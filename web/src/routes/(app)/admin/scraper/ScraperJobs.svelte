@@ -121,8 +121,6 @@ function handleSortingChange(updater: Updater<SortingState>) {
   sorting = typeof updater === "function" ? updater(sorting) : updater;
 }
 
-// --- Helper functions ---
-
 const PRIORITY_ORDER: Record<string, number> = {
   critical: 0,
   high: 1,
@@ -212,8 +210,6 @@ function overdueDurationColor(ms: number): string {
   if (minutes >= 5) return "text-red-500";
   return "text-amber-500";
 }
-
-// --- Table columns ---
 
 const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
   {

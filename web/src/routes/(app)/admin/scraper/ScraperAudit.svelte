@@ -26,7 +26,6 @@ let { active: _active = true }: Props = $props();
 
 let expandedId: number | null = $state(null);
 
-// --- WebSocket stream ---
 const stream = useStream("auditLog", null, {
   initial: [] as AuditLogEntry[],
   on: {},
@@ -41,7 +40,6 @@ const stream = useStream("auditLog", null, {
 const entries = $derived(stream.state);
 const connectionState = $derived(stream.connectionState);
 
-// --- Live-updating clock for relative timestamps ---
 let now = $state(new Date());
 let tickTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -57,8 +55,6 @@ scheduleTick();
 onDestroy(() => {
   clearTimeout(tickTimer);
 });
-
-// --- Change column helpers ---
 
 interface ChangeAnalysis {
   kind: "scalar" | "json-single" | "json-multi";
@@ -120,8 +116,6 @@ function formatCourseTooltip(entry: AuditLogEntry): string {
   parts.push(`ID ${entry.courseId}`);
   return parts.join("\n");
 }
-
-// --- TanStack Table ---
 
 let sorting: SortingState = $state([{ id: "time", desc: true }]);
 

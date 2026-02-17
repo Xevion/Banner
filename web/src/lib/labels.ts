@@ -208,8 +208,6 @@ export function getPartOfTermLabel(pot: PartOfTerm, context: DisplayContext): st
   return PART_OF_TERM_LABELS[pot.type][context];
 }
 
-// --- Filter value string → display label bridge functions ---
-
 function stripRawPrefix(value: string): string {
   return value.startsWith("raw:") ? value.slice(4) : value;
 }
@@ -268,8 +266,6 @@ export function getFilterLabel(
       return getPartOfTermFilterLabel(filterValue);
   }
 }
-
-// --- Shared filter UI configuration ---
 
 /** Attribute filter value groupings for UI categorization */
 export const ATTRIBUTE_GROUPS = {

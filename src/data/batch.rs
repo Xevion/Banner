@@ -152,10 +152,6 @@ fn extract_campus_code(course: &Course) -> Option<String> {
         .and_then(|mf| mf.meeting_time.campus.clone())
 }
 
-// ---------------------------------------------------------------------------
-// Task 1: UpsertDiffRow — captures pre- and post-upsert state for diffing
-// ---------------------------------------------------------------------------
-
 /// Row returned by the CTE-based upsert query, carrying both old and new values
 /// for every auditable field. `old_id` is `None` for fresh inserts.
 #[derive(sqlx::FromRow, Debug)]
@@ -221,10 +217,6 @@ struct UpsertDiffRow {
     old_attributes: Option<serde_json::Value>,
     new_attributes: serde_json::Value,
 }
-
-// ---------------------------------------------------------------------------
-// Task 3: Entry types and diff logic
-// ---------------------------------------------------------------------------
 
 struct AuditEntry {
     course_id: i32,
@@ -389,10 +381,6 @@ fn compute_diffs(rows: &[UpsertDiffRow]) -> (Vec<AuditEntry>, Vec<MetricEntry>) 
     (audits, metrics)
 }
 
-// ---------------------------------------------------------------------------
-// Task 4: Batch insert functions for audits and metrics
-// ---------------------------------------------------------------------------
-
 async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result<Vec<i32>> {
     if audits.is_empty() {
         return Ok(Vec::new());
@@ -451,10 +439,6 @@ async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Res
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Core upsert functions (updated to use &mut PgConnection)
-// ---------------------------------------------------------------------------
 
 /// Batch upsert courses in a single database query.
 ///
@@ -622,10 +606,6 @@ async fn fetch_audit_entries_by_ids(
         })
         .collect())
 }
-
-// ---------------------------------------------------------------------------
-// Task 2: CTE-based upsert returning old+new values
-// ---------------------------------------------------------------------------
 
 /// Upsert all courses and return diff rows with old and new values for auditing.
 async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<Vec<UpsertDiffRow>> {

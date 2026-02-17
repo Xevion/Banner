@@ -8,10 +8,6 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
-// ---------------------------------------------------------------------------
-// Shared types used by both data and web layers
-// ---------------------------------------------------------------------------
-
 /// A top-candidate summary shown in the instructor list view.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -151,10 +147,6 @@ pub struct RescoreResponse {
     pub skipped_no_candidates: usize,
 }
 
-// ---------------------------------------------------------------------------
-// Internal row types for SQL queries
-// ---------------------------------------------------------------------------
-
 #[derive(sqlx::FromRow)]
 struct InstructorRow {
     id: i32,
@@ -180,10 +172,6 @@ struct StatusCount {
     count: i64,
 }
 
-// ---------------------------------------------------------------------------
-// Filter params (shared with web layer for query extraction)
-// ---------------------------------------------------------------------------
-
 /// Filter/sort/pagination params for listing instructors.
 pub struct ListInstructorsFilter {
     pub status: Option<String>,
@@ -192,10 +180,6 @@ pub struct ListInstructorsFilter {
     pub per_page: i32,
     pub sort: Option<String>,
 }
-
-// ---------------------------------------------------------------------------
-// Data-layer functions
-// ---------------------------------------------------------------------------
 
 /// List instructors with filtering, sorting, and pagination.
 pub async fn list_instructors(

@@ -29,10 +29,6 @@ fn db_error(context: &str, e: anyhow::Error) -> ApiError {
     )
 }
 
-// ---------------------------------------------------------------------------
-// Response types
-// ---------------------------------------------------------------------------
-
 /// Response for `GET /api/admin/terms`.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -68,10 +64,6 @@ impl From<SyncResult> for TermSyncResponse {
     }
 }
 
-// ---------------------------------------------------------------------------
-// 1. GET /api/admin/terms — List all terms
-// ---------------------------------------------------------------------------
-
 /// `GET /api/admin/terms` — List all terms with their scraping status.
 #[instrument(skip_all)]
 pub async fn list_terms(
@@ -95,10 +87,6 @@ pub async fn list_terms(
     debug!(count = terms.len(), "listed terms");
     Ok(Json(TermsListResponse { terms }))
 }
-
-// ---------------------------------------------------------------------------
-// 2. POST /api/admin/terms/:code/enable — Enable scraping
-// ---------------------------------------------------------------------------
 
 /// `POST /api/admin/terms/:code/enable` — Enable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
@@ -140,10 +128,6 @@ pub async fn enable_term(
     }))
 }
 
-// ---------------------------------------------------------------------------
-// 3. POST /api/admin/terms/:code/disable — Disable scraping
-// ---------------------------------------------------------------------------
-
 /// `POST /api/admin/terms/:code/disable` — Disable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn disable_term(
@@ -183,10 +167,6 @@ pub async fn disable_term(
         term,
     }))
 }
-
-// ---------------------------------------------------------------------------
-// 4. POST /api/admin/terms/sync — Sync terms from Banner API
-// ---------------------------------------------------------------------------
 
 /// `POST /api/admin/terms/sync` — Manually sync terms from the Banner API.
 #[instrument(skip_all)]

@@ -23,7 +23,6 @@ interface Props {
 
 let { subjects, isLoading = false }: Props = $props();
 
-// --- Expanded subject detail ---
 let expandedSubject = $state<string | null>(null);
 let subjectDetail = $state<SubjectDetailResponse | null>(null);
 let detailLoading = $state(false);
@@ -41,7 +40,6 @@ async function toggleSubjectDetail(subject: string) {
   detailLoading = false;
 }
 
-// --- Live-updating clock for relative timestamps ---
 let now = $state(new Date());
 let tickTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -58,8 +56,6 @@ onDestroy(() => {
   clearTimeout(tickTimer);
 });
 
-// --- Helpers ---
-
 function formatInterval(secs: number): string {
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.round(secs / 60)}m`;
@@ -69,8 +65,6 @@ function formatInterval(secs: number): string {
 function emphasisClass(value: number): string {
   return value === 0 ? "text-muted-foreground" : "text-foreground";
 }
-
-// --- TanStack Table ---
 
 let sorting: SortingState = $state([{ id: "subject", desc: false }]);
 

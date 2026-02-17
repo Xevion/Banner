@@ -7,10 +7,6 @@ use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info};
 
-// ---------------------------------------------------------------------------
-// Scoring types
-// ---------------------------------------------------------------------------
-
 /// Breakdown of individual scoring signals.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ScoreBreakdown {
@@ -27,28 +23,16 @@ pub struct MatchScore {
     pub breakdown: ScoreBreakdown,
 }
 
-// ---------------------------------------------------------------------------
-// Thresholds
-// ---------------------------------------------------------------------------
-
 /// Minimum composite score to store a candidate row.
 const MIN_CANDIDATE_THRESHOLD: f32 = 0.40;
 
 /// Score at or above which a candidate is auto-accepted.
 const AUTO_ACCEPT_THRESHOLD: f32 = 0.85;
 
-// ---------------------------------------------------------------------------
-// Weights (must sum to 1.0)
-// ---------------------------------------------------------------------------
-
 const WEIGHT_NAME: f32 = 0.50;
 const WEIGHT_DEPARTMENT: f32 = 0.25;
 const WEIGHT_UNIQUENESS: f32 = 0.15;
 const WEIGHT_VOLUME: f32 = 0.10;
-
-// ---------------------------------------------------------------------------
-// Pure scoring functions
-// ---------------------------------------------------------------------------
 
 /// Check if an instructor's subjects overlap with an RMP department.
 ///
@@ -240,10 +224,6 @@ pub fn compute_match_score(
         },
     }
 }
-
-// ---------------------------------------------------------------------------
-// Candidate generation (DB)
-// ---------------------------------------------------------------------------
 
 /// Statistics returned from candidate generation.
 #[derive(Debug)]
@@ -608,10 +588,6 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
     Ok(stats)
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

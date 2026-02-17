@@ -79,10 +79,6 @@ pub fn default_bucket_for_period(period: &str) -> &'static str {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Endpoint 1: GET /api/admin/scraper/stats
-// ---------------------------------------------------------------------------
-
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -158,10 +154,6 @@ pub async fn scraper_stats(
 
     Ok(Json(result))
 }
-
-// ---------------------------------------------------------------------------
-// Endpoint 2: GET /api/admin/scraper/timeseries
-// ---------------------------------------------------------------------------
 
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -247,10 +239,6 @@ pub async fn scraper_timeseries(
     }))
 }
 
-// ---------------------------------------------------------------------------
-// Endpoint 3: GET /api/admin/scraper/subjects
-// ---------------------------------------------------------------------------
-
 #[derive(Serialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -335,10 +323,6 @@ pub async fn scraper_subjects(
 
     Ok(Json(SubjectsResponse { subjects }))
 }
-
-// ---------------------------------------------------------------------------
-// Endpoint 4: GET /api/admin/scraper/subjects/{subject}
-// ---------------------------------------------------------------------------
 
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -438,10 +422,6 @@ pub async fn scraper_subject_detail(
 
     Ok(Json(SubjectDetailResponse { subject, results }))
 }
-
-// ---------------------------------------------------------------------------
-// Reusable compute functions for both HTTP handlers and computed streams
-// ---------------------------------------------------------------------------
 
 /// Validate a period string and return the corresponding interval SQL string.
 pub fn validate_period(period: &str) -> Option<&'static str> {

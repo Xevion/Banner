@@ -29,7 +29,6 @@ function track(..._deps: unknown[]) {
 
 let courseTableRef: CourseTable | undefined = $state();
 
-// --- Initial state from URL params (captured once) ---
 const initialParams = untrack(() => new URLSearchParams(data.url.search));
 const defaultTermSlug = untrack(() => data.searchOptions?.terms[0]?.slug ?? "");
 
@@ -63,7 +62,6 @@ let sorting: SortingState = $state(
   })()
 );
 
-// --- Derived search options ---
 const terms = $derived(searchOptions?.terms ?? []);
 const subjects: Subject[] = $derived(searchOptions?.subjects ?? []);
 const subjectMap: Record<string, string> = $derived(
@@ -87,7 +85,6 @@ const ranges = $derived(
   }
 );
 
-// --- CourseDetail context ---
 const attributeMap = $derived(buildAttributeMap(referenceData.attributes));
 const courseDetailCtx: import("$lib/components/course-detail/context").CourseDetailContext = {
   get attributeMap() {
@@ -103,7 +100,6 @@ $effect(() => {
   }
 });
 
-// --- Column visibility ---
 const columns = new ColumnVisibilityController({
   autoHideColumns: ["crn", "location"],
   columns: [
@@ -117,7 +113,7 @@ const columns = new ColumnVisibilityController({
   ],
 });
 
-// --- URL sync ---
+// Keep URL params in sync with filter state
 useURLSync({
   filters,
   selectedTerm: () => selectedTerm,
@@ -126,13 +122,11 @@ useURLSync({
   sorting: () => sorting,
 });
 
-// --- Data state ---
 let searchResult: SearchResponse | null = $state(null);
 let searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null = $state(null);
 let loading = $state(false);
 let error = $state<string | null>(null);
 
-// --- Search orchestration ---
 let validatingSubjects = false;
 let searchTimeout: ReturnType<typeof setTimeout> | undefined;
 let lastSearchKey = "";

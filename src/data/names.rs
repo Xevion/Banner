@@ -373,10 +373,6 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
-    // -----------------------------------------------------------------------
-    // HTML entity decoding
-    // -----------------------------------------------------------------------
-
     #[test]
     fn decode_apostrophe_entity() {
         assert_eq!(decode_html_entities("O&#39;Brien"), "O'Brien");
@@ -391,10 +387,6 @@ mod tests {
     fn decode_no_entities() {
         assert_eq!(decode_html_entities("Smith"), "Smith");
     }
-
-    // -----------------------------------------------------------------------
-    // Nickname extraction
-    // -----------------------------------------------------------------------
 
     #[test]
     fn extract_paren_nickname() {
@@ -424,10 +416,6 @@ mod tests {
         assert!(nicks.is_empty());
     }
 
-    // -----------------------------------------------------------------------
-    // Suffix extraction
-    // -----------------------------------------------------------------------
-
     #[test]
     fn extract_suffix_iii() {
         let (name, suffix) = extract_suffix("LeBlanc III");
@@ -449,10 +437,6 @@ mod tests {
         assert_eq!(suffix, None);
     }
 
-    // -----------------------------------------------------------------------
-    // Junk stripping
-    // -----------------------------------------------------------------------
-
     #[test]
     fn strip_trailing_comma() {
         assert_eq!(strip_junk("Cronenberger,"), "Cronenberger");
@@ -467,10 +451,6 @@ mod tests {
     fn strip_clean_name() {
         assert_eq!(strip_junk("  Maria  "), "Maria");
     }
-
-    // -----------------------------------------------------------------------
-    // normalize_for_matching
-    // -----------------------------------------------------------------------
 
     #[test]
     fn normalize_strips_accents() {
@@ -506,10 +486,6 @@ mod tests {
     fn normalize_strips_spaces() {
         assert_eq!(normalize_for_matching("Mary Lou"), "marylou");
     }
-
-    // -----------------------------------------------------------------------
-    // parse_banner_name
-    // -----------------------------------------------------------------------
 
     #[test]
     fn banner_standard_name() {
@@ -585,10 +561,6 @@ mod tests {
         assert!(parse_banner_name(", John").is_none());
     }
 
-    // -----------------------------------------------------------------------
-    // parse_rmp_name
-    // -----------------------------------------------------------------------
-
     #[test]
     fn rmp_standard_name() {
         let p = parse_rmp_name("John", "Smith").unwrap();
@@ -634,10 +606,6 @@ mod tests {
         let p = parse_rmp_name("Liliana", "Saldaña").unwrap();
         assert_eq!(p.last, "Saldaña");
     }
-
-    // -----------------------------------------------------------------------
-    // matching_keys
-    // -----------------------------------------------------------------------
 
     #[test]
     fn keys_simple_name() {

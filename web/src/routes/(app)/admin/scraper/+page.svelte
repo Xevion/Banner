@@ -24,8 +24,6 @@ let selectedTerm = $state<string | undefined>(undefined);
 // Tab state
 let activeTab = $state("charts");
 
-// --- WebSocket streams for real-time data ---
-
 const stats = useStream(
   "scraperStats",
   { period: selectedPeriod, term: selectedTerm },
@@ -60,15 +58,12 @@ let currentStats = $derived(stats.state);
 let currentSubjects = $derived(subjects.state);
 let currentTerms = $derived(terms.data ?? []);
 
-// --- Term Select Items ---
 let termItems = $derived([
   { value: "", label: "All Terms" },
   ...currentTerms.map((t) => ({ value: t.code, label: t.description })),
 ]);
 
 let termSelectValue = $derived(selectedTerm ?? "");
-
-// --- Helpers ---
 
 function successRateColor(rate: number): string {
   if (rate >= 0.95) return "text-green-600 dark:text-green-400";

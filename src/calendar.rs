@@ -35,10 +35,6 @@ impl CalendarCourse {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Day-of-week conversion
-// ---------------------------------------------------------------------------
-
 /// Convert a `DayOfWeek` to a chrono `Weekday`.
 fn to_weekday(day: &DayOfWeek) -> Weekday {
     match day {
@@ -112,10 +108,6 @@ fn escape_ics(text: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "")
 }
-
-// ---------------------------------------------------------------------------
-// University holidays (ported from bot/commands/ics.rs)
-// ---------------------------------------------------------------------------
 
 /// Find the nth occurrence of a weekday in a given month/year (1-based).
 fn nth_weekday_of_month(year: i32, month: u32, weekday: Weekday, n: u32) -> Option<NaiveDate> {
@@ -219,10 +211,6 @@ fn excluded_holiday_names(
     names.dedup();
     names
 }
-
-// ---------------------------------------------------------------------------
-// ICS generation
-// ---------------------------------------------------------------------------
 
 /// Result from ICS generation, including the file content and excluded holiday names.
 pub struct IcsResult {
@@ -372,10 +360,6 @@ fn generate_ics_event(
     event.push_str("END:VEVENT\r\n");
     Ok((event, holiday_names))
 }
-
-// ---------------------------------------------------------------------------
-// Google Calendar URL generation
-// ---------------------------------------------------------------------------
 
 /// Generate a Google Calendar "add event" URL for a single meeting time.
 pub fn generate_gcal_url(

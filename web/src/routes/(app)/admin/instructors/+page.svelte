@@ -23,7 +23,6 @@ import { onDestroy } from "svelte";
 import { fade, slide } from "svelte/transition";
 import CandidateCard from "./CandidateCard.svelte";
 
-// --- Props from load function ---
 let { data } = $props();
 
 // Build initial subject map from load data
@@ -37,7 +36,6 @@ function buildSubjectMap(
   return map;
 }
 
-// --- State ---
 let subjectMap = $state(buildSubjectMap(data.subjects));
 let instructors = $state<InstructorListItem[]>(data.instructors?.instructors ?? []);
 let stats = $state<InstructorStats>(
@@ -80,7 +78,6 @@ let showRejectConfirm = $state<number | null>(null);
 // Search debounce
 let searchTimeout: ReturnType<typeof setTimeout> | undefined;
 
-// --- Constants ---
 const filterCards: {
   label: string;
   value: string | undefined;
@@ -132,7 +129,6 @@ const progressSegments = [
   { stat: "rejected" as keyof InstructorStats, color: "bg-red-500", label: "Rejected" },
 ];
 
-// --- Derived ---
 let matchedLegacyIds = $derived(
   new Set(detail?.currentMatches.map((m: { legacyId: number }) => m.legacyId) ?? [])
 );
@@ -140,7 +136,6 @@ let matchedLegacyIds = $derived(
 let progressDenom = $derived(stats.total || 1);
 let totalPages = $derived(Math.max(1, Math.ceil(totalCount / perPage)));
 
-// --- Data fetching ---
 async function fetchInstructors() {
   loading = true;
   error = null;
@@ -181,7 +176,6 @@ onDestroy(() => {
   clearHighlightTimeouts();
 });
 
-// --- Navigation & filters ---
 function setFilter(value: string | undefined) {
   activeFilter = value;
   currentPage = 1;
@@ -245,7 +239,6 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-// --- Local state updates (no refetch) ---
 function updateLocalStatus(instructorId: number, newStatus: string) {
   instructors = instructors.map((i) =>
     i.id === instructorId ? { ...i, rmpMatchStatus: newStatus } : i
@@ -279,7 +272,6 @@ function matchesFilter(status: string): boolean {
   return status === activeFilter;
 }
 
-// --- Actions ---
 async function handleMatch(instructorId: number, rmpLegacyId: number) {
   actionLoading = `match-${rmpLegacyId}`;
   const result = await client.matchInstructor(instructorId, rmpLegacyId);
@@ -356,7 +348,6 @@ async function handleRescore() {
   rescoreLoading = false;
 }
 
-// --- Helpers ---
 function statusBadge(status: string): { label: string; classes: string } {
   switch (status) {
     case "unmatched":

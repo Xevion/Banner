@@ -19,10 +19,6 @@ pub use crate::data::admin_rmp::{
     InstructorDetailResponse, ListInstructorsResponse, RescoreResponse,
 };
 
-// ---------------------------------------------------------------------------
-// Request types (HTTP-specific: query params, request bodies)
-// ---------------------------------------------------------------------------
-
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -68,10 +64,6 @@ pub struct OkResponse {
 pub struct UnmatchBody {
     rmp_legacy_id: Option<i32>,
 }
-
-// ---------------------------------------------------------------------------
-// Handlers
-// ---------------------------------------------------------------------------
 
 /// `GET /api/admin/instructors` — List instructors with filtering and pagination.
 #[instrument(skip_all)]

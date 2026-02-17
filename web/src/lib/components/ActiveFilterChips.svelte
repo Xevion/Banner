@@ -14,8 +14,6 @@ import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 
 let { filters }: { filters: SearchFilters } = $props();
 
-// --- Chip formatting helpers ---
-
 function formatDaysChip(d: string[]): string {
   return d.map((day) => dayCode(day as DayOfWeek)).join("");
 }
@@ -32,8 +30,6 @@ function formatMultiChip(codes: string[], labelFn: (filterValue: string) => stri
   if (codes.length === 1) return first;
   return `${first} + ${codes.length - 1} more`;
 }
-
-// --- Instructional method grouping ---
 
 interface FormatChipGroup {
   type: "InPerson" | "Online" | "Hybrid" | "Independent";
@@ -92,8 +88,6 @@ let formatChipGroups = $derived(groupInstructionalMethods(filters.instructionalM
 function removeSubject(code: string) {
   filters.subject = filters.subject.filter((s) => s !== code);
 }
-
-// --- Scroll-based fade mask ---
 
 let chipsContainer: HTMLDivElement | undefined = $state();
 let scrollMetrics = $state<ScrollMetrics>({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
