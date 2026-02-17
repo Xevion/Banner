@@ -12,7 +12,7 @@ use tracing::{debug, error, info, instrument, warn};
 use ts_rs::TS;
 
 use crate::state::AppState;
-use crate::web::extractors::AdminUser;
+use crate::web::auth::extractors::AdminUser;
 
 // ---------------------------------------------------------------------------
 // Query / body types

@@ -305,7 +305,7 @@ pub fn matching_keys(parts: &NameParts) -> Vec<(String, String)> {
 ///
 /// Parses each `display_name` using [`parse_banner_name`] and updates the row.
 /// Logs warnings for any names that fail to parse.
-pub async fn backfill_instructor_names(db_pool: &PgPool) -> crate::error::Result<()> {
+pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
     let rows: Vec<(i32, String)> = sqlx::query_as(
         "SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL",
     )

@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::watch;
 
-use crate::events::DomainEvent;
+use super::DomainEvent;
 
 /// Fixed-capacity ring buffer with cursor-based multi-reader access.
 pub struct EventBuffer {

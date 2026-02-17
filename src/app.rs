@@ -217,7 +217,7 @@ impl App {
 
     /// Run the application and handle shutdown signals
     pub async fn run(self) -> ExitCode {
-        use crate::signals::handle_shutdown_signals;
+        use crate::services::signals::handle_shutdown_signals;
         handle_shutdown_signals(self.service_manager, self.config.shutdown_timeout).await
     }
 

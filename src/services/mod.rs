@@ -4,6 +4,7 @@ use tracing::{error, info, warn};
 
 pub mod bot;
 pub mod manager;
+pub mod signals;
 pub mod web;
 
 #[derive(Debug)]

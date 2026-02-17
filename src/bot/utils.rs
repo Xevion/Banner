@@ -2,7 +2,7 @@
 
 use crate::banner::{Course, Term};
 use crate::bot::Context;
-use crate::error::Result;
+use anyhow::Result;
 use tracing::error;
 
 /// Gets a course by its CRN for the current term.

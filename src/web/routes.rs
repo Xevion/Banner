@@ -31,15 +31,14 @@ fn code_to_filter_value(category: &str, code: &str, description: Option<&str>) -
         _ => format!("raw:{code}"),
     }
 }
-use crate::web::admin_scraper;
-use crate::web::admin_terms;
+use crate::data;
+use crate::data::models;
+use crate::web::admin;
 use crate::web::auth::{self, AuthConfig};
 use crate::web::calendar;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::stream;
 use crate::web::timeline;
-use crate::{data, web::admin};
-use crate::{data::models, web::admin_rmp};
 #[cfg(feature = "embed-assets")]
 use axum::{
     http::{HeaderMap, StatusCode, Uri},
@@ -51,7 +50,7 @@ use std::{collections::BTreeMap, time::Duration};
 use ts_rs::TS;
 
 use crate::state::AppState;
-use crate::status::ServiceStatus;
+use crate::state::ServiceStatus;
 use crate::utils::fmt_duration;
 #[cfg(not(feature = "embed-assets"))]
 use tower_http::cors::{Any, CorsLayer};
@@ -104,44 +103,47 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .route("/admin/scrape-jobs", get(admin::list_scrape_jobs))
         .route("/admin/audit-log", get(admin::list_audit_log))
-        .route("/admin/instructors", get(admin_rmp::list_instructors))
-        .route("/admin/instructors/{id}", get(admin_rmp::get_instructor))
+        .route("/admin/instructors", get(admin::rmp::list_instructors))
+        .route("/admin/instructors/{id}", get(admin::rmp::get_instructor))
         .route(
             "/admin/instructors/{id}/match",
-            post(admin_rmp::match_instructor),
+            post(admin::rmp::match_instructor),
         )
         .route(
             "/admin/instructors/{id}/reject-candidate",
-            post(admin_rmp::reject_candidate),
+            post(admin::rmp::reject_candidate),
         )
         .route(
             "/admin/instructors/{id}/reject-all",
-            post(admin_rmp::reject_all),
+            post(admin::rmp::reject_all),
         )
         .route(
             "/admin/instructors/{id}/unmatch",
-            post(admin_rmp::unmatch_instructor),
+            post(admin::rmp::unmatch_instructor),
         )
-        .route("/admin/rmp/rescore", post(admin_rmp::rescore))
-        .route("/admin/scraper/stats", get(admin_scraper::scraper_stats))
+        .route("/admin/rmp/rescore", post(admin::rmp::rescore))
+        .route("/admin/scraper/stats", get(admin::scraper::scraper_stats))
         .route(
             "/admin/scraper/timeseries",
-            get(admin_scraper::scraper_timeseries),
+            get(admin::scraper::scraper_timeseries),
         )
         .route(
             "/admin/scraper/subjects",
-            get(admin_scraper::scraper_subjects),
+            get(admin::scraper::scraper_subjects),
         )
         .route(
             "/admin/scraper/subjects/{subject}",
-            get(admin_scraper::scraper_subject_detail),
+            get(admin::scraper::scraper_subject_detail),
         )
-        .route("/admin/terms", get(admin_terms::list_terms))
-        .route("/admin/terms/sync", post(admin_terms::sync_terms))
-        .route("/admin/terms/{code}/enable", post(admin_terms::enable_term))
+        .route("/admin/terms", get(admin::terms::list_terms))
+        .route("/admin/terms/sync", post(admin::terms::sync_terms))
+        .route(
+            "/admin/terms/{code}/enable",
+            post(admin::terms::enable_term),
+        )
         .route(
             "/admin/terms/{code}/disable",
-            post(admin_terms::disable_term),
+            post(admin::terms::disable_term),
         )
         .with_state(app_state.clone());
 

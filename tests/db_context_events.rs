@@ -1,8 +1,8 @@
 //! Integration tests for DbContext event emission.
 
+use banner::data::DbContext;
+use banner::data::events::{DomainEvent, EventBuffer};
 use banner::data::models::{ScrapePriority, TargetType};
-use banner::db::DbContext;
-use banner::events::{DomainEvent, EventBuffer};
 use banner::web::ws::ScrapeJobEvent;
 use serde_json::json;
 use std::sync::Arc;

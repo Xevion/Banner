@@ -1,7 +1,11 @@
 //! Database query functions for courses, used by the web API.
 
-use crate::data::models::{Course, CourseInstructorDetail};
-use crate::error::Result;
+use super::context::DbContext;
+use super::events::{AuditLogEvent, DomainEvent};
+use crate::banner::Course as BannerCourse;
+use crate::data::batch::batch_upsert_courses as batch_upsert_impl;
+use crate::data::models::{Course, CourseInstructorDetail, UpsertCounts};
+use anyhow::Result;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use ts_rs::TS;
@@ -392,4 +396,33 @@ pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<Filt
         credit_hour_max: ch_max,
         wait_count_max: wc_max,
     })
+}
+
+/// Course operations with automatic event emission.
+pub struct CourseOps<'a> {
+    ctx: &'a DbContext,
+}
+
+impl<'a> CourseOps<'a> {
+    pub(crate) fn new(ctx: &'a DbContext) -> Self {
+        Self { ctx }
+    }
+
+    /// Batch upsert courses and emit audit log events.
+    ///
+    /// This wraps the existing `batch_upsert_courses` function but handles
+    /// event emission automatically.
+    pub async fn batch_upsert(&self, courses: &[BannerCourse]) -> Result<UpsertCounts> {
+        let (counts, audit_entries) = batch_upsert_impl(courses, self.ctx.pool()).await?;
+
+        if !audit_entries.is_empty() {
+            self.ctx
+                .events()
+                .publish(DomainEvent::AuditLog(AuditLogEvent {
+                    entries: audit_entries,
+                }));
+        }
+
+        Ok(counts)
+    }
 }

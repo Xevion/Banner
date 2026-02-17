@@ -4,7 +4,7 @@ use anyhow::Context;
 use sqlx::PgPool;
 
 use super::models::User;
-use crate::error::Result;
+use anyhow::Result;
 
 /// Insert a new user or update username/avatar on conflict.
 pub async fn upsert_user(

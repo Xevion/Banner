@@ -11,12 +11,12 @@ use futures::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::debug;
 
-use crate::events::{AuditLogEvent, DomainEvent};
+use crate::data::events::{AuditLogEvent, DomainEvent};
 use crate::state::AppState;
-use crate::web::admin_scraper::{
+use crate::web::admin::scraper::{
     compute_stats, compute_subjects, compute_timeseries, default_bucket_for_period,
 };
-use crate::web::extractors::AdminUser;
+use crate::web::auth::extractors::AdminUser;
 use crate::web::stream::computed::{ComputedCacheKey, ComputedUpdate};
 use crate::web::stream::protocol::{
     STREAM_PROTOCOL_VERSION, StreamClientMessage, StreamDelta, StreamError, StreamErrorCode,
@@ -742,7 +742,7 @@ async fn resync_computed(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::web::admin_scraper::validate_bucket;
+    use crate::web::admin::scraper::validate_bucket;
     use crate::web::stream::filters::ScraperTimeseriesFilter;
     use crate::web::stream::subscriptions::Subscription;
 

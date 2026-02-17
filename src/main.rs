@@ -12,17 +12,11 @@ mod calendar;
 mod cli;
 mod config;
 mod data;
-mod db;
-mod error;
-mod events;
-mod formatter;
 mod logging;
 mod rmp;
 mod scraper;
 mod services;
-mod signals;
 mod state;
-mod status;
 mod utils;
 mod web;
 

@@ -1,8 +1,8 @@
 use super::Job;
 use crate::banner::{BannerApi, SearchQuery, Term};
+use crate::data::DbContext;
 use crate::data::models::UpsertCounts;
-use crate::db::DbContext;
-use crate::error::Result;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 

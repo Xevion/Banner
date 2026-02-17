@@ -1,6 +1,7 @@
+pub mod formatter;
+
 use crate::cli::TracingFormat;
 use crate::config::Config;
-use crate::formatter;
 use tracing_subscriber::fmt::format::JsonFields;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 

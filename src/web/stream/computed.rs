@@ -12,9 +12,9 @@ use tokio::sync::{RwLock, broadcast, mpsc};
 use tokio::time::Instant;
 use tracing::warn;
 
-use crate::events::{DomainEvent, EventBuffer};
+use crate::data::events::{DomainEvent, EventBuffer};
 use crate::state::ReferenceCache;
-use crate::web::admin_scraper::{
+use crate::web::admin::scraper::{
     ScraperStatsResponse, SubjectSummary, TimeseriesPoint, compute_stats, compute_subjects,
     compute_timeseries,
 };

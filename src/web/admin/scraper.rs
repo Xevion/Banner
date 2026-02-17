@@ -16,10 +16,10 @@ use tracing::{debug, error, instrument, warn};
 use ts_rs::TS;
 
 use crate::banner::models::terms::Term;
-use crate::db::DbContext;
+use crate::data::DbContext;
 use crate::scraper::adaptive::{self, SubjectSchedule, SubjectStats};
 use crate::state::{AppState, ReferenceCache};
-use crate::web::extractors::AdminUser;
+use crate::web::auth::extractors::AdminUser;
 
 type ApiError = (StatusCode, Json<serde_json::Value>);
 
@@ -660,7 +660,7 @@ pub async fn compute_timeseries(
 /// Compute subject summaries from the database.
 pub async fn compute_subjects(
     pool: &PgPool,
-    events: &std::sync::Arc<crate::events::EventBuffer>,
+    events: &std::sync::Arc<crate::data::events::EventBuffer>,
     ref_cache: &ReferenceCache,
 ) -> anyhow::Result<Vec<SubjectSummary>> {
     let db = DbContext::new(pool.clone(), events.clone());

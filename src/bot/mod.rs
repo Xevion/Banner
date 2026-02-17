@@ -1,5 +1,5 @@
-use crate::error::Error;
 use crate::state::AppState;
+use anyhow::Error;
 
 pub mod autocomplete;
 pub mod commands;

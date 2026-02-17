@@ -5,7 +5,7 @@ use rand::Rng;
 use sqlx::PgPool;
 
 use super::models::UserSession;
-use crate::error::Result;
+use anyhow::Result;
 
 /// Session lifetime: 7 days (in seconds).
 pub const SESSION_DURATION_SECS: u64 = 7 * 24 * 3600;

@@ -1,7 +1,7 @@
 //! Database operations for the `reference_data` table (code→description lookups).
 
 use crate::data::models::ReferenceData;
-use crate::error::Result;
+use anyhow::Result;
 use html_escape::decode_html_entities;
 use sqlx::PgPool;
 

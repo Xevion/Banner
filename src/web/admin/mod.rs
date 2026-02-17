@@ -2,6 +2,10 @@
 //!
 //! All endpoints require the `AdminUser` extractor, returning 401/403 as needed.
 
+pub mod rmp;
+pub mod scraper;
+pub mod terms;
+
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
@@ -13,9 +17,9 @@ use ts_rs::TS;
 
 use crate::data::models::User;
 use crate::state::AppState;
-use crate::status::ServiceStatus;
+use crate::state::ServiceStatus;
 use crate::web::audit::{AuditLogEntry, AuditLogResponse};
-use crate::web::extractors::AdminUser;
+use crate::web::auth::extractors::AdminUser;
 use crate::web::ws::ScrapeJobDto;
 
 #[derive(Debug, Clone, Serialize, TS)]

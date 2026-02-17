@@ -5,13 +5,13 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use tracing::debug;
 
+use super::context::DbContext;
+use super::events::DomainEvent;
 use crate::data::models::{
     ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetType, UpsertCounts,
 };
-use crate::db::DbContext;
-use crate::error::Result;
-use crate::events::DomainEvent;
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
+use anyhow::Result;
 
 /// Lock expiry duration in seconds.
 const LOCK_EXPIRY_SECS: i32 = 10 * 60;

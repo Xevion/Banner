@@ -1,7 +1,7 @@
 //! Database operations for RateMyProfessors data.
 
-use crate::error::Result;
 use crate::rmp::RmpProfessor;
+use anyhow::Result;
 use sqlx::PgPool;
 use std::collections::HashSet;
 

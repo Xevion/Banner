@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use ts_rs::TS;
 
 use crate::banner::BannerTerm;
-use crate::error::Result;
+use anyhow::Result;
 
 /// A term record from the database, synced from Banner.
 ///

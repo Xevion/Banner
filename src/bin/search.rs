@@ -1,6 +1,6 @@
+use anyhow::Result;
 use banner::banner::{BannerApi, SearchQuery, Term};
 use banner::config::Config;
-use banner::error::Result;
 use figment::{Figment, providers::Env};
 use futures::future;
 use tracing::{error, info};

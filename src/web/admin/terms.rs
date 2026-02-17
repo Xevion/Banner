@@ -15,7 +15,7 @@ use ts_rs::TS;
 
 use crate::data::terms::{self, DbTerm, SyncResult};
 use crate::state::AppState;
-use crate::web::extractors::AdminUser;
+use crate::web::auth::extractors::AdminUser;
 
 type ApiError = (StatusCode, Json<Value>);
 

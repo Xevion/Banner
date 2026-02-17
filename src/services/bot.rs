@@ -2,7 +2,7 @@ use super::Service;
 use crate::bot::{Data, get_commands};
 use crate::config::Config;
 use crate::state::AppState;
-use crate::status::{ServiceStatus, ServiceStatusRegistry};
+use crate::state::{ServiceStatus, ServiceStatusRegistry};
 use num_format::{Locale, ToFormattedString};
 use serenity::Client;
 use serenity::all::{ActivityData, ClientBuilder, GatewayIntents};

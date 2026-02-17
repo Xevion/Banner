@@ -1,9 +1,9 @@
 use crate::banner::{BannerApi, BannerApiError};
+use crate::data::DbContext;
 use crate::data::models::{ScrapeJob, UpsertCounts};
-use crate::db::DbContext;
-use crate::error::Result;
 use crate::scraper::jobs::{JobError, JobType};
 use crate::utils::fmt_duration;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use std::time::Duration;

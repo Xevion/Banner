@@ -1,7 +1,7 @@
 //! Confidence scoring and candidate generation for RMP instructor matching.
 
 use crate::data::names::{matching_keys, parse_banner_name, parse_rmp_name};
-use crate::error::Result;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};

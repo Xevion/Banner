@@ -1,6 +1,6 @@
 use super::Service;
 use crate::state::AppState;
-use crate::status::ServiceStatus;
+use crate::state::ServiceStatus;
 use crate::web::auth::AuthConfig;
 use crate::web::create_router;
 use std::net::SocketAddr;

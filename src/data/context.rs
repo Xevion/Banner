@@ -3,9 +3,9 @@
 use sqlx::PgPool;
 use std::sync::Arc;
 
-use crate::db::courses::CourseOps;
-use crate::db::scrape_jobs::ScrapeJobOps;
-use crate::events::EventBuffer;
+use super::courses::CourseOps;
+use super::events::EventBuffer;
+use super::scrape_jobs::ScrapeJobOps;
 
 /// Database context that wraps pool and event buffer.
 ///

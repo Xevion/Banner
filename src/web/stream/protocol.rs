@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::web::admin_scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
+use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
 use crate::web::stream::filters::{
     AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter,
 };

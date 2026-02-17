@@ -1,9 +1,9 @@
 #[allow(dead_code)]
 mod helpers;
 
+use banner::data::DbContext;
+use banner::data::events::EventBuffer;
 use banner::data::models::{ScrapePriority, TargetType};
-use banner::db::DbContext;
-use banner::events::EventBuffer;
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;

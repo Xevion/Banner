@@ -2,19 +2,79 @@
 
 use crate::banner::BannerApi;
 use crate::banner::Course;
+use crate::data::events::EventBuffer;
 use crate::data::models::ReferenceData;
-use crate::events::EventBuffer;
-use crate::status::ServiceStatusRegistry;
+use crate::web::auth::session::{OAuthStateStore, SessionCache};
 use crate::web::schedule_cache::ScheduleCache;
-use crate::web::session_cache::{OAuthStateStore, SessionCache};
 use crate::web::stream::computed::ComputedStreamManager;
 use anyhow::Result;
 use dashmap::DashMap;
+use serde::Serialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
+use ts_rs::TS;
+
+/// Health status of a service.
+#[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum ServiceStatus {
+    #[allow(dead_code)]
+    Starting,
+    Active,
+    Connected,
+    Disabled,
+    Error,
+}
+
+/// A timestamped status entry for a service.
+#[derive(Debug, Clone)]
+pub struct StatusEntry {
+    pub status: ServiceStatus,
+    #[allow(dead_code)]
+    pub updated_at: Instant,
+}
+
+/// Thread-safe registry for services to self-report their health status.
+#[derive(Debug, Clone, Default)]
+pub struct ServiceStatusRegistry {
+    inner: Arc<DashMap<String, StatusEntry>>,
+}
+
+impl ServiceStatusRegistry {
+    /// Creates a new empty registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Inserts or updates the status for a named service.
+    pub fn set(&self, name: &str, status: ServiceStatus) {
+        self.inner.insert(
+            name.to_owned(),
+            StatusEntry {
+                status,
+                updated_at: Instant::now(),
+            },
+        );
+    }
+
+    /// Returns the current status of a named service, if present.
+    #[allow(dead_code)]
+    pub fn get(&self, name: &str) -> Option<ServiceStatus> {
+        self.inner.get(name).map(|entry| entry.status.clone())
+    }
+
+    /// Returns a snapshot of all service statuses.
+    pub fn all(&self) -> Vec<(String, ServiceStatus)> {
+        self.inner
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().status.clone()))
+            .collect()
+    }
+}
 
 /// In-memory cache for reference data (code→description lookups).
 ///

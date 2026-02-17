@@ -3,6 +3,9 @@
 //! Provides login, callback, logout, and session introspection endpoints
 //! for Discord OAuth2 authentication flow.
 
+pub mod extractors;
+pub mod session;
+
 use axum::extract::{Extension, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Json, Redirect, Response};
