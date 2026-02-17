@@ -1,6 +1,7 @@
 //! Course search command implementation.
 
 use crate::banner::{SearchQuery, Term};
+use crate::bot::autocomplete::{autocomplete_subject, autocomplete_term};
 use crate::bot::{Context, Error};
 use anyhow::anyhow;
 use regex::Regex;
@@ -14,18 +15,27 @@ static WILDCARD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)(x+)").
 #[poise::command(slash_command, prefix_command)]
 pub async fn search(
     ctx: Context<'_>,
+    #[description = "Subject (e.g. CS, MAT, ENG)"]
+    #[autocomplete = "autocomplete_subject"]
+    subject: Option<String>,
+    #[description = "Term (defaults to current)"]
+    #[autocomplete = "autocomplete_term"]
+    term: Option<String>,
     #[description = "Course title (exact, use autocomplete)"] title: Option<String>,
     #[description = "Course code (e.g. 3743, 3000-3999, 3xxx, 3000-)"] code: Option<String>,
     #[description = "Maximum number of results"] max: Option<i32>,
     #[description = "Keywords in title or description (space separated)"] keywords: Option<String>,
     // #[description = "Instructor name"] instructor: Option<String>,
-    // #[description = "Subject (e.g Computer Science/CS, Mathematics/MAT)"] subject: Option<String>,
 ) -> Result<(), Error> {
     // Defer the response since this might take a while
     ctx.defer().await?;
 
     // Build the search query — no default credit filter so all courses are visible
     let mut query = SearchQuery::new();
+
+    if let Some(subject) = subject {
+        query = query.subject(subject);
+    }
 
     if let Some(title) = title {
         query = query.title(title);
@@ -46,7 +56,7 @@ pub async fn search(
         query = query.max_results(max_results.min(25)); // Cap at 25
     }
 
-    let term = Term::get_current().inner().to_string();
+    let term = term.unwrap_or_else(|| Term::get_current().inner().to_string());
     let search_result = ctx
         .data()
         .app_state

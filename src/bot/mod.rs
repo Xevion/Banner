@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::state::AppState;
 
+pub mod autocomplete;
 pub mod commands;
 pub mod utils;
 
