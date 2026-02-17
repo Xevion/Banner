@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { formatMeetingDays, formatMeetingTimesTooltip, formatTimeRange } from "$lib/course";
 
 let { course }: { course: CourseResponse } = $props();

@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { CodeDescription, Subject, Term } from "$lib/api";
+import type { CodeDescription } from "$lib/bindings";
+import type { Subject, Term } from "$lib/api";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { SlidersHorizontal } from "@lucide/svelte";
 import CatalogPopover from "./CatalogPopover.svelte";

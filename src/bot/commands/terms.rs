@@ -21,7 +21,6 @@ pub async fn terms(
         .data()
         .app_state
         .banner_api
-        .sessions
         .get_terms(&search_term, page_number, max_results)
         .await?;
 

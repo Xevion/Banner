@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTimeInput, formatTime, toggleDay, toggleValue } from "$lib/filters";
+import { parseTimeInput, formatCompactTime, toggleDay, toggleValue } from "$lib/filters";
 
 describe("parseTimeInput", () => {
   it("parses AM time", () => {
@@ -48,30 +48,30 @@ describe("parseTimeInput", () => {
   });
 });
 
-describe("formatTime", () => {
+describe("formatCompactTime", () => {
   it("formats morning time", () => {
-    expect(formatTime("0930")).toBe("9:30 AM");
+    expect(formatCompactTime("0930")).toBe("9:30 AM");
   });
 
   it("formats afternoon time", () => {
-    expect(formatTime("1500")).toBe("3:00 PM");
+    expect(formatCompactTime("1500")).toBe("3:00 PM");
   });
 
   it("formats noon", () => {
-    expect(formatTime("1200")).toBe("12:00 PM");
+    expect(formatCompactTime("1200")).toBe("12:00 PM");
   });
 
   it("formats midnight", () => {
-    expect(formatTime("0000")).toBe("12:00 AM");
+    expect(formatCompactTime("0000")).toBe("12:00 AM");
   });
 
   it("returns empty string for null", () => {
-    expect(formatTime(null)).toBe("");
+    expect(formatCompactTime(null)).toBe("");
   });
 
   it("returns empty string for invalid length", () => {
-    expect(formatTime("12")).toBe("");
-    expect(formatTime("123456")).toBe("");
+    expect(formatCompactTime("12")).toBe("");
+    expect(formatCompactTime("123456")).toBe("");
   });
 });
 

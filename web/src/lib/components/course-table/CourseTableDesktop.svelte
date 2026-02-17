@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";

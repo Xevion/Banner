@@ -6,7 +6,8 @@
  * Fetches are throttled so rapid panning/zooming doesn't flood the API.
  */
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
-import { type TimeRange, client } from "$lib/api";
+import type { TimeRange } from "$lib/bindings";
+import { client } from "$lib/api";
 import { SLOT_INTERVAL_MS } from "./constants";
 import type { TimeSlot } from "./types";
 
@@ -80,9 +81,10 @@ async function fetchFromApi(gaps: Range[]): Promise<TimeSlot[]> {
     end: new Date(end).toISOString(),
   }));
 
-  const response = await client.getTimeline(ranges);
+  const result = await client.getTimeline(ranges);
+  if (result.isErr) throw result.error;
 
-  return response.slots.map((slot) => ({
+  return result.value.slots.map((slot) => ({
     time: new Date(slot.time),
     subjects: Object.fromEntries(
       Object.entries(slot.subjects).map(([k, v]) => [k, Number(v)])

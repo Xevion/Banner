@@ -47,7 +47,11 @@ const subjects = useStream("scraperSubjects", null, {
 
 // Terms: keep as HTTP fetch (per plan)
 const terms = useAutoRefresh({
-  fetcher: () => client.getAdminTerms().then((r) => r.terms),
+  fetcher: async () => {
+    const r = await client.getAdminTerms();
+    if (r.isErr) throw r.error;
+    return r.value.terms;
+  },
   interval: 0, // Fetch once, no auto-refresh
 });
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { abbreviateInstructor, getPrimaryInstructor, ratingStyle, rmpUrl } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { formatNumber } from "$lib/utils";

@@ -1,18 +1,9 @@
 <script lang="ts">
-import { type AdminStatusResponse, client } from "$lib/api";
 import { formatNumber } from "$lib/utils";
-import { onMount } from "svelte";
 
-let status = $state<AdminStatusResponse | null>(null);
-let error = $state<string | null>(null);
-
-onMount(async () => {
-  try {
-    status = await client.getAdminStatus();
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to load status";
-  }
-});
+let { data } = $props();
+let status = $derived(data.status);
+let error = $derived(data.error);
 </script>
 
 <h1 class="mb-4 text-lg font-semibold text-foreground">Dashboard</h1>

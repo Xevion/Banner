@@ -1,5 +1,5 @@
 // useCourseTableState.svelte.ts
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 
 export function useCourseTableState(getCourses: () => CourseResponse[], getLimit: () => number) {
   let expandedCrn: string | null = $state(null);

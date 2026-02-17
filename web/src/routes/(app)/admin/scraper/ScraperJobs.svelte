@@ -1,5 +1,6 @@
 <script lang="ts">
-import { type ScrapeJobDto, client } from "$lib/api";
+import type { ScrapeJobDto } from "$lib/bindings";
+import { client } from "$lib/api";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useStream } from "$lib/composables";
 import { formatAbsoluteDate } from "$lib/date";
@@ -101,17 +102,15 @@ onMount(() => {
   }, 1000);
 
   // Load subject reference data
-  client
-    .getReference("subject")
-    .then((entries) => {
+  void client.getReference("subject").then((result) => {
+    if (result.isOk) {
       subjectMap.clear();
-      for (const entry of entries) {
+      for (const entry of result.value) {
         subjectMap.set(entry.code, entry.description);
       }
-    })
-    .catch(() => {
-      // Subject lookup is best-effort
-    });
+    }
+    // Subject lookup is best-effort
+  });
 
   return () => {
     clearInterval(tickInterval);

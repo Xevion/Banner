@@ -30,7 +30,10 @@ describe("BannerApiClient", () => {
     const result = await apiClient.getStatus();
 
     expect(fetch).toHaveBeenCalledWith("/api/status");
-    expect(result).toEqual(mockStatus);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value).toEqual(mockStatus);
+    }
   });
 
   it("should handle API errors", async () => {
@@ -38,11 +41,15 @@ describe("BannerApiClient", () => {
       ok: false,
       status: 500,
       statusText: "Internal Server Error",
-    } as Response);
+      json: () => Promise.reject(new Error("no json")),
+    } as unknown as Response);
 
-    await expect(apiClient.getStatus()).rejects.toThrow(
-      "API request failed: 500 Internal Server Error"
-    );
+    const result = await apiClient.getStatus();
+
+    expect(result.isErr).toBe(true);
+    if (result.isErr) {
+      expect(result.error.message).toBe("API request failed: 500 Internal Server Error");
+    }
   });
 
   it("should search courses with all params", async () => {
@@ -68,7 +75,10 @@ describe("BannerApiClient", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/courses/search?term=202420&subject=CS&query=data&openOnly=true&limit=25&offset=50"
     );
-    expect(result).toEqual(mockResponse);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value).toEqual(mockResponse);
+    }
   });
 
   it("should search courses with minimal params", async () => {
@@ -82,9 +92,10 @@ describe("BannerApiClient", () => {
       json: () => Promise.resolve(mockResponse),
     } as Response);
 
-    await apiClient.searchCourses({ term: "202420" });
+    const result = await apiClient.searchCourses({ term: "202420" });
 
     expect(fetch).toHaveBeenCalledWith("/api/courses/search?term=202420");
+    expect(result.isOk).toBe(true);
   });
 
   it("should fetch reference data", async () => {
@@ -101,6 +112,9 @@ describe("BannerApiClient", () => {
     const result = await apiClient.getReference("instructional_methods");
 
     expect(fetch).toHaveBeenCalledWith("/api/reference/instructional_methods");
-    expect(result).toEqual(mockRef);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value).toEqual(mockRef);
+    }
   });
 });

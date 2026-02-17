@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import CourseDetailTabs from "./course-detail/CourseDetailTabs.svelte";
 
 let { course }: { course: CourseResponse } = $props();

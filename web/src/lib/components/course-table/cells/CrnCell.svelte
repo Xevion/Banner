@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { fade } from "svelte/transition";
 import { getTableContext } from "../context";
 

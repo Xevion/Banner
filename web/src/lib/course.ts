@@ -1,14 +1,15 @@
 import type {
   Campus,
   CourseResponse,
-  DayOfWeek,
   DbMeetingTime,
   InstructionalMethod,
   InstructorResponse,
-} from "$lib/api";
+} from "$lib/bindings";
+import { formatDateShort } from "$lib/date";
+import { formatDayCodes, formatDayList, formatDayVerbose } from "$lib/days";
 
 /** Convert ISO time string "08:30:00" to "8:30 AM" */
-export function formatTime(time: string | null): string {
+export function formatISOTime(time: string | null): string {
   if (!time) return "TBA";
   // ISO format: "HH:MM:SS"
   const parts = time.split(":");
@@ -20,48 +21,12 @@ export function formatTime(time: string | null): string {
   return `${display}:${minutes} ${period}`;
 }
 
-/**
- * Compact day abbreviation for table cells.
- *
- * Single day → 3-letter: "Mon", "Thu"
- * Multi-day  → concatenated codes: "MWF", "TTh", "MTWTh", "TSa"
- *
- * Codes use single letters where unambiguous (M/T/W/F) and
- * two letters where needed (Th/Sa/Su).
- */
-const DAY_SHORT: Record<DayOfWeek, [string, string]> = {
-  monday: ["M", "Mon"],
-  tuesday: ["T", "Tue"],
-  wednesday: ["W", "Wed"],
-  thursday: ["Th", "Thu"],
-  friday: ["F", "Fri"],
-  saturday: ["Sa", "Sat"],
-  sunday: ["Su", "Sun"],
-};
-
 export function formatMeetingDays(mt: DbMeetingTime): string {
-  const days = mt.days;
-  if (days.length === 0) return "";
-  if (days.length === 1) return DAY_SHORT[days[0]][1];
-  return days.map((d) => DAY_SHORT[d][0]).join("");
+  return formatDayCodes(mt.days);
 }
 
-/** Longer day names for detail view: single day → "Thursdays", multiple → "Mon, Wed, Fri" */
-const DAY_LONG: Record<DayOfWeek, [string, string]> = {
-  monday: ["Mon", "Mondays"],
-  tuesday: ["Tue", "Tuesdays"],
-  wednesday: ["Wed", "Wednesdays"],
-  thursday: ["Thur", "Thursdays"],
-  friday: ["Fri", "Fridays"],
-  saturday: ["Sat", "Saturdays"],
-  sunday: ["Sun", "Sundays"],
-};
-
 export function formatMeetingDaysLong(mt: DbMeetingTime): string {
-  const days = mt.days;
-  if (days.length === 0) return "";
-  if (days.length === 1) return DAY_LONG[days[0]][1];
-  return days.map((d) => DAY_LONG[d][0]).join(", ");
+  return formatDayList(mt.days);
 }
 
 /**
@@ -150,14 +115,6 @@ export function getPrimaryInstructor(
   return instructors.find((i) => i.isPrimary) ?? instructors[0];
 }
 
-/** Format an ISO-8601 date (YYYY-MM-DD) to "January 20, 2026". */
-export function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  if (!year || !month || !day) return dateStr;
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
-
 /** Longer location string using building description: "Main Hall 2.206" */
 function formatLocationLong(mt: DbMeetingTime): string | null {
   const name = mt.location?.buildingDescription ?? mt.location?.building;
@@ -165,33 +122,8 @@ function formatLocationLong(mt: DbMeetingTime): string | null {
   return mt.location?.room ? `${name} ${mt.location.room}` : name;
 }
 
-/** Format an ISO-8601 date (YYYY-MM-DD) as "Aug 26, 2024". */
-export function formatDateShort(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  if (!year || !month || !day) return dateStr;
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-/**
- * Verbose day names for tooltips: "Tuesdays & Thursdays", "Mondays, Wednesdays & Fridays".
- * Single day → plural: "Thursdays".
- */
-const DAY_VERBOSE: Record<DayOfWeek, string> = {
-  monday: "Mondays",
-  tuesday: "Tuesdays",
-  wednesday: "Wednesdays",
-  thursday: "Thursdays",
-  friday: "Fridays",
-  saturday: "Saturdays",
-  sunday: "Sundays",
-};
-
 export function formatMeetingDaysVerbose(mt: DbMeetingTime): string {
-  const names = mt.days.map((d) => DAY_VERBOSE[d]);
-  if (names.length === 0) return "";
-  if (names.length === 1) return names[0];
-  return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
+  return formatDayVerbose(mt.days);
 }
 
 /**
@@ -234,36 +166,21 @@ export function formatMeetingTimesTooltip(meetingTimes: DbMeetingTime[]): string
   return meetingTimes.map(formatMeetingTimeTooltip).join("\n\n");
 }
 
-/** Border accent color based on instructional method and campus. */
-export function concernAccentColor(
+/** Border accent class based on instructional method and campus. */
+export function concernAccentClass(
   method: InstructionalMethod | null,
   campus: Campus | null
 ): string | null {
-  // Online variants get blue accents
-  if (method?.type === "Online") {
-    return "#3b82f6"; // blue-500
-  }
-
-  // Hybrid variants get purple accents
-  if (method?.type === "Hybrid") {
-    return "#a855f7"; // purple-500
-  }
-
-  // OnlinePrograms campus gets cyan accent (restricted access)
-  if (campus?.type === "OnlinePrograms") {
-    return "#06b6d4"; // cyan-500
-  }
-
-  // Off-campus locations get amber accent
+  if (method?.type === "Online") return "border-l-2 border-l-blue-500";
+  if (method?.type === "Hybrid") return "border-l-2 border-l-purple-500";
+  if (campus?.type === "OnlinePrograms") return "border-l-2 border-l-cyan-500";
   if (
     campus?.type === "Downtown" ||
     campus?.type === "Southwest" ||
     campus?.type === "Laredo" ||
     campus?.type === "Unknown"
-  ) {
-    return "#f59e0b"; // amber-500
-  }
-
+  )
+    return "border-l-2 border-l-amber-500";
   return null;
 }
 

@@ -3,4 +3,4 @@
 /**
  * Machine-readable error code for API responses.
  */
-export type ApiErrorCode = "NOT_FOUND" | "BAD_REQUEST" | "INTERNAL_ERROR" | "INVALID_TERM" | "INVALID_RANGE" | "UNAUTHORIZED" | "FORBIDDEN" | "NO_TERMS";
+export type ApiErrorCode = "NOT_FOUND" | "BAD_REQUEST" | "CONFLICT" | "INTERNAL_ERROR" | "INVALID_TERM" | "INVALID_RANGE" | "UNAUTHORIZED" | "FORBIDDEN" | "NO_TERMS";

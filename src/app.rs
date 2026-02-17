@@ -234,7 +234,6 @@ impl App {
         banner_api: &Arc<BannerApi>,
     ) -> Result<crate::data::terms::SyncResult, anyhow::Error> {
         let banner_terms = banner_api
-            .sessions
             .get_terms("", 1, 500)
             .await
             .context("Failed to fetch terms from Banner API")?;

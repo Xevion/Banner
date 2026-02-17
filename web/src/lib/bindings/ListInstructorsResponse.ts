@@ -3,6 +3,6 @@ import type { InstructorListItem } from "./InstructorListItem";
 import type { InstructorStats } from "./InstructorStats";
 
 /**
- * Response for `GET /api/admin/instructors`.
+ * Response for the paginated instructor list.
  */
 export type ListInstructorsResponse = { instructors: Array<InstructorListItem>, total: number, page: number, perPage: number, stats: InstructorStats, };

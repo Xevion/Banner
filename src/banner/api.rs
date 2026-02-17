@@ -213,6 +213,20 @@ impl BannerApi {
         Ok(search_result)
     }
 
+    /// Retrieves a list of terms from the Banner API.
+    ///
+    /// Delegates to the session pool's HTTP client. Prefer calling this
+    /// over `banner_api.sessions.get_terms()` — terms are a session-independent
+    /// resource and this method expresses that.
+    pub async fn get_terms(
+        &self,
+        search: &str,
+        page: i32,
+        max_results: i32,
+    ) -> Result<Vec<BannerTerm>> {
+        self.sessions.get_terms(search, page, max_results).await
+    }
+
     /// Retrieves a list of subjects from the Banner API.
     pub async fn get_subjects(
         &self,

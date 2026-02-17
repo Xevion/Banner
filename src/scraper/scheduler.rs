@@ -359,7 +359,7 @@ impl Scheduler {
     async fn sync_terms(db_pool: &PgPool, banner_api: &BannerApi) -> Result<()> {
         info!("Starting term sync from Banner API");
 
-        let banner_terms = banner_api.sessions.get_terms("", 1, 500).await?;
+        let banner_terms = banner_api.get_terms("", 1, 500).await?;
         let start = Instant::now();
         let result = terms::sync_terms_from_banner(db_pool, banner_terms).await?;
         let elapsed = start.elapsed();
@@ -436,7 +436,7 @@ impl Scheduler {
         let mut all_entries = Vec::new();
 
         // Terms (fetched via session pool, no active session needed)
-        match banner_api.sessions.get_terms("", 1, 500).await {
+        match banner_api.get_terms("", 1, 500).await {
             Ok(terms) => {
                 debug!(count = terms.len(), "Fetched terms");
                 all_entries.extend(terms.into_iter().map(|t| ReferenceData {

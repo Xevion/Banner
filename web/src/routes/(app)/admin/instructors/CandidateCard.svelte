@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CandidateResponse } from "$lib/api";
+import type { CandidateResponse } from "$lib/bindings";
 import { ratingStyle, rmpUrl } from "$lib/course";
 import { Check, ExternalLink, LoaderCircle, X, XCircle } from "@lucide/svelte";
 import ScoreBreakdown from "./ScoreBreakdown.svelte";

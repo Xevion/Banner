@@ -1,4 +1,5 @@
-import type { SearchParams, SortColumn, SortDirection } from "$lib/api";
+import type { SortColumn, SortDirection } from "$lib/bindings";
+import type { SearchParams } from "$lib/api";
 import type { SortingState } from "@tanstack/table-core";
 import { createContext } from "svelte";
 import { SvelteURLSearchParams } from "svelte/reactivity";
@@ -188,14 +189,6 @@ export class SearchFilters implements FilterFields {
       this.courseNumberLow,
       this.courseNumberHigh,
     ].join("|");
-  }
-
-  /**
-   * Builds a filter-only key (excludes offset/sorting).
-   * Used to detect when filters change to reset pagination.
-   */
-  toFilterKey(): string {
-    return this.toSearchKey();
   }
 
   /**

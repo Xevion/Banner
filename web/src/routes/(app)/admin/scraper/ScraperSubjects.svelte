@@ -36,13 +36,9 @@ async function toggleSubjectDetail(subject: string) {
   }
   expandedSubject = subject;
   detailLoading = true;
-  try {
-    subjectDetail = await client.getScraperSubjectDetail(subject);
-  } catch {
-    subjectDetail = null;
-  } finally {
-    detailLoading = false;
-  }
+  const result = await client.getScraperSubjectDetail(subject);
+  subjectDetail = result.isOk ? result.value : null;
+  detailLoading = false;
 }
 
 // --- Live-updating clock for relative timestamps ---

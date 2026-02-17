@@ -1,5 +1,6 @@
 <script lang="ts">
-import { type ServiceInfo, type ServiceStatus, type StatusResponse, client } from "$lib/api";
+import type { ServiceInfo, ServiceStatus, StatusResponse } from "$lib/bindings";
+import { client } from "$lib/api";
 import Footer from "$lib/components/Footer.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
@@ -133,21 +134,24 @@ onMount(() => {
         }, REQUEST_TIMEOUT);
       });
 
-      const statusData = await Promise.race([client.getStatus(), timeoutPromise]);
+      const result = await Promise.race([client.getStatus(), timeoutPromise]);
 
       if (requestTimeoutId) {
         clearTimeout(requestTimeoutId);
         requestTimeoutId = null;
       }
 
-      const responseTime = Date.now() - startTime;
-
-      statusState = {
-        mode: "response",
-        status: statusData,
-        timing: { health: responseTime, status: responseTime },
-        lastFetch: new Date(),
-      };
+      if (result.isErr) {
+        statusState = { mode: "error", lastFetch: new Date() };
+      } else {
+        const responseTime = Date.now() - startTime;
+        statusState = {
+          mode: "response",
+          status: result.value,
+          timing: { health: responseTime, status: responseTime },
+          lastFetch: new Date(),
+        };
+      }
     } catch (err) {
       if (requestTimeoutId) {
         clearTimeout(requestTimeoutId);

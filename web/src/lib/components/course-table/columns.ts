@@ -1,5 +1,5 @@
 // columns.ts
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import type { ColumnDef } from "@tanstack/table-core";
 import type { Component } from "svelte";
 import {

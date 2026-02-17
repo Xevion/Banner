@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { formatCreditHours } from "$lib/course";
 import { formatNumber } from "$lib/utils";
 import { getInstructionalMethodLabel, getCampusLabel, getAttributeLabel } from "$lib/labels";

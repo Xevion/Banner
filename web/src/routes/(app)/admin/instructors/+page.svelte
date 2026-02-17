@@ -1,11 +1,11 @@
 <script lang="ts">
-import {
-  type CandidateResponse,
-  type InstructorDetailResponse,
-  type InstructorListItem,
-  type InstructorStats,
-  client,
-} from "$lib/api";
+import type {
+  CandidateResponse,
+  InstructorDetailResponse,
+  InstructorListItem,
+  InstructorStats,
+} from "$lib/bindings";
+import { client } from "$lib/api";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { formatInstructorName, ratingStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
@@ -19,29 +19,45 @@ import {
   X,
 } from "@lucide/svelte";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
-import { onDestroy, onMount } from "svelte";
+import { onDestroy } from "svelte";
 import { fade, slide } from "svelte/transition";
 import CandidateCard from "./CandidateCard.svelte";
 
+// --- Props from load function ---
+let { data } = $props();
+
+// Build initial subject map from load data
+function buildSubjectMap(
+  subjects: { code: string; description: string }[]
+): SvelteMap<string, string> {
+  const map = new SvelteMap<string, string>();
+  for (const entry of subjects) {
+    map.set(entry.code, entry.description);
+  }
+  return map;
+}
+
 // --- State ---
-let subjectMap = $state(new Map<string, string>());
-let instructors = $state<InstructorListItem[]>([]);
-let stats = $state<InstructorStats>({
-  total: 0,
-  unmatched: 0,
-  auto: 0,
-  confirmed: 0,
-  rejected: 0,
-  withCandidates: 0,
-});
-let totalCount = $state(0);
+let subjectMap = $state(buildSubjectMap(data.subjects));
+let instructors = $state<InstructorListItem[]>(data.instructors?.instructors ?? []);
+let stats = $state<InstructorStats>(
+  data.instructors?.stats ?? {
+    total: 0,
+    unmatched: 0,
+    auto: 0,
+    confirmed: 0,
+    rejected: 0,
+    withCandidates: 0,
+  }
+);
+let totalCount = $state(data.instructors?.total ?? 0);
 let currentPage = $state(1);
 let perPage = $state(25);
 let activeFilter = $state<string | undefined>(undefined);
 let searchQuery = $state("");
 let searchInput = $state("");
-let error = $state<string | null>(null);
-let loading = $state(true);
+let error = $state<string | null>(data.error);
+let loading = $state(false);
 
 // Expanded row detail
 let expandedId = $state<number | null>(null);
@@ -130,51 +146,35 @@ async function fetchInstructors() {
   error = null;
   recentlyChanged.clear();
   clearHighlightTimeouts();
-  try {
-    const res = await client.getAdminInstructors({
-      status: activeFilter,
-      search: searchQuery || undefined,
-      page: currentPage,
-      perPage: perPage,
-    });
+  const result = await client.getAdminInstructors({
+    status: activeFilter,
+    search: searchQuery || undefined,
+    page: currentPage,
+    perPage: perPage,
+  });
+  if (result.isErr) {
+    error = result.error.message;
+  } else {
+    const res = result.value;
     instructors = res.instructors;
     totalCount = res.total;
     stats = res.stats;
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to load instructors";
-  } finally {
-    loading = false;
   }
+  loading = false;
 }
 
 async function fetchDetail(id: number) {
   detailLoading = true;
   detailError = null;
   detail = null;
-  try {
-    detail = await client.getAdminInstructor(id);
-  } catch (e) {
-    detailError = e instanceof Error ? e.message : "Failed to load details";
-  } finally {
-    detailLoading = false;
+  const result = await client.getAdminInstructor(id);
+  if (result.isErr) {
+    detailError = result.error.message;
+  } else {
+    detail = result.value;
   }
+  detailLoading = false;
 }
-
-onMount(() => {
-  void fetchInstructors();
-  void client
-    .getReference("subject")
-    .then((entries) => {
-      const map = new SvelteMap<string, string>();
-      for (const entry of entries) {
-        map.set(entry.code, entry.description);
-      }
-      subjectMap = map;
-    })
-    .catch(() => {
-      // Subject lookup is best-effort
-    });
-});
 
 onDestroy(() => {
   clearTimeout(searchTimeout);
@@ -282,26 +282,25 @@ function matchesFilter(status: string): boolean {
 // --- Actions ---
 async function handleMatch(instructorId: number, rmpLegacyId: number) {
   actionLoading = `match-${rmpLegacyId}`;
-  try {
-    detail = await client.matchInstructor(instructorId, rmpLegacyId);
+  const result = await client.matchInstructor(instructorId, rmpLegacyId);
+  if (result.isErr) {
+    detailError = result.error.message;
+  } else {
+    detail = result.value;
     updateLocalStatus(instructorId, "confirmed");
-  } catch (e) {
-    detailError = e instanceof Error ? e.message : "Match failed";
-  } finally {
-    actionLoading = null;
   }
+  actionLoading = null;
 }
 
 async function handleReject(instructorId: number, rmpLegacyId: number) {
   actionLoading = `reject-${rmpLegacyId}`;
-  try {
-    await client.rejectCandidate(instructorId, rmpLegacyId);
+  const result = await client.rejectCandidate(instructorId, rmpLegacyId);
+  if (result.isErr) {
+    detailError = result.error.message;
+  } else {
     await fetchDetail(instructorId);
-  } catch (e) {
-    detailError = e instanceof Error ? e.message : "Reject failed";
-  } finally {
-    actionLoading = null;
   }
+  actionLoading = null;
 }
 
 function requestRejectAll(instructorId: number) {
@@ -311,15 +310,14 @@ function requestRejectAll(instructorId: number) {
 async function confirmRejectAll(instructorId: number) {
   showRejectConfirm = null;
   actionLoading = "reject-all";
-  try {
-    await client.rejectAllCandidates(instructorId);
+  const result = await client.rejectAllCandidates(instructorId);
+  if (result.isErr) {
+    detailError = result.error.message;
+  } else {
     await fetchDetail(instructorId);
     updateLocalStatus(instructorId, "rejected");
-  } catch (e) {
-    detailError = e instanceof Error ? e.message : "Reject all failed";
-  } finally {
-    actionLoading = null;
   }
+  actionLoading = null;
 }
 
 function cancelRejectAll() {
@@ -328,35 +326,34 @@ function cancelRejectAll() {
 
 async function handleUnmatch(instructorId: number, rmpLegacyId: number) {
   actionLoading = `unmatch-${rmpLegacyId}`;
-  try {
-    await client.unmatchInstructor(instructorId, rmpLegacyId);
+  const result = await client.unmatchInstructor(instructorId, rmpLegacyId);
+  if (result.isErr) {
+    detailError = result.error.message;
+  } else {
     await fetchDetail(instructorId);
     updateLocalStatus(instructorId, "unmatched");
-  } catch (e) {
-    detailError = e instanceof Error ? e.message : "Unmatch failed";
-  } finally {
-    actionLoading = null;
   }
+  actionLoading = null;
 }
 
 async function handleRescore() {
   rescoreLoading = true;
   rescoreResult = null;
-  try {
-    const res = await client.rescoreInstructors();
+  const result = await client.rescoreInstructors();
+  if (result.isErr) {
+    rescoreResult = {
+      message: result.error.message,
+      isError: true,
+    };
+  } else {
+    const res = result.value;
     rescoreResult = {
       message: `Rescored: ${res.totalUnmatched} unmatched, ${res.candidatesCreated} candidates created, ${res.autoMatched} auto-matched`,
       isError: false,
     };
     await fetchInstructors();
-  } catch (e) {
-    rescoreResult = {
-      message: e instanceof Error ? e.message : "Rescore failed",
-      isError: true,
-    };
-  } finally {
-    rescoreLoading = false;
   }
+  rescoreLoading = false;
 }
 
 // --- Helpers ---

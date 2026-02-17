@@ -1,123 +1,38 @@
 import { authStore } from "$lib/auth.svelte";
+import Result, { ok, err } from "true-myth/result";
 import type {
   AdminStatusResponse,
   ApiError,
   ApiErrorCode,
-  Attribute,
-  AuditLogEntry,
   AuditLogResponse,
-  Campus,
-  CandidateResponse,
   CodeDescription,
   CourseResponse,
-  DayOfWeek,
-  DbMeetingTime,
-  DbTerm,
-  FilterRanges,
-  HybridVariant,
-  InstructionalMethod,
-  InstructorDetail,
   InstructorDetailResponse,
-  InstructorListItem,
-  InstructorResponse,
-  InstructorStats,
-  LinkedRmpProfile,
   ListInstructorsParams as ListInstructorsParamsGenerated,
   ListInstructorsResponse,
   MatchBody,
-  MetricEntry,
   MetricsParams as MetricsParamsGenerated,
   MetricsResponse,
-  OnlineVariant,
-  PartOfTerm,
   RejectCandidateBody,
   RescoreResponse,
-  ScrapeJobDto,
-  ScrapeJobEvent,
   ScrapeJobsResponse,
   ScraperStatsResponse,
-  SearchOptionsReference,
   SearchOptionsResponse,
   SearchParams as SearchParamsGenerated,
   SearchResponse as SearchResponseGenerated,
-  ServiceInfo,
-  ServiceStatus,
-  SortColumn,
-  SortDirection,
   StatusResponse,
   SubjectDetailResponse,
-  SubjectResultEntry,
-  SubjectSummary,
   SubjectsResponse,
   TermResponse,
   TermsListResponse,
   TimeRange,
   TimelineRequest,
   TimelineResponse,
-  TimelineSlot,
-  TimeseriesPoint,
   TimeseriesResponse,
-  TopCandidateResponse,
   User,
 } from "$lib/bindings";
 
 const API_BASE_URL = "/api";
-
-// Re-export generated types under their canonical names
-export type {
-  AdminStatusResponse,
-  ApiError,
-  ApiErrorCode,
-  Attribute,
-  AuditLogEntry,
-  AuditLogResponse,
-  Campus,
-  CandidateResponse,
-  CodeDescription,
-  CourseResponse,
-  DayOfWeek,
-  DbMeetingTime,
-  DbTerm,
-  FilterRanges,
-  HybridVariant,
-  InstructionalMethod,
-  InstructorDetail,
-  InstructorDetailResponse,
-  InstructorListItem,
-  InstructorResponse,
-  InstructorStats,
-  LinkedRmpProfile,
-  ListInstructorsResponse,
-  MetricEntry,
-  MetricsResponse,
-  OnlineVariant,
-  PartOfTerm,
-  RescoreResponse,
-  ScrapeJobDto,
-  ScrapeJobEvent,
-  ScrapeJobsResponse,
-  ScraperStatsResponse,
-  SearchOptionsReference,
-  SearchOptionsResponse,
-  ServiceInfo,
-  ServiceStatus,
-  SortColumn,
-  SortDirection,
-  StatusResponse,
-  SubjectDetailResponse,
-  SubjectResultEntry,
-  SubjectSummary,
-  SubjectsResponse,
-  TermResponse,
-  TermsListResponse,
-  TimelineRequest,
-  TimelineResponse,
-  TimelineSlot,
-  TimeRange,
-  TimeseriesPoint,
-  TimeseriesResponse,
-  TopCandidateResponse,
-};
 
 // Semantic aliases
 export type Term = TermResponse;
@@ -216,71 +131,95 @@ export class BannerApiClient {
     return Object.keys(init).length > 0 ? init : undefined;
   }
 
+  private responseToErr(response: Response, apiError?: ApiError): Result<never, ApiErrorClass> {
+    if (response.status === 401) {
+      authStore.handleUnauthorized();
+    }
+    const error =
+      apiError ??
+      ({
+        code: "INTERNAL_ERROR",
+        message: `API request failed: ${response.status} ${response.statusText}`,
+        details: null,
+      } satisfies ApiError);
+    return err(new ApiErrorClass(error));
+  }
+
   private async request<T>(
     endpoint: string,
     options?: { method?: string; body?: unknown }
-  ): Promise<T> {
+  ): Promise<Result<T, ApiErrorClass>> {
     const init = this.buildInit(options);
     const args: [string, RequestInit?] = [`${this.baseUrl}${endpoint}`];
     if (init) args.push(init);
 
-    const response = await this.fetchFn(...args);
-
-    if (response.status === 401) {
-      authStore.handleUnauthorized();
+    let response: Response;
+    try {
+      response = await this.fetchFn(...args);
+    } catch (e) {
+      return err(
+        new ApiErrorClass({
+          code: "INTERNAL_ERROR",
+          message: e instanceof Error ? e.message : "Network request failed",
+          details: null,
+        })
+      );
     }
 
     if (!response.ok) {
-      let apiError: ApiError;
+      let apiError: ApiError | undefined;
       try {
         apiError = (await response.json()) as ApiError;
       } catch {
-        apiError = {
-          code: "INTERNAL_ERROR",
-          message: `API request failed: ${response.status} ${response.statusText}`,
-          details: null,
-        };
+        // Fall through — responseToErr uses a default
       }
-      throw new ApiErrorClass(apiError);
+      return this.responseToErr(response, apiError);
     }
 
-    return (await response.json()) as T;
+    return ok((await response.json()) as T);
   }
 
   private async requestVoid(
     endpoint: string,
     options?: { method?: string; body?: unknown }
-  ): Promise<void> {
+  ): Promise<Result<void, ApiErrorClass>> {
     const init = this.buildInit(options);
     const args: [string, RequestInit?] = [`${this.baseUrl}${endpoint}`];
     if (init) args.push(init);
 
-    const response = await this.fetchFn(...args);
-
-    if (response.status === 401) {
-      authStore.handleUnauthorized();
+    let response: Response;
+    try {
+      response = await this.fetchFn(...args);
+    } catch (e) {
+      return err(
+        new ApiErrorClass({
+          code: "INTERNAL_ERROR",
+          message: e instanceof Error ? e.message : "Network request failed",
+          details: null,
+        })
+      );
     }
 
     if (!response.ok) {
-      let apiError: ApiError;
+      let apiError: ApiError | undefined;
       try {
         apiError = (await response.json()) as ApiError;
       } catch {
-        apiError = {
-          code: "INTERNAL_ERROR",
-          message: `API request failed: ${response.status} ${response.statusText}`,
-          details: null,
-        };
+        // Fall through — responseToErr uses a default
       }
-      throw new ApiErrorClass(apiError);
+      return this.responseToErr(response, apiError);
     }
+
+    return ok(undefined as unknown as void);
   }
 
-  async getStatus(): Promise<StatusResponse> {
+  async getStatus(): Promise<Result<StatusResponse, ApiErrorClass>> {
     return this.request<StatusResponse>("/status");
   }
 
-  async searchCourses(params: Partial<SearchParams> & { term: string }): Promise<SearchResponse> {
+  async searchCourses(
+    params: Partial<SearchParams> & { term: string }
+  ): Promise<Result<SearchResponse, ApiErrorClass>> {
     const query = toURLSearchParams(params as Record<string, unknown>);
     return this.request<SearchResponse>(`/courses/search?${query.toString()}`);
   }
@@ -289,21 +228,21 @@ export class BannerApiClient {
     term: string,
     subject: string,
     courseNumber: string
-  ): Promise<CourseResponse[]> {
+  ): Promise<Result<CourseResponse[], ApiErrorClass>> {
     return this.request<CourseResponse[]>(
       `/courses/${encodeURIComponent(term)}/${encodeURIComponent(subject)}/${encodeURIComponent(courseNumber)}/sections`
     );
   }
 
-  async getTerms(): Promise<Term[]> {
+  async getTerms(): Promise<Result<Term[], ApiErrorClass>> {
     return this.request<Term[]>("/terms");
   }
 
-  async getSubjects(term: string): Promise<Subject[]> {
+  async getSubjects(term: string): Promise<Result<Subject[], ApiErrorClass>> {
     return this.request<Subject[]>(`/subjects?term=${encodeURIComponent(term)}`);
   }
 
-  async getReference(category: string): Promise<ReferenceEntry[]> {
+  async getReference(category: string): Promise<Result<ReferenceEntry[], ApiErrorClass>> {
     return this.request<ReferenceEntry[]>(`/reference/${encodeURIComponent(category)}`);
   }
 
@@ -314,58 +253,77 @@ export class BannerApiClient {
   >();
   private static SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
 
-  async getSearchOptions(term?: string): Promise<SearchOptionsResponse> {
+  async getSearchOptions(term?: string): Promise<Result<SearchOptionsResponse, ApiErrorClass>> {
     const cacheKey = term ?? "__default__";
     const cached = this.searchOptionsCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < BannerApiClient.SEARCH_OPTIONS_TTL) {
-      return cached.data;
+      return ok(cached.data);
     }
     const url = term ? `/search-options?term=${encodeURIComponent(term)}` : "/search-options";
-    const data = await this.request<SearchOptionsResponse>(url);
-    this.searchOptionsCache.set(cacheKey, { data, fetchedAt: Date.now() });
-    return data;
+    const result = await this.request<SearchOptionsResponse>(url);
+    if (result.isOk) {
+      this.searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
+    }
+    return result;
   }
 
   // Admin endpoints
-  async getAdminStatus(): Promise<AdminStatusResponse> {
+  async getAdminStatus(): Promise<Result<AdminStatusResponse, ApiErrorClass>> {
     return this.request<AdminStatusResponse>("/admin/status");
   }
 
-  async getAdminUsers(): Promise<User[]> {
+  async getAdminUsers(): Promise<Result<User[], ApiErrorClass>> {
     return this.request<User[]>("/admin/users");
   }
 
-  async setUserAdmin(discordId: string, isAdmin: boolean): Promise<User> {
+  async setUserAdmin(discordId: string, isAdmin: boolean): Promise<Result<User, ApiErrorClass>> {
     return this.request<User>(`/admin/users/${discordId}/admin`, {
       method: "PUT",
       body: { is_admin: isAdmin },
     });
   }
 
-  async getAdminScrapeJobs(): Promise<ScrapeJobsResponse> {
+  async getAdminScrapeJobs(): Promise<Result<ScrapeJobsResponse, ApiErrorClass>> {
     return this.request<ScrapeJobsResponse>("/admin/scrape-jobs");
   }
 
   /**
    * Fetch the audit log with conditional request support.
    *
-   * Returns `null` when the server responds 304 (data unchanged).
+   * Returns `ok(null)` when the server responds 304 (data unchanged).
    * Stores and sends `Last-Modified` / `If-Modified-Since` automatically.
    */
-  async getAdminAuditLog(): Promise<AuditLogResponse | null> {
+  async getAdminAuditLog(): Promise<Result<AuditLogResponse | null, ApiErrorClass>> {
     const headers: Record<string, string> = {};
     if (this._auditLastModified) {
       headers["If-Modified-Since"] = this._auditLastModified;
     }
 
-    const response = await this.fetchFn(`${this.baseUrl}/admin/audit-log`, { headers });
+    let response: Response;
+    try {
+      response = await this.fetchFn(`${this.baseUrl}/admin/audit-log`, { headers });
+    } catch (e) {
+      return err(
+        new ApiErrorClass({
+          code: "INTERNAL_ERROR",
+          message: e instanceof Error ? e.message : "Network request failed",
+          details: null,
+        })
+      );
+    }
 
     if (response.status === 304) {
-      return null;
+      return ok(null);
     }
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      let apiError: ApiError | undefined;
+      try {
+        apiError = (await response.json()) as ApiError;
+      } catch {
+        // Fall through — responseToErr uses a default
+      }
+      return this.responseToErr(response, apiError);
     }
 
     const lastMod = response.headers.get("Last-Modified");
@@ -373,20 +331,22 @@ export class BannerApiClient {
       this._auditLastModified = lastMod;
     }
 
-    return (await response.json()) as AuditLogResponse;
+    return ok((await response.json()) as AuditLogResponse);
   }
 
   /** Stored `Last-Modified` value for audit log conditional requests. */
   private _auditLastModified: string | null = null;
 
-  async getTimeline(ranges: TimeRange[]): Promise<TimelineResponse> {
+  async getTimeline(ranges: TimeRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {
     return this.request<TimelineResponse>("/timeline", {
       method: "POST",
       body: { ranges } satisfies TimelineRequest,
     });
   }
 
-  async getMetrics(params?: Partial<MetricsParams>): Promise<MetricsResponse> {
+  async getMetrics(
+    params?: Partial<MetricsParams>
+  ): Promise<Result<MetricsResponse, ApiErrorClass>> {
     if (!params) {
       return this.request<MetricsResponse>("/metrics");
     }
@@ -399,7 +359,7 @@ export class BannerApiClient {
 
   async getAdminInstructors(
     params?: Partial<ListInstructorsParams>
-  ): Promise<ListInstructorsResponse> {
+  ): Promise<Result<ListInstructorsResponse, ApiErrorClass>> {
     if (!params) {
       return this.request<ListInstructorsResponse>("/admin/instructors");
     }
@@ -408,38 +368,41 @@ export class BannerApiClient {
     return this.request<ListInstructorsResponse>(`/admin/instructors${qs ? `?${qs}` : ""}`);
   }
 
-  async getAdminInstructor(id: number): Promise<InstructorDetailResponse> {
+  async getAdminInstructor(id: number): Promise<Result<InstructorDetailResponse, ApiErrorClass>> {
     return this.request<InstructorDetailResponse>(`/admin/instructors/${id}`);
   }
 
-  async matchInstructor(id: number, rmpLegacyId: number): Promise<InstructorDetailResponse> {
+  async matchInstructor(
+    id: number,
+    rmpLegacyId: number
+  ): Promise<Result<InstructorDetailResponse, ApiErrorClass>> {
     return this.request<InstructorDetailResponse>(`/admin/instructors/${id}/match`, {
       method: "POST",
       body: { rmpLegacyId } satisfies MatchBody,
     });
   }
 
-  async rejectCandidate(id: number, rmpLegacyId: number): Promise<void> {
+  async rejectCandidate(id: number, rmpLegacyId: number): Promise<Result<void, ApiErrorClass>> {
     return this.requestVoid(`/admin/instructors/${id}/reject-candidate`, {
       method: "POST",
       body: { rmpLegacyId } satisfies RejectCandidateBody,
     });
   }
 
-  async rejectAllCandidates(id: number): Promise<void> {
+  async rejectAllCandidates(id: number): Promise<Result<void, ApiErrorClass>> {
     return this.requestVoid(`/admin/instructors/${id}/reject-all`, {
       method: "POST",
     });
   }
 
-  async unmatchInstructor(id: number, rmpLegacyId?: number): Promise<void> {
+  async unmatchInstructor(id: number, rmpLegacyId?: number): Promise<Result<void, ApiErrorClass>> {
     return this.requestVoid(`/admin/instructors/${id}/unmatch`, {
       method: "POST",
       ...(rmpLegacyId !== undefined ? { body: { rmpLegacyId } satisfies MatchBody } : {}),
     });
   }
 
-  async rescoreInstructors(): Promise<RescoreResponse> {
+  async rescoreInstructors(): Promise<Result<RescoreResponse, ApiErrorClass>> {
     return this.request<RescoreResponse>("/admin/rmp/rescore", {
       method: "POST",
     });
@@ -447,7 +410,10 @@ export class BannerApiClient {
 
   // Scraper analytics endpoints
 
-  async getScraperStats(period?: ScraperPeriod, term?: string): Promise<ScraperStatsResponse> {
+  async getScraperStats(
+    period?: ScraperPeriod,
+    term?: string
+  ): Promise<Result<ScraperStatsResponse, ApiErrorClass>> {
     const query = new URLSearchParams();
     if (period) query.set("period", period);
     if (term) query.set("term", term);
@@ -459,7 +425,7 @@ export class BannerApiClient {
     period?: ScraperPeriod,
     bucket?: string,
     term?: string
-  ): Promise<TimeseriesResponse> {
+  ): Promise<Result<TimeseriesResponse, ApiErrorClass>> {
     const query = new URLSearchParams();
     if (period) query.set("period", period);
     if (bucket) query.set("bucket", bucket);
@@ -468,20 +434,25 @@ export class BannerApiClient {
     return this.request<TimeseriesResponse>(`/admin/scraper/timeseries${qs ? `?${qs}` : ""}`);
   }
 
-  async getScraperSubjects(): Promise<SubjectsResponse> {
+  async getScraperSubjects(): Promise<Result<SubjectsResponse, ApiErrorClass>> {
     return this.request<SubjectsResponse>("/admin/scraper/subjects");
   }
 
-  async getScraperSubjectDetail(subject: string, limit?: number): Promise<SubjectDetailResponse> {
+  async getScraperSubjectDetail(
+    subject: string,
+    limit?: number
+  ): Promise<Result<SubjectDetailResponse, ApiErrorClass>> {
     const qs = limit !== undefined ? `?limit=${limit}` : "";
     return this.request<SubjectDetailResponse>(
       `/admin/scraper/subjects/${encodeURIComponent(subject)}${qs}`
     );
   }
 
-  async getAdminTerms(): Promise<TermsListResponse> {
+  async getAdminTerms(): Promise<Result<TermsListResponse, ApiErrorClass>> {
     return this.request<TermsListResponse>("/admin/terms");
   }
 }
 
 export const client = new BannerApiClient();
+
+export type { Result } from "true-myth/result";

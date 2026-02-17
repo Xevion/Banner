@@ -1,5 +1,6 @@
 <script lang="ts">
-import { type CourseResponse, client } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
+import { client } from "$lib/api";
 import {
   abbreviateInstructor,
   formatMeetingTimeSummary,
@@ -28,18 +29,15 @@ $effect(() => {
   const { termCode, subject, courseNumber } = course;
   state = { mode: "loading" };
 
-  client
-    .getRelatedSections(termCode, subject, courseNumber)
-    .then((sections) => {
+  void client.getRelatedSections(termCode, subject, courseNumber).then((result) => {
+    if (result.isErr) {
+      state = { mode: "error", message: result.error.message };
+    } else {
+      const sections = result.value;
       state = { mode: "loaded", sections };
       sectionCount = sections.filter((s) => s.crn !== course.crn).length;
-    })
-    .catch((err) => {
-      state = {
-        mode: "error",
-        message: err instanceof Error ? err.message : "Failed to load",
-      };
-    });
+    }
+  });
 });
 
 // How far the scroll container pulls up behind the header (header height + gap)

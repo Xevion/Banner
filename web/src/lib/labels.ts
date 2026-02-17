@@ -5,7 +5,7 @@ import type {
   InstructionalMethod,
   OnlineVariant,
   PartOfTerm,
-} from "$lib/api";
+} from "$lib/bindings";
 
 /** Display label styles for different UI contexts */
 export type DisplayContext = "filter" | "detail" | "tooltip";

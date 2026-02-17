@@ -4,6 +4,6 @@ import type { InstructorDetail } from "./InstructorDetail";
 import type { LinkedRmpProfile } from "./LinkedRmpProfile";
 
 /**
- * Response for `GET /api/admin/instructors/{id}` and `POST .../match`.
+ * Full instructor detail with candidates and linked profiles.
  */
 export type InstructorDetailResponse = { instructor: InstructorDetail, currentMatches: Array<LinkedRmpProfile>, candidates: Array<CandidateResponse>, };

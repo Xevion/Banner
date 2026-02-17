@@ -41,7 +41,7 @@ fn generate_session_id() -> String {
     let random_part = Alphanumeric.sample_string(&mut rand::rng(), 5);
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock before UNIX epoch")
         .as_millis();
     format!("{}{}", random_part, timestamp)
 }
@@ -50,7 +50,7 @@ fn generate_session_id() -> String {
 pub fn nonce() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock before UNIX epoch")
         .as_millis()
         .to_string()
 }
@@ -427,19 +427,26 @@ impl SessionPool {
         }
     }
 
-    /// Sets up initial session cookies by making required Banner API requests.
-    async fn create_session(&self, term: &Term) -> Result<BannerSession> {
-        debug!(term = %term, "Setting up new Banner session with cookies");
-
-        // The 'register' or 'search' registration page
-        let initial_registration = self
+    /// Establishes session cookies by hitting the Banner registration page.
+    ///
+    /// Returns `(jsessionid, ssb_cookie, cookie_header)` on success.
+    /// Validates the HTTP response status and required cookies.
+    async fn establish_cookies(&self) -> Result<(String, String, String)> {
+        let response = self
             .http
             .get(format!("{}/registration", self.base_url))
             .send()
-            .await?;
-        // TODO: Validate success
+            .await
+            .context("Failed to reach registration page")?;
 
-        let cookies: HashMap<String, String> = initial_registration
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Registration page returned {}",
+                response.status()
+            ));
+        }
+
+        let cookies: HashMap<String, String> = response
             .headers()
             .get_all("Set-Cookie")
             .iter()
@@ -451,12 +458,15 @@ impl SessionPool {
 
         let jsessionid = cookies
             .get("JSESSIONID")
-            .ok_or_else(|| anyhow::anyhow!("JSESSIONID cookie missing"))?;
+            .ok_or_else(|| anyhow::anyhow!("JSESSIONID cookie missing"))?
+            .clone();
         let ssb_cookie = cookies
             .get("SSB_COOKIE")
-            .ok_or_else(|| anyhow::anyhow!("SSB_COOKIE cookie missing"))?;
+            .ok_or_else(|| anyhow::anyhow!("SSB_COOKIE cookie missing"))?
+            .clone();
         let cookie_header = format!("JSESSIONID={}; SSB_COOKIE={}", jsessionid, ssb_cookie);
 
+        // Navigate through the required pages to initialize the session
         self.http
             .get(format!("{}/selfServiceMenu/data", self.base_url))
             .header("Cookie", &cookie_header)
@@ -473,29 +483,45 @@ impl SessionPool {
             .await?
             .error_for_status()
             .context("Failed to get term selection page")?;
-        // TODO: Validate success
 
+        Ok((jsessionid, ssb_cookie, cookie_header))
+    }
+
+    /// Sets up a complete Banner session for the given term.
+    ///
+    /// Establishes cookies, verifies the term is available, and selects it.
+    async fn create_session(&self, term: &Term) -> Result<BannerSession> {
+        debug!(term = %term, "Setting up new Banner session with cookies");
+
+        let (jsessionid, ssb_cookie, cookie_header) = self
+            .establish_cookies()
+            .await
+            .context("Failed to establish session cookies")?;
+
+        // Verify the term exists in Banner's term list
+        let term_code = term.to_string();
         let terms = self.get_terms("", 1, 10).await?;
-        if !terms.iter().any(|t| t.code == term.to_string()) {
-            return Err(anyhow::anyhow!("Failed to get term search response"));
+        if !terms.iter().any(|t| t.code == term_code) {
+            return Err(anyhow::anyhow!(
+                "Term {term_code} not found in Banner term list"
+            ));
         }
 
-        let specific_term_search_response = self.get_terms(&term.to_string(), 1, 10).await?;
-        if !specific_term_search_response
-            .iter()
-            .any(|t| t.code == term.to_string())
-        {
-            return Err(anyhow::anyhow!("Failed to get term search response"));
+        let specific_terms = self.get_terms(&term_code, 1, 10).await?;
+        if !specific_terms.iter().any(|t| t.code == term_code) {
+            return Err(anyhow::anyhow!(
+                "Term {term_code} not found in filtered term search"
+            ));
         }
 
         let unique_session_id = generate_session_id();
-        self.select_term(&term.to_string(), &unique_session_id, &cookie_header)
+        self.select_term(&term_code, &unique_session_id, &cookie_header)
             .await?;
 
         Ok(BannerSession::new(
             &unique_session_id,
-            jsessionid,
-            ssb_cookie,
+            &jsessionid,
+            &ssb_cookie,
         ))
     }
 

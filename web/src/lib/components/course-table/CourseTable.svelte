@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import type { SortingState, VisibilityState } from "@tanstack/table-core";
 import { useCourseTableState } from "./useCourseTableState.svelte";
 import CourseTableDesktop from "./CourseTableDesktop.svelte";

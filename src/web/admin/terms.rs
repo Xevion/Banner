@@ -196,18 +196,13 @@ pub async fn sync_terms(
 ) -> Result<Json<TermSyncResponse>, ApiError> {
     let start = Instant::now();
 
-    let banner_terms = state
-        .banner_api
-        .sessions
-        .get_terms("", 1, 500)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "failed to fetch terms from Banner API");
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": "Failed to fetch terms from Banner API"})),
-            )
-        })?;
+    let banner_terms = state.banner_api.get_terms("", 1, 500).await.map_err(|e| {
+        error!(error = %e, "failed to fetch terms from Banner API");
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": "Failed to fetch terms from Banner API"})),
+        )
+    })?;
 
     let result = terms::sync_terms_from_banner(&state.db_pool, banner_terms)
         .await

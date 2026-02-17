@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { getTableContext } from "../context";
 
 let { course }: { course: CourseResponse } = $props();

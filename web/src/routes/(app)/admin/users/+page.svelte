@@ -2,30 +2,22 @@
 import { client } from "$lib/api";
 import type { User } from "$lib/bindings";
 import { Shield, ShieldOff } from "@lucide/svelte";
-import { onMount } from "svelte";
 
-let users = $state<User[]>([]);
-let error = $state<string | null>(null);
+let { data } = $props();
+let users = $state<User[]>(data.users);
+let error = $state<string | null>(data.error);
 let updating = $state<string | null>(null);
-
-onMount(async () => {
-  try {
-    users = await client.getAdminUsers();
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to load users";
-  }
-});
 
 async function toggleAdmin(user: User) {
   updating = user.discordId;
-  try {
-    const updated = await client.setUserAdmin(user.discordId, !user.isAdmin);
+  const result = await client.setUserAdmin(user.discordId, !user.isAdmin);
+  if (result.isErr) {
+    error = result.error.message;
+  } else {
+    const updated = result.value;
     users = users.map((u) => (u.discordId === updated.discordId ? updated : u));
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to update user";
-  } finally {
-    updating = null;
   }
+  updating = null;
 }
 </script>
 

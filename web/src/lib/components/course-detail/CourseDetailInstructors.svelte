@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { formatInstructorName, ratingStyle, rmpUrl } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";

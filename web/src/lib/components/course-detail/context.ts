@@ -1,4 +1,4 @@
-import type { CodeDescription } from "$lib/api";
+import type { CodeDescription } from "$lib/bindings";
 import { getContext, setContext } from "svelte";
 
 const COURSE_DETAIL_CONTEXT_KEY = Symbol("course-detail-context");

@@ -13,6 +13,7 @@ use ts_rs::TS;
 pub enum ApiErrorCode {
     NotFound,
     BadRequest,
+    Conflict,
     InternalError,
     InvalidTerm,
     InvalidRange,
@@ -66,6 +67,10 @@ impl ApiError {
         Self::new(ApiErrorCode::InvalidTerm, format!("Invalid term: {}", term))
     }
 
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(ApiErrorCode::Conflict, message)
+    }
+
     fn status_code(&self) -> StatusCode {
         match self.code {
             ApiErrorCode::NotFound => StatusCode::NOT_FOUND,
@@ -73,6 +78,7 @@ impl ApiError {
             | ApiErrorCode::InvalidTerm
             | ApiErrorCode::InvalidRange
             | ApiErrorCode::NoTerms => StatusCode::BAD_REQUEST,
+            ApiErrorCode::Conflict => StatusCode::CONFLICT,
             ApiErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
             ApiErrorCode::Forbidden => StatusCode::FORBIDDEN,
             ApiErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
@@ -93,6 +99,7 @@ impl From<(StatusCode, String)> for ApiError {
         let code = match status {
             StatusCode::NOT_FOUND => ApiErrorCode::NotFound,
             StatusCode::BAD_REQUEST => ApiErrorCode::BadRequest,
+            StatusCode::CONFLICT => ApiErrorCode::Conflict,
             StatusCode::UNAUTHORIZED => ApiErrorCode::Unauthorized,
             StatusCode::FORBIDDEN => ApiErrorCode::Forbidden,
             _ => ApiErrorCode::InternalError,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatMeetingTimeSummary } from "$lib/course";
-import type { CourseResponse, DbMeetingTime } from "$lib/api";
+import type { CourseResponse, DbMeetingTime } from "$lib/bindings";
 
 function makeMeetingTime(overrides: Partial<DbMeetingTime> = {}): DbMeetingTime {
   const mt: DbMeetingTime = {

@@ -1,6 +1,7 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/api";
-import { formatDate, formatMeetingDaysLong, formatTime } from "$lib/course";
+import type { CourseResponse } from "$lib/bindings";
+import { formatDate } from "$lib/date";
+import { formatMeetingDaysLong, formatISOTime } from "$lib/course";
 import { Calendar, Download, ExternalLink, MapPin } from "@lucide/svelte";
 import { DropdownMenu } from "bits-ui";
 
@@ -77,7 +78,7 @@ let hasCalendar = $derived(course.meetingTimes.length > 0);
             {/if}
             {#if mt.timeRange !== null}
               <span class="text-foreground/80">
-                {formatTime(mt.timeRange.start)}&ndash;{formatTime(mt.timeRange.end)}
+                {formatISOTime(mt.timeRange.start)}&ndash;{formatISOTime(mt.timeRange.end)}
               </span>
             {:else}
               <span class="italic text-muted-foreground">Time TBA</span>

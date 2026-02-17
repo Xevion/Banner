@@ -1,16 +1,15 @@
-import type { CourseResponse, DbMeetingTime, InstructorResponse } from "$lib/api";
+import type { CourseResponse, DbMeetingTime, InstructorResponse } from "$lib/bindings";
+import { formatDate, formatDateShort } from "$lib/date";
 import {
   abbreviateInstructor,
   formatCreditHours,
-  formatDate,
-  formatDateShort,
   formatInstructorName,
   formatMeetingDays,
   formatMeetingDaysLong,
   formatMeetingDaysVerbose,
   formatMeetingTimeTooltip,
   formatMeetingTimesTooltip,
-  formatTime,
+  formatISOTime,
   formatTimeRange,
   getPrimaryInstructor,
 } from "$lib/course";
@@ -29,13 +28,13 @@ function makeMeetingTime(overrides: Partial<DbMeetingTime> = {}): DbMeetingTime 
   return mt;
 }
 
-describe("formatTime", () => {
-  it("converts 09:00:00 to 9:00 AM", () => expect(formatTime("09:00:00")).toBe("9:00 AM"));
-  it("converts 13:30:00 to 1:30 PM", () => expect(formatTime("13:30:00")).toBe("1:30 PM"));
-  it("converts 00:00:00 to 12:00 AM", () => expect(formatTime("00:00:00")).toBe("12:00 AM"));
-  it("converts 12:00:00 to 12:00 PM", () => expect(formatTime("12:00:00")).toBe("12:00 PM"));
-  it("converts 23:59:00 to 11:59 PM", () => expect(formatTime("23:59:00")).toBe("11:59 PM"));
-  it("returns TBA for null", () => expect(formatTime(null)).toBe("TBA"));
+describe("formatISOTime", () => {
+  it("converts 09:00:00 to 9:00 AM", () => expect(formatISOTime("09:00:00")).toBe("9:00 AM"));
+  it("converts 13:30:00 to 1:30 PM", () => expect(formatISOTime("13:30:00")).toBe("1:30 PM"));
+  it("converts 00:00:00 to 12:00 AM", () => expect(formatISOTime("00:00:00")).toBe("12:00 AM"));
+  it("converts 12:00:00 to 12:00 PM", () => expect(formatISOTime("12:00:00")).toBe("12:00 PM"));
+  it("converts 23:59:00 to 11:59 PM", () => expect(formatISOTime("23:59:00")).toBe("11:59 PM"));
+  it("returns TBA for null", () => expect(formatISOTime(null)).toBe("TBA"));
 });
 
 describe("formatMeetingDays", () => {
@@ -224,7 +223,7 @@ describe("formatMeetingDaysLong", () => {
   });
   it("returns semi-abbreviated for TR", () => {
     expect(formatMeetingDaysLong(makeMeetingTime({ days: ["tuesday", "thursday"] }))).toBe(
-      "Tue, Thur"
+      "Tue, Thu"
     );
   });
   it("returns empty string when no days", () => {
