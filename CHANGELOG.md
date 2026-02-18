@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.4](https://github.com/Xevion/Banner/compare/v0.6.3...v0.6.4) (2026-02-06)
+
+
+### Features
+
+* **log:** Enhance tracing formatter with syntax highlighting and smart field grouping ([8d58f8a](https://github.com/Xevion/Banner/commit/8d58f8a6c78cfeb8ae5eedcbd7a7614bcc9fd8c2))
+* **stream:** Add ScraperStats, ScraperTimeseries, and ScraperSubjects stream kinds ([f32b727](https://github.com/Xevion/Banner/commit/f32b72754c0ab36161b97df56e65b33d8a78e693))
+* **terms:** Add multi-term scraping support with database table and admin API ([f5d13b0](https://github.com/Xevion/Banner/commit/f5d13b072a45ba01e540e330b0555dfc5e66f5b8))
+
+
+### Bug Fixes
+
+* **ci:** Update bytes dependency for security audit fix, add security audits to check script ([049938a](https://github.com/Xevion/Banner/commit/049938a0a670414ac3e30ac178473ea05777118a))
+* **deps:** Update time to 0.3.47 for RUSTSEC-2026-0009 ([1321d1e](https://github.com/Xevion/Banner/commit/1321d1e2d9f6de8d8646b41dde45441785a33610))
+
+
+### Code Refactoring
+
+* **db:** Restructure database layer with context and event emission ([5551dc3](https://github.com/Xevion/Banner/commit/5551dc381f07aa7371726c9fbd3d9b012226d13b))
+* **middleware:** Consolidate rate limiting into unified module ([a69ba89](https://github.com/Xevion/Banner/commit/a69ba8964c0653fa82acd9eba6db03a7caec59aa))
+* **query:** Replace Duration with NaiveTime for course search time parameters ([6252777](https://github.com/Xevion/Banner/commit/6252777b2946e6a8a987e880b00e75932c8a7879))
+* **tracing:** Improve log messages across codebase, standardize duration formatting ([0f230e6](https://github.com/Xevion/Banner/commit/0f230e677b0922791952a795935bf33d56e03a90))
+* **web:** Consolidate admin pages into tabbed scraper interface ([6fb7d79](https://github.com/Xevion/Banner/commit/6fb7d7913ac108e59ee5f937608844b8e2ab1ac5))
+
 ## [0.6.3](https://github.com/Xevion/Banner/compare/v0.6.2...v0.6.3) (2026-02-03)
 
 
