@@ -95,7 +95,7 @@ pub struct MeetingTime {
     pub campus_description: Option<String>, // name of campus, e.g Main Campus
     pub course_reference_number: String, // CRN, e.g 27294
     pub credit_hour_session: Option<f64>, // e.g. 30
-    pub hours_week: f64, // e.g. 30
+    pub hours_week: Option<f64>, // e.g. 30
     pub meeting_schedule_type: String, // e.g AFF
     pub meeting_type: String, // e.g HB, H2, H1, OS, OA, OH, ID, FF
     pub meeting_type_description: String,

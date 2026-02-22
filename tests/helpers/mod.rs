@@ -179,7 +179,7 @@ impl MeetingTimeBuilder {
                 campus_description: Some("Main Campus".to_owned()),
                 course_reference_number: self.crn,
                 credit_hour_session: None,
-                hours_week: 0.0,
+                hours_week: Some(0.0),
                 meeting_schedule_type: self.meeting_schedule_type,
                 meeting_type: self.meeting_type.clone(),
                 meeting_type_description: "Face to Face".to_owned(),
