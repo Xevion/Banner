@@ -14,8 +14,14 @@ jobs:
   rust-quality:
     name: Rust Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SQLX_OFFLINE: "true"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y mold
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -41,6 +47,7 @@ jobs:
   frontend-quality:
     name: Frontend Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +58,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: bun install --frozen-lockfile
+        run: bun ci --frozen-lockfile
+
+      - name: Sync SvelteKit
+        working-directory: web
+        run: bunx svelte-kit sync
 
       - name: Check formatting
         working-directory: web
@@ -73,6 +84,7 @@ jobs:
   rust-tests:
     name: Rust Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17-alpine
@@ -89,8 +101,12 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://banner:banner@localhost:5432/banner
+      SQLX_OFFLINE: "true"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y mold
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -100,12 +116,16 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@cargo-nextest
+
       - name: Run tests
-        run: cargo test --no-default-features
+        run: cargo nextest run --no-default-features
 
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -116,7 +136,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: bun install --frozen-lockfile
+        run: bun ci --frozen-lockfile
+
+      - name: Sync SvelteKit
+        working-directory: web
+        run: bunx svelte-kit sync
 
       - name: Run tests
         working-directory: web
@@ -125,6 +149,7 @@ jobs:
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -142,6 +167,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -161,11 +187,11 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: web
-        run: bun install --frozen-lockfile
+        run: bun ci --frozen-lockfile
 
       - name: Install script dependencies
         working-directory: scripts
-        run: bun install --frozen-lockfile
+        run: bun ci --frozen-lockfile
 
       - name: Frontend security audit
         run: bun scripts/audit.ts
