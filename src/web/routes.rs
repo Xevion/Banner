@@ -52,9 +52,9 @@ use crate::web::calendar;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::stream;
 use crate::web::timeline;
-use axum::response::IntoResponse;
 #[cfg(feature = "embed-assets")]
 use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration};
@@ -938,8 +938,7 @@ async fn get_reference(
         let rows_mapped: Vec<CodeDescription> = rows
             .into_iter()
             .map(|r| {
-                let filter_value =
-                    code_to_filter_value(&category, &r.code, Some(&r.description));
+                let filter_value = code_to_filter_value(&category, &r.code, Some(&r.description));
                 CodeDescription {
                     code: r.code,
                     description: r.description,
@@ -947,7 +946,10 @@ async fn get_reference(
                 }
             })
             .collect();
-        return Ok(with_cache_control(rows_mapped, "private, max-age=600, stale-while-revalidate=60"));
+        return Ok(with_cache_control(
+            rows_mapped,
+            "private, max-age=600, stale-while-revalidate=60",
+        ));
     }
 
     let entries_mapped: Vec<CodeDescription> = entries
@@ -961,7 +963,10 @@ async fn get_reference(
             }
         })
         .collect();
-    Ok(with_cache_control(entries_mapped, "private, max-age=600, stale-while-revalidate=60"))
+    Ok(with_cache_control(
+        entries_mapped,
+        "private, max-age=600, stale-while-revalidate=60",
+    ))
 }
 
 /// `GET /api/search-options?term={slug}` (term optional, defaults to latest)
@@ -991,7 +996,10 @@ async fn get_search_options(
         Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
 
     if let Some(cached) = state.search_options_cache.get(&term_code) {
-        return Ok(with_cache_control((*cached).clone(), "private, max-age=600, stale-while-revalidate=60"));
+        return Ok(with_cache_control(
+            (*cached).clone(),
+            "private, max-age=600, stale-while-revalidate=60",
+        ));
     }
 
     if !state.search_options_cache.try_claim(&term_code) {
@@ -1060,8 +1068,13 @@ async fn get_search_options(
         ranges,
     };
 
-    state.search_options_cache.insert(term_code.clone(), response.clone());
+    state
+        .search_options_cache
+        .insert(term_code.clone(), response.clone());
     state.search_options_cache.release(&term_code);
 
-    Ok(with_cache_control(response, "private, max-age=600, stale-while-revalidate=60"))
+    Ok(with_cache_control(
+        response,
+        "private, max-age=600, stale-while-revalidate=60",
+    ))
 }

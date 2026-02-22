@@ -14,6 +14,7 @@ use chrono::{DateTime, Datelike, Duration, NaiveTime, Timelike, Utc};
 use chrono_tz::US::Central;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use ts_rs::TS;
 
 use crate::state::AppState;
@@ -175,7 +176,7 @@ pub(crate) async fn timeline(
     let snapshot = state.schedule_cache.snapshot();
 
     let slot_times = generate_slots(&merged);
-    let mut all_subjects: BTreeSet<String> = BTreeSet::new();
+    let mut all_subjects: BTreeSet<Arc<str>> = BTreeSet::new();
 
     let slots: Vec<TimelineSlot> = slot_times
         .into_iter()
@@ -189,28 +190,37 @@ pub(crate) async fn timeline(
             let slot_start_minutes = time_to_minutes(local_time);
             let slot_end_minutes = slot_start_minutes + SLOT_MINUTES;
 
-            let mut subject_totals: BTreeMap<String, i64> = BTreeMap::new();
+            // Use Arc<str> keys internally — Arc::clone is an atomic refcount
+            // bump vs String::clone which heap-allocates every time.
+            let mut subject_totals: BTreeMap<Arc<str>, i64> = BTreeMap::new();
 
             for course in &snapshot.courses {
                 let active = course.schedules.iter().any(|s| {
                     s.active_during(local_date, wday_bit, slot_start_minutes, slot_end_minutes)
                 });
                 if active {
-                    *subject_totals.entry(course.subject.clone()).or_default() +=
-                        course.enrollment as i64;
+                    *subject_totals
+                        .entry(Arc::clone(&course.subject))
+                        .or_default() += course.enrollment as i64;
                 }
             }
 
-            all_subjects.extend(subject_totals.keys().cloned());
+            all_subjects.extend(subject_totals.keys().map(Arc::clone));
+
+            // Convert to String keys at the response boundary.
+            let subjects: BTreeMap<String, i64> = subject_totals
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect();
 
             TimelineSlot {
                 time: utc_time,
-                subjects: subject_totals,
+                subjects,
             }
         })
         .collect();
 
-    let subjects: Vec<String> = all_subjects.into_iter().collect();
+    let subjects: Vec<String> = all_subjects.into_iter().map(|s| s.to_string()).collect();
 
     Ok(Json(TimelineResponse { slots, subjects }))
 }
