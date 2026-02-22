@@ -20,6 +20,9 @@ const TIMESTAMP_FORMAT: &[FormatItem<'static>] =
 /// Maximum length for string values before truncation
 const MAX_VALUE_LENGTH: usize = 60;
 
+/// Field names that should never be truncated
+const NO_TRUNCATE_FIELDS: &[&str] = &["error"];
+
 /// Characters that require quoting when present in a string value
 const DELIMITER_CHARS: &[char] = &['=', '{', '}', ':', ',', ' ', '\t', '\n', '\r'];
 
@@ -40,19 +43,20 @@ fn needs_quoting(s: &str) -> bool {
     s.is_empty() || s.contains(DELIMITER_CHARS)
 }
 
-/// Format a string value, adding quotes and truncation as needed
-fn format_string_value(s: &str) -> String {
+/// Format a string value, adding quotes and truncation as needed.
+/// When `truncate` is false, the value is never truncated regardless of length.
+fn format_string_value(s: &str, truncate: bool) -> String {
     // Already quoted - pass through (but still truncate if needed)
     if s.starts_with('"') && s.ends_with('"') {
         let inner = &s[1..s.len() - 1];
-        if inner.len() > MAX_VALUE_LENGTH {
+        if truncate && inner.len() > MAX_VALUE_LENGTH {
             return format!("\"{}...\"", truncate_str(inner, MAX_VALUE_LENGTH));
         }
         return s.to_string();
     }
 
     let needs_quote = needs_quoting(s);
-    let needs_truncate = s.len() > MAX_VALUE_LENGTH;
+    let needs_truncate = truncate && s.len() > MAX_VALUE_LENGTH;
 
     match (needs_quote, needs_truncate) {
         (false, false) => s.to_string(),
@@ -133,12 +137,27 @@ enum FieldValue {
 }
 
 trait WriteColored {
-    fn write_colored(&self, writer: &mut Writer<'_>) -> fmt::Result;
+    fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result;
 }
 
 /// Write a string value with appropriate coloring (arrays, numbers, quoted strings).
-fn write_str_value_colored(writer: &mut Writer<'_>, s: &str) -> fmt::Result {
+fn write_str_value_colored(writer: &mut Writer<'_>, s: &str, truncate: bool) -> fmt::Result {
     let ansi = writer.has_ansi_escapes();
+
+    // For non-truncated multiline strings (e.g. error fields), render with
+    // actual newlines and indentation instead of escaping them
+    if !truncate && s.contains('\n') {
+        let indent = "    ";
+        write!(writer, "\n")?;
+        for line in s.lines() {
+            if ansi {
+                writeln!(writer, "{}{}", indent, Paint::new(line).red())?;
+            } else {
+                writeln!(writer, "{}{}", indent, line)?;
+            }
+        }
+        return Ok(());
+    }
 
     if s.starts_with('[') && s.ends_with(']') {
         write_array_colored(writer, s)
@@ -149,7 +168,7 @@ fn write_str_value_colored(writer: &mut Writer<'_>, s: &str) -> fmt::Result {
             write!(writer, "{}", s)
         }
     } else {
-        let formatted = format_string_value(s);
+        let formatted = format_string_value(s, truncate);
         if formatted.starts_with('"') && ansi {
             write!(writer, "{}", Paint::new(&formatted).yellow())
         } else {
@@ -159,10 +178,12 @@ fn write_str_value_colored(writer: &mut Writer<'_>, s: &str) -> fmt::Result {
 }
 
 impl WriteColored for FieldValue {
-    fn write_colored(&self, writer: &mut Writer<'_>) -> fmt::Result {
+    fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
         let ansi = writer.has_ansi_escapes();
         match self {
-            FieldValue::Debug(s) | FieldValue::Display(s) => write_str_value_colored(writer, s),
+            FieldValue::Debug(s) | FieldValue::Display(s) => {
+                write_str_value_colored(writer, s, truncate)
+            }
             FieldValue::Signed(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
@@ -189,8 +210,8 @@ impl WriteColored for FieldValue {
 }
 
 impl WriteColored for String {
-    fn write_colored(&self, writer: &mut Writer<'_>) -> fmt::Result {
-        write_str_value_colored(writer, self)
+    fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
+        write_str_value_colored(writer, self, truncate)
     }
 }
 
@@ -400,20 +421,22 @@ fn write_grouped_fields<V: WriteColored>(
 ) -> fmt::Result {
     let mut first = true;
 
-    for (key, grouped) in fields {
+    for (key, grouped) in &fields {
         if !first {
             writer.write_char(' ')?;
         }
         first = false;
 
+        let truncate = !NO_TRUNCATE_FIELDS.contains(&key.as_str());
+
         match grouped {
             GroupedField::Single(value) => {
-                write_field_key(writer, &key)?;
+                write_field_key(writer, key)?;
                 write_field_eq(writer)?;
-                value.write_colored(writer)?;
+                value.write_colored(writer, truncate)?;
             }
             GroupedField::Group(subfields) => {
-                write_field_key(writer, &key)?;
+                write_field_key(writer, key)?;
                 write_field_eq(writer)?;
                 write_dim_char(writer, '{')?;
 
@@ -424,9 +447,9 @@ fn write_grouped_fields<V: WriteColored>(
                     }
                     sub_first = false;
 
-                    write_field_key(writer, &subkey)?;
+                    write_field_key(writer, subkey)?;
                     write_field_eq(writer)?;
-                    subvalue.write_colored(writer)?;
+                    subvalue.write_colored(writer, truncate)?;
                 }
 
                 write_dim_char(writer, '}')?;

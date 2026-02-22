@@ -187,11 +187,12 @@ impl BannerApi {
             .await
             .with_context(|| format!("Failed to read body (status={status})"))?;
 
-        let search_result: SearchResult = parse_json_with_context(&body).map_err(|e| {
-            BannerApiError::RequestFailed(anyhow!(
-                "Failed to parse search response (status={status}, url={url}): {e}"
-            ))
-        })?;
+        let search_result: SearchResult =
+            parse_json_with_context(&body).map_err(|source| BannerApiError::ParseFailed {
+                status: status.as_u16(),
+                url: url.to_string(),
+                source,
+            })?;
 
         // Check for signs of an invalid session
         if search_result.path_mode.is_none() {

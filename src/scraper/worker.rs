@@ -316,27 +316,48 @@ impl Worker {
         let remaining_retries = max_retries.saturating_sub(next_attempt);
 
         // Log the error appropriately based on type
-        if let Some(BannerApiError::InvalidSession(_)) = e.downcast_ref::<BannerApiError>() {
-            warn!(
-                worker_id = self.id,
-                job_id,
-                duration = fmt_duration(duration),
-                retry_attempt = next_attempt,
-                max_retries = max_retries,
-                remaining_retries = remaining_retries,
-                "Invalid session detected, will retry"
-            );
-        } else {
-            error!(
-                worker_id = self.id,
-                job_id,
-                duration = fmt_duration(duration),
-                retry_attempt = next_attempt,
-                max_retries = max_retries,
-                remaining_retries = remaining_retries,
-                error = ?e,
-                "Failed to process job, will retry"
-            );
+        match e.downcast_ref::<BannerApiError>() {
+            Some(BannerApiError::InvalidSession(_)) => {
+                warn!(
+                    worker_id = self.id,
+                    job_id,
+                    duration = fmt_duration(duration),
+                    retry_attempt = next_attempt,
+                    max_retries = max_retries,
+                    remaining_retries = remaining_retries,
+                    "Invalid session detected, will retry"
+                );
+            }
+            Some(BannerApiError::ParseFailed {
+                status,
+                url,
+                source,
+            }) => {
+                error!(
+                    worker_id = self.id,
+                    job_id,
+                    duration = fmt_duration(duration),
+                    retry_attempt = next_attempt,
+                    max_retries = max_retries,
+                    remaining_retries = remaining_retries,
+                    status,
+                    url,
+                    error = ?source,
+                    "Failed to parse search response"
+                );
+            }
+            _ => {
+                error!(
+                    worker_id = self.id,
+                    job_id,
+                    duration = fmt_duration(duration),
+                    retry_attempt = next_attempt,
+                    max_retries = max_retries,
+                    remaining_retries = remaining_retries,
+                    error = ?e,
+                    "Failed to process job, will retry"
+                );
+            }
         }
 
         // Check if retries remain
