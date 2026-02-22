@@ -1,0 +1,22 @@
+# Local development services
+# Usage: docker compose up -d (or `just db`)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "59489:5432"
+    environment:
+      POSTGRES_USER: banner
+      POSTGRES_PASSWORD: banner
+      POSTGRES_DB: banner
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

@@ -163,10 +163,12 @@ jobs:
         working-directory: web
         run: bun install --frozen-lockfile
 
+      - name: Install script dependencies
+        working-directory: scripts
+        run: bun install --frozen-lockfile
+
       - name: Frontend security audit
-        working-directory: web
-        run: bun audit --audit-level=moderate
-        continue-on-error: true
+        run: bun scripts/audit.ts
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master

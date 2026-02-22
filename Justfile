@@ -6,6 +6,7 @@ alias d := dev
 alias t := test
 alias f := format
 alias fmt := format
+alias l := lint
 alias s := search
 alias bld := build
 alias bind := bindings
@@ -14,14 +15,17 @@ alias b := bun
 default:
     just --list
 
-# Run all checks in parallel. Pass -f/--fix to auto-format and fix first.
-check *flags:
-    bun scripts/check.ts {{flags}}
+# Run all checks in parallel. Targets: backend,frontend. Pass -f/--fix to auto-format first.
+check *args:
+    bun scripts/check.ts {{args}}
 
-# Format all Rust and TypeScript code
-format:
-    cargo fmt --all
-    bun run --cwd web format
+# Auto-format code. Targets: backend,frontend
+format *targets:
+    bun scripts/format.ts {{targets}}
+
+# Lint code. Targets: backend,frontend
+lint *targets:
+    bun scripts/lint.ts {{targets}}
 
 # Run tests. Usage: just test [rust|web|<nextest filter args>]
 test *args:
@@ -35,7 +39,7 @@ bindings:
 search *ARGS:
     cargo run -q --bin search -- {{ARGS}}
 
-# Dev server. Flags: -f(rontend) -b(ackend) -W(no-watch) -n(o-build) -r(elease) -e(mbed) --tracing <fmt>
+# Dev server. Flags: -f(rontend) -b(ackend) -W(no-watch) -n(o-build) -r(elease) -e(mbed) -I(no-interrupt) -V(erbose-build) --tracing <fmt>
 # Pass args to binary after --: just dev -n -- --some-flag
 dev *flags:
     bun scripts/dev.ts {{flags}}
@@ -61,3 +65,13 @@ storybook-test: (bun "storybook:test")
 
 sql *ARGS:
 	lazysql ${DATABASE_URL}
+
+# Install git pre-commit hooks
+install-hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .husky
+    chmod +x scripts/pre-commit.ts
+    echo "bun scripts/pre-commit.ts" > .husky/pre-commit
+    chmod +x .husky/pre-commit
+    echo "✓ Pre-commit hook installed"
