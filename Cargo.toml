@@ -63,6 +63,9 @@ chrono-tz = "0.10.4"
 htmlize = { version = "1.0.6", features = ["unescape"] }
 unicode-normalization = "0.1.25"
 indexmap = "2.13.0"
+ulid = "1.2.1"
+tower = { version = "0.5.3", features = ["util"] }
+custom_debug_derive = "0.6.2"
 
 [dev-dependencies]
 

@@ -17,10 +17,8 @@ pub async fn build_snapshot(
         .unwrap_or(DEFAULT_AUDIT_LIMIT)
         .clamp(1, MAX_AUDIT_LIMIT);
 
-    let field_changed: Option<&[String]> = filter
-        .field_changed
-        .as_deref()
-        .filter(|v| !v.is_empty());
+    let field_changed: Option<&[String]> =
+        filter.field_changed.as_deref().filter(|v| !v.is_empty());
     let subject: Option<&[String]> = filter.subject.as_deref().filter(|v| !v.is_empty());
     let term: Option<&str> = filter.term.as_deref();
 

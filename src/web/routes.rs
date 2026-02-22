@@ -2,11 +2,13 @@
 
 use axum::{
     Extension, Router,
-    body::Body,
-    extract::{Path, Query, Request, State},
-    response::{Json, Response},
+    extract::{Path, Query, State},
+    response::Json,
     routing::{get, post, put},
 };
+
+#[cfg(feature = "embed-assets")]
+use axum::extract::Request;
 
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpRating, SectionLink};
 use crate::data::reference_types::{
@@ -51,14 +53,11 @@ use ts_rs::TS;
 
 use crate::state::AppState;
 use crate::state::ServiceStatus;
-use crate::utils::fmt_duration;
+use crate::web::middleware::request_id::RequestIdLayer;
 #[cfg(not(feature = "embed-assets"))]
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::{
-    classify::ServerErrorsFailureClass, compression::CompressionLayer, timeout::TimeoutLayer,
-    trace::TraceLayer,
-};
-use tracing::{Span, error, trace, warn};
+use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
+use tracing::{error, trace, warn};
 
 #[cfg(feature = "embed-assets")]
 use crate::web::assets::try_serve_asset_with_encoding;
@@ -171,6 +170,8 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
     }
 
     router.layer((
+        // Outermost: per-request ULID span + severity-proportional response logging.
+        RequestIdLayer,
         // Compress API responses (gzip/brotli/zstd). Pre-compressed static
         // assets already have Content-Encoding set, so tower-http skips them.
         CompressionLayer::new()
@@ -178,37 +179,6 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             .br(true)
             .gzip(true)
             .quality(tower_http::CompressionLevel::Fastest),
-        TraceLayer::new_for_http()
-            .make_span_with(|request: &Request<Body>| {
-                tracing::trace_span!("request", path = request.uri().path())
-            })
-            .on_request(())
-            .on_body_chunk(())
-            .on_eos(())
-            .on_response(
-                |response: &Response<Body>, latency: Duration, _span: &Span| {
-                    let status = format!(
-                        "{} {}",
-                        response.status().as_u16(),
-                        response.status().canonical_reason().unwrap_or("??")
-                    );
-
-                    if latency > Duration::from_secs(1) {
-                        warn!(latency = fmt_duration(latency), status = status, "Slow response");
-                    } else {
-                        trace!(latency = fmt_duration(latency), status = status, "Response");
-                    }
-                },
-            )
-            .on_failure(
-                |error: ServerErrorsFailureClass, latency: Duration, _span: &Span| {
-                    warn!(
-                        error = ?error,
-                        latency = fmt_duration(latency),
-                        "Request failed"
-                    );
-                },
-            ),
         TimeoutLayer::new(Duration::from_secs(10)),
     ))
 }

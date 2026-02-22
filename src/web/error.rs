@@ -113,3 +113,38 @@ pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
     tracing::error!(error = %error, context = context, "Database error");
     ApiError::internal_error(format!("{} failed", context))
 }
+
+/// Extension trait for `Option<T>` to convert `None` into a 404 [`ApiError`].
+#[allow(dead_code)]
+pub trait OptionNotFoundExt<T> {
+    /// Convert `None` into [`ApiError::not_found`] with a message like
+    /// `"Course 'CRN-12345' not found"`.
+    fn or_not_found(self, entity: &str, id: impl std::fmt::Display) -> Result<T, ApiError>;
+}
+
+impl<T> OptionNotFoundExt<T> for Option<T> {
+    fn or_not_found(self, entity: &str, id: impl std::fmt::Display) -> Result<T, ApiError> {
+        self.ok_or_else(|| ApiError::not_found(format!("{entity} '{id}' not found")))
+    }
+}
+
+/// Extension trait for `Result<T, sqlx::Error>` to handle unique constraint violations.
+#[allow(dead_code)]
+pub trait SqlxResultExt<T> {
+    /// Convert a PostgreSQL unique-constraint violation (`23505`) into
+    /// [`ApiError::conflict`] with the given message. All other errors
+    /// become an internal error via [`db_error`]; `Ok` values pass through.
+    fn conflict_on_unique(self, message: impl Into<String>) -> Result<T, ApiError>;
+}
+
+impl<T> SqlxResultExt<T> for Result<T, sqlx::Error> {
+    fn conflict_on_unique(self, message: impl Into<String>) -> Result<T, ApiError> {
+        match self {
+            Ok(val) => Ok(val),
+            Err(sqlx::Error::Database(ref db_err)) if db_err.code().as_deref() == Some("23505") => {
+                Err(ApiError::conflict(message))
+            }
+            Err(e) => Err(db_error("Database operation", e.into())),
+        }
+    }
+}

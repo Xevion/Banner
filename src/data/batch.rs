@@ -902,7 +902,12 @@ async fn upsert_course_instructors(
     }
 
     // Collect unique course IDs for the batch
-    let unique_cids: Vec<i32> = cids.iter().copied().collect::<HashSet<_>>().into_iter().collect();
+    let unique_cids: Vec<i32> = cids
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
 
     // Fetch existing instructor names before deletion
     let old_rows: Vec<(i32, String)> = sqlx::query_as(

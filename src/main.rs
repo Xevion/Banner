@@ -12,6 +12,7 @@ mod calendar;
 mod cli;
 mod config;
 mod data;
+mod fmt;
 mod logging;
 mod rmp;
 mod scraper;

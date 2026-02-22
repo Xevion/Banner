@@ -346,8 +346,10 @@ impl Scheduler {
 
         for subject in &subjects {
             let key = (subject.code.clone(), term_code.to_string());
-            let stats = stats_map.get(&key).cloned().unwrap_or_else(|| {
-                SubjectStats {
+            let stats = stats_map
+                .get(&key)
+                .cloned()
+                .unwrap_or_else(|| SubjectStats {
                     subject: subject.code.clone(),
                     term: term_code.to_string(),
                     recent_runs: 0,
@@ -357,8 +359,7 @@ impl Scheduler {
                     recent_failure_count: 0,
                     recent_success_count: 0,
                     last_completed: DateTime::<Utc>::MIN_UTC,
-                }
-            });
+                });
 
             match evaluate_subject(&stats, now, category) {
                 SubjectSchedule::Eligible(_) => {

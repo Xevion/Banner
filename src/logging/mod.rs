@@ -2,10 +2,11 @@ pub mod formatter;
 
 use crate::cli::TracingFormat;
 use crate::config::Config;
-use tracing_subscriber::fmt::format::JsonFields;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, fmt::format::JsonFields};
 
-/// Configure and initialize logging for the application
+/// Configure and initialize logging for the application.
 pub fn setup_logging(config: &Config, tracing_format: TracingFormat) {
     // Configure logging based on config.
     // Module paths use `banner::banner::` because the crate (`banner`) contains
@@ -17,30 +18,30 @@ pub fn setup_logging(config: &Config, tracing_format: TracingFormat) {
         ))
     });
 
-    // Select formatter based on CLI args
     let use_pretty = match tracing_format {
         TracingFormat::Pretty => true,
         TracingFormat::Json => false,
     };
 
-    let subscriber: Box<dyn tracing::Subscriber + Send + Sync> = if use_pretty {
-        Box::new(
-            FmtSubscriber::builder()
-                .with_target(true)
-                .event_format(formatter::CustomPrettyFormatter)
-                .with_env_filter(filter)
-                .finish(),
-        )
+    if use_pretty {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .event_format(formatter::CustomPrettyFormatter)
+                    .fmt_fields(formatter::compact_fields()),
+            )
+            .init();
     } else {
-        Box::new(
-            FmtSubscriber::builder()
-                .with_target(true)
-                .event_format(formatter::CustomJsonFormatter)
-                .fmt_fields(JsonFields::new())
-                .with_env_filter(filter)
-                .finish(),
-        )
-    };
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .event_format(formatter::CustomJsonFormatter)
+                    .fmt_fields(JsonFields::new()),
+            )
+            .init();
+    }
 }

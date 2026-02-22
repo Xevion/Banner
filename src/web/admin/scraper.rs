@@ -652,10 +652,7 @@ pub async fn compute_subjects(
     let term = Term::get_current().inner().to_string();
 
     // Filter to current term stats only for the admin dashboard
-    let raw_stats: Vec<_> = all_stats
-        .into_iter()
-        .filter(|s| s.term == term)
-        .collect();
+    let raw_stats: Vec<_> = all_stats.into_iter().filter(|s| s.term == term).collect();
     let course_counts: std::collections::HashMap<String, i64> = sqlx::query_as(
         "SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject",
     )

@@ -9,6 +9,7 @@ pub mod calendar;
 #[cfg(feature = "embed-assets")]
 pub mod encoding;
 pub mod error;
+pub mod middleware;
 pub mod routes;
 pub mod schedule_cache;
 pub mod stream;

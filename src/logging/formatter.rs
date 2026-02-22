@@ -3,11 +3,12 @@
 use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use std::fmt;
+use std::{borrow::Cow, fmt};
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::FormatItem};
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
+use tracing_subscriber::field::RecordFields;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields};
 use tracing_subscriber::registry::LookupSpan;
@@ -148,7 +149,7 @@ fn write_str_value_colored(writer: &mut Writer<'_>, s: &str, truncate: bool) -> 
     // actual newlines and indentation instead of escaping them
     if !truncate && s.contains('\n') {
         let indent = "    ";
-        write!(writer, "\n")?;
+        writeln!(writer)?;
         for line in s.lines() {
             if ansi {
                 writeln!(writer, "{}{}", indent, Paint::new(line).red())?;
@@ -812,4 +813,123 @@ fn write_bold(writer: &mut Writer<'_>, s: impl fmt::Display) -> fmt::Result {
     } else {
         write!(writer, "{}", s)
     }
+}
+
+// ── CompactFields ─────────────────────────────────────────────────────────────
+
+/// Closure that transforms a field's display string.
+type FieldTransform = Box<dyn Fn(&str) -> Cow<'_, str> + Send + Sync>;
+
+/// Rule for transforming a named field in pretty output.
+enum FieldRule {
+    /// Apply a custom transform to the field's formatted value.
+    Transform(FieldTransform),
+}
+
+/// Field-level display customization for the pretty formatter.
+///
+/// Wraps DefaultFields — fields without matching rules are formatted
+/// identically to the default. Only affects pretty (span) output; the JSON
+/// formatter uses `JsonFields` directly and is unaffected.
+pub struct CompactFields {
+    rules: Vec<(&'static str, FieldRule)>,
+}
+
+impl CompactFields {
+    fn new() -> Self {
+        Self { rules: vec![] }
+    }
+
+    fn transform(
+        mut self,
+        field: &'static str,
+        f: impl Fn(&str) -> Cow<'_, str> + Send + Sync + 'static,
+    ) -> Self {
+        self.rules.push((field, FieldRule::Transform(Box::new(f))));
+        self
+    }
+}
+
+struct CompactVisitor<'a, 'rules> {
+    writer: Writer<'a>,
+    rules: &'rules [(&'static str, FieldRule)],
+    is_empty: bool,
+    result: fmt::Result,
+}
+
+impl Visit for CompactVisitor<'_, '_> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if self.result.is_err() {
+            return;
+        }
+        if field.name() == "message" {
+            self.record_debug(field, &format_args!("{}", value))
+        } else {
+            self.record_debug(field, &value)
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if self.result.is_err() {
+            return;
+        }
+
+        let name = field.name();
+        let rule = self.rules.iter().find(|(n, _)| *n == name).map(|(_, r)| r);
+
+        self.result = match rule {
+            Some(FieldRule::Transform(f)) => {
+                let formatted = format!("{:?}", value);
+                let transformed = f(&formatted);
+                if self.is_empty {
+                    write!(self.writer, "{}={}", name, transformed)
+                } else {
+                    write!(self.writer, " {}={}", name, transformed)
+                }
+            }
+            None if name == "message" => {
+                if self.is_empty {
+                    write!(self.writer, "{:?}", value)
+                } else {
+                    write!(self.writer, " {:?}", value)
+                }
+            }
+            None => {
+                if self.is_empty {
+                    write!(self.writer, "{}={:?}", name, value)
+                } else {
+                    write!(self.writer, " {}={:?}", name, value)
+                }
+            }
+        };
+
+        self.is_empty = false;
+    }
+}
+
+impl<'writer> FormatFields<'writer> for CompactFields {
+    fn format_fields<R: RecordFields>(&self, writer: Writer<'writer>, fields: R) -> fmt::Result {
+        let mut visitor = CompactVisitor {
+            writer,
+            rules: &self.rules,
+            is_empty: true,
+            result: Ok(()),
+        };
+        fields.record(&mut visitor);
+        visitor.result
+    }
+}
+
+/// Build the configured [`CompactFields`] for the pretty output path.
+///
+/// Truncates `req_id` ULID values to `first4..last6` so they remain
+/// scannable on compact log lines without dominating the output.
+pub fn compact_fields() -> CompactFields {
+    CompactFields::new().transform("req_id", |v| {
+        if v.len() > 12 {
+            Cow::Owned(format!("{}..{}", &v[..4], &v[v.len() - 6..]))
+        } else {
+            Cow::Borrowed(v)
+        }
+    })
 }

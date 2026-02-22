@@ -39,6 +39,7 @@ pub enum TermCategory {
 #[derive(Debug, Clone)]
 pub struct SubjectStats {
     pub subject: String,
+    #[allow(dead_code)]
     pub term: String,
     pub recent_runs: i64,
     pub avg_change_ratio: f64,
