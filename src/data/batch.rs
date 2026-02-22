@@ -221,8 +221,8 @@ struct UpsertDiffRow {
 struct AuditEntry {
     course_id: i32,
     field_changed: &'static str,
-    old_value: String,
-    new_value: String,
+    old_value: Option<serde_json::Value>,
+    new_value: serde_json::Value,
 }
 
 struct MetricEntry {
@@ -244,18 +244,14 @@ macro_rules! diff_field {
     // Standard: Option<T> old vs T new (non-nullable columns)
     ($audits:ident, $row:ident, $field:expr, $old:ident, $new:ident) => {
         if $row.old_id.is_some() {
-            let old_str = $row
-                .$old
-                .as_ref()
-                .map(|v| v.to_string())
-                .unwrap_or_default();
-            let new_str = $row.$new.to_string();
-            if old_str != new_str {
+            let old_val = $row.$old.as_ref().map(|v| serde_json::json!(v));
+            let new_val = serde_json::json!($row.$new);
+            if old_val.as_ref() != Some(&new_val) {
                 $audits.push(AuditEntry {
                     course_id: $row.id,
                     field_changed: $field,
-                    old_value: old_str,
-                    new_value: new_str,
+                    old_value: old_val,
+                    new_value: new_val,
                 });
             }
         }
@@ -263,22 +259,14 @@ macro_rules! diff_field {
     // Nullable: Option<T> old vs Option<T> new
     (opt $audits:ident, $row:ident, $field:expr, $old:ident, $new:ident) => {
         if $row.old_id.is_some() {
-            let old_str = $row
-                .$old
-                .as_ref()
-                .map(|v| v.to_string())
-                .unwrap_or_default();
-            let new_str = $row
-                .$new
-                .as_ref()
-                .map(|v| v.to_string())
-                .unwrap_or_default();
-            if old_str != new_str {
+            let old_val = $row.$old.as_ref().map(|v| serde_json::json!(v));
+            let new_val = $row.$new.as_ref().map(|v| serde_json::json!(v));
+            if old_val != new_val {
                 $audits.push(AuditEntry {
                     course_id: $row.id,
                     field_changed: $field,
-                    old_value: old_str,
-                    new_value: new_str,
+                    old_value: old_val,
+                    new_value: new_val.unwrap_or(serde_json::Value::Null),
                 });
             }
         }
@@ -286,18 +274,14 @@ macro_rules! diff_field {
     // JSONB: Option<Value> old vs Value new
     (json $audits:ident, $row:ident, $field:expr, $old:ident, $new:ident) => {
         if $row.old_id.is_some() {
-            let old_val = $row
-                .$old
-                .as_ref()
-                .cloned()
-                .unwrap_or(serde_json::Value::Null);
-            let new_val = &$row.$new;
-            if old_val != *new_val {
+            let old_val = $row.$old.clone();
+            let new_val = $row.$new.clone();
+            if old_val.as_ref() != Some(&new_val) {
                 $audits.push(AuditEntry {
                     course_id: $row.id,
                     field_changed: $field,
-                    old_value: old_val.to_string(),
-                    new_value: new_val.to_string(),
+                    old_value: old_val,
+                    new_value: new_val,
                 });
             }
         }
@@ -326,8 +310,8 @@ fn compute_diffs(rows: &[UpsertDiffRow]) -> (Vec<AuditEntry>, Vec<MetricEntry>) 
             audits.push(AuditEntry {
                 course_id: row.id,
                 field_changed: "initial",
-                old_value: String::new(),
-                new_value: snapshot.to_string(),
+                old_value: None,
+                new_value: snapshot,
             });
         }
 
@@ -409,14 +393,15 @@ async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result
 
     let course_ids: Vec<i32> = audits.iter().map(|a| a.course_id).collect();
     let fields: Vec<&str> = audits.iter().map(|a| a.field_changed).collect();
-    let old_values: Vec<&str> = audits.iter().map(|a| a.old_value.as_str()).collect();
-    let new_values: Vec<&str> = audits.iter().map(|a| a.new_value.as_str()).collect();
+    let old_values: Vec<Option<serde_json::Value>> =
+        audits.iter().map(|a| a.old_value.clone()).collect();
+    let new_values: Vec<serde_json::Value> = audits.iter().map(|a| a.new_value.clone()).collect();
 
     let rows: Vec<(i32,)> = sqlx::query_as(
         r#"
         INSERT INTO course_audits (course_id, timestamp, field_changed, old_value, new_value)
         SELECT v.course_id, NOW(), v.field_changed, v.old_value, v.new_value
-        FROM UNNEST($1::int4[], $2::text[], $3::text[], $4::text[])
+        FROM UNNEST($1::int4[], $2::text[], $3::jsonb[], $4::jsonb[])
             AS v(course_id, field_changed, old_value, new_value)
         RETURNING id
         "#,
@@ -961,8 +946,8 @@ async fn upsert_course_instructors(
             audits.push(AuditEntry {
                 course_id,
                 field_changed: "instructors",
-                old_value: serde_json::to_string(&old).unwrap_or_default(),
-                new_value: serde_json::to_string(&new).unwrap_or_default(),
+                old_value: Some(serde_json::to_value(&old).unwrap_or_default()),
+                new_value: serde_json::to_value(&new).unwrap_or_default(),
             });
         }
     }

@@ -4,7 +4,7 @@ import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useStream } from "$lib/composables";
 import { formatAbsoluteDate } from "$lib/date";
-import { type DiffEntry, formatDiffPath, jsonDiff, tryParseJson } from "$lib/diff";
+import { type DiffEntry, formatDiffPath, jsonDiff } from "$lib/diff";
 import { relativeTime } from "$lib/time";
 import { formatNumber } from "$lib/utils";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight } from "@lucide/svelte";
@@ -64,32 +64,37 @@ interface ChangeAnalysis {
   delta: number | null;
 }
 
-function analyzeChange(entry: AuditLogEntry): ChangeAnalysis {
-  const parsedOld = tryParseJson(entry.oldValue);
-  const parsedNew = tryParseJson(entry.newValue);
+function displayValue(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val;
+  return JSON.stringify(val);
+}
 
-  const isJsonOld = typeof parsedOld === "object" && parsedOld !== null;
-  const isJsonNew = typeof parsedNew === "object" && parsedNew !== null;
+function analyzeChange(entry: AuditLogEntry): ChangeAnalysis {
+  const oldVal = entry.oldValue;
+  const newVal = entry.newValue;
+
+  const isJsonOld = typeof oldVal === "object" && oldVal !== null;
+  const isJsonNew = typeof newVal === "object" && newVal !== null;
 
   if (isJsonOld && isJsonNew) {
-    const diffs = jsonDiff(parsedOld, parsedNew);
+    const diffs = jsonDiff(oldVal, newVal);
     const kind = diffs.length <= 1 ? "json-single" : "json-multi";
-    return { kind, oldRaw: entry.oldValue, newRaw: entry.newValue, diffs, delta: null };
+    return { kind, oldRaw: displayValue(oldVal), newRaw: displayValue(newVal), diffs, delta: null };
   }
 
   let delta: number | null = null;
-  const numOld = Number(entry.oldValue);
-  const numNew = Number(entry.newValue);
-  if (
-    !Number.isNaN(numOld) &&
-    !Number.isNaN(numNew) &&
-    entry.oldValue !== "" &&
-    entry.newValue !== ""
-  ) {
-    delta = numNew - numOld;
+  if (typeof oldVal === "number" && typeof newVal === "number") {
+    delta = newVal - oldVal;
   }
 
-  return { kind: "scalar", oldRaw: entry.oldValue, newRaw: entry.newValue, diffs: [], delta };
+  return {
+    kind: "scalar",
+    oldRaw: displayValue(oldVal),
+    newRaw: displayValue(newVal),
+    diffs: [],
+    delta,
+  };
 }
 
 function stringify(val: unknown): string {

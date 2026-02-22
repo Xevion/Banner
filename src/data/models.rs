@@ -365,8 +365,8 @@ pub struct CourseAudit {
     pub course_id: i32,
     pub timestamp: DateTime<Utc>,
     pub field_changed: String,
-    pub old_value: String,
-    pub new_value: String,
+    pub old_value: Option<serde_json::Value>,
+    pub new_value: serde_json::Value,
 }
 
 /// Aggregate counts returned by batch upsert, used for scrape job result logging.
