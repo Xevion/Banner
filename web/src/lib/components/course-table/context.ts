@@ -1,7 +1,5 @@
 import type { useClipboard } from "$lib/composables/useClipboard.svelte";
-import { getContext } from "svelte";
-
-export const TABLE_CONTEXT_KEY = Symbol("table-context");
+import { createContext } from "svelte";
 
 export interface TableContext {
   clipboard: ReturnType<typeof useClipboard>;
@@ -9,7 +7,4 @@ export interface TableContext {
   maxSubjectLength: number;
 }
 
-/** Type-safe utility for accessing table context in cell components */
-export function getTableContext(): TableContext {
-  return getContext<TableContext>(TABLE_CONTEXT_KEY);
-}
+export const [getTableContext, setTableContext] = createContext<TableContext>();

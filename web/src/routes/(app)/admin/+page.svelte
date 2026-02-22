@@ -7,6 +7,10 @@ let status = $derived(data.status);
 let error = $derived(data.error);
 </script>
 
+<svelte:head>
+  <title>Dashboard | Banner</title>
+</svelte:head>
+
 <h1 class="mb-4 text-lg font-semibold text-foreground">Dashboard</h1>
 
 {#if error}

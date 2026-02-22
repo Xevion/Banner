@@ -179,7 +179,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             .br(true)
             .gzip(true)
             .quality(tower_http::CompressionLevel::Fastest),
-        TimeoutLayer::new(Duration::from_secs(10)),
+        TimeoutLayer::new(Duration::from_secs(60)),
     ))
 }
 

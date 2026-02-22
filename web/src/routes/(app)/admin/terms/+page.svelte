@@ -39,6 +39,48 @@ async function toggleTerm(term: DbTerm) {
   }
 }
 
+function getTermStatus(term: DbTerm): "past" | "current" | "future" {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const year = now.getFullYear();
+  const mmdd = month * 100 + day;
+
+  let currentYear: number;
+  let currentSeason: string;
+
+  if (mmdd >= 114 && mmdd <= 501) {
+    currentSeason = "Spring";
+    currentYear = year;
+  } else if (mmdd >= 502 && mmdd <= 524) {
+    // Gap between Spring and Summer — treat Summer as current
+    currentSeason = "Summer";
+    currentYear = year;
+  } else if (mmdd >= 525 && mmdd <= 815) {
+    currentSeason = "Summer";
+    currentYear = year;
+  } else if (mmdd >= 816 && mmdd <= 817) {
+    // Gap between Summer and Fall — treat Fall as current
+    currentSeason = "Fall";
+    currentYear = year;
+  } else if (mmdd >= 818 && mmdd <= 1210) {
+    currentSeason = "Fall";
+    currentYear = year;
+  } else {
+    // Dec 11–31 or Jan 1–13: between Fall and Spring — treat Spring as current
+    currentSeason = "Spring";
+    currentYear = mmdd >= 1211 ? year + 1 : year;
+  }
+
+  const seasonStart = (s: string) => (s === "Spring" ? 1 : s === "Summer" ? 5 : 8);
+  const currentIndex = currentYear * 12 + seasonStart(currentSeason);
+  const termIndex = term.year * 12 + seasonStart(term.season);
+
+  if (termIndex < currentIndex) return "past";
+  if (termIndex > currentIndex) return "future";
+  return "current";
+}
+
 async function syncTerms() {
   syncing = true;
   syncMessage = null;
@@ -61,6 +103,10 @@ async function syncTerms() {
   }
 }
 </script>
+
+<svelte:head>
+  <title>Terms | Banner</title>
+</svelte:head>
 
 <div class="flex flex-col gap-y-4">
   <div class="flex items-center justify-between">
@@ -99,18 +145,23 @@ async function syncTerms() {
       <tbody>
         {#each terms as term (term.code)}
           {@const toggling = togglingCodes.has(term.code)}
+          {@const status = getTermStatus(term)}
           <tr class="border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors">
             <td class="px-4 py-2.5 font-medium text-foreground">{term.description}</td>
             <td class="px-4 py-2.5 text-muted-foreground font-mono text-xs">{term.code}</td>
             <td class="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{term.season}</td>
             <td class="px-4 py-2.5 hidden md:table-cell">
-              {#if term.isArchived}
+              {#if status === 'past'}
                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                   Archived
                 </span>
-              {:else}
+              {:else if status === 'current'}
                 <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">
-                  Active
+                  Current
+                </span>
+              {:else}
+                <span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                  Upcoming
                 </span>
               {/if}
             </td>

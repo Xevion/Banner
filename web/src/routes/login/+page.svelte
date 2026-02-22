@@ -31,6 +31,10 @@ const faqItems = [
 ];
 </script>
 
+<svelte:head>
+  <title>Login | Banner</title>
+</svelte:head>
+
 <div class="flex flex-1 items-center justify-center px-4 pb-14">
     <div class="w-full max-w-md flex flex-col gap-y-8">
         <!-- Sign-in card -->

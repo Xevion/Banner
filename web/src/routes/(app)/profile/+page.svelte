@@ -2,6 +2,10 @@
 import { authStore } from "$lib/auth.svelte";
 </script>
 
+<svelte:head>
+  <title>Profile | Banner</title>
+</svelte:head>
+
 <h1 class="mb-4 text-lg font-semibold text-foreground">Profile</h1>
 
 {#if authStore.user}

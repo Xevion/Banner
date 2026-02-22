@@ -15,7 +15,7 @@ onMount(() => {
 </script>
 
 <svelte:head>
-  <title>Class Timeline</title>
+  <title>Timeline | Banner</title>
 </svelte:head>
 
 <div class="fixed inset-0 z-0 overscroll-none overflow-hidden">

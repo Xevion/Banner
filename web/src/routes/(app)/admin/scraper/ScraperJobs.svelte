@@ -2,7 +2,7 @@
 import type { ScrapeJobDto } from "$lib/bindings";
 import { client } from "$lib/api";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
-import { useStream } from "$lib/composables";
+import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration } from "$lib/time";
 import { ArrowDown, ArrowUp, ArrowUpDown, TriangleAlert } from "@lucide/svelte";

@@ -15,12 +15,11 @@ import {
 import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
-import { setContext } from "svelte";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
 import { COLUMN_DEFS, CELL_COMPONENTS } from "./columns";
 import { buildSkeletonHtml } from "./skeletons";
 import EmptyState from "./EmptyState.svelte";
-import { TABLE_CONTEXT_KEY } from "./context";
+import { setTableContext } from "./context";
 
 let {
   courses,
@@ -57,7 +56,7 @@ let tableElement: HTMLTableElement = undefined!;
 const clipboard = useClipboard(1000);
 
 // Set context once for all cells - shared utilities
-setContext(TABLE_CONTEXT_KEY, {
+setTableContext({
   clipboard,
   get subjectMap() {
     return subjectMap;

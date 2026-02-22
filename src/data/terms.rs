@@ -148,8 +148,7 @@ pub async fn disable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
 
 /// Update the `last_scraped_at` timestamp for a term.
 ///
-/// Called when a full scrape of a term completes.
-#[allow(dead_code)] // Will be used when per-term scrape completion tracking is implemented
+/// Called when a subject scrape job completes for this term.
 pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> {
     sqlx::query("UPDATE terms SET last_scraped_at = now(), updated_at = now() WHERE code = $1")
         .bind(code)

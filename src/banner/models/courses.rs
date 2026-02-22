@@ -30,7 +30,7 @@ pub struct Course {
     pub subject_description: String,
     pub sequence_number: String,
     pub campus_description: String,
-    pub schedule_type_description: String,
+    pub schedule_type_description: Option<String>,
     pub course_title: String,
     pub credit_hours: Option<i32>,
     pub maximum_enrollment: i32,

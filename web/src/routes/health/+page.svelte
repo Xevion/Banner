@@ -180,6 +180,10 @@ onMount(() => {
 });
 </script>
 
+<svelte:head>
+  <title>System Status | Banner</title>
+</svelte:head>
+
 <div class="min-h-screen flex flex-col items-center justify-center p-5">
   <div
     class="bg-card text-card-foreground rounded-xl border border-border p-6 w-full max-w-[400px] shadow-sm"

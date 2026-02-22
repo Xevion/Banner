@@ -72,6 +72,10 @@ function successRateColor(rate: number): string {
 }
 </script>
 
+<svelte:head>
+  <title>Scraper | Banner</title>
+</svelte:head>
+
 <div class="flex flex-col gap-y-6">
   <!-- Header: Title + Connection indicator + Controls -->
   <div class="grid grid-cols-1 items-center gap-x-4 gap-y-2

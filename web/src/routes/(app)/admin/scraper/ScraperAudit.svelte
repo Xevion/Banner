@@ -2,7 +2,7 @@
 import type { AuditLogEntry } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
-import { useStream } from "$lib/composables";
+import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
 import { type DiffEntry, formatDiffPath, jsonDiff } from "$lib/diff";
 import { relativeTime } from "$lib/time";

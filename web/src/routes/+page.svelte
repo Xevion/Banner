@@ -26,6 +26,7 @@ interface PageLoadData {
 
 let { data }: { data: PageLoadData } = $props();
 
+
 /** No-op function to register Svelte reactivity dependencies for `$effect` tracking */
 function track(..._deps: unknown[]) {
   /* noop */
@@ -248,6 +249,10 @@ function handlePageChange(newOffset: number) {
   offset = newOffset;
 }
 </script>
+
+<svelte:head>
+  <title>Course Search | Banner</title>
+</svelte:head>
 
 <div class="min-h-screen flex flex-col items-center px-3 md:px-5 pb-5 pt-20">
   <div class="w-full max-w-6xl flex flex-col pt-2">

@@ -27,6 +27,10 @@ onMount(() => {
 });
 </script>
 
+<svelte:head>
+  <title>Banner</title>
+</svelte:head>
+
 <Tooltip.Provider delayDuration={150} skipDelayDuration={50}>
   <div class="relative flex min-h-screen flex-col overflow-x-hidden">
     <!-- pointer-events-none so the navbar doesn't block canvas interactions;

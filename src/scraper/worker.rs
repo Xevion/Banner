@@ -1,6 +1,7 @@
 use crate::banner::{BannerApi, BannerApiError};
 use crate::data::DbContext;
 use crate::data::models::{ScrapeJob, UpsertCounts};
+use crate::data::terms;
 use crate::scraper::jobs::{JobError, JobType};
 use crate::utils::fmt_duration;
 use anyhow::Result;
@@ -218,6 +219,12 @@ impl Worker {
                     );
                 }
 
+                // Extract term code before payload is moved into insert_result
+                let term_code = payload
+                    .get("term")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
                 // Log the result
                 if let Err(e) = self
                     .db
@@ -242,6 +249,12 @@ impl Worker {
                 // Mark job as completed (deletes it and emits Completed event)
                 if let Err(e) = self.db.scrape_jobs().complete(job_id).await {
                     error!(worker_id = self.id, job_id, error = ?e, "Failed to complete job");
+                }
+
+                // Update last_scraped_at for the term if this job has a term code
+                if let Some(code) = term_code {
+                    let _ = terms::update_last_scraped_at(self.db.pool(), &code).await
+                        .map_err(|e| warn!(worker_id = self.id, job_id, term_code = code.as_str(), error = ?e, "Failed to update last_scraped_at"));
                 }
             }
             Err(JobError::Recoverable(e)) => {

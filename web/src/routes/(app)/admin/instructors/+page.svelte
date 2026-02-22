@@ -381,6 +381,10 @@ function formatScore(score: number): string {
 }
 </script>
 
+<svelte:head>
+  <title>Instructors | Banner</title>
+</svelte:head>
+
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- Header -->

@@ -22,6 +22,10 @@ async function toggleAdmin(user: User) {
 }
 </script>
 
+<svelte:head>
+  <title>Users | Banner</title>
+</svelte:head>
+
 <h1 class="mb-4 text-lg font-semibold text-foreground">Users</h1>
 
 {#if error}

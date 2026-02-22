@@ -8,6 +8,7 @@ import {
   releaseStreamClient,
   type ConnectionState,
   type FilterFor,
+  type SnapshotFor,
 } from "$lib/ws";
 import type {
   StreamKind,
@@ -20,9 +21,6 @@ import type {
   TimeseriesPoint,
 } from "$lib/bindings";
 
-// Type helpers for stream-specific types
-type SnapshotFor<S extends StreamKind> = Extract<StreamSnapshot, { stream: S }>;
-
 type EventFor<S extends StreamKind> = S extends "scrapeJobs"
   ? ScrapeJobEvent
   : S extends "auditLog"
@@ -34,8 +32,6 @@ type EventFor<S extends StreamKind> = S extends "scrapeJobs"
         : S extends "scraperSubjects"
           ? { changed: SubjectSummary[]; removed: string[] }
           : never;
-
-// FilterFor imported from $lib/ws to avoid duplication
 
 // Extract the event type discriminator
 type EventType<S extends StreamKind> = EventFor<S> extends { type: infer T } ? T : never;

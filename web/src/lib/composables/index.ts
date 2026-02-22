@@ -1,6 +1,10 @@
 export { useStream } from "./useStream.svelte";
 export { useQuery } from "./useQuery.svelte";
-export { updateById, removeById, addItem } from "./reducers";
+export { useAutoRefresh } from "./useAutoRefresh.svelte";
+export { updateById, removeById, addItem, mergeByKey } from "./reducers";
 export { useURLSync } from "./useURLSync.svelte";
+export { useClipboard } from "./useClipboard.svelte";
+export { useOverlayScrollbars } from "./useOverlayScrollbars.svelte";
+export { useTooltipDelegation } from "./useTooltipDelegation";
 export { ColumnVisibilityController } from "./useColumnVisibility.svelte";
 export type { UseColumnVisibilityOptions, ColumnDef } from "./useColumnVisibility.svelte";

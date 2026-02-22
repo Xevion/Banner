@@ -17,7 +17,7 @@ const MAX_RECONNECT_DELAY = 30_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
 export type StreamKey = StreamKind;
-type SnapshotFor<S extends StreamKey> = Extract<StreamSnapshot, { stream: S }>;
+export type SnapshotFor<S extends StreamKey> = Extract<StreamSnapshot, { stream: S }>;
 type DeltaFor<S extends StreamKey> = Extract<StreamDelta, { stream: S }>;
 export type FilterFor<S extends StreamKey> = S extends "scrapeJobs"
   ? ScrapeJobsFilter | null

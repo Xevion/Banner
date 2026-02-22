@@ -9,6 +9,7 @@ import {
   formatMeetingDaysVerbose,
   formatMeetingTimeTooltip,
   formatMeetingTimesTooltip,
+  formatMeetingTimeSummary,
   formatISOTime,
   formatTimeRange,
   getPrimaryInstructor,
@@ -350,5 +351,81 @@ describe("formatInstructorName", () => {
     expect(formatInstructorName({ displayName: "Staff", firstName: null, lastName: null })).toBe(
       "Staff"
     );
+  });
+});
+
+function makeCourse(overrides: Partial<CourseResponse> = {}): CourseResponse {
+  return {
+    crn: "12345",
+    subject: "CS",
+    courseNumber: "1234",
+    title: "Test Course",
+    termCode: "202510",
+    sequenceNumber: null,
+    instructionalMethod: null,
+    instructionalMethodCode: null,
+    campus: null,
+    enrollment: { current: 10, max: 30, waitCount: 0, waitCapacity: 0 },
+    creditHours: { type: "fixed", hours: 3 },
+    crossList: null,
+    sectionLink: null,
+    partOfTerm: null,
+    isAsyncOnline: false,
+    primaryLocation: null,
+    hasPhysicalLocation: false,
+    primaryInstructorId: null,
+    meetingTimes: [],
+    attributes: [],
+    instructors: [],
+    ...overrides,
+  };
+}
+
+describe("formatMeetingTimeSummary", () => {
+  it("returns 'Async' for async online courses", () => {
+    const course = makeCourse({
+      isAsyncOnline: true,
+      meetingTimes: [
+        makeMeetingTime({
+          location: { building: "INT", buildingDescription: null, room: null, campus: null },
+        }),
+      ],
+    });
+    expect(formatMeetingTimeSummary(course)).toBe("Async");
+  });
+
+  it("returns 'TBA' for courses with no meeting times", () => {
+    const course = makeCourse({ meetingTimes: [] });
+    expect(formatMeetingTimeSummary(course)).toBe("TBA");
+  });
+
+  it("returns 'TBA' when days and times are all TBA", () => {
+    const course = makeCourse({
+      meetingTimes: [makeMeetingTime()],
+    });
+    expect(formatMeetingTimeSummary(course)).toBe("TBA");
+  });
+
+  it("returns formatted days and time for normal meeting", () => {
+    const course = makeCourse({
+      meetingTimes: [
+        makeMeetingTime({
+          days: ["monday", "wednesday", "friday"],
+          timeRange: { start: "09:00:00", end: "09:50:00" },
+        }),
+      ],
+    });
+    expect(formatMeetingTimeSummary(course)).toBe("MWF 9:00–9:50 AM");
+  });
+
+  it("returns formatted days with TBA time", () => {
+    const course = makeCourse({
+      meetingTimes: [
+        makeMeetingTime({
+          days: ["tuesday", "thursday"],
+        }),
+      ],
+    });
+    expect(formatMeetingTimeSummary(course)).toBe("TTh TBA");
   });
 });
