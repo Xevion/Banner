@@ -9,8 +9,8 @@ use tracing::{debug, trace, warn};
 
 pub struct LoggingMiddleware;
 
-/// Threshold for logging slow requests at DEBUG level (in milliseconds)
-const SLOW_REQUEST_THRESHOLD: Duration = Duration::from_secs(1);
+/// Threshold for logging slow requests at DEBUG level
+const SLOW_REQUEST_THRESHOLD: Duration = Duration::from_secs(5);
 
 #[async_trait::async_trait]
 impl Middleware for LoggingMiddleware {

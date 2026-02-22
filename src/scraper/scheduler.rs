@@ -1,9 +1,11 @@
 use crate::banner::{BannerApi, Term};
 use crate::data::DbContext;
 use crate::data::models::{ReferenceData, ScrapePriority, TargetType};
-use crate::data::terms;
+use crate::data::{term_subjects, terms};
 use crate::rmp::RmpClient;
-use crate::scraper::adaptive::{SubjectSchedule, SubjectStats, evaluate_subject};
+use crate::scraper::adaptive::{
+    ARCHIVED_INTERVAL, SubjectSchedule, SubjectStats, TermCategory, evaluate_subject,
+};
 use crate::scraper::jobs::subject::SubjectJob;
 use crate::state::ReferenceCache;
 use crate::utils::fmt_duration;
@@ -17,7 +19,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, broadcast};
 use tokio::time;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// How often reference data is re-scraped (6 hours).
 const REFERENCE_DATA_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
@@ -35,6 +37,10 @@ pub struct Scheduler {
     db: DbContext,
     banner_api: Arc<BannerApi>,
     reference_cache: Arc<RwLock<ReferenceCache>>,
+    /// Tracks when each archived term was last evaluated, so we can skip
+    /// the expensive `get_subjects()` API call when no subjects can possibly
+    /// be eligible yet (archived interval is 48 hours).
+    archived_eval_times: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
 }
 
 impl Scheduler {
@@ -47,6 +53,7 @@ impl Scheduler {
             db,
             banner_api,
             reference_cache,
+            archived_eval_times: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -75,6 +82,15 @@ impl Scheduler {
         loop {
             tokio::select! {
                 _ = time::sleep_until(next_run) => {
+                    // Skip this cycle if the previous one is still running.
+                    if let Some((ref handle, _)) = current_work
+                        && !handle.is_finished()
+                    {
+                        trace!("Previous scheduling cycle still running, skipping");
+                        next_run = time::Instant::now() + work_interval;
+                        continue;
+                    }
+
                     let cancel_token = CancellationToken::new();
 
                     let should_scrape_ref = last_ref_scrape.elapsed() >= REFERENCE_DATA_INTERVAL;
@@ -87,6 +103,7 @@ impl Scheduler {
                         let banner_api = self.banner_api.clone();
                         let cancel_token = cancel_token.clone();
                         let reference_cache = self.reference_cache.clone();
+                        let archived_eval_times = self.archived_eval_times.clone();
 
                                 async move {
                                     tokio::select! {
@@ -119,12 +136,12 @@ impl Scheduler {
 
                                             tokio::join!(term_fut, rmp_fut, ref_fut);
 
-                                            if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api).await {
+                                            if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
                                                 error!(error = ?e, "Failed to schedule jobs");
                                             }
                                         } => {}
                                         _ = cancel_token.cancelled() => {
-                                            debug!("Scheduling work cancelled gracefully");
+                                            trace!("Scheduling work cancelled gracefully");
                                         }
                                     }
                                 }
@@ -153,7 +170,7 @@ impl Scheduler {
                         if tokio::time::timeout(Duration::from_secs(5), handle).await.is_err() {
                             warn!("Scheduling work did not complete within 5s, abandoning");
                         } else {
-                            debug!("Scheduling work completed gracefully");
+                            trace!("Scheduling work completed gracefully");
                         }
                     }
 
@@ -171,53 +188,64 @@ impl Scheduler {
     /// on recent change rates, failure patterns, and time of day.
     ///
     /// This is a static method (not &self) to allow it to be called from spawned tasks.
-    async fn schedule_jobs_impl(db: &DbContext, banner_api: &BannerApi) -> Result<()> {
+    async fn schedule_jobs_impl(
+        db: &DbContext,
+        banner_api: &BannerApi,
+        archived_eval_times: &std::sync::Mutex<HashMap<String, Instant>>,
+    ) -> Result<()> {
         // Query enabled terms from database
         let start = Instant::now();
-        let enabled_terms = terms::get_enabled_term_codes(db.pool()).await?;
+        let enabled_terms = terms::get_enabled_terms_for_scheduling(db.pool()).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
             warn!(
                 duration = fmt_duration(elapsed),
-                "Slow query: get_enabled_term_codes"
+                "Slow query: get_enabled_terms_for_scheduling"
             );
         }
 
         if enabled_terms.is_empty() {
-            debug!("No enabled terms to schedule");
+            trace!("No enabled terms to schedule");
             return Ok(());
         }
 
-        info!(terms = ?enabled_terms, "Scheduling jobs for enabled terms");
+        // Compute categories up front so we can skip past terms entirely.
+        let current_term_code = Term::get_current().inner().to_string();
+        let categorized: Vec<_> = enabled_terms
+            .into_iter()
+            .map(|t| {
+                let category = if t.code.as_str() < current_term_code.as_str() {
+                    TermCategory::Past
+                } else if t.code.as_str() > current_term_code.as_str() {
+                    TermCategory::Future
+                } else if t.is_archived {
+                    TermCategory::Archived
+                } else {
+                    TermCategory::Current
+                };
+                (t, category)
+            })
+            .collect();
 
-        for term_code in enabled_terms {
-            if let Err(e) = Self::schedule_term_jobs(db, banner_api, &term_code).await {
-                error!(term = %term_code, error = ?e, "Failed to schedule jobs for term");
-                // Continue with other terms
-            }
-        }
+        // Filter out terms that don't need evaluation this cycle:
+        // - Past and Archived terms only need evaluation every ARCHIVED_INTERVAL (48h).
+        let active_terms: Vec<_> = {
+            let eval_times = archived_eval_times.lock().unwrap();
+            categorized
+                .into_iter()
+                .filter(|(t, cat)| match cat {
+                    TermCategory::Past | TermCategory::Archived => {
+                        // Skip if we evaluated this term recently
+                        eval_times
+                            .get(&t.code)
+                            .is_none_or(|last| last.elapsed() >= ARCHIVED_INTERVAL)
+                    }
+                    _ => true,
+                })
+                .collect()
+        };
 
-        debug!("Job scheduling complete");
-        Ok(())
-    }
-
-    /// Schedule jobs for a single term.
-    #[tracing::instrument(skip_all, fields(term = %term_code))]
-    async fn schedule_term_jobs(
-        db: &DbContext,
-        banner_api: &BannerApi,
-        term_code: &str,
-    ) -> Result<()> {
-        debug!("Enqueuing subject jobs for term");
-
-        let subjects = banner_api.get_subjects("", term_code, 1, 500).await?;
-        debug!(
-            subject_count = subjects.len(),
-            "Retrieved subjects from API"
-        );
-
-        // Fetch per-subject stats and build a lookup map
-        // Note: Currently stats are not term-aware, so we use global stats.
+        // Fetch per-(subject, term) stats once for the entire cycle.
         let start = Instant::now();
         let stats_rows = db.scrape_jobs().fetch_subject_stats().await?;
         let elapsed = start.elapsed();
@@ -227,30 +255,101 @@ impl Scheduler {
                 "Slow query: fetch_subject_stats"
             );
         }
-        let stats_map: HashMap<String, SubjectStats> = stats_rows
+        let stats_map: HashMap<(String, String), SubjectStats> = stats_rows
             .into_iter()
             .map(|row| {
-                let subject = row.subject.clone();
-                (subject, SubjectStats::from(row))
+                let key = (row.subject.clone(), row.term.clone());
+                (key, SubjectStats::from(row))
             })
             .collect();
 
-        // Determine if this is a past term (for ReadOnly mode)
-        let current_term_code = Term::get_current().inner().to_string();
-        let is_past_term = term_code < current_term_code.as_str();
+        let active_count = active_terms.len();
+        let current_future: Vec<&str> = active_terms
+            .iter()
+            .filter(|(_, c)| matches!(c, TermCategory::Current | TermCategory::Future))
+            .map(|(t, _)| t.code.as_str())
+            .collect();
+        let past_count = active_count - current_future.len();
+
+        if !current_future.is_empty() || past_count > 0 {
+            info!(
+                current_future = ?current_future,
+                past_terms = past_count,
+                "Scheduling cycle"
+            );
+        }
+
+        for (term, category) in active_terms {
+            if let Err(e) =
+                Self::schedule_term_jobs(db, banner_api, &term.code, category, &stats_map).await
+            {
+                error!(term = %term.code, error = ?e, "Failed to schedule jobs for term");
+                continue;
+            }
+
+            // Record evaluation time for past/archived terms so we skip them next cycle.
+            if category == TermCategory::Past || category == TermCategory::Archived {
+                archived_eval_times
+                    .lock()
+                    .unwrap()
+                    .insert(term.code.clone(), Instant::now());
+            }
+        }
+
+        trace!("Job scheduling complete");
+        Ok(())
+    }
+
+    /// Schedule jobs for a single term.
+    ///
+    /// For past/archived terms, subjects are read from the database cache to avoid
+    /// expensive Banner session creation. The cache is populated on first access.
+    #[tracing::instrument(skip_all, fields(term = %term_code))]
+    async fn schedule_term_jobs(
+        db: &DbContext,
+        banner_api: &BannerApi,
+        term_code: &str,
+        category: TermCategory,
+        stats_map: &HashMap<(String, String), SubjectStats>,
+    ) -> Result<()> {
+        trace!(?category, "Enqueuing subject jobs for term");
+
+        let subjects = match category {
+            TermCategory::Past | TermCategory::Archived => {
+                let cached = term_subjects::get_cached(term_code, db.pool()).await?;
+                if !cached.is_empty() {
+                    trace!(count = cached.len(), "Using cached subjects");
+                    cached
+                } else {
+                    let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
+                    trace!(
+                        count = fetched.len(),
+                        "Fetched subjects from API (cold cache)"
+                    );
+                    term_subjects::cache(term_code, &fetched, db.pool()).await?;
+                    fetched
+                }
+            }
+            _ => {
+                let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
+                trace!(count = fetched.len(), "Fetched subjects from API");
+                term_subjects::cache(term_code, &fetched, db.pool()).await?;
+                fetched
+            }
+        };
 
         // Evaluate each subject using adaptive scheduling
         let now = Utc::now();
         let mut eligible_subjects: Vec<String> = Vec::new();
         let mut cooldown_count: usize = 0;
         let mut paused_count: usize = 0;
-        let mut read_only_count: usize = 0;
 
         for subject in &subjects {
-            let stats = stats_map.get(&subject.code).cloned().unwrap_or_else(|| {
-                // Cold start: no history for this subject
+            let key = (subject.code.clone(), term_code.to_string());
+            let stats = stats_map.get(&key).cloned().unwrap_or_else(|| {
                 SubjectStats {
                     subject: subject.code.clone(),
+                    term: term_code.to_string(),
                     recent_runs: 0,
                     avg_change_ratio: 0.0,
                     consecutive_zero_changes: 0,
@@ -261,14 +360,24 @@ impl Scheduler {
                 }
             });
 
-            match evaluate_subject(&stats, now, is_past_term) {
+            match evaluate_subject(&stats, now, category) {
                 SubjectSchedule::Eligible(_) => {
                     eligible_subjects.push(subject.code.clone());
                 }
                 SubjectSchedule::Cooldown(_) => cooldown_count += 1,
                 SubjectSchedule::Paused => paused_count += 1,
-                SubjectSchedule::ReadOnly => read_only_count += 1,
             }
+        }
+
+        if eligible_subjects.is_empty() {
+            trace!(
+                total = subjects.len(),
+                cooldown = cooldown_count,
+                paused = paused_count,
+                ?category,
+                "No eligible subjects"
+            );
+            return Ok(());
         }
 
         info!(
@@ -276,15 +385,9 @@ impl Scheduler {
             eligible = eligible_subjects.len(),
             cooldown = cooldown_count,
             paused = paused_count,
-            read_only = read_only_count,
-            is_past_term,
-            "Adaptive scheduling decisions"
+            ?category,
+            "Scheduling subjects"
         );
-
-        if eligible_subjects.is_empty() {
-            debug!("No eligible subjects to schedule");
-            return Ok(());
-        }
 
         // Create payloads with term field for eligible subjects
         let subject_payloads: Vec<_> = eligible_subjects
@@ -448,10 +551,13 @@ impl Scheduler {
             Err(e) => warn!(error = ?e, "Failed to fetch terms"),
         }
 
-        // Subjects
+        // Subjects — also cache in term_subjects for scheduler use
         match banner_api.get_subjects("", &term, 1, 500).await {
             Ok(pairs) => {
                 debug!(count = pairs.len(), "Fetched subjects");
+                if let Err(e) = term_subjects::cache(&term, &pairs, db_pool).await {
+                    warn!(error = ?e, "Failed to cache term subjects");
+                }
                 all_entries.extend(pairs.into_iter().map(|p| ReferenceData {
                     category: "subject".to_string(),
                     code: p.code,

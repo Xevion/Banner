@@ -485,13 +485,14 @@ pub struct UserSession {
     pub last_active_at: DateTime<Utc>,
 }
 
-/// Per-subject aggregated stats from recent scrape results.
+/// Per-subject-term aggregated stats from recent scrape results.
 ///
 /// Populated by `ScrapeJobOps::fetch_subject_stats` and converted into
 /// `crate::scraper::adaptive::SubjectStats` for interval computation.
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct SubjectResultStats {
     pub subject: String,
+    pub term: String,
     pub recent_runs: i64,
     pub avg_change_ratio: f64,
     pub consecutive_zero_changes: i64,

@@ -17,14 +17,29 @@ const ZERO_5_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const ZERO_10_INTERVAL: Duration = Duration::from_secs(2 * 60 * 60);
 const CEILING_INTERVAL: Duration = Duration::from_secs(4 * 60 * 60);
 const COLD_START_INTERVAL: Duration = FLOOR_INTERVAL;
+pub(crate) const ARCHIVED_INTERVAL: Duration = Duration::from_secs(48 * 60 * 60);
 const PAUSE_PROBE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const EMPTY_FETCH_PAUSE_THRESHOLD: i64 = 3;
 const FAILURE_PAUSE_THRESHOLD: i64 = 5;
+
+/// Scheduling tier for a term based on its temporal status and archive flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TermCategory {
+    /// Active term — full adaptive scheduling.
+    Current,
+    /// Upcoming term — full adaptive scheduling (same as current).
+    Future,
+    /// Banner "View Only" term — fixed 48-hour interval.
+    Archived,
+    /// Past non-archived term — fixed 48-hour interval (same as Archived).
+    Past,
+}
 
 /// Aggregated per-subject statistics derived from recent scrape results.
 #[derive(Debug, Clone)]
 pub struct SubjectStats {
     pub subject: String,
+    pub term: String,
     pub recent_runs: i64,
     pub avg_change_ratio: f64,
     pub consecutive_zero_changes: i64,
@@ -43,14 +58,13 @@ pub enum SubjectSchedule {
     Cooldown(Duration),
     /// Subject is paused due to repeated empty fetches or failures.
     Paused,
-    /// Subject belongs to a past term and should not be scraped.
-    ReadOnly,
 }
 
 impl From<SubjectResultStats> for SubjectStats {
     fn from(row: SubjectResultStats) -> Self {
         Self {
             subject: row.subject,
+            term: row.term,
             recent_runs: row.recent_runs,
             avg_change_ratio: row.avg_change_ratio,
             consecutive_zero_changes: row.consecutive_zero_changes,
@@ -110,19 +124,25 @@ pub fn time_of_day_multiplier(now: DateTime<Utc>) -> u32 {
 /// Evaluate whether a subject should be scraped now.
 ///
 /// Combines base interval, time-of-day multiplier, pause detection (empty
-/// fetches / consecutive failures), and past-term read-only status.
+/// fetches / consecutive failures), and term category scheduling tiers.
 pub fn evaluate_subject(
     stats: &SubjectStats,
     now: DateTime<Utc>,
-    is_past_term: bool,
+    category: TermCategory,
 ) -> SubjectSchedule {
-    if is_past_term {
-        return SubjectSchedule::ReadOnly;
-    }
-
     let elapsed = (now - stats.last_completed)
         .to_std()
         .unwrap_or(Duration::ZERO);
+
+    // Past and Archived terms use a fixed long interval, bypassing adaptive logic entirely.
+    if category == TermCategory::Past || category == TermCategory::Archived {
+        return if elapsed >= ARCHIVED_INTERVAL {
+            SubjectSchedule::Eligible(ARCHIVED_INTERVAL)
+        } else {
+            SubjectSchedule::Cooldown(ARCHIVED_INTERVAL - elapsed)
+        };
+    }
+
     let probe_due = elapsed >= PAUSE_PROBE_INTERVAL;
 
     // Pause on repeated empty fetches
@@ -164,6 +184,7 @@ mod tests {
     fn make_stats(subject: &str) -> SubjectStats {
         SubjectStats {
             subject: subject.to_string(),
+            term: "202620".to_string(),
             recent_runs: 10,
             avg_change_ratio: 0.0,
             consecutive_zero_changes: 0,
@@ -242,7 +263,7 @@ mod tests {
         let mut stats = make_stats("CS");
         stats.consecutive_empty_fetches = 3;
         stats.last_completed = Utc::now() - chrono::Duration::minutes(10);
-        let result = evaluate_subject(&stats, Utc::now(), false);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Current);
         assert_eq!(result, SubjectSchedule::Paused);
     }
 
@@ -252,7 +273,7 @@ mod tests {
         stats.recent_success_count = 0;
         stats.recent_failure_count = 5;
         stats.last_completed = Utc::now() - chrono::Duration::minutes(10);
-        let result = evaluate_subject(&stats, Utc::now(), false);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Current);
         assert_eq!(result, SubjectSchedule::Paused);
     }
 
@@ -261,15 +282,40 @@ mod tests {
         let mut stats = make_stats("CS");
         stats.consecutive_empty_fetches = 5;
         stats.last_completed = Utc::now() - chrono::Duration::hours(7);
-        let result = evaluate_subject(&stats, Utc::now(), false);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Current);
         assert_eq!(result, SubjectSchedule::Eligible(PAUSE_PROBE_INTERVAL));
     }
 
     #[test]
-    fn test_read_only_past_term() {
-        let stats = make_stats("CS");
-        let result = evaluate_subject(&stats, Utc::now(), true);
-        assert_eq!(result, SubjectSchedule::ReadOnly);
+    fn test_past_term_uses_archived_interval() {
+        let mut stats = make_stats("CS");
+        stats.last_completed = Utc::now() - chrono::Duration::hours(49);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Past);
+        assert_eq!(result, SubjectSchedule::Eligible(ARCHIVED_INTERVAL));
+    }
+
+    #[test]
+    fn test_past_term_cooldown_before_48h() {
+        let mut stats = make_stats("CS");
+        stats.last_completed = Utc::now() - chrono::Duration::hours(24);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Past);
+        assert!(matches!(result, SubjectSchedule::Cooldown(_)));
+    }
+
+    #[test]
+    fn test_archived_eligible_after_48h() {
+        let mut stats = make_stats("CS");
+        stats.last_completed = Utc::now() - chrono::Duration::hours(49);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Archived);
+        assert_eq!(result, SubjectSchedule::Eligible(ARCHIVED_INTERVAL));
+    }
+
+    #[test]
+    fn test_archived_cooldown_before_48h() {
+        let mut stats = make_stats("CS");
+        stats.last_completed = Utc::now() - chrono::Duration::hours(24);
+        let result = evaluate_subject(&stats, Utc::now(), TermCategory::Archived);
+        assert!(matches!(result, SubjectSchedule::Cooldown(_)));
     }
 
     #[test]
@@ -280,7 +326,7 @@ mod tests {
         // Use a peak-hours timestamp so multiplier = 1
         let peak = Utc.with_ymd_and_hms(2025, 7, 14, 15, 0, 0).unwrap(); // Mon 10am CT
         stats.last_completed = peak - chrono::Duration::seconds(30);
-        let result = evaluate_subject(&stats, peak, false);
+        let result = evaluate_subject(&stats, peak, TermCategory::Current);
         assert!(matches!(result, SubjectSchedule::Cooldown(_)));
     }
 
@@ -290,7 +336,7 @@ mod tests {
         stats.avg_change_ratio = 0.15; // floor = 3 min
         let peak = Utc.with_ymd_and_hms(2025, 7, 14, 15, 0, 0).unwrap(); // Mon 10am CT
         stats.last_completed = peak - chrono::Duration::minutes(5);
-        let result = evaluate_subject(&stats, peak, false);
+        let result = evaluate_subject(&stats, peak, TermCategory::Current);
         assert!(matches!(result, SubjectSchedule::Eligible(_)));
     }
 

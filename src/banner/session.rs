@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, Notify};
-use tracing::{debug, trace};
+use tracing::trace;
 use url::Url;
 
 const SESSION_EXPIRY: Duration = Duration::from_secs(25 * 60); // 25 minutes
@@ -313,7 +313,7 @@ impl TermPool {
     async fn release(&self, session: BannerSession) {
         let id = session.unique_session_id.clone();
         if session.is_expired() {
-            debug!(id = id, "Session expired, dropping");
+            trace!(id = id, "Session expired, dropping");
             // Wake up a waiter, as it might need to create a new session
             // if this was the last one.
             self.notifier.notify_one();
@@ -376,7 +376,7 @@ impl SessionPool {
                             pool: Arc::clone(&term_pool),
                         });
                     } else {
-                        debug!(id = session.unique_session_id, "Discarded expired session");
+                        trace!(id = session.unique_session_id, "Discarded expired session");
                     }
                 }
             } // MutexGuard is dropped, lock is released.
@@ -403,14 +403,14 @@ impl SessionPool {
             // Guard resets is_creating on drop (including cancellation).
             let creating_guard = CreatingGuard(Arc::clone(&term_pool));
 
-            debug!(term = %term, "Creating new session (pool empty)");
+            trace!(term = %term, "Creating new session (pool empty)");
             let new_session_result = self.create_session(&term).await;
             drop(creating_guard);
 
             match new_session_result {
                 Ok(new_session) => {
                     let elapsed = start.elapsed();
-                    debug!(
+                    trace!(
                         id = new_session.unique_session_id,
                         elapsed = fmt_duration(elapsed),
                         "Created new session"
@@ -491,29 +491,14 @@ impl SessionPool {
     ///
     /// Establishes cookies, verifies the term is available, and selects it.
     async fn create_session(&self, term: &Term) -> Result<BannerSession> {
-        debug!(term = %term, "Setting up new Banner session with cookies");
+        trace!(term = %term, "Setting up new Banner session with cookies");
 
         let (jsessionid, ssb_cookie, cookie_header) = self
             .establish_cookies()
             .await
             .context("Failed to establish session cookies")?;
 
-        // Verify the term exists in Banner's term list
         let term_code = term.to_string();
-        let terms = self.get_terms("", 1, 10).await?;
-        if !terms.iter().any(|t| t.code == term_code) {
-            return Err(anyhow::anyhow!(
-                "Term {term_code} not found in Banner term list"
-            ));
-        }
-
-        let specific_terms = self.get_terms(&term_code, 1, 10).await?;
-        if !specific_terms.iter().any(|t| t.code == term_code) {
-            return Err(anyhow::anyhow!(
-                "Term {term_code} not found in filtered term search"
-            ));
-        }
-
         let unique_session_id = generate_session_id();
         self.select_term(&term_code, &unique_session_id, &cookie_header)
             .await?;

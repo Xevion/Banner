@@ -6,6 +6,7 @@ import BottomSheet from "$lib/components/BottomSheet.svelte";
 import ErrorBoundaryFallback from "$lib/components/ErrorBoundaryFallback.svelte";
 import {
   Activity,
+  Calendar,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -56,6 +57,7 @@ const userItems = [
 const adminItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/scraper", label: "Scraper", icon: Activity },
+  { href: "/admin/terms", label: "Terms", icon: Calendar },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/instructors", label: "Instructors", icon: GraduationCap },
 ];
@@ -80,6 +82,7 @@ const nonAdminTabs = [
 // "More" sheet items (admin only, items not in the tab bar)
 const moreSheetItems = [
   { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/admin/terms", icon: Calendar, label: "Terms" },
   { href: "/admin/users", icon: Users, label: "Users" },
   { href: "/admin/instructors", icon: GraduationCap, label: "Instructors" },
 ] as const;

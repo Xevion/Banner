@@ -2,26 +2,11 @@
 
 use sqlx::PgPool;
 
-use crate::web::audit::AuditLogEntry;
+use crate::web::audit::{AuditLogEntry, AuditRow};
 use crate::web::stream::filters::AuditLogFilter;
 
 const DEFAULT_AUDIT_LIMIT: i32 = 200;
 const MAX_AUDIT_LIMIT: i32 = 500;
-
-#[derive(sqlx::FromRow)]
-struct AuditRow {
-    id: i32,
-    course_id: i32,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    field_changed: String,
-    old_value: String,
-    new_value: String,
-    subject: Option<String>,
-    course_number: Option<String>,
-    crn: Option<String>,
-    title: Option<String>,
-    term_code: Option<String>,
-}
 
 pub async fn build_snapshot(
     db_pool: &PgPool,
@@ -32,45 +17,33 @@ pub async fn build_snapshot(
         .unwrap_or(DEFAULT_AUDIT_LIMIT)
         .clamp(1, MAX_AUDIT_LIMIT);
 
+    let field_changed: Option<&[String]> = filter
+        .field_changed
+        .as_deref()
+        .filter(|v| !v.is_empty());
+    let subject: Option<&[String]> = filter.subject.as_deref().filter(|v| !v.is_empty());
+    let term: Option<&str> = filter.term.as_deref();
+
     let rows: Vec<AuditRow> = sqlx::query_as(
         "SELECT a.id, a.course_id, a.timestamp, a.field_changed, a.old_value, a.new_value, \
                 c.subject, c.course_number, c.crn, c.title, c.term_code \
          FROM course_audits a \
          LEFT JOIN courses c ON c.id = a.course_id \
          WHERE ($1::timestamptz IS NULL OR a.timestamp > $1) \
-         ORDER BY a.timestamp DESC LIMIT $2",
+           AND ($2::text[] IS NULL OR a.field_changed = ANY($2)) \
+           AND ($3::text[] IS NULL OR c.subject = ANY($3)) \
+           AND ($4::text IS NULL OR c.term_code = $4) \
+         ORDER BY a.timestamp DESC LIMIT $5",
     )
     .bind(filter.since_dt)
+    .bind(field_changed)
+    .bind(subject)
+    .bind(term)
     .bind(limit)
     .fetch_all(db_pool)
     .await?;
 
-    let entries = rows
-        .into_iter()
-        .filter(|row| {
-            filter_matches(
-                filter,
-                &row.field_changed,
-                row.subject.as_deref(),
-                row.term_code.as_deref(),
-            )
-        })
-        .map(|row| AuditLogEntry {
-            id: row.id,
-            course_id: row.course_id,
-            timestamp: row.timestamp.to_rfc3339(),
-            field_changed: row.field_changed,
-            old_value: row.old_value,
-            new_value: row.new_value,
-            subject: row.subject,
-            course_number: row.course_number,
-            crn: row.crn,
-            course_title: row.title,
-            term_code: row.term_code,
-        })
-        .collect();
-
-    Ok(entries)
+    Ok(rows.into_iter().map(AuditLogEntry::from).collect())
 }
 
 pub fn filter_entries(filter: &AuditLogFilter, entries: &[AuditLogEntry]) -> Vec<AuditLogEntry> {

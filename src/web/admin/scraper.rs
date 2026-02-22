@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
-use tracing::{debug, error, instrument, warn};
+use tracing::{error, instrument, trace, warn};
 use ts_rs::TS;
 
 use crate::banner::models::terms::Term;
@@ -147,7 +147,7 @@ pub async fn scraper_stats(
         );
     }
 
-    debug!(
+    trace!(
         total_scrapes = result.total_scrapes,
         "fetched scraper stats"
     );
@@ -230,7 +230,7 @@ pub async fn scraper_timeseries(
         );
     }
 
-    debug!(point_count = points.len(), "fetched scraper timeseries");
+    trace!(point_count = points.len(), "fetched scraper timeseries");
 
     Ok(Json(TimeseriesResponse {
         period,
@@ -319,7 +319,7 @@ pub async fn scraper_subjects(
         );
     }
 
-    debug!(count = subjects.len(), "fetched scraper subjects");
+    trace!(count = subjects.len(), "fetched scraper subjects");
 
     Ok(Json(SubjectsResponse { subjects }))
 }
@@ -418,7 +418,7 @@ pub async fn scraper_subject_detail(
         })
         .collect();
 
-    debug!(count = results.len(), "fetched subject detail");
+    trace!(count = results.len(), "fetched subject detail");
 
     Ok(Json(SubjectDetailResponse { subject, results }))
 }
@@ -644,12 +644,18 @@ pub async fn compute_subjects(
     ref_cache: &ReferenceCache,
 ) -> anyhow::Result<Vec<SubjectSummary>> {
     let db = DbContext::new(pool.clone(), events.clone());
-    let raw_stats = db.scrape_jobs().fetch_subject_stats().await?;
+    let all_stats = db.scrape_jobs().fetch_subject_stats().await?;
 
     let now = Utc::now();
     let multiplier = adaptive::time_of_day_multiplier(now);
 
     let term = Term::get_current().inner().to_string();
+
+    // Filter to current term stats only for the admin dashboard
+    let raw_stats: Vec<_> = all_stats
+        .into_iter()
+        .filter(|s| s.term == term)
+        .collect();
     let course_counts: std::collections::HashMap<String, i64> = sqlx::query_as(
         "SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject",
     )
@@ -664,14 +670,13 @@ pub async fn compute_subjects(
         .into_iter()
         .map(|row| {
             let stats: SubjectStats = row.into();
-            let schedule = adaptive::evaluate_subject(&stats, now, false);
+            let schedule = adaptive::evaluate_subject(&stats, now, adaptive::TermCategory::Current);
             let base_interval = adaptive::compute_base_interval(&stats);
 
             let schedule_state = match &schedule {
                 SubjectSchedule::Eligible(_) => "eligible",
                 SubjectSchedule::Cooldown(_) => "cooldown",
                 SubjectSchedule::Paused => "paused",
-                SubjectSchedule::ReadOnly => "read_only",
             };
 
             let current_interval_secs = base_interval.as_secs() * multiplier as u64;
@@ -685,7 +690,7 @@ pub async fn compute_subjects(
                         Some(remaining_secs),
                     )
                 }
-                SubjectSchedule::Paused | SubjectSchedule::ReadOnly => (None, None),
+                SubjectSchedule::Paused => (None, None),
             };
 
             let subject_description = ref_cache

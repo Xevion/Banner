@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::Json;
 use serde::Serialize;
 use serde_json::{Value, json};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{error, info, instrument, trace, warn};
 use ts_rs::TS;
 
 use crate::data::terms::{self, DbTerm, SyncResult};
@@ -84,7 +84,7 @@ pub async fn list_terms(
         );
     }
 
-    debug!(count = terms.len(), "listed terms");
+    trace!(count = terms.len(), "listed terms");
     Ok(Json(TermsListResponse { terms }))
 }
 

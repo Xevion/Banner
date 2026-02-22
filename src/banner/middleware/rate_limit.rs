@@ -165,12 +165,12 @@ impl Middleware for RateLimitMiddleware {
         self.rate_limiter.wait_for_permission(request_type).await;
         let wait_duration = start.elapsed();
 
-        if wait_duration >= Duration::from_millis(500) {
+        if wait_duration >= Duration::from_secs(5) {
             debug!(
                 request_type = ?request_type,
                 wait = fmt_duration(wait_duration),
                 rpm = self.rate_limiter.rpm(request_type),
-                "Rate limit caused delay"
+                "Rate limit caused significant delay"
             );
         }
 
@@ -307,18 +307,18 @@ mod tests {
     #[test]
     fn test_rpm_returns_config_values() {
         let config = RateLimitingConfig {
-            session_rpm: 6,
-            search_rpm: 30,
-            metadata_rpm: 20,
-            reset_rpm: 10,
-            burst_allowance: 3,
+            session_rpm: 20,
+            search_rpm: 60,
+            metadata_rpm: 40,
+            reset_rpm: 30,
+            burst_allowance: 5,
         };
         let limiter = BannerRateLimiter::new(config);
 
-        assert_eq!(limiter.rpm(RequestType::Session), 6);
-        assert_eq!(limiter.rpm(RequestType::Search), 30);
-        assert_eq!(limiter.rpm(RequestType::Metadata), 20);
-        assert_eq!(limiter.rpm(RequestType::Reset), 10);
+        assert_eq!(limiter.rpm(RequestType::Session), 20);
+        assert_eq!(limiter.rpm(RequestType::Search), 60);
+        assert_eq!(limiter.rpm(RequestType::Metadata), 40);
+        assert_eq!(limiter.rpm(RequestType::Reset), 30);
     }
 
     // --- Classification tests ---

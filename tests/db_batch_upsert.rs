@@ -233,9 +233,16 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(
-        audit_count, 0,
-        "initial insert should not create audit entries"
+        audit_count, 1,
+        "initial insert should create one 'initial' audit entry"
     );
+
+    let (field_changed,): (String,) =
+        sqlx::query_as("SELECT field_changed FROM course_audits LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(field_changed, "initial");
 
     let (metric_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM course_metrics")
         .fetch_one(&pool)
@@ -271,14 +278,14 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
     )];
     batch_upsert_courses(&updated, &pool).await.unwrap();
 
-    // Should have audit entries for enrollment and wait_count changes
+    // Should have audit entries: 1 initial + at least 2 change entries (enrollment, wait_count)
     let (audit_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM course_audits")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert!(
-        audit_count >= 2,
-        "should have audit entries for enrollment and wait_count changes, got {audit_count}"
+        audit_count >= 3,
+        "should have 1 initial + audit entries for enrollment and wait_count changes, got {audit_count}"
     );
 
     // Should have 2 metric entries: baseline + change
@@ -322,8 +329,8 @@ async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(
-        audit_count, 0,
-        "identical re-upsert should not create audit entries"
+        audit_count, 1,
+        "should have only the initial insert audit entry, no change audits"
     );
 
     let (metric_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM course_metrics")

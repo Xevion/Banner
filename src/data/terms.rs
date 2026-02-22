@@ -80,17 +80,25 @@ pub async fn get_enabled_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
     Ok(terms)
 }
 
-/// Get just the term codes that have scraping enabled.
+/// A lightweight projection of an enabled term for scheduling decisions.
+#[derive(sqlx::FromRow, Debug, Clone)]
+pub struct EnabledTerm {
+    pub code: String,
+    pub is_archived: bool,
+}
+
+/// Get enabled terms with their archive status.
 ///
-/// Useful for scheduler loops that only need codes, avoiding full row overhead.
-pub async fn get_enabled_term_codes(db_pool: &PgPool) -> Result<Vec<String>> {
-    let codes = sqlx::query_scalar::<_, String>(
-        "SELECT code FROM terms WHERE scrape_enabled = true ORDER BY code DESC",
+/// Returns lightweight projections for the scheduler to determine per-term
+/// scheduling tiers without fetching full rows.
+pub async fn get_enabled_terms_for_scheduling(db_pool: &PgPool) -> Result<Vec<EnabledTerm>> {
+    let terms = sqlx::query_as::<_, EnabledTerm>(
+        "SELECT code, is_archived FROM terms WHERE scrape_enabled = true ORDER BY code DESC",
     )
     .fetch_all(db_pool)
     .await?;
 
-    Ok(codes)
+    Ok(terms)
 }
 
 /// Get a single term by code.

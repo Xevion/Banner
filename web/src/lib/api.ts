@@ -1,5 +1,6 @@
 import { authStore } from "$lib/auth.svelte";
-import Result, { ok, err } from "true-myth/result";
+import type Result from "true-myth/result";
+import { ok, err } from "true-myth/result";
 import type {
   AdminStatusResponse,
   ApiError,
@@ -24,6 +25,8 @@ import type {
   SubjectDetailResponse,
   SubjectsResponse,
   TermResponse,
+  TermSyncResponse,
+  TermUpdateResponse,
   TermsListResponse,
   TimeRange,
   TimelineRequest,
@@ -450,6 +453,22 @@ export class BannerApiClient {
 
   async getAdminTerms(): Promise<Result<TermsListResponse, ApiErrorClass>> {
     return this.request<TermsListResponse>("/admin/terms");
+  }
+
+  async enableTerm(code: string): Promise<Result<TermUpdateResponse, ApiErrorClass>> {
+    return this.request<TermUpdateResponse>(`/admin/terms/${encodeURIComponent(code)}/enable`, {
+      method: "POST",
+    });
+  }
+
+  async disableTerm(code: string): Promise<Result<TermUpdateResponse, ApiErrorClass>> {
+    return this.request<TermUpdateResponse>(`/admin/terms/${encodeURIComponent(code)}/disable`, {
+      method: "POST",
+    });
+  }
+
+  async syncTerms(): Promise<Result<TermSyncResponse, ApiErrorClass>> {
+    return this.request<TermSyncResponse>("/admin/terms/sync", { method: "POST" });
   }
 }
 

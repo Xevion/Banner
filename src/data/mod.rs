@@ -14,6 +14,7 @@ pub mod rmp;
 pub mod rmp_matching;
 mod scrape_jobs;
 pub mod sessions;
+pub mod term_subjects;
 pub mod terms;
 pub mod users;
 

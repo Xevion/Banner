@@ -12,13 +12,13 @@ use axum::response::{IntoResponse, Json, Response};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::{debug, error, info, instrument};
+use tracing::{error, info, instrument, trace};
 use ts_rs::TS;
 
 use crate::data::models::User;
 use crate::state::AppState;
 use crate::state::ServiceStatus;
-use crate::web::audit::{AuditLogEntry, AuditLogResponse};
+use crate::web::audit::{AuditLogEntry, AuditLogResponse, AuditRow};
 use crate::web::auth::extractors::AdminUser;
 use crate::web::ws::ScrapeJobDto;
 
@@ -107,7 +107,7 @@ pub async fn admin_status(
         .map(|(name, status)| AdminServiceInfo { name, status })
         .collect();
 
-    debug!(
+    trace!(
         user_count,
         session_count,
         course_count,
@@ -141,7 +141,7 @@ pub async fn list_users(
             )
         })?;
 
-    debug!(count = users.len(), "Listed users");
+    trace!(count = users.len(), "Listed users");
 
     Ok(Json(users))
 }
@@ -207,26 +207,9 @@ pub async fn list_scrape_jobs(
 
     let jobs: Vec<ScrapeJobDto> = rows.iter().map(ScrapeJobDto::from).collect();
 
-    debug!(count = jobs.len(), "Listed scrape jobs");
+    trace!(count = jobs.len(), "Listed scrape jobs");
 
     Ok(Json(ScrapeJobsResponse { jobs }))
-}
-
-/// Row returned by the audit-log query (audit + joined course fields).
-#[derive(sqlx::FromRow, Debug)]
-struct AuditRow {
-    id: i32,
-    course_id: i32,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    field_changed: String,
-    old_value: String,
-    new_value: String,
-    // Joined from courses table (nullable in case the course was deleted)
-    subject: Option<String>,
-    course_number: Option<String>,
-    crn: Option<String>,
-    title: Option<String>,
-    term_code: Option<String>,
 }
 
 /// Format a `DateTime<Utc>` as an HTTP-date (RFC 2822) for Last-Modified headers.
@@ -275,7 +258,7 @@ pub async fn list_audit_log(
     if let (Some(since), Some(latest_ts)) = (parse_if_modified_since(&headers), latest) {
         // Truncate to seconds for comparison (HTTP dates have second precision)
         if latest_ts.timestamp() <= since.timestamp() {
-            debug!("Audit log not modified, returning 304");
+            trace!("Audit log not modified, returning 304");
             let mut resp = StatusCode::NOT_MODIFIED.into_response();
             if let Ok(val) = to_http_date(&latest_ts).parse() {
                 resp.headers_mut().insert(header::LAST_MODIFIED, val);
@@ -284,24 +267,9 @@ pub async fn list_audit_log(
         }
     }
 
-    let entries: Vec<AuditLogEntry> = rows
-        .iter()
-        .map(|a| AuditLogEntry {
-            id: a.id,
-            course_id: a.course_id,
-            timestamp: a.timestamp.to_rfc3339(),
-            field_changed: a.field_changed.clone(),
-            old_value: a.old_value.clone(),
-            new_value: a.new_value.clone(),
-            subject: a.subject.clone(),
-            course_number: a.course_number.clone(),
-            crn: a.crn.clone(),
-            course_title: a.title.clone(),
-            term_code: a.term_code.clone(),
-        })
-        .collect();
+    let entries: Vec<AuditLogEntry> = rows.into_iter().map(AuditLogEntry::from).collect();
 
-    debug!(count = entries.len(), "Listed audit log entries");
+    trace!(count = entries.len(), "Listed audit log entries");
 
     let mut resp = Json(AuditLogResponse { entries }).into_response();
     if let Some(latest_ts) = latest

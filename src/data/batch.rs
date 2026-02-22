@@ -6,7 +6,7 @@ use crate::data::course_types::{DateRange, MeetingLocation};
 use crate::data::models::{DayOfWeek, DbMeetingTime, UpsertCounts};
 use crate::data::names::{decode_html_entities, parse_banner_name};
 use crate::utils::fmt_duration;
-use crate::web::audit::AuditLogEntry;
+use crate::web::audit::{AuditLogEntry, AuditRow};
 use anyhow::Result;
 use chrono::NaiveDate;
 use sqlx::PgConnection;
@@ -310,6 +310,27 @@ fn compute_diffs(rows: &[UpsertDiffRow]) -> (Vec<AuditEntry>, Vec<MetricEntry>) 
     let mut metrics = Vec::new();
 
     for row in rows {
+        if row.old_id.is_none() {
+            let snapshot = serde_json::json!({
+                "enrollment": row.new_enrollment,
+                "maxEnrollment": row.new_max_enrollment,
+                "waitCount": row.new_wait_count,
+                "waitCapacity": row.new_wait_capacity,
+                "title": row.new_title,
+                "subject": row.new_subject,
+                "courseNumber": row.new_course_number,
+                "instructionalMethod": row.new_instructional_method,
+                "campus": row.new_campus,
+                "creditHours": row.new_credit_hours,
+            });
+            audits.push(AuditEntry {
+                course_id: row.id,
+                field_changed: "initial",
+                old_value: String::new(),
+                new_value: snapshot.to_string(),
+            });
+        }
+
         // Non-nullable fields
         diff_field!(audits, row, "enrollment", old_enrollment, new_enrollment);
         diff_field!(
@@ -476,7 +497,15 @@ pub async fn batch_upsert_courses(
         .collect();
 
     // Step 3: Compute audit/metric diffs
-    let (audits, metrics) = compute_diffs(&diff_rows);
+    let (mut audits, metrics) = compute_diffs(&diff_rows);
+
+    // Step 4: Upsert instructors (returns email -> id map)
+    let email_to_id = upsert_instructors(courses, &mut tx).await?;
+
+    // Step 5: Link courses to instructors via junction table, collecting instructor audits
+    let instructor_audits =
+        upsert_course_instructors(courses, &crn_term_to_id, &email_to_id, &mut tx).await?;
+    audits.extend(instructor_audits);
 
     // Count courses that had at least one field change (existing rows only)
     let changed_ids: HashSet<i32> = audits.iter().map(|a| a.course_id).collect();
@@ -491,15 +520,9 @@ pub async fn batch_upsert_courses(
         metrics_generated: metrics.len() as i32,
     };
 
-    // Step 4: Insert audits and metrics
+    // Step 6: Insert audits and metrics
     let audit_ids = insert_audits(&audits, &mut tx).await?;
     insert_metrics(&metrics, &mut tx).await?;
-
-    // Step 5: Upsert instructors (returns email -> id map)
-    let email_to_id = upsert_instructors(courses, &mut tx).await?;
-
-    // Step 6: Link courses to instructors via junction table
-    upsert_course_instructors(courses, &crn_term_to_id, &email_to_id, &mut tx).await?;
 
     tx.commit().await?;
 
@@ -562,21 +585,6 @@ async fn fetch_audit_entries_by_ids(
     db_pool: &PgPool,
     audit_ids: &[i32],
 ) -> Result<Vec<AuditLogEntry>> {
-    #[derive(sqlx::FromRow)]
-    struct AuditRow {
-        id: i32,
-        course_id: i32,
-        timestamp: chrono::DateTime<chrono::Utc>,
-        field_changed: String,
-        old_value: String,
-        new_value: String,
-        subject: Option<String>,
-        course_number: Option<String>,
-        crn: Option<String>,
-        title: Option<String>,
-        term_code: Option<String>,
-    }
-
     let rows: Vec<AuditRow> = sqlx::query_as(
         "SELECT a.id, a.course_id, a.timestamp, a.field_changed, a.old_value, a.new_value, \
                 c.subject, c.course_number, c.crn, c.title, c.term_code \
@@ -589,22 +597,7 @@ async fn fetch_audit_entries_by_ids(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to fetch audit entries: {}", e))?;
 
-    Ok(rows
-        .into_iter()
-        .map(|row| AuditLogEntry {
-            id: row.id,
-            course_id: row.course_id,
-            timestamp: row.timestamp.to_rfc3339(),
-            field_changed: row.field_changed,
-            old_value: row.old_value,
-            new_value: row.new_value,
-            subject: row.subject,
-            course_number: row.course_number,
-            crn: row.crn,
-            course_title: row.title,
-            term_code: row.term_code,
-        })
-        .collect())
+    Ok(rows.into_iter().map(AuditLogEntry::from).collect())
 }
 
 /// Upsert all courses and return diff rows with old and new values for auditing.
@@ -860,16 +853,20 @@ async fn upsert_instructors(
 }
 
 /// Link courses to their instructors via the junction table.
+/// Returns audit entries for any instructor changes detected.
 async fn upsert_course_instructors(
     courses: &[Course],
     crn_term_to_id: &HashMap<(&str, &str), i32>,
     email_to_id: &HashMap<String, i32>,
     conn: &mut PgConnection,
-) -> Result<()> {
+) -> Result<Vec<AuditEntry>> {
     let mut cids = Vec::new();
     let mut instructor_ids: Vec<i32> = Vec::new();
     let mut banner_ids: Vec<&str> = Vec::new();
     let mut primaries = Vec::new();
+
+    // Build new instructor names per course for auditing
+    let mut new_names: HashMap<i32, Vec<String>> = HashMap::new();
 
     for course in courses {
         let key = (
@@ -885,6 +882,7 @@ async fn upsert_course_instructors(
             continue;
         };
 
+        let names = new_names.entry(course_id).or_default();
         for faculty in &course.faculty {
             if let Some(email) = &faculty.email_address {
                 let email_lower = email.to_lowercase();
@@ -893,17 +891,37 @@ async fn upsert_course_instructors(
                     instructor_ids.push(instructor_id);
                     banner_ids.push(faculty.banner_id.as_str());
                     primaries.push(faculty.primary_indicator);
+                    names.push(decode_html_entities(&faculty.display_name));
                 }
             }
         }
     }
 
     if cids.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
-    // Delete existing links for these courses then re-insert.
-    // This handles instructor changes cleanly.
+    // Collect unique course IDs for the batch
+    let unique_cids: Vec<i32> = cids.iter().copied().collect::<HashSet<_>>().into_iter().collect();
+
+    // Fetch existing instructor names before deletion
+    let old_rows: Vec<(i32, String)> = sqlx::query_as(
+        "SELECT ci.course_id, i.display_name \
+         FROM course_instructors ci \
+         JOIN instructors i ON i.id = ci.instructor_id \
+         WHERE ci.course_id = ANY($1) \
+         ORDER BY ci.course_id, ci.is_primary DESC, i.display_name",
+    )
+    .bind(&unique_cids)
+    .fetch_all(&mut *conn)
+    .await?;
+
+    let mut old_names: HashMap<i32, Vec<String>> = HashMap::new();
+    for (course_id, name) in old_rows {
+        old_names.entry(course_id).or_default().push(name);
+    }
+
+    // Delete existing links for these courses then re-insert
     sqlx::query("DELETE FROM course_instructors WHERE course_id = ANY($1)")
         .bind(&cids)
         .execute(&mut *conn)
@@ -927,5 +945,22 @@ async fn upsert_course_instructors(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch upsert course_instructors: {}", e))?;
 
-    Ok(())
+    // Compare old vs new instructor names and emit audit entries
+    let mut audits = Vec::new();
+    for &course_id in &unique_cids {
+        let old = old_names.get(&course_id).cloned().unwrap_or_default();
+        let mut new = new_names.get(&course_id).cloned().unwrap_or_default();
+        new.sort();
+
+        if old != new {
+            audits.push(AuditEntry {
+                course_id,
+                field_changed: "instructors",
+                old_value: serde_json::to_string(&old).unwrap_or_default(),
+                new_value: serde_json::to_string(&new).unwrap_or_default(),
+            });
+        }
+    }
+
+    Ok(audits)
 }

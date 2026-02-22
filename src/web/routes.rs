@@ -58,7 +58,7 @@ use tower_http::{
     classify::ServerErrorsFailureClass, compression::CompressionLayer, timeout::TimeoutLayer,
     trace::TraceLayer,
 };
-use tracing::{Span, debug, error, trace, warn};
+use tracing::{Span, error, trace, warn};
 
 #[cfg(feature = "embed-assets")]
 use crate::web::assets::try_serve_asset_with_encoding;
@@ -180,29 +180,23 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             .quality(tower_http::CompressionLevel::Fastest),
         TraceLayer::new_for_http()
             .make_span_with(|request: &Request<Body>| {
-                tracing::debug_span!("request", path = request.uri().path())
+                tracing::trace_span!("request", path = request.uri().path())
             })
             .on_request(())
             .on_body_chunk(())
             .on_eos(())
             .on_response(
                 |response: &Response<Body>, latency: Duration, _span: &Span| {
-                    let latency_threshold = if cfg!(debug_assertions) {
-                        Duration::from_millis(100)
-                    } else {
-                        Duration::from_millis(1000)
-                    };
-
                     let status = format!(
                         "{} {}",
                         response.status().as_u16(),
                         response.status().canonical_reason().unwrap_or("??")
                     );
 
-                    if latency > latency_threshold {
-                        warn!(latency = fmt_duration(latency), status = status, "Response");
+                    if latency > Duration::from_secs(1) {
+                        warn!(latency = fmt_duration(latency), status = status, "Slow response");
                     } else {
-                        debug!(latency = fmt_duration(latency), status = status, "Response");
+                        trace!(latency = fmt_duration(latency), status = status, "Response");
                     }
                 },
             )

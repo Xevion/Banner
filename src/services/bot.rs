@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, broadcast};
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// Discord bot service implementation
 pub struct BotService {
@@ -180,7 +180,7 @@ impl BotService {
                             } else {
                                 // Increase interval by 10% (up to maximum)
                                 let new_interval = interval.period().mul_f32(1.1).min(max_interval);
-                                debug!(
+                                trace!(
                                     current_course_count = course_count,
                                     last_interval = interval.period().as_secs(),
                                     new_interval = new_interval.as_secs(),

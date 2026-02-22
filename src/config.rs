@@ -119,29 +119,29 @@ impl Default for RateLimitingConfig {
     }
 }
 
-/// Default session requests per minute (6 = 1 every 10 seconds)
+/// Default session requests per minute (20 = 1 every 3 seconds)
 fn default_session_rpm() -> u32 {
-    6
-}
-
-/// Default search requests per minute (30 = 1 every 2 seconds)
-fn default_search_rpm() -> u32 {
-    30
-}
-
-/// Default metadata requests per minute (20 = 1 every 3 seconds)
-fn default_metadata_rpm() -> u32 {
     20
 }
 
-/// Default reset requests per minute (10 = 1 every 6 seconds)
-fn default_reset_rpm() -> u32 {
-    10
+/// Default search requests per minute (60 = 1 per second)
+fn default_search_rpm() -> u32 {
+    60
 }
 
-/// Default burst allowance (3 extra requests)
+/// Default metadata requests per minute (40 = 1 every 1.5 seconds)
+fn default_metadata_rpm() -> u32 {
+    40
+}
+
+/// Default reset requests per minute (30 = 1 every 2 seconds)
+fn default_reset_rpm() -> u32 {
+    30
+}
+
+/// Default burst allowance (5 extra requests)
 fn default_burst_allowance() -> u32 {
-    3
+    5
 }
 
 /// Duration parser configured to handle various time units with seconds as default
@@ -356,10 +356,10 @@ mod tests {
     #[test]
     fn test_default_rate_limiting() {
         let rl = default_rate_limiting();
-        assert_eq!(rl.session_rpm, 6);
-        assert_eq!(rl.search_rpm, 30);
-        assert_eq!(rl.metadata_rpm, 20);
-        assert_eq!(rl.reset_rpm, 10);
-        assert_eq!(rl.burst_allowance, 3);
+        assert_eq!(rl.session_rpm, 20);
+        assert_eq!(rl.search_rpm, 60);
+        assert_eq!(rl.metadata_rpm, 40);
+        assert_eq!(rl.reset_rpm, 30);
+        assert_eq!(rl.burst_allowance, 5);
     }
 }

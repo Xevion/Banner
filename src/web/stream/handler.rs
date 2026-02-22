@@ -9,7 +9,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::RecvError;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::data::events::{AuditLogEvent, DomainEvent};
 use crate::state::AppState;
@@ -101,7 +101,7 @@ async fn send_error(
 }
 
 async fn handle_stream_ws(socket: WebSocket, state: AppState) {
-    debug!("stream WebSocket connected");
+    trace!("stream WebSocket connected");
 
     let (mut sink, mut stream) = socket.split();
     let ready = StreamServerMessage::Ready {
@@ -177,7 +177,7 @@ async fn handle_stream_ws(socket: WebSocket, state: AppState) {
         }
     }
 
-    debug!("stream WebSocket disconnected");
+    trace!("stream WebSocket disconnected");
 }
 
 async fn handle_client_message(

@@ -259,28 +259,34 @@ impl<'a> ScrapeJobOps<'a> {
         Ok(existing_payloads)
     }
 
-    /// Fetch aggregated per-subject statistics from the last 24 hours of results.
+    /// Fetch aggregated per-(subject, term) statistics from the last 24 hours of results.
+    ///
+    /// For past/archived terms, results older than 24h are still relevant since they
+    /// scrape on 48h intervals. We use a 72h window to capture at least one full cycle.
     pub async fn fetch_subject_stats(&self) -> Result<Vec<SubjectResultStats>> {
         let rows = sqlx::query_as::<_, SubjectResultStats>(
             r#"
             WITH recent AS (
-                SELECT payload->>'subject' AS subject, success,
+                SELECT payload->>'subject' AS subject,
+                       COALESCE(payload->>'term', '') AS term,
+                       success,
                        COALESCE(courses_fetched, 0) AS courses_fetched,
                        COALESCE(courses_changed, 0) AS courses_changed,
                        completed_at,
-                       ROW_NUMBER() OVER (PARTITION BY payload->>'subject' ORDER BY completed_at DESC) AS rn
+                       ROW_NUMBER() OVER (PARTITION BY payload->>'subject', payload->>'term' ORDER BY completed_at DESC) AS rn
                 FROM scrape_job_results
-                WHERE target_type = 'Subject' AND completed_at > NOW() - INTERVAL '24 hours'
+                WHERE target_type = 'Subject' AND completed_at > NOW() - INTERVAL '72 hours'
             ),
             filtered AS (SELECT * FROM recent WHERE rn <= 20),
             zero_break AS (
-                SELECT subject,
+                SELECT subject, term,
                        MIN(rn) FILTER (WHERE courses_changed > 0 AND success) AS first_nonzero_rn,
                        MIN(rn) FILTER (WHERE courses_fetched > 0 AND success) AS first_nonempty_rn
-                FROM filtered GROUP BY subject
+                FROM filtered GROUP BY subject, term
             )
             SELECT
                 f.subject::TEXT AS subject,
+                f.term::TEXT AS term,
                 COUNT(*)::BIGINT AS recent_runs,
                 COALESCE(AVG(CASE WHEN f.success AND f.courses_fetched > 0
                      THEN f.courses_changed::FLOAT / f.courses_fetched ELSE NULL END), 0.0)::FLOAT8 AS avg_change_ratio,
@@ -290,8 +296,8 @@ impl<'a> ScrapeJobOps<'a> {
                 COUNT(*) FILTER (WHERE f.success)::BIGINT AS recent_success_count,
                 MAX(f.completed_at) AS last_completed
             FROM filtered f
-            LEFT JOIN zero_break zb ON f.subject = zb.subject
-            GROUP BY f.subject, zb.first_nonzero_rn, zb.first_nonempty_rn
+            LEFT JOIN zero_break zb ON f.subject = zb.subject AND f.term = zb.term
+            GROUP BY f.subject, f.term, zb.first_nonzero_rn, zb.first_nonempty_rn
             "#,
         )
         .fetch_all(self.ctx.pool())
