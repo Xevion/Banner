@@ -97,8 +97,8 @@ pub struct MeetingTime {
     pub credit_hour_session: Option<f64>, // e.g. 30
     pub hours_week: Option<f64>, // e.g. 30
     pub meeting_schedule_type: String, // e.g AFF
-    pub meeting_type: String, // e.g HB, H2, H1, OS, OA, OH, ID, FF
-    pub meeting_type_description: String,
+    pub meeting_type: Option<String>, // e.g HB, H2, H1, OS, OA, OH, ID, FF; null when not set by Banner
+    pub meeting_type_description: Option<String>,
 }
 
 bitflags! {
@@ -429,7 +429,12 @@ impl MeetingScheduleInfo {
                         end: now,
                     }
                 });
-        let meeting_type: MeetingType = meeting_time.meeting_type.parse().unwrap();
+        let meeting_type: MeetingType = meeting_time
+            .meeting_type
+            .as_deref()
+            .unwrap_or("")
+            .parse()
+            .unwrap();
         let location = MeetingLocation::from_meeting_time(meeting_time);
         let duration_weeks = date_range.weeks_duration();
 

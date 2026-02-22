@@ -36,8 +36,8 @@ pub struct Course {
     pub maximum_enrollment: i32,
     pub enrollment: i32,
     pub seats_available: i32,
-    pub wait_capacity: i32,
-    pub wait_count: i32,
+    pub wait_capacity: Option<i32>, // null for older/archived courses
+    pub wait_count: Option<i32>,    // null for older/archived courses
     pub cross_list: Option<String>,
     pub cross_list_capacity: Option<i32>,
     pub cross_list_count: Option<i32>,

@@ -126,7 +126,7 @@ fn to_db_meeting_times(course: &Course) -> serde_json::Value {
                 date_range,
                 days,
                 location,
-                meeting_type: mt.meeting_type.clone(),
+                meeting_type: mt.meeting_type.clone().unwrap_or_default(),
                 meeting_schedule_type: mt.meeting_schedule_type.clone(),
             }
         })
@@ -600,8 +600,11 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
     let term_codes: Vec<&str> = courses.iter().map(|c| c.term.as_str()).collect();
     let enrollments: Vec<i32> = courses.iter().map(|c| c.enrollment).collect();
     let max_enrollments: Vec<i32> = courses.iter().map(|c| c.maximum_enrollment).collect();
-    let wait_counts: Vec<i32> = courses.iter().map(|c| c.wait_count).collect();
-    let wait_capacities: Vec<i32> = courses.iter().map(|c| c.wait_capacity).collect();
+    let wait_counts: Vec<i32> = courses.iter().map(|c| c.wait_count.unwrap_or(0)).collect();
+    let wait_capacities: Vec<i32> = courses
+        .iter()
+        .map(|c| c.wait_capacity.unwrap_or(0))
+        .collect();
 
     // New scalar fields
     let sequence_numbers: Vec<Option<&str>> = courses
