@@ -3,7 +3,8 @@
 use axum::{
     Extension, Router,
     extract::{Path, Query, State},
-    response::Json,
+    http::HeaderValue,
+    response::{Json, Response},
     routing::{get, post, put},
 };
 
@@ -14,6 +15,16 @@ use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpRating, S
 use crate::data::reference_types::{
     Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
 };
+
+/// Wraps a JSON response with a `Cache-Control` header.
+fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -> Response {
+    let mut response = Json(value).into_response();
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static(header),
+    );
+    response
+}
 
 /// Convert a raw Banner code to its typed filter string for a given reference category.
 fn code_to_filter_value(category: &str, code: &str, description: Option<&str>) -> String {
@@ -41,11 +52,9 @@ use crate::web::calendar;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::stream;
 use crate::web::timeline;
+use axum::response::IntoResponse;
 #[cfg(feature = "embed-assets")]
-use axum::{
-    http::{HeaderMap, StatusCode, Uri},
-    response::IntoResponse,
-};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration};
@@ -916,7 +925,7 @@ async fn get_related_sections(
 async fn get_reference(
     State(state): State<AppState>,
     Path(category): Path<String>,
-) -> Result<Json<Vec<CodeDescription>>, ApiError> {
+) -> Result<Response, ApiError> {
     let cache = state.reference_cache.read().await;
     let entries = cache.entries_for_category(&category);
 
@@ -926,41 +935,40 @@ async fn get_reference(
             .await
             .map_err(|e| db_error(&format!("Reference lookup for {}", category), e))?;
 
-        return Ok(Json(
-            rows.into_iter()
-                .map(|r| {
-                    let filter_value =
-                        code_to_filter_value(&category, &r.code, Some(&r.description));
-                    CodeDescription {
-                        code: r.code,
-                        description: r.description,
-                        filter_value,
-                    }
-                })
-                .collect(),
-        ));
-    }
-
-    Ok(Json(
-        entries
+        let rows_mapped: Vec<CodeDescription> = rows
             .into_iter()
-            .map(|(code, desc)| {
-                let filter_value = code_to_filter_value(&category, code, Some(desc));
+            .map(|r| {
+                let filter_value =
+                    code_to_filter_value(&category, &r.code, Some(&r.description));
                 CodeDescription {
-                    code: code.to_string(),
-                    description: desc.to_string(),
+                    code: r.code,
+                    description: r.description,
                     filter_value,
                 }
             })
-            .collect(),
-    ))
+            .collect();
+        return Ok(with_cache_control(rows_mapped, "private, max-age=600, stale-while-revalidate=60"));
+    }
+
+    let entries_mapped: Vec<CodeDescription> = entries
+        .into_iter()
+        .map(|(code, desc)| {
+            let filter_value = code_to_filter_value(&category, code, Some(desc));
+            CodeDescription {
+                code: code.to_string(),
+                description: desc.to_string(),
+                filter_value,
+            }
+        })
+        .collect();
+    Ok(with_cache_control(entries_mapped, "private, max-age=600, stale-while-revalidate=60"))
 }
 
 /// `GET /api/search-options?term={slug}` (term optional, defaults to latest)
 async fn get_search_options(
     State(state): State<AppState>,
     Query(params): Query<SearchOptionsParams>,
-) -> Result<Json<SearchOptionsResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
 
     let term_slug = if let Some(ref t) = params.term {
@@ -983,7 +991,7 @@ async fn get_search_options(
         Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
 
     if let Some(cached) = state.search_options_cache.get(&term_code) {
-        return Ok(Json((*cached).clone()));
+        return Ok(with_cache_control((*cached).clone(), "private, max-age=600, stale-while-revalidate=60"));
     }
 
     if !state.search_options_cache.try_claim(&term_code) {
@@ -1055,5 +1063,5 @@ async fn get_search_options(
     state.search_options_cache.insert(term_code.clone(), response.clone());
     state.search_options_cache.release(&term_code);
 
-    Ok(Json(response))
+    Ok(with_cache_control(response, "private, max-age=600, stale-while-revalidate=60"))
 }
