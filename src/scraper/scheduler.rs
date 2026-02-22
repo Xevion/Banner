@@ -1,7 +1,7 @@
 use crate::banner::{BannerApi, Term};
 use crate::data::DbContext;
 use crate::data::models::{ReferenceData, ScrapePriority, TargetType};
-use crate::data::{term_subjects, terms};
+use crate::data::{kv, term_subjects, terms};
 use crate::rmp::RmpClient;
 use crate::scraper::adaptive::{
     ARCHIVED_INTERVAL, SubjectSchedule, SubjectStats, TermCategory, evaluate_subject,
@@ -31,6 +31,30 @@ const RMP_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const TERM_SYNC_INTERVAL: Duration = Duration::from_secs(8 * 60 * 60);
 
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
+
+// app_kv keys for persisting scheduler timestamps across restarts.
+pub const KV_REF_SCRAPE: &str = "scheduler.ref_scrape";
+pub const KV_RMP_SYNC: &str = "scheduler.rmp_sync";
+pub const KV_TERM_SYNC: &str = "scheduler.term_sync";
+
+/// Convert a persisted UTC timestamp to an `Instant`, preserving remaining cooldown.
+///
+/// If the persisted time is older than `interval`, returns an `Instant` that
+/// triggers immediate execution. If it's recent, the returned `Instant` reflects
+/// how much time has actually elapsed so the scheduler respects the remaining cooldown.
+fn persisted_to_instant(persisted: Option<DateTime<Utc>>, interval: Duration) -> Instant {
+    match persisted {
+        None => Instant::now() - interval,
+        Some(ts) => {
+            let elapsed = (Utc::now() - ts).to_std().unwrap_or(interval);
+            if elapsed >= interval {
+                Instant::now() - interval
+            } else {
+                Instant::now() - elapsed
+            }
+        }
+    }
+}
 
 /// Periodically analyzes data and enqueues prioritized scrape jobs.
 pub struct Scheduler {
@@ -72,12 +96,25 @@ impl Scheduler {
         let work_interval = Duration::from_secs(60);
         let mut next_run = time::Instant::now();
         let mut current_work: Option<(tokio::task::JoinHandle<()>, CancellationToken)> = None;
-        // Scrape reference data immediately on first cycle
-        let mut last_ref_scrape = Instant::now() - REFERENCE_DATA_INTERVAL;
-        // Sync RMP data immediately on first cycle
-        let mut last_rmp_sync = Instant::now() - RMP_SYNC_INTERVAL;
-        // Sync terms immediately on first cycle (also done at startup, but scheduler handles periodic)
-        let mut last_term_sync = Instant::now() - TERM_SYNC_INTERVAL;
+
+        // Load persisted timestamps so we don't redo work that completed recently.
+        let pool = self.db.pool();
+        let persisted_ref = kv::get_timestamp(pool, KV_REF_SCRAPE).await.unwrap_or(None);
+        let persisted_rmp = kv::get_timestamp(pool, KV_RMP_SYNC).await.unwrap_or(None);
+        let persisted_term = kv::get_timestamp(pool, KV_TERM_SYNC).await.unwrap_or(None);
+
+        if persisted_ref.is_some() || persisted_rmp.is_some() || persisted_term.is_some() {
+            info!(
+                last_ref_scrape = ?persisted_ref,
+                last_rmp_sync = ?persisted_rmp,
+                last_term_sync = ?persisted_term,
+                "Loaded persisted scheduler timestamps"
+            );
+        }
+
+        let mut last_ref_scrape = persisted_to_instant(persisted_ref, REFERENCE_DATA_INTERVAL);
+        let mut last_rmp_sync = persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL);
+        let mut last_term_sync = persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL);
 
         loop {
             tokio::select! {
@@ -98,6 +135,7 @@ impl Scheduler {
                     let should_sync_terms = last_term_sync.elapsed() >= TERM_SYNC_INTERVAL;
 
                     // Spawn work in separate task to allow graceful cancellation during shutdown.
+                    // Timestamps are persisted to DB on success so restarts don't redo recent work.
                     let work_handle = tokio::spawn({
                         let db = self.db.clone();
                         let banner_api = self.banner_api.clone();
@@ -111,26 +149,41 @@ impl Scheduler {
                                             // Term sync, RMP sync, and reference data are independent —
                                             // run them concurrently so they don't wait behind each other.
                                             let term_fut = async {
-                                                if should_sync_terms
-                                                    && let Err(e) = Self::sync_terms(db.pool(), &banner_api).await
-                                                {
-                                                    error!(error = ?e, "Failed to sync terms");
+                                                if should_sync_terms {
+                                                    match Self::sync_terms(db.pool(), &banner_api).await {
+                                                        Ok(()) => {
+                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_TERM_SYNC, Utc::now()).await {
+                                                                warn!(error = ?e, "Failed to persist term sync timestamp");
+                                                            }
+                                                        }
+                                                        Err(e) => error!(error = ?e, "Failed to sync terms"),
+                                                    }
                                                 }
                                             };
 
                                             let rmp_fut = async {
-                                                if should_sync_rmp
-                                                    && let Err(e) = Self::sync_rmp_data(db.pool()).await
-                                                {
-                                                    error!(error = ?e, "Failed to sync RMP data");
+                                                if should_sync_rmp {
+                                                    match Self::sync_rmp_data(db.pool()).await {
+                                                        Ok(()) => {
+                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_SYNC, Utc::now()).await {
+                                                                warn!(error = ?e, "Failed to persist RMP sync timestamp");
+                                                            }
+                                                        }
+                                                        Err(e) => error!(error = ?e, "Failed to sync RMP data"),
+                                                    }
                                                 }
                                             };
 
                                             let ref_fut = async {
-                                                if should_scrape_ref
-                                                    && let Err(e) = Self::scrape_reference_data(db.pool(), &banner_api, &reference_cache).await
-                                                {
-                                                    error!(error = ?e, "Failed to scrape reference data");
+                                                if should_scrape_ref {
+                                                    match Self::scrape_reference_data(db.pool(), &banner_api, &reference_cache).await {
+                                                        Ok(()) => {
+                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_REF_SCRAPE, Utc::now()).await {
+                                                                warn!(error = ?e, "Failed to persist ref scrape timestamp");
+                                                            }
+                                                        }
+                                                        Err(e) => error!(error = ?e, "Failed to scrape reference data"),
+                                                    }
                                                 }
                                             };
 
@@ -147,6 +200,9 @@ impl Scheduler {
                                 }
                     });
 
+                    // Update in-memory timestamps to prevent re-triggering while
+                    // the spawned task is still running. The DB is updated on
+                    // success inside the task above.
                     if should_scrape_ref {
                         last_ref_scrape = Instant::now();
                     }

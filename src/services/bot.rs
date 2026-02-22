@@ -94,20 +94,46 @@ impl BotService {
                         "Discord bot connected and ready"
                     );
 
-                    poise::builtins::register_in_guild(
-                        ctx,
-                        &framework.options().commands,
-                        bot_target_guild.into(),
-                    )
-                    .await?;
-                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                    // Skip command registration if definitions haven't changed since last startup.
+                    let fingerprint =
+                        crate::bot::commands_fingerprint(&framework.options().commands);
+                    let stored =
+                        crate::data::kv::get(&app_state.db_pool, "bot.commands_fingerprint")
+                            .await
+                            .unwrap_or(None);
 
-                    info!(
-                        guild_commands = command_count,
-                        global_commands = command_count,
-                        target_guild = %bot_target_guild,
-                        "Discord commands registered"
-                    );
+                    if stored.as_deref() == Some(fingerprint.as_str()) {
+                        info!(
+                            commands = command_count,
+                            "Discord commands unchanged, skipping registration"
+                        );
+                    } else {
+                        poise::builtins::register_in_guild(
+                            ctx,
+                            &framework.options().commands,
+                            bot_target_guild.into(),
+                        )
+                        .await?;
+                        poise::builtins::register_globally(ctx, &framework.options().commands)
+                            .await?;
+
+                        if let Err(e) = crate::data::kv::set(
+                            &app_state.db_pool,
+                            "bot.commands_fingerprint",
+                            &fingerprint,
+                        )
+                        .await
+                        {
+                            warn!(error = ?e, "Failed to persist command fingerprint");
+                        }
+
+                        info!(
+                            guild_commands = command_count,
+                            global_commands = command_count,
+                            target_guild = %bot_target_guild,
+                            "Discord commands registered"
+                        );
+                    }
 
                     // Start status update task with shutdown support
                     let handle = Self::start_status_update_task(

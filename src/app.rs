@@ -2,6 +2,7 @@ use crate::banner::BannerApi;
 use crate::cli::ServiceName;
 use crate::config::Config;
 use crate::scraper::ScraperService;
+use crate::scraper::scheduler::KV_TERM_SYNC;
 use crate::services::bot::BotService;
 use crate::services::manager::ServiceManager;
 use crate::services::web::WebService;
@@ -9,6 +10,7 @@ use crate::state::AppState;
 use crate::utils::fmt_duration;
 use crate::web::auth::AuthConfig;
 use anyhow::Context;
+use chrono::Utc;
 use figment::value::UncasedStr;
 use figment::{Figment, providers::Env};
 use sqlx::ConnectOptions;
@@ -91,7 +93,8 @@ impl App {
         .context("Failed to create BannerApi")?;
         let banner_api_arc = Arc::new(banner_api);
 
-        // Sync terms from Banner API (non-fatal if fails)
+        // Sync terms from Banner API (non-fatal if fails).
+        // Persist the timestamp so the scheduler doesn't repeat this on its first cycle.
         match Self::sync_terms_on_startup(&db_pool, &banner_api_arc).await {
             Ok(result) => {
                 info!(
@@ -99,6 +102,11 @@ impl App {
                     updated = result.updated,
                     "Term sync completed"
                 );
+                if let Err(e) =
+                    crate::data::kv::set_timestamp(&db_pool, KV_TERM_SYNC, Utc::now()).await
+                {
+                    warn!(error = ?e, "Failed to persist term sync timestamp");
+                }
             }
             Err(e) => {
                 // Non-fatal: app can start without terms, scheduler will retry
