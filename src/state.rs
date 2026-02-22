@@ -6,6 +6,7 @@ use crate::data::events::EventBuffer;
 use crate::data::models::ReferenceData;
 use crate::web::auth::session::{OAuthStateStore, SessionCache};
 use crate::web::schedule_cache::ScheduleCache;
+use crate::web::search_options_cache::SearchOptionsCache;
 use crate::web::stream::computed::ComputedStreamManager;
 use anyhow::Result;
 use dashmap::DashMap;
@@ -142,7 +143,7 @@ pub struct AppState {
     pub oauth_state_store: OAuthStateStore,
     pub schedule_cache: ScheduleCache,
     pub events: Arc<EventBuffer>,
-    pub search_options_cache: Arc<DashMap<String, (Instant, serde_json::Value)>>,
+    pub search_options_cache: SearchOptionsCache,
     pub computed_streams: ComputedStreamManager,
 }
 
@@ -162,7 +163,7 @@ impl AppState {
             reference_cache,
             schedule_cache,
             events,
-            search_options_cache: Arc::new(DashMap::new()),
+            search_options_cache: SearchOptionsCache::new(),
             computed_streams,
         }
     }

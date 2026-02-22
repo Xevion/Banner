@@ -962,7 +962,6 @@ async fn get_search_options(
     Query(params): Query<SearchOptionsParams>,
 ) -> Result<Json<SearchOptionsResponse>, ApiError> {
     use crate::banner::models::terms::Term;
-    use std::time::Instant;
 
     let term_slug = if let Some(ref t) = params.term {
         t.clone()
@@ -983,15 +982,13 @@ async fn get_search_options(
     let term_code =
         Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
 
-    if let Some(entry) = state.search_options_cache.get(&term_code) {
-        let (cached_at, ref cached_value) = *entry;
-        if cached_at.elapsed() < Duration::from_secs(600) {
-            let response: SearchOptionsResponse = serde_json::from_value(cached_value.clone())
-                .map_err(|e| {
-                    ApiError::internal_error(format!("Cache deserialization error: {e}"))
-                })?;
-            return Ok(Json(response));
-        }
+    if let Some(cached) = state.search_options_cache.get(&term_code) {
+        return Ok(Json((*cached).clone()));
+    }
+
+    if !state.search_options_cache.try_claim(&term_code) {
+        // Another request is building this term's options — fall through and build it too.
+        // (Acceptable: singleflight is best-effort, not strict.)
     }
 
     let (term_codes, subject_rows, ranges) = tokio::try_join!(
@@ -1055,10 +1052,8 @@ async fn get_search_options(
         ranges,
     };
 
-    let cached_value = serde_json::to_value(&response).unwrap_or_default();
-    state
-        .search_options_cache
-        .insert(term_code, (Instant::now(), cached_value));
+    state.search_options_cache.insert(term_code.clone(), response.clone());
+    state.search_options_cache.release(&term_code);
 
     Ok(Json(response))
 }

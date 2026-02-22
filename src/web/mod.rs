@@ -12,6 +12,7 @@ pub mod error;
 pub mod middleware;
 pub mod routes;
 pub mod schedule_cache;
+pub mod search_options_cache;
 pub mod stream;
 pub mod timeline;
 pub mod ws;
