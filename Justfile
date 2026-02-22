@@ -41,8 +41,9 @@ search *ARGS:
 
 # Dev server. Flags: -f(rontend) -b(ackend) -W(no-watch) -n(o-build) -r(elease) -e(mbed) -I(no-interrupt) -V(erbose-build) --tracing <fmt>
 # Pass args to binary after --: just dev -n -- --some-flag
+[no-exit-message]
 dev *flags:
-    bun scripts/dev.ts {{flags}}
+    exec bun scripts/dev.ts {{flags}}
 
 # Production build. Flags: -d(ebug) -f(rontend-only) -b(ackend-only)
 build *flags:

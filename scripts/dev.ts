@@ -134,10 +134,11 @@ if (runBackend) {
       interrupt: !flags["no-interrupt"],
       verboseBuild: flags["verbose-build"],
     });
-    group.onCleanup(() => watcher.killSync());
+    group.onAsyncCleanup(() => watcher.shutdown());
     watcher.start();
   }
 }
 
 const code = await group.waitForFirst();
-process.exit(code);
+// 130 = SIGINT (128 + 2), which is a normal dev server shutdown
+process.exit(code === 130 ? 0 : code);

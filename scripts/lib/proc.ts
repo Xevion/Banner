@@ -204,9 +204,14 @@ export class ProcessGroup {
 	private procs: ReturnType<typeof Bun.spawn>[] = [];
 	private signalHandlers: { signal: NodeJS.Signals; handler: () => void }[] = [];
 	private cleanupFns: (() => void)[] = [];
+	private asyncCleanupFns: (() => Promise<void>)[] = [];
+
+	private shuttingDown = false;
 
 	constructor() {
 		const cleanup = () => {
+			if (this.shuttingDown) return;
+			this.shuttingDown = true;
 			for (const p of this.procs) {
 				try {
 					p.kill('SIGTERM');
@@ -221,9 +226,9 @@ export class ProcessGroup {
 					// Best-effort cleanup
 				}
 			}
-			this.removeSignalHandlers();
-			ProcessGroup.resetTerminal();
-			process.exit(130); // 128 + SIGINT(2)
+			// Don't process.exit() here — let waitForFirst/waitForAll resolve
+			// naturally after children exit. Exiting immediately causes children
+			// to keep writing to the terminal after the shell prompt returns.
 		};
 		for (const sig of ['SIGINT', 'SIGTERM'] as const) {
 			process.on(sig, cleanup);
@@ -236,6 +241,16 @@ export class ProcessGroup {
 	 */
 	onCleanup(fn: () => void): void {
 		this.cleanupFns.push(fn);
+	}
+
+	/**
+	 * Register an async cleanup function awaited during killAll.
+	 *
+	 * Use for cleanup that must complete before the process exits,
+	 * e.g. waiting for a graceful server shutdown.
+	 */
+	onAsyncCleanup(fn: () => Promise<void>): void {
+		this.asyncCleanupFns.push(fn);
 	}
 
 	private removeSignalHandlers(): void {
@@ -287,11 +302,14 @@ export class ProcessGroup {
 	 * Kill all processes in the group and wait for them to exit.
 	 */
 	async killAll(): Promise<void> {
-		for (const fn of this.cleanupFns) {
-			try {
-				fn();
-			} catch {
-				// Best-effort cleanup
+		// Run sync cleanup fns if signal handler hasn't already
+		if (!this.shuttingDown) {
+			for (const fn of this.cleanupFns) {
+				try {
+					fn();
+				} catch {
+					// Best-effort cleanup
+				}
 			}
 		}
 
@@ -304,9 +322,16 @@ export class ProcessGroup {
 		}
 
 		const timeout = 5000;
-		const exitPromises = this.procs.map((p) => p.exited);
 		const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, timeout));
-		await Promise.race([Promise.all(exitPromises), timeoutPromise]);
+
+		// Wait for group procs and async cleanup (e.g. watcher shutdown) together
+		const exitPromises = this.procs.map((p) => p.exited);
+		const asyncCleanup = this.asyncCleanupFns.map((fn) =>
+			fn().catch(() => {
+				/* best-effort */
+			}),
+		);
+		await Promise.race([Promise.all([...exitPromises, ...asyncCleanup]), timeoutPromise]);
 
 		for (const p of this.procs) {
 			try {
