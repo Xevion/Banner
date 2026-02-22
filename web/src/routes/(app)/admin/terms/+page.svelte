@@ -1,11 +1,12 @@
 <script lang="ts">
+import type { PageProps } from "./$types";
 import { client } from "$lib/api";
 import type { DbTerm } from "$lib/bindings";
 import { formatRelativeDate, formatAbsoluteDate } from "$lib/date";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { RefreshCw } from "@lucide/svelte";
 
-let { data } = $props();
+let { data }: PageProps = $props();
 let terms = $state<DbTerm[]>(data.terms);
 let error = $state<string | null>(data.error);
 

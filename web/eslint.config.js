@@ -8,23 +8,37 @@ import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import svelteConfig from "./svelte.config.js";
+import * as customParser from "@xevion/ts-eslint-extra";
 
 const gitignorePath = path.resolve(import.meta.dirname, ".gitignore");
 
 export default tseslint.config(
   includeIgnoreFile(gitignorePath),
   {
-    ignores: ["dist/", ".svelte-kit/", "build/", "src/lib/bindings/", "scripts/"],
-  }, // Base JS rules
-  js.configs.recommended, // TypeScript: recommended type-checked + stylistic type-checked
+    ignores: [
+      "dist/",
+      ".svelte-kit/",
+      "build/",
+      "src/lib/bindings/",
+      "scripts/",
+      ".storybook/",
+      "src/**/*.stories.svelte",
+      "src/**/*.stories.ts",
+    ],
+  },
+  // Base JS rules
+  js.configs.recommended,
+  // TypeScript: recommended type-checked + stylistic type-checked
   ...tseslint.configs.recommendedTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked, // Svelte recommended
-  ...svelte.configs.recommended, // Global settings: environments + type-aware parser
+  ...tseslint.configs.stylisticTypeChecked,
+  // Svelte recommended
+  ...svelte.configs.recommended,
+  // Global settings: environments + shared rules
   {
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
       parserOptions: {
-        projectService: true,
+        project: "./tsconfig.json",
         tsconfigRootDir: import.meta.dirname,
         extraFileExtensions: [".svelte"],
       },
@@ -37,27 +51,41 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "separate-type-imports" },
+      ],
     },
-  }, // Svelte files: parser config + rule overrides
+  },
+  // TS files: use custom parser to resolve .svelte named exports
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: customParser,
+    },
+  },
+  // Svelte files: svelte-eslint-parser (from svelte.configs.recommended) as
+  // outer parser, with custom parser for script blocks to resolve .svelte exports
   {
     files: ["**/*.svelte", "**/*.svelte.ts", "**/*.svelte.js"],
     languageOptions: {
       parserOptions: {
-        parser: tseslint.parser,
+        parser: customParser,
         svelteConfig,
       },
     },
     rules: {
       "svelte/no-navigation-without-resolve": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
     },
-  }, // Disable type-checked rules for plain JS config files
+  },
+  // Disable type-checked rules for plain JS config files
   {
     files: ["**/*.js"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  // Disable type-checked rules for config files not in project
+  {
+    files: ["vitest.config.ts", "vite.config.ts"],
     ...tseslint.configs.disableTypeChecked,
   },
   storybook.configs["flat/recommended"]

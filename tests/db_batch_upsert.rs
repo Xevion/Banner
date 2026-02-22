@@ -1,8 +1,11 @@
-#[allow(dead_code)]
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
 use sqlx::PgPool;
+
+/// Columns selected by the course verification query:
+/// (crn, subject, course_number, title, enrollment, max_enrollment, wait_count, wait_capacity)
+type CourseRow = (String, String, String, String, i32, i32, i32, i32);
 
 #[sqlx::test]
 async fn test_batch_upsert_empty_slice(pool: PgPool) {
@@ -19,23 +22,27 @@ async fn test_batch_upsert_empty_slice(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
     let courses = vec![
-        helpers::make_course("10001", "202510", "CS", "1083", "Intro to CS", 25, 30, 0, 5),
+        helpers::make_course(
+            "10001",
+            "202510",
+            "CS",
+            "1083",
+            "Intro to CS",
+            (25, 30, 0, 5),
+        ),
         helpers::make_course(
             "10002",
             "202510",
             "MAT",
             "1214",
             "Calculus I",
-            40,
-            45,
-            3,
-            10,
+            (40, 45, 3, 10),
         ),
     ];
 
     batch_upsert_courses(&courses, &pool).await.unwrap();
 
-    let rows: Vec<(String, String, String, String, i32, i32, i32, i32)> = sqlx::query_as(
+    let rows: Vec<CourseRow> = sqlx::query_as(
         "SELECT crn, subject, course_number, title, enrollment, max_enrollment, wait_count, wait_capacity
          FROM courses ORDER BY crn",
     )
@@ -69,10 +76,7 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
         "CS",
         "3443",
         "App Programming",
-        10,
-        35,
-        0,
-        5,
+        (10, 35, 0, 5),
     )];
     batch_upsert_courses(&initial, &pool).await.unwrap();
 
@@ -83,10 +87,7 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
         "CS",
         "3443",
         "App Programming",
-        30,
-        35,
-        2,
-        5,
+        (30, 35, 2, 5),
     )];
     batch_upsert_courses(&updated, &pool).await.unwrap();
 
@@ -108,34 +109,42 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
     let initial = vec![
-        helpers::make_course("30001", "202510", "CS", "1083", "Intro to CS", 10, 30, 0, 5),
+        helpers::make_course(
+            "30001",
+            "202510",
+            "CS",
+            "1083",
+            "Intro to CS",
+            (10, 30, 0, 5),
+        ),
         helpers::make_course(
             "30002",
             "202510",
             "CS",
             "2073",
             "Computer Architecture",
-            20,
-            30,
-            0,
-            5,
+            (20, 30, 0, 5),
         ),
     ];
     batch_upsert_courses(&initial, &pool).await.unwrap();
 
     // Update both existing courses and add a new one
     let mixed = vec![
-        helpers::make_course("30001", "202510", "CS", "1083", "Intro to CS", 15, 30, 1, 5),
+        helpers::make_course(
+            "30001",
+            "202510",
+            "CS",
+            "1083",
+            "Intro to CS",
+            (15, 30, 1, 5),
+        ),
         helpers::make_course(
             "30002",
             "202510",
             "CS",
             "2073",
             "Computer Architecture",
-            25,
-            30,
-            0,
-            5,
+            (25, 30, 0, 5),
         ),
         helpers::make_course(
             "30003",
@@ -143,10 +152,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
             "MAT",
             "1214",
             "Calculus I",
-            40,
-            45,
-            3,
-            10,
+            (40, 45, 3, 10),
         ),
     ];
     batch_upsert_courses(&mixed, &pool).await.unwrap();
@@ -184,8 +190,22 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
 async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
     // Same CRN, different term codes → should produce two separate rows
     let courses = vec![
-        helpers::make_course("40001", "202510", "CS", "1083", "Intro to CS", 25, 30, 0, 5),
-        helpers::make_course("40001", "202520", "CS", "1083", "Intro to CS", 10, 30, 0, 5),
+        helpers::make_course(
+            "40001",
+            "202510",
+            "CS",
+            "1083",
+            "Intro to CS",
+            (25, 30, 0, 5),
+        ),
+        helpers::make_course(
+            "40001",
+            "202520",
+            "CS",
+            "1083",
+            "Intro to CS",
+            (10, 30, 0, 5),
+        ),
     ];
 
     batch_upsert_courses(&courses, &pool).await.unwrap();
@@ -221,10 +241,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
         "CS",
         "3443",
         "App Programming",
-        10,
-        35,
-        0,
-        5,
+        (10, 35, 0, 5),
     )];
     batch_upsert_courses(&initial, &pool).await.unwrap();
 
@@ -271,10 +288,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
         "CS",
         "3443",
         "App Programming",
-        20,
-        35,
-        2,
-        5,
+        (20, 35, 2, 5),
     )];
     batch_upsert_courses(&updated, &pool).await.unwrap();
 
@@ -316,10 +330,7 @@ async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
         "CS",
         "1083",
         "Intro to CS",
-        25,
-        30,
-        0,
-        5,
+        (25, 30, 0, 5),
     )];
     batch_upsert_courses(&course, &pool).await.unwrap();
     batch_upsert_courses(&course, &pool).await.unwrap();

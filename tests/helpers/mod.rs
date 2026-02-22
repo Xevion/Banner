@@ -18,10 +18,7 @@ pub fn make_course(
     subject: &str,
     course_number: &str,
     title: &str,
-    enrollment: i32,
-    max_enrollment: i32,
-    wait_count: i32,
-    wait_capacity: i32,
+    (enrollment, max_enrollment, wait_count, wait_capacity): (i32, i32, i32, i32),
 ) -> Course {
     Course {
         id: 0,
@@ -118,16 +115,9 @@ impl MeetingTimeBuilder {
     }
 
     /// Set which days of the week this meeting occurs on.
-    pub fn days(
-        mut self,
-        mon: bool,
-        tue: bool,
-        wed: bool,
-        thu: bool,
-        fri: bool,
-        sat: bool,
-        sun: bool,
-    ) -> Self {
+    ///
+    /// Days are ordered `[mon, tue, wed, thu, fri, sat, sun]`.
+    pub fn days(mut self, [mon, tue, wed, thu, fri, sat, sun]: [bool; 7]) -> Self {
         self.monday = mon;
         self.tuesday = tue;
         self.wednesday = wed;

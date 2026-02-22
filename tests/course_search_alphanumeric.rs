@@ -12,31 +12,39 @@ async fn test_search_alphanumeric_course_numbers(pool: sqlx::PgPool) {
 
     // Insert courses with both numeric and alphanumeric course numbers
     let courses = vec![
-        make_course("10001", term, "CS", "0100", "Intro to CS", 20, 30, 0, 10),
-        make_course("10002", term, "CS", "015X", "Special Topics", 15, 25, 0, 5),
+        make_course("10001", term, "CS", "0100", "Intro to CS", (20, 30, 0, 10)),
+        make_course(
+            "10002",
+            term,
+            "CS",
+            "015X",
+            "Special Topics",
+            (15, 25, 0, 5),
+        ),
         make_course(
             "10003",
             term,
             "CS",
             "0200",
             "Data Structures",
-            25,
-            30,
-            0,
-            10,
+            (25, 30, 0, 10),
         ),
-        make_course("10004", term, "CS", "0399", "Advanced Topics", 18, 25, 0, 5),
-        make_course("10005", term, "CS", "399H", "Honors Course", 12, 20, 0, 5),
+        make_course(
+            "10004",
+            term,
+            "CS",
+            "0399",
+            "Advanced Topics",
+            (18, 25, 0, 5),
+        ),
+        make_course("10005", term, "CS", "399H", "Honors Course", (12, 20, 0, 5)),
         make_course(
             "10006",
             term,
             "CS",
             "5500",
             "Graduate Seminar",
-            10,
-            15,
-            0,
-            3,
+            (10, 15, 0, 3),
         ),
     ];
 

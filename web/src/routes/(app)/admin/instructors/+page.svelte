@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { PageProps } from "./$types";
 import type {
   CandidateResponse,
   InstructorDetailResponse,
@@ -23,7 +24,7 @@ import { onDestroy } from "svelte";
 import { fade, slide } from "svelte/transition";
 import CandidateCard from "./CandidateCard.svelte";
 
-let { data } = $props();
+let { data }: PageProps = $props();
 
 // Build initial subject map from load data
 function buildSubjectMap(

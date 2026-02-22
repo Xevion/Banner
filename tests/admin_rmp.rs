@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 mod helpers;
 
 use banner::data::rmp::unmatch_instructor;

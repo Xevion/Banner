@@ -75,18 +75,18 @@ export function mergeObjects<Sources extends readonly MaybeThunk<any>[]>(
   const resolve = <T extends object>(src: MaybeThunk<T>): T | undefined =>
     typeof src === "function" ? (src() ?? undefined) : src;
 
-  const findSourceWithKey = (key: PropertyKey) => {
+  const findSourceWithKey = (key: PropertyKey): object | undefined => {
     for (let i = sources.length - 1; i >= 0; i--) {
-      const obj = resolve(sources[i]);
+      const obj = resolve(sources[i] as MaybeThunk<object>);
       if (obj && key in obj) return obj;
     }
     return undefined;
   };
 
-  return new Proxy(Object.create(null), {
+  return new Proxy(Object.create(null) as object, {
     get(_, key) {
-      const src = findSourceWithKey(key);
-      return src?.[key as never];
+      const src = findSourceWithKey(key) as Record<PropertyKey, unknown> | undefined;
+      return src?.[key];
     },
 
     has(_, key) {
@@ -96,7 +96,7 @@ export function mergeObjects<Sources extends readonly MaybeThunk<any>[]>(
     ownKeys(): (string | symbol)[] {
       const all = new SvelteSet<string | symbol>();
       for (const s of sources) {
-        const obj = resolve(s);
+        const obj = resolve(s as MaybeThunk<object>);
         if (obj) {
           for (const k of Reflect.ownKeys(obj)) {
             all.add(k);
@@ -107,7 +107,7 @@ export function mergeObjects<Sources extends readonly MaybeThunk<any>[]>(
     },
 
     getOwnPropertyDescriptor(_, key) {
-      const src = findSourceWithKey(key);
+      const src = findSourceWithKey(key) as Record<PropertyKey, unknown> | undefined;
       if (!src) return undefined;
       return {
         configurable: true,

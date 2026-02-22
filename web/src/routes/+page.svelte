@@ -2,7 +2,11 @@
 import type { SearchOptionsResponse } from "$lib/bindings";
 import { type SearchResponse, type Subject, client } from "$lib/api";
 import { CourseTable } from "$lib/components/course-table";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import {
+  buildAttributeMap,
+  setCourseDetailContext,
+  type CourseDetailContext,
+} from "$lib/components/course-detail/context";
 import ActiveFilterChips from "$lib/components/ActiveFilterChips.svelte";
 import ColumnVisibilityDropdown from "$lib/components/ColumnVisibilityDropdown.svelte";
 import Footer from "$lib/components/Footer.svelte";
@@ -27,7 +31,7 @@ function track(..._deps: unknown[]) {
   /* noop */
 }
 
-let courseTableRef: CourseTable | undefined = $state();
+let courseTableRef: { navigateToSection: (crn: string) => void } | undefined = $state();
 
 const initialParams = untrack(() => new URLSearchParams(data.url.search));
 const defaultTermSlug = untrack(() => data.searchOptions?.terms[0]?.slug ?? "");
@@ -86,7 +90,7 @@ const ranges = $derived(
 );
 
 const attributeMap = $derived(buildAttributeMap(referenceData.attributes));
-const courseDetailCtx: import("$lib/components/course-detail/context").CourseDetailContext = {
+const courseDetailCtx: CourseDetailContext = {
   get attributeMap() {
     return attributeMap;
   },

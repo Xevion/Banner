@@ -1,7 +1,8 @@
 <script lang="ts">
+import type { PageProps } from "./$types";
 import { formatNumber } from "$lib/utils";
 
-let { data } = $props();
+let { data }: PageProps = $props();
 let status = $derived(data.status);
 let error = $derived(data.error);
 </script>

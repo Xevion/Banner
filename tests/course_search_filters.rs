@@ -90,10 +90,10 @@ async fn insert_test_courses(pool: &PgPool) {
     let courses = vec![
         // 20001: CS 1100, MWF 09:00–09:50, open (25/30)
         with_meetings(
-            make_course("20001", term, "CS", "1100", "Intro to CS", 25, 30, 0, 10),
+            make_course("20001", term, "CS", "1100", "Intro to CS", (25, 30, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, true, false, false)
+                    .days([true, false, true, false, true, false, false])
                     .time("0900", "0950")
                     .location("SCI", "101")
                     .build(),
@@ -107,14 +107,11 @@ async fn insert_test_courses(pool: &PgPool) {
                 "CS",
                 "2200",
                 "Data Structures",
-                30,
-                30,
-                0,
-                10,
+                (30, 30, 0, 10),
             ),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(false, true, false, true, false, false, false)
+                    .days([false, true, false, true, false, false, false])
                     .time("1400", "1515")
                     .location("SCI", "202")
                     .build(),
@@ -122,10 +119,10 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // 20003: CS 3300, MW 16:00–17:15, open (20/25)
         with_meetings(
-            make_course("20003", term, "CS", "3300", "Algorithms", 20, 25, 0, 5),
+            make_course("20003", term, "CS", "3300", "Algorithms", (20, 25, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, false, false, false)
+                    .days([true, false, true, false, false, false, false])
                     .time("1600", "1715")
                     .location("SCI", "303")
                     .build(),
@@ -139,14 +136,11 @@ async fn insert_test_courses(pool: &PgPool) {
                 "MATH",
                 "1100",
                 "College Algebra",
-                28,
-                35,
-                0,
-                5,
+                (28, 35, 0, 5),
             ),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, true, false, false)
+                    .days([true, false, true, false, true, false, false])
                     .time("0800", "0850")
                     .location("MATH", "200")
                     .build(),
@@ -160,14 +154,11 @@ async fn insert_test_courses(pool: &PgPool) {
                 "MATH",
                 "2400",
                 "Linear Algebra",
-                22,
-                25,
-                0,
-                5,
+                (22, 25, 0, 5),
             ),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(false, true, false, true, false, false, false)
+                    .days([false, true, false, true, false, false, false])
                     .time("1000", "1115")
                     .location("MATH", "300")
                     .build(),
@@ -175,10 +166,10 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // 20006: ENG 1010, MW 11:00–12:15, full (20/20)
         with_meetings(
-            make_course("20006", term, "ENG", "1010", "English Comp", 20, 20, 0, 5),
+            make_course("20006", term, "ENG", "1010", "English Comp", (20, 20, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, false, false, false)
+                    .days([true, false, true, false, false, false, false])
                     .time("1100", "1215")
                     .location("LIB", "100")
                     .build(),
@@ -186,15 +177,15 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // 20007: PHYS 1600, two meetings: MWF 09:00–09:50 + TTh 14:00–15:15, open (15/30)
         with_meetings(
-            make_course("20007", term, "PHYS", "1600", "Physics I", 15, 30, 0, 10),
+            make_course("20007", term, "PHYS", "1600", "Physics I", (15, 30, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, true, false, false)
+                    .days([true, false, true, false, true, false, false])
                     .time("0900", "0950")
                     .location("SCI", "400")
                     .build(),
                 MeetingTimeBuilder::new()
-                    .days(false, true, false, true, false, false, false)
+                    .days([false, true, false, true, false, false, false])
                     .time("1400", "1515")
                     .location("SCI", "401")
                     .build(),
@@ -202,17 +193,17 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // 20008: ART 2100, Sat 09:00–12:00, open (10/15)
         with_meetings(
-            make_course("20008", term, "ART", "2100", "Studio Art", 10, 15, 0, 5),
+            make_course("20008", term, "ART", "2100", "Studio Art", (10, 15, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(false, false, false, false, false, true, false)
+                    .days([false, false, false, false, false, true, false])
                     .time("0900", "1200")
                     .location("ART", "110")
                     .build(),
             ],
         ),
         // 20009: CS 4400, no meetings (TBA), open (8/15)
-        make_course("20009", term, "CS", "4400", "Senior Project", 8, 15, 0, 5),
+        make_course("20009", term, "CS", "4400", "Senior Project", (8, 15, 0, 5)),
     ];
 
     batch_upsert_courses(&courses, pool)

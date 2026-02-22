@@ -28,10 +28,10 @@ async fn insert_test_courses(pool: &PgPool) {
     let courses = vec![
         // MWF 09:00–09:50
         with_meetings(
-            make_course("10001", term, "CS", "1100", "Intro to CS", 20, 30, 0, 10),
+            make_course("10001", term, "CS", "1100", "Intro to CS", (20, 30, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, true, false, false)
+                    .days([true, false, true, false, true, false, false])
                     .time("0900", "0950")
                     .location("SCI", "101")
                     .build(),
@@ -45,14 +45,11 @@ async fn insert_test_courses(pool: &PgPool) {
                 "CS",
                 "2200",
                 "Data Structures",
-                25,
-                30,
-                0,
-                10,
+                (25, 30, 0, 10),
             ),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(false, true, false, true, false, false, false)
+                    .days([false, true, false, true, false, false, false])
                     .time("1030", "1145")
                     .location("SCI", "202")
                     .build(),
@@ -60,10 +57,10 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // MW 14:00–15:15
         with_meetings(
-            make_course("10003", term, "MATH", "1300", "Calculus I", 30, 35, 0, 5),
+            make_course("10003", term, "MATH", "1300", "Calculus I", (30, 35, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, false, false, false)
+                    .days([true, false, true, false, false, false, false])
                     .time("1400", "1515")
                     .location("MATH", "300")
                     .build(),
@@ -71,10 +68,10 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // Monday only 13:30–16:15
         with_meetings(
-            make_course("10004", term, "ART", "2100", "Studio Art", 15, 20, 0, 5),
+            make_course("10004", term, "ART", "2100", "Studio Art", (15, 20, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, false, false, false, false, false)
+                    .days([true, false, false, false, false, false, false])
                     .time("1330", "1615")
                     .location("ART", "110")
                     .build(),
@@ -88,14 +85,11 @@ async fn insert_test_courses(pool: &PgPool) {
                 "MUS",
                 "1050",
                 "Music Appreciation",
-                40,
-                50,
-                0,
-                10,
+                (40, 50, 0, 10),
             ),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(false, false, false, false, false, true, false)
+                    .days([false, false, false, false, false, true, false])
                     .time("0900", "1200")
                     .location("MUS", "100")
                     .build(),
@@ -108,22 +102,19 @@ async fn insert_test_courses(pool: &PgPool) {
             "ENG",
             "1010",
             "English Composition",
-            25,
-            30,
-            0,
-            10,
+            (25, 30, 0, 10),
         ),
         // Two separate meetings: MWF 08:00–08:50 and TTh 10:00–11:15
         with_meetings(
-            make_course("10007", term, "PHYS", "1600", "Physics I", 28, 35, 0, 5),
+            make_course("10007", term, "PHYS", "1600", "Physics I", (28, 35, 0, 5)),
             vec![
                 MeetingTimeBuilder::new()
-                    .days(true, false, true, false, true, false, false)
+                    .days([true, false, true, false, true, false, false])
                     .time("0800", "0850")
                     .location("SCI", "400")
                     .build(),
                 MeetingTimeBuilder::new()
-                    .days(false, true, false, true, false, false, false)
+                    .days([false, true, false, true, false, false, false])
                     .time("1000", "1115")
                     .location("SCI", "401")
                     .build(),

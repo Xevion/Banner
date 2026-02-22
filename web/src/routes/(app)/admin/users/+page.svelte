@@ -1,9 +1,10 @@
 <script lang="ts">
+import type { PageProps } from "./$types";
 import { client } from "$lib/api";
 import type { User } from "$lib/bindings";
 import { Shield, ShieldOff } from "@lucide/svelte";
 
-let { data } = $props();
+let { data }: PageProps = $props();
 let users = $state<User[]>(data.users);
 let error = $state<string | null>(data.error);
 let updating = $state<string | null>(null);

@@ -368,6 +368,30 @@ fn format_time_parameter(time: NaiveTime) -> (String, String, String) {
     )
 }
 
+impl std::fmt::Display for SearchQuery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let parts: Vec<String> = self
+            .fields()
+            .into_iter()
+            .map(|field| match field {
+                QueryField::Single {
+                    display_name,
+                    value,
+                    ..
+                } => format!("{display_name}={value}"),
+                QueryField::Time {
+                    display_name, time, ..
+                } => {
+                    let (hour, minute, meridiem) = format_time_parameter(time);
+                    format!("{display_name}={hour}:{minute}:{meridiem}")
+                }
+            })
+            .collect();
+
+        write!(f, "{}", parts.join(", "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,7 +451,7 @@ mod tests {
 
         // open_only(false) should NOT set the param
         let params2 = SearchQuery::new().open_only(false).to_params();
-        assert!(params2.get("chk_open_only").is_none());
+        assert!(!params2.contains_key("chk_open_only"));
     }
 
     #[test]
@@ -578,29 +602,5 @@ mod tests {
         // min_credits, max_credits, course_number_range, course_number_range_to,
         // pageOffset, pageMaxSize = 12
         assert_eq!(params.len(), 12);
-    }
-}
-
-impl std::fmt::Display for SearchQuery {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parts: Vec<String> = self
-            .fields()
-            .into_iter()
-            .map(|field| match field {
-                QueryField::Single {
-                    display_name,
-                    value,
-                    ..
-                } => format!("{display_name}={value}"),
-                QueryField::Time {
-                    display_name, time, ..
-                } => {
-                    let (hour, minute, meridiem) = format_time_parameter(time);
-                    format!("{display_name}={hour}:{minute}:{meridiem}")
-                }
-            })
-            .collect();
-
-        write!(f, "{}", parts.join(", "))
     }
 }

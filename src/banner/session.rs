@@ -113,145 +113,6 @@ impl BannerSession {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Duration;
-
-    /// Verifies that cancelling `acquire()` mid-session-creation resets `is_creating`,
-    /// allowing subsequent callers to proceed rather than deadlocking.
-    #[tokio::test]
-    async fn test_acquire_not_deadlocked_after_cancellation() {
-        use tokio::sync::mpsc;
-
-        let (tx, mut rx) = mpsc::channel::<()>(10);
-
-        // Local server: /registration signals arrival via `tx`, then hangs forever.
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        let app = axum::Router::new().route(
-            "/StudentRegistrationSsb/registration",
-            axum::routing::get(move || {
-                let tx = tx.clone();
-                async move {
-                    let _ = tx.send(()).await;
-                    std::future::pending::<&str>().await
-                }
-            }),
-        );
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-
-        let base_url = format!("http://{}/StudentRegistrationSsb", addr);
-        let client = reqwest_middleware::ClientBuilder::new(
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(300))
-                .build()
-                .unwrap(),
-        )
-        .build();
-
-        let pool = SessionPool::new(client, base_url);
-        let term: Term = "202620".parse().unwrap();
-
-        // First acquire: cancel once the request reaches the server.
-        tokio::select! {
-            _ = pool.acquire(term) => panic!("server hangs — acquire should never complete"),
-            _ = rx.recv() => {} // Request arrived; dropping the future simulates timeout cancellation.
-        }
-
-        // Second acquire: verify it reaches the server (i.e., is_creating was reset).
-        tokio::select! {
-            _ = pool.acquire(term) => {}
-            result = tokio::time::timeout(Duration::from_secs(5), rx.recv()) => {
-                assert!(
-                    result.is_ok(),
-                    "acquire() deadlocked — is_creating was not reset after cancellation"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_new_session_creates_session() {
-        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        assert_eq!(session.id(), "sess-1");
-    }
-
-    #[test]
-    fn test_fresh_session_not_expired() {
-        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        assert!(!session.is_expired());
-    }
-
-    #[test]
-    fn test_fresh_session_not_been_used() {
-        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        assert!(!session.been_used());
-    }
-
-    #[test]
-    fn test_touch_marks_used() {
-        let mut session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        session.touch();
-        assert!(session.been_used());
-    }
-
-    #[test]
-    fn test_touched_session_not_expired() {
-        let mut session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        session.touch();
-        assert!(!session.is_expired());
-    }
-
-    #[test]
-    fn test_cookie_format() {
-        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
-        assert_eq!(session.cookie(), "JSESSIONID=JSID123; SSB_COOKIE=SSB456");
-    }
-
-    #[test]
-    fn test_id_returns_unique_session_id() {
-        let session = BannerSession::new("my-unique-id", "JSID123", "SSB456");
-        assert_eq!(session.id(), "my-unique-id");
-    }
-
-    #[test]
-    fn test_expired_session() {
-        let session = BannerSession::new_with_created_at(
-            "sess-old",
-            "JSID123",
-            "SSB456",
-            Instant::now() - Duration::from_secs(26 * 60),
-        );
-        assert!(session.is_expired());
-    }
-
-    #[test]
-    fn test_not_quite_expired_session() {
-        let session = BannerSession::new_with_created_at(
-            "sess-recent",
-            "JSID123",
-            "SSB456",
-            Instant::now() - Duration::from_secs(24 * 60),
-        );
-        assert!(!session.is_expired());
-    }
-
-    #[test]
-    fn test_session_at_expiry_boundary() {
-        let session = BannerSession::new_with_created_at(
-            "sess-boundary",
-            "JSID123",
-            "SSB456",
-            Instant::now() - Duration::from_secs(25 * 60 + 1),
-        );
-        assert!(session.is_expired());
-    }
-}
-
 /// A smart pointer that returns a `BannerSession` to the pool when dropped.
 pub struct PooledSession {
     session: ManuallyDrop<BannerSession>,
@@ -622,5 +483,144 @@ impl SessionPool {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Verifies that cancelling `acquire()` mid-session-creation resets `is_creating`,
+    /// allowing subsequent callers to proceed rather than deadlocking.
+    #[tokio::test]
+    async fn test_acquire_not_deadlocked_after_cancellation() {
+        use tokio::sync::mpsc;
+
+        let (tx, mut rx) = mpsc::channel::<()>(10);
+
+        // Local server: /registration signals arrival via `tx`, then hangs forever.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let app = axum::Router::new().route(
+            "/StudentRegistrationSsb/registration",
+            axum::routing::get(move || {
+                let tx = tx.clone();
+                async move {
+                    let _ = tx.send(()).await;
+                    std::future::pending::<&str>().await
+                }
+            }),
+        );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let base_url = format!("http://{}/StudentRegistrationSsb", addr);
+        let client = reqwest_middleware::ClientBuilder::new(
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(300))
+                .build()
+                .unwrap(),
+        )
+        .build();
+
+        let pool = SessionPool::new(client, base_url);
+        let term: Term = "202620".parse().unwrap();
+
+        // First acquire: cancel once the request reaches the server.
+        tokio::select! {
+            _ = pool.acquire(term) => panic!("server hangs — acquire should never complete"),
+            _ = rx.recv() => {} // Request arrived; dropping the future simulates timeout cancellation.
+        }
+
+        // Second acquire: verify it reaches the server (i.e., is_creating was reset).
+        tokio::select! {
+            _ = pool.acquire(term) => {}
+            result = tokio::time::timeout(Duration::from_secs(5), rx.recv()) => {
+                assert!(
+                    result.is_ok(),
+                    "acquire() deadlocked — is_creating was not reset after cancellation"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_session_creates_session() {
+        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        assert_eq!(session.id(), "sess-1");
+    }
+
+    #[test]
+    fn test_fresh_session_not_expired() {
+        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn test_fresh_session_not_been_used() {
+        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        assert!(!session.been_used());
+    }
+
+    #[test]
+    fn test_touch_marks_used() {
+        let mut session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        session.touch();
+        assert!(session.been_used());
+    }
+
+    #[test]
+    fn test_touched_session_not_expired() {
+        let mut session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        session.touch();
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn test_cookie_format() {
+        let session = BannerSession::new("sess-1", "JSID123", "SSB456");
+        assert_eq!(session.cookie(), "JSESSIONID=JSID123; SSB_COOKIE=SSB456");
+    }
+
+    #[test]
+    fn test_id_returns_unique_session_id() {
+        let session = BannerSession::new("my-unique-id", "JSID123", "SSB456");
+        assert_eq!(session.id(), "my-unique-id");
+    }
+
+    #[test]
+    fn test_expired_session() {
+        let session = BannerSession::new_with_created_at(
+            "sess-old",
+            "JSID123",
+            "SSB456",
+            Instant::now() - Duration::from_secs(26 * 60),
+        );
+        assert!(session.is_expired());
+    }
+
+    #[test]
+    fn test_not_quite_expired_session() {
+        let session = BannerSession::new_with_created_at(
+            "sess-recent",
+            "JSID123",
+            "SSB456",
+            Instant::now() - Duration::from_secs(24 * 60),
+        );
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn test_session_at_expiry_boundary() {
+        let session = BannerSession::new_with_created_at(
+            "sess-boundary",
+            "JSID123",
+            "SSB456",
+            Instant::now() - Duration::from_secs(25 * 60 + 1),
+        );
+        assert!(session.is_expired());
     }
 }
