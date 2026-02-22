@@ -50,8 +50,8 @@ pub struct Course {
     pub is_section_linked: bool,
     pub subject_course: String,
     pub reserved_seat_summary: Option<String>,
-    pub instructional_method: String,
-    pub instructional_method_description: String,
+    pub instructional_method: Option<String>,
+    pub instructional_method_description: Option<String>,
     pub section_attributes: Vec<SectionAttribute>,
     #[serde(default)]
     pub faculty: Vec<FacultyItem>,

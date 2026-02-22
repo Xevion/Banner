@@ -629,7 +629,7 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
         .collect();
     let instructional_methods: Vec<Option<&str>> = courses
         .iter()
-        .map(|c| Some(c.instructional_method.as_str()))
+        .map(|c| c.instructional_method.as_deref())
         .collect();
     let campuses: Vec<Option<String>> = courses.iter().map(extract_campus_code).collect();
     let credit_hours: Vec<Option<i32>> = courses.iter().map(|c| c.credit_hours).collect();
