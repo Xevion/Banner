@@ -10,7 +10,7 @@ const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 /// The valid years for terms
 /// We set a semi-static upper limit to avoid having to update this value while also keeping a tight bound
 /// TODO: Recheck the lower bound, it's just a guess right now.
-const VALID_YEARS: RangeInclusive<u32> = 2007..=(CURRENT_YEAR + 10);
+const VALID_YEARS: RangeInclusive<u32> = 2001..=(CURRENT_YEAR + 10);
 
 /// Represents a term in the Banner system
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
