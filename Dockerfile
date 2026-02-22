@@ -61,9 +61,11 @@ COPY build.rs ./
 COPY .git* ./
 COPY src ./src
 COPY migrations ./migrations
+COPY .sqlx ./.sqlx
 COPY --from=frontend-builder /app/dist ./web/dist
 
-# Build web app with embedded assets
+# Build web app with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
+ENV SQLX_OFFLINE=true
 RUN cargo build --release --bin banner
 
 # Strip the binary to reduce size
