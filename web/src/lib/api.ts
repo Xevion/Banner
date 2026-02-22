@@ -110,6 +110,13 @@ export class ApiErrorClass extends Error {
   }
 }
 
+/** Module-level cache shared by all BannerApiClient instances. */
+const _searchOptionsCache = new Map<
+  string,
+  { data: SearchOptionsResponse; fetchedAt: number }
+>();
+const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
+
 export class BannerApiClient {
   private baseUrl: string;
   private fetchFn: typeof fetch;
@@ -249,23 +256,16 @@ export class BannerApiClient {
     return this.request<ReferenceEntry[]>(`/reference/${encodeURIComponent(category)}`);
   }
 
-  // In-memory cache for search options per term
-  private searchOptionsCache = new Map<
-    string,
-    { data: SearchOptionsResponse; fetchedAt: number }
-  >();
-  private static SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
-
   async getSearchOptions(term?: string): Promise<Result<SearchOptionsResponse, ApiErrorClass>> {
     const cacheKey = term ?? "__default__";
-    const cached = this.searchOptionsCache.get(cacheKey);
-    if (cached && Date.now() - cached.fetchedAt < BannerApiClient.SEARCH_OPTIONS_TTL) {
+    const cached = _searchOptionsCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < SEARCH_OPTIONS_TTL) {
       return ok(cached.data);
     }
     const url = term ? `/search-options?term=${encodeURIComponent(term)}` : "/search-options";
     const result = await this.request<SearchOptionsResponse>(url);
     if (result.isOk) {
-      this.searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
+      _searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
     }
     return result;
   }
