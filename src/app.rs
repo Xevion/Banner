@@ -127,6 +127,9 @@ impl App {
             info!(error = ?e, "Could not load reference cache on startup (may be empty)");
         }
 
+        // Spawn background reference cache refresh every 30 minutes
+        app_state.spawn_reference_cache_refresh(std::time::Duration::from_secs(30 * 60));
+
         // Load schedule cache for timeline enrollment queries
         if let Err(e) = app_state.schedule_cache.load().await {
             info!(error = ?e, "Could not load schedule cache on startup (may be empty)");

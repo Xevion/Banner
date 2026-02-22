@@ -168,6 +168,30 @@ impl AppState {
         }
     }
 
+    /// Spawn a background task that refreshes the reference cache every `interval`.
+    /// The task runs until the process exits.
+    pub fn spawn_reference_cache_refresh(&self, interval: std::time::Duration) {
+        let state = self.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            ticker.tick().await; // skip the immediate first tick
+            loop {
+                ticker.tick().await;
+                match crate::data::reference::get_all(&state.db_pool).await {
+                    Ok(entries) => {
+                        let count = entries.len();
+                        let cache = ReferenceCache::from_entries(entries);
+                        *state.reference_cache.write().await = cache;
+                        tracing::info!(entries = count, "Reference cache refreshed");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to refresh reference cache");
+                    }
+                }
+            }
+        });
+    }
+
     /// Initialize the reference cache from the database.
     pub async fn load_reference_cache(&self) -> Result<()> {
         let entries = crate::data::reference::get_all(&self.db_pool).await?;
