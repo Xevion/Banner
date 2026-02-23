@@ -1,3 +1,4 @@
+import { goto } from "$app/navigation";
 import type { User } from "$lib/bindings";
 
 type AuthState =
@@ -68,7 +69,7 @@ class AuthStore {
   }
 
   login() {
-    window.location.href = "/api/auth/login";
+    void goto("/api/auth/login");
   }
 
   async logout() {
@@ -76,7 +77,7 @@ class AuthStore {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
       this.state = { mode: "unauthenticated" };
-      window.location.href = "/";
+      void goto("/");
     }
   }
 }

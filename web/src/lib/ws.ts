@@ -1,3 +1,4 @@
+import { browser } from "$app/environment";
 import type {
   StreamKind,
   StreamFilter,
@@ -94,6 +95,7 @@ export class StreamClient {
   }
 
   connect(): void {
+    if (!browser) return;
     this.closeExisting();
     this.intentionalClose = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";

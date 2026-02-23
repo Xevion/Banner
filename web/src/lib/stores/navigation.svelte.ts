@@ -1,4 +1,5 @@
 import { beforeNavigate, onNavigate } from "$app/navigation";
+import { browser } from "$app/environment";
 
 export type NavDirection = "left" | "right" | "fade";
 export type NavAxis = "horizontal" | "vertical";
@@ -9,7 +10,7 @@ export type NavAxis = "horizontal" | "vertical";
  * The pill animation (JS/RAF-driven) uses page.url.pathname directly.
  */
 class NavbarState {
-  path = $state(typeof window !== "undefined" ? window.location.pathname : "/");
+  path = $state("/");
 }
 
 export const navbar = new NavbarState();
@@ -59,7 +60,9 @@ function computeAxis(from: string, to: string): NavAxis {
 
 /** Call once from root layout to start tracking navigation direction */
 export function initNavigation() {
-  navbar.path = window.location.pathname;
+  if (browser) {
+    navbar.path = window.location.pathname;
+  }
 
   beforeNavigate(({ from, to }) => {
     if (!from?.url || !to?.url) return;
