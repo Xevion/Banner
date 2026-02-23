@@ -77,7 +77,29 @@ export function initNavigation() {
     const toPath = navigation.to?.url.pathname;
     const isPageChange = fromPath !== toPath;
 
-    if (!document.startViewTransition || !isPageChange) {
+    if (!document.startViewTransition) {
+      void navigation.complete.then(() => {
+        navbar.path = window.location.pathname;
+      });
+      return;
+    }
+
+    // Same-page navigations (e.g. search filter/pagination changes): use a scoped
+    // view transition on the results table so popovers and other UI aren't affected.
+    if (!isPageChange) {
+      const tableEl = document.querySelector("[data-search-results]");
+      if (tableEl && "startViewTransition" in tableEl) {
+        interface ScopedVT {
+          startViewTransition: (cb: () => Promise<void>) => void;
+        }
+        return new Promise((resolve) => {
+          (tableEl as unknown as ScopedVT).startViewTransition(async () => {
+            resolve();
+            await navigation.complete;
+          });
+        });
+      }
+      // No table element (different page or not mounted yet) — skip transition
       void navigation.complete.then(() => {
         navbar.path = window.location.pathname;
       });

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { SearchOptionsResponse } from "$lib/bindings";
-import { type SearchResponse, type Subject, client } from "$lib/api";
+import type { SearchResponse, Subject } from "$lib/api";
 import { CourseTable } from "$lib/components/course-table";
 import {
   buildAttributeMap,
@@ -14,57 +14,59 @@ import Pagination from "$lib/components/Pagination.svelte";
 import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
 import SearchStatus from "$lib/components/SearchStatus.svelte";
 import type { SortingState } from "@tanstack/table-core";
-import { tick, untrack } from "svelte";
-import { useURLSync } from "$lib/composables/useURLSync.svelte";
+import { untrack } from "svelte";
+import { useURLSync, type URLSyncHandle } from "$lib/composables/useURLSync.svelte";
 import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
 import { SearchFilters, setFiltersContext } from "$lib/stores/search-filters.svelte";
+import { navigating } from "$app/stores";
+import { invalidateAll } from "$app/navigation";
 
 interface PageLoadData {
   searchOptions: SearchOptionsResponse | null;
+  searchResult: SearchResponse | null;
+  searchError: string | null;
+  searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null;
   url: URL;
 }
 
 let { data }: { data: PageLoadData } = $props();
 
-/** No-op function to register Svelte reactivity dependencies for `$effect` tracking */
-function track(..._deps: unknown[]) {
-  /* noop */
-}
-
 let courseTableRef: { navigateToSection: (crn: string) => void } | undefined = $state();
 
-const initialParams = untrack(() => new URLSearchParams(data.url.search));
-const defaultTermSlug = untrack(() => data.searchOptions?.terms[0]?.slug ?? "");
+// Reactive derivations from load data
+const searchOptions = $derived(data.searchOptions);
+const searchResult = $derived(data.searchResult);
+const searchMeta = $derived(data.searchMeta);
+const searchError = $derived(data.searchError);
+const loading = $derived($navigating !== null);
 
-const urlTerm = initialParams.get("term");
-let selectedTerm = $state(
-  untrack(() => {
-    const terms = data.searchOptions?.terms ?? [];
-    return urlTerm && terms.some((t) => t.slug === urlTerm) ? urlTerm : defaultTermSlug;
-  })
-);
-
+// Mutable filter state — UI's writable handle, synced to URL
 const filters = new SearchFilters();
 setFiltersContext(filters);
-untrack(() => {
-  const validSubjects = new Set(data.searchOptions?.subjects.map((s) => s.code));
-  filters.fromURLParams(initialParams, validSubjects);
+
+let selectedTerm = $state("");
+let offset = $state(0);
+let sorting: SortingState = $state([]);
+
+// Hydrate mutable state from load data on every navigation
+$effect(() => {
+  const params = new URLSearchParams(data.url.search);
+  const validSubjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
+
+  const urlTerm = params.get("term");
+  const termList = untrack(() => searchOptions?.terms ?? []);
+  const defaultTerm = untrack(() => searchOptions?.terms[0]?.slug ?? "");
+  selectedTerm = urlTerm && termList.some((t) => t.slug === urlTerm) ? urlTerm : defaultTerm;
+
+  filters.fromURLParams(params, validSubjects);
+  offset = Number(params.get("offset")) || 0;
+
+  const sortBy = params.get("sort_by");
+  const sortDir = params.get("sort_dir");
+  sorting = sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
 });
 
-let offset = $state(Number(initialParams.get("offset")) || 0);
-const limit = 25;
-
-// svelte-ignore state_referenced_locally
-let searchOptions = $state<SearchOptionsResponse | null>(data.searchOptions);
-
-let sorting: SortingState = $state(
-  (() => {
-    const sortBy = initialParams.get("sort_by");
-    const sortDir = initialParams.get("sort_dir");
-    if (!sortBy) return [];
-    return [{ id: sortBy, desc: sortDir === "desc" }];
-  })()
-);
+const defaultTermSlug = $derived(searchOptions?.terms[0]?.slug ?? "");
 
 const terms = $derived(searchOptions?.terms ?? []);
 const subjects: Subject[] = $derived(searchOptions?.subjects ?? []);
@@ -117,159 +119,36 @@ const columns = new ColumnVisibilityController({
   ],
 });
 
-// Re-sync state from URL on browser back/forward navigation.
-// SvelteKit re-runs the load function and updates `data`, but component
-// state was initialized once — this effect bridges the gap.
-let prevUrlSearch = untrack(() => data.url.search);
+// Reset offset when filters change
+let prevFilterKey = $state("");
 $effect(() => {
-  const search = data.url.search;
-  if (search === prevUrlSearch) return;
-  prevUrlSearch = search;
-
-  const params = new URLSearchParams(search);
-  const validSubjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
-
-  const urlTerm = params.get("term");
-  const termList = untrack(() => searchOptions?.terms ?? []);
-  selectedTerm = urlTerm && termList.some((t) => t.slug === urlTerm) ? urlTerm : defaultTermSlug;
-
-  filters.fromURLParams(params, validSubjects);
-  offset = Number(params.get("offset")) || 0;
-
-  const sortBy = params.get("sort_by");
-  const sortDir = params.get("sort_dir");
-  sorting = sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
+  const key = filters.toSearchKey();
+  if (prevFilterKey && key !== prevFilterKey) {
+    offset = 0;
+  }
+  prevFilterKey = key;
 });
 
-// Keep URL params in sync with filter state
-useURLSync({
+// Keep URL in sync with filter state; debounces text input, immediate for discrete changes
+const urlSync: URLSyncHandle = useURLSync({
   filters,
   selectedTerm: () => selectedTerm,
-  defaultTermSlug,
+  defaultTermSlug: () => defaultTermSlug,
   offset: () => offset,
   sorting: () => sorting,
 });
 
-let searchResult: SearchResponse | null = $state(null);
-let searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null = $state(null);
-let loading = $state(false);
-let error = $state<string | null>(null);
-
-let validatingSubjects = false;
-let searchTimeout: ReturnType<typeof setTimeout> | undefined;
-let lastSearchKey = "";
-let fetchCounter = 0;
-
-// Fetch new search options when term changes
-$effect(() => {
-  const term = selectedTerm;
-  if (!term) return;
-  void client.getSearchOptions(term).then((result) => {
-    if (result.isErr) {
-      console.error("Failed to fetch search options:", result.error);
-      return;
-    }
-    const opts = result.value;
-    searchOptions = opts;
-    const validCodes = new Set(opts.subjects.map((s) => s.code));
-    const filtered = filters.subject.filter((code) => validCodes.has(code));
-    if (filtered.length !== filters.subject.length) {
-      validatingSubjects = true;
-      filters.subject = filtered;
-      validatingSubjects = false;
-    }
-  });
-});
-
-// Unified search effect
-$effect(() => {
-  const term = selectedTerm;
-  const filterKey = filters.toSearchKey();
-  track(offset, sorting);
-
-  if (validatingSubjects) return;
-
-  const searchKey = [term, filterKey, offset, JSON.stringify(sorting)].join("|");
-  const THROTTLE_MS = 300;
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    if (searchKey === lastSearchKey) return;
-    void performSearch();
-  }, THROTTLE_MS);
-
-  return () => clearTimeout(searchTimeout);
-});
-
-// Reset offset when filters change
-let prevFilters = $state("");
-$effect(() => {
-  const key = filters.toSearchKey();
-  if (prevFilters && key !== prevFilters) {
-    offset = 0;
-  }
-  prevFilters = key;
-});
-
-async function performSearch() {
-  if (!selectedTerm) return;
-  const key = [selectedTerm, filters.toSearchKey(), offset, JSON.stringify(sorting)].join("|");
-  lastSearchKey = key;
-  loading = true;
-  error = null;
-
-  const fetchId = ++fetchCounter;
-  const t0 = performance.now();
-  const apiParams = filters.toAPIParams(selectedTerm, limit, offset, sorting);
-  const result = await client.searchCourses(apiParams);
-
-  // Ignore stale responses
-  if (fetchId !== fetchCounter) return;
-
-  if (result.isErr) {
-    error = result.error.message;
-    loading = false;
-    return;
-  }
-
-  const data = result.value;
-  const applyUpdate = () => {
-    searchResult = data;
-    searchMeta = {
-      totalCount: data.totalCount,
-      durationMs: performance.now() - t0,
-      timestamp: new Date(),
-    };
-  };
-
-  // Scoped view transitions only affect the table element
-  const tableEl = document.querySelector("[data-search-results]");
-  if (tableEl && "startViewTransition" in tableEl) {
-    const startViewTransition = (
-      tableEl as unknown as {
-        startViewTransition: (cb: () => Promise<void>) => {
-          updateCallbackDone: Promise<void>;
-        };
-      }
-    ).startViewTransition;
-    const transition = startViewTransition(async () => {
-      applyUpdate();
-      await tick();
-    });
-    await transition.updateCallbackDone;
-  } else {
-    applyUpdate();
-  }
-
-  loading = false;
-}
+const limit = 25;
 
 function handleSortingChange(newSorting: SortingState) {
   sorting = newSorting;
   offset = 0;
+  urlSync.navigateNow();
 }
 
 function handlePageChange(newOffset: number) {
   offset = newOffset;
+  urlSync.navigateNow();
 }
 </script>
 
@@ -304,11 +183,11 @@ function handlePageChange(newOffset: number) {
     </div>
 
     <!-- Results -->
-    {#if error}
+    {#if searchError}
       <div class="text-center py-8">
-        <p class="text-status-red">{error}</p>
+        <p class="text-status-red">{searchError}</p>
         <button
-          onclick={() => performSearch()}
+          onclick={() => invalidateAll()}
           class="mt-2 text-sm text-muted-foreground hover:underline"
         >
           Retry
