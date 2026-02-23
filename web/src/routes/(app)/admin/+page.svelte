@@ -1,10 +1,27 @@
 <script lang="ts">
+import type { ServiceStatus } from "$lib/bindings";
 import type { PageProps } from "./$types";
 import { formatNumber } from "$lib/utils";
 
 let { data }: PageProps = $props();
 let status = $derived(data.status);
 let error = $derived(data.error);
+
+const STATUS_COLORS: Record<ServiceStatus, string> = {
+  active: "var(--status-green)",
+  connected: "var(--status-green)",
+  starting: "var(--status-orange)",
+  disabled: "var(--status-gray)",
+  error: "var(--status-red)",
+};
+
+function formatStatus(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function toTitleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 </script>
 
 <svelte:head>
@@ -40,10 +57,14 @@ let error = $derived(data.error);
   <h2 class="mt-6 mb-3 text-sm font-semibold text-foreground">Services</h2>
   <div class="bg-card border-border rounded-lg border">
     {#each status.services as service (service.name)}
+      {@const color = STATUS_COLORS[service.status] ?? "var(--status-gray)"}
       <div class="border-border flex items-center justify-between border-b px-4 py-3 last:border-b-0">
-        <span class="font-medium select-none">{service.name}</span>
-        <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 select-none dark:bg-green-900 dark:text-green-200">
-          {service.status}
+        <span class="font-medium select-none">{toTitleCase(service.name)}</span>
+        <span
+          class="rounded-full px-2.5 py-0.5 text-xs font-medium select-none"
+          style="background-color: color-mix(in oklch, {color} 15%, transparent); color: {color}"
+        >
+          {formatStatus(service.status)}
         </span>
       </div>
     {/each}

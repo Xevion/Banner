@@ -6,16 +6,15 @@ import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
 import { formatNumber } from "$lib/utils";
 import {
-  Activity,
+  ArrowLeft,
   Bot,
-  CheckCircle,
-  Circle,
   Clock,
+  Database,
   Globe,
   Hourglass,
   MessageCircle,
-  WifiOff,
-  XCircle,
+  RefreshCw,
+  Server,
 } from "@lucide/svelte";
 import { onMount } from "svelte";
 
@@ -26,9 +25,35 @@ const SERVICE_ICONS: Record<string, typeof Bot> = {
   bot: Bot,
   banner: Globe,
   discord: MessageCircle,
-  database: Activity,
-  web: Globe,
+  database: Database,
+  web: Server,
   scraper: Clock,
+};
+
+const STATUS_COLORS: Record<ServiceStatus | "Unreachable", string> = {
+  active: "var(--status-green)",
+  connected: "var(--status-green)",
+  starting: "var(--status-orange)",
+  disabled: "var(--status-gray)",
+  error: "var(--status-red)",
+  Unreachable: "var(--status-red)",
+};
+
+function formatStatus(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function toTitleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const OVERALL_STATUS_LABELS: Record<ServiceStatus | "Unreachable", string> = {
+  active: "All Good",
+  connected: "All Good",
+  starting: "Starting Up",
+  disabled: "Degraded",
+  error: "Issues",
+  Unreachable: "Offline",
 };
 
 interface ResponseTiming {
@@ -48,20 +73,15 @@ type StatusState =
   | { mode: "error"; lastFetch: Date }
   | { mode: "timeout"; lastFetch: Date };
 
-const STATUS_ICONS: Record<
-  ServiceStatus | "Unreachable",
-  { icon: typeof CheckCircle; color: string }
-> = {
-  active: { icon: CheckCircle, color: "var(--status-green)" },
-  connected: { icon: CheckCircle, color: "var(--status-green)" },
-  starting: { icon: Hourglass, color: "var(--status-orange)" },
-  disabled: { icon: Circle, color: "var(--status-gray)" },
-  error: { icon: XCircle, color: "var(--status-red)" },
-  Unreachable: { icon: WifiOff, color: "var(--status-red)" },
-};
-
 let statusState = $state({ mode: "loading" } as StatusState);
 let now = $state(new Date());
+let isRefreshing = $state(false);
+
+// Module-level fetch coordination — safe since this is a single-instance page
+let _scheduledTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let _requestTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let _isFetching = false;
+let _cancelled = false;
 
 const isLoading = $derived(statusState.mode === "loading");
 const shouldShowSkeleton = $derived(statusState.mode === "loading" || statusState.mode === "error");
@@ -76,7 +96,8 @@ const overallHealth: ServiceStatus | "Unreachable" = $derived(
         : "error"
 );
 
-const overallIcon = $derived(STATUS_ICONS[overallHealth]);
+const overallColor = $derived(STATUS_COLORS[overallHealth]);
+const isHealthy = $derived(overallHealth === "active" || overallHealth === "connected");
 
 const services: Service[] = $derived(
   statusState.mode === "response"
@@ -107,9 +128,73 @@ const lastFetch = $derived(
 const relativeLastFetchResult = $derived(lastFetch ? relativeTime(lastFetch, now) : null);
 const relativeLastFetch = $derived(relativeLastFetchResult?.text ?? "");
 
+async function doFetch() {
+  if (_isFetching) return;
+  _isFetching = true;
+
+  try {
+    const startTime = Date.now();
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      _requestTimeoutId = setTimeout(() => {
+        reject(new Error("Request timeout"));
+      }, REQUEST_TIMEOUT);
+    });
+
+    const result = await Promise.race([client.getStatus(), timeoutPromise]);
+
+    if (_requestTimeoutId) {
+      clearTimeout(_requestTimeoutId);
+      _requestTimeoutId = null;
+    }
+
+    if (result.isErr) {
+      statusState = { mode: "error", lastFetch: new Date() };
+    } else {
+      const responseTime = Date.now() - startTime;
+      statusState = {
+        mode: "response",
+        status: result.value,
+        timing: { health: responseTime, status: responseTime },
+        lastFetch: new Date(),
+      };
+    }
+  } catch (err) {
+    if (_requestTimeoutId) {
+      clearTimeout(_requestTimeoutId);
+      _requestTimeoutId = null;
+    }
+
+    const message = err instanceof Error ? err.message : "";
+
+    if (message === "Request timeout") {
+      statusState = { mode: "timeout", lastFetch: new Date() };
+    } else {
+      statusState = { mode: "error", lastFetch: new Date() };
+    }
+  } finally {
+    _isFetching = false;
+    if (!_cancelled) {
+      _scheduledTimeoutId = setTimeout(() => void doFetch(), REFRESH_INTERVAL);
+    }
+  }
+}
+
+function triggerRefresh() {
+  if (isRefreshing || _isFetching) return;
+  if (_scheduledTimeoutId) {
+    clearTimeout(_scheduledTimeoutId);
+    _scheduledTimeoutId = null;
+  }
+  isRefreshing = true;
+  void doFetch().then(() => {
+    setTimeout(() => {
+      isRefreshing = false;
+    }, 400);
+  });
+}
+
 onMount(() => {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let requestTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let nowTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   // Adaptive tick: schedules the next `now` update based on when the
@@ -124,57 +209,13 @@ onMount(() => {
   }
   scheduleNowTick();
 
-  const fetchData = async () => {
-    try {
-      const startTime = Date.now();
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        requestTimeoutId = setTimeout(() => {
-          reject(new Error("Request timeout"));
-        }, REQUEST_TIMEOUT);
-      });
-
-      const result = await Promise.race([client.getStatus(), timeoutPromise]);
-
-      if (requestTimeoutId) {
-        clearTimeout(requestTimeoutId);
-        requestTimeoutId = null;
-      }
-
-      if (result.isErr) {
-        statusState = { mode: "error", lastFetch: new Date() };
-      } else {
-        const responseTime = Date.now() - startTime;
-        statusState = {
-          mode: "response",
-          status: result.value,
-          timing: { health: responseTime, status: responseTime },
-          lastFetch: new Date(),
-        };
-      }
-    } catch (err) {
-      if (requestTimeoutId) {
-        clearTimeout(requestTimeoutId);
-        requestTimeoutId = null;
-      }
-
-      const message = err instanceof Error ? err.message : "";
-
-      if (message === "Request timeout") {
-        statusState = { mode: "timeout", lastFetch: new Date() };
-      } else {
-        statusState = { mode: "error", lastFetch: new Date() };
-      }
-    }
-
-    timeoutId = setTimeout(() => void fetchData(), REFRESH_INTERVAL);
-  };
-
-  void fetchData();
+  _cancelled = false;
+  void doFetch();
 
   return () => {
-    if (timeoutId) clearTimeout(timeoutId);
-    if (requestTimeoutId) clearTimeout(requestTimeoutId);
+    _cancelled = true;
+    if (_scheduledTimeoutId) clearTimeout(_scheduledTimeoutId);
+    if (_requestTimeoutId) clearTimeout(_requestTimeoutId);
     if (nowTimeoutId) clearTimeout(nowTimeoutId);
   };
 });
@@ -184,95 +225,106 @@ onMount(() => {
   <title>System Status | Banner</title>
 </svelte:head>
 
-<div class="min-h-screen flex flex-col items-center justify-center p-5">
+<div class="min-h-screen flex flex-col items-center pt-24 px-5 pb-8">
+  <!-- Page header row: back link -->
+  <div class="w-full max-w-lg mb-4">
+    <a
+      href="/"
+      class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground no-underline transition-colors"
+    >
+      <ArrowLeft size={14} />
+      Back
+    </a>
+  </div>
+
+  <!-- Main card -->
   <div
-    class="bg-card text-card-foreground rounded-xl border border-border p-6 w-full max-w-[400px] shadow-sm"
+    class="bg-card text-card-foreground rounded-xl border border-border p-7 w-full max-w-lg shadow-sm"
   >
-    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-5">
       <!-- Overall Status -->
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <Activity
-            size={18}
-            color={isLoading ? undefined : overallIcon.color}
-            class={isLoading ? "animate-pulse" : ""}
-            style="opacity: {isLoading ? 0.3 : 1}; transition: opacity 2s ease-in-out, color 2s ease-in-out;"
-          />
+        <div class="flex items-center gap-2.5">
+          <!-- Live status dot -->
+          <span class="relative flex h-2.5 w-2.5 flex-shrink-0">
+            {#if !isLoading && isHealthy}
+              <span
+                class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-50"
+                style="background-color: {overallColor}"
+              ></span>
+            {/if}
+            <span
+              class="relative inline-flex h-2.5 w-2.5 rounded-full transition-colors duration-500"
+              class:animate-pulse={isLoading}
+              style={isLoading
+                ? "background-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent)"
+                : `background-color: ${overallColor}`}
+            ></span>
+          </span>
           <span class="text-base font-medium text-foreground">System Status</span>
         </div>
         {#if isLoading}
-          <div class="h-5 w-20 bg-muted rounded animate-pulse"></div>
+          <div class="h-5 w-20 bg-muted rounded-full animate-pulse"></div>
         {:else}
-          {#if overallIcon}
-            {@const OverallIconComponent = overallIcon.icon}
-            <div class="flex items-center gap-1.5">
-              <span
-                class="text-sm"
-                class:text-muted-foreground={overallHealth === "disabled"}
-                class:opacity-70={overallHealth === "disabled"}
-              >
-                {overallHealth}
-              </span>
-              <OverallIconComponent size={16} color={overallIcon.color} />
-            </div>
-          {/if}
+          <span
+            class="rounded-full px-2.5 py-0.5 text-xs font-medium"
+            style="background-color: color-mix(in oklch, {overallColor} 15%, transparent); color: {overallColor}"
+          >
+            {OVERALL_STATUS_LABELS[overallHealth]}
+          </span>
         {/if}
       </div>
 
       <!-- Services -->
-      <div class="flex flex-col gap-3 mt-4">
+      <div class="rounded-lg border border-border overflow-hidden">
         {#if shouldShowSkeleton}
-          {#each Array(3) as _service, i (i)}
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <div class="h-6 w-[18px] bg-muted rounded animate-pulse"></div>
-                <div class="h-6 w-[60px] bg-muted rounded animate-pulse"></div>
+          {#each Array(3) as _, i (i)}
+            <div
+              class="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0"
+            >
+              <div class="flex items-center gap-2.5">
+                <div class="h-4 w-4 bg-muted rounded animate-pulse"></div>
+                <div class="h-4 w-20 bg-muted rounded animate-pulse"></div>
               </div>
-              <div class="flex items-center gap-2">
-                <div class="h-5 w-[50px] bg-muted rounded animate-pulse"></div>
-                <div class="h-5 w-4 bg-muted rounded animate-pulse"></div>
-              </div>
+              <div class="h-5 w-16 bg-muted rounded-full animate-pulse"></div>
             </div>
           {/each}
         {:else}
           {#each services as service (service.name)}
-            {@const statusInfo = STATUS_ICONS[service.status]}
+            {@const color = STATUS_COLORS[service.status]}
             {@const ServiceIcon = service.icon}
-            {@const StatusIconComponent = statusInfo.icon}
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <ServiceIcon size={18} />
-                <span class="text-muted-foreground">{service.name}</span>
+            <div
+              class="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0"
+            >
+              <div class="flex items-center gap-2.5 text-muted-foreground">
+                <ServiceIcon size={15} />
+                <span class="text-sm">{toTitleCase(service.name)}</span>
               </div>
-              <div class="flex items-center gap-1.5">
-                <span
-                  class="text-sm"
-                  class:text-muted-foreground={service.status === "disabled"}
-                  class:opacity-70={service.status === "disabled"}
-                >
-                  {service.status}
-                </span>
-                <StatusIconComponent size={16} color={statusInfo.color} />
-              </div>
+              <span
+                class="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                style="background-color: color-mix(in oklch, {color} 15%, transparent); color: {color}"
+              >
+                {formatStatus(service.status)}
+              </span>
             </div>
           {/each}
         {/if}
       </div>
 
       <!-- Timing & Last Updated -->
-      <div class="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
+      <div class="flex flex-col gap-2 pt-4 border-t border-border">
         {#if isLoading}
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Hourglass size={13} />
+              <Hourglass size={13} class="text-muted-foreground" />
               <span class="text-sm text-muted-foreground">Response Time</span>
             </div>
-            <div class="h-[18px] w-[50px] bg-muted rounded animate-pulse"></div>
+            <div class="h-4 w-12 bg-muted rounded animate-pulse"></div>
           </div>
         {:else if shouldShowTiming && statusState.mode === "response"}
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Hourglass size={13} />
+              <Hourglass size={13} class="text-muted-foreground" />
               <span class="text-sm text-muted-foreground">Response Time</span>
             </div>
             <span class="text-sm text-muted-foreground">
@@ -284,24 +336,34 @@ onMount(() => {
         {#if isLoading}
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Clock size={13} />
+              <Clock size={13} class="text-muted-foreground" />
               <span class="text-sm text-muted-foreground">Last Updated</span>
             </div>
-            <span class="text-sm text-muted-foreground pb-0.5">Loading...</span>
+            <span class="text-sm text-muted-foreground">Loading...</span>
           </div>
         {:else if shouldShowLastFetch && lastFetch}
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Clock size={13} />
+              <Clock size={13} class="text-muted-foreground" />
               <span class="text-sm text-muted-foreground">Last Updated</span>
             </div>
-            <SimpleTooltip text="as of {lastFetch.toLocaleTimeString()}" delay={150} passthrough>
-              <abbr
-                class="cursor-pointer underline decoration-dotted decoration-border underline-offset-[6px]"
+            <div class="flex items-center gap-2">
+              <SimpleTooltip text="as of {lastFetch.toLocaleTimeString()}" delay={150} passthrough>
+                <abbr
+                  class="cursor-pointer underline decoration-dotted decoration-border underline-offset-[6px]"
+                >
+                  <span class="text-sm text-muted-foreground">{relativeLastFetch}</span>
+                </abbr>
+              </SimpleTooltip>
+              <button
+                onclick={triggerRefresh}
+                class="text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center"
+                title="Refresh now"
+                disabled={isRefreshing}
               >
-                <span class="text-sm text-muted-foreground">{relativeLastFetch}</span>
-              </abbr>
-            </SimpleTooltip>
+                <RefreshCw size={13} class={isRefreshing ? "animate-spin" : ""} />
+              </button>
+            </div>
           </div>
         {/if}
       </div>
