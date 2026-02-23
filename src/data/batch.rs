@@ -816,16 +816,21 @@ async fn upsert_instructors(
     let email_refs: Vec<&str> = emails_lower.iter().map(|s| s.as_str()).collect();
     let first_name_refs: Vec<Option<&str>> = first_names.iter().map(|s| s.as_deref()).collect();
     let last_name_refs: Vec<Option<&str>> = last_names.iter().map(|s| s.as_deref()).collect();
+    let slugs: Vec<String> = display_names
+        .iter()
+        .map(|name| crate::data::instructors::generate_slug(name))
+        .collect();
 
     let rows: Vec<(i32, String)> = sqlx::query_as(
         r#"
-        INSERT INTO instructors (display_name, email, first_name, last_name)
-        SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
+        INSERT INTO instructors (display_name, email, first_name, last_name, slug)
+        SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
         ON CONFLICT (email)
         DO UPDATE SET
             display_name = EXCLUDED.display_name,
             first_name = EXCLUDED.first_name,
-            last_name = EXCLUDED.last_name
+            last_name = EXCLUDED.last_name,
+            slug = COALESCE(instructors.slug, EXCLUDED.slug)
         RETURNING id, email
         "#,
     )
@@ -833,6 +838,7 @@ async fn upsert_instructors(
     .bind(&email_refs)
     .bind(&first_name_refs)
     .bind(&last_name_refs)
+    .bind(&slugs)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors: {}", e))?;

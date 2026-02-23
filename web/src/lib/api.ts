@@ -9,6 +9,8 @@ import type {
   CodeDescription,
   CourseResponse,
   InstructorDetailResponse,
+  PublicInstructorListResponse,
+  PublicInstructorProfileResponse,
   ListInstructorsParams as ListInstructorsParamsGenerated,
   ListInstructorsResponse,
   MatchBody,
@@ -266,6 +268,40 @@ export class BannerApiClient {
       _searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
     }
     return result;
+  }
+
+  // Public instructor endpoints
+
+  async getInstructors(params?: {
+    search?: string;
+    subject?: string;
+    sort?: string;
+    page?: number;
+    perPage?: number;
+  }): Promise<Result<PublicInstructorListResponse, ApiErrorClass>> {
+    if (!params) {
+      return this.request<PublicInstructorListResponse>("/instructors");
+    }
+    const query = toURLSearchParams(params as Record<string, unknown>);
+    const qs = query.toString();
+    return this.request<PublicInstructorListResponse>(`/instructors${qs ? `?${qs}` : ""}`);
+  }
+
+  async getInstructor(
+    slug: string
+  ): Promise<Result<PublicInstructorProfileResponse, ApiErrorClass>> {
+    return this.request<PublicInstructorProfileResponse>(
+      `/instructors/${encodeURIComponent(slug)}`
+    );
+  }
+
+  async getInstructorSections(
+    slug: string,
+    term: string
+  ): Promise<Result<CourseResponse[], ApiErrorClass>> {
+    return this.request<CourseResponse[]>(
+      `/instructors/${encodeURIComponent(slug)}/sections?term=${encodeURIComponent(term)}`
+    );
   }
 
   // Admin endpoints

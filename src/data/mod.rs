@@ -6,6 +6,7 @@ mod context;
 pub mod course_types;
 pub mod courses;
 pub mod events;
+pub mod instructors;
 pub mod kv;
 pub mod models;
 pub mod names;

@@ -229,6 +229,7 @@ pub async fn get_course_instructors(
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
                rmp.avg_rating, rmp.num_ratings, rmp.rmp_legacy_id,
+               i.slug,
                ci.course_id
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
@@ -266,6 +267,7 @@ pub async fn get_instructors_for_courses(
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
                rmp.avg_rating, rmp.num_ratings, rmp.rmp_legacy_id,
+               i.slug,
                ci.course_id
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
@@ -492,12 +494,14 @@ pub async fn suggest_instructors(
 
     Ok(rows
         .into_iter()
-        .map(|(id, display_name, section_count, score)| InstructorSuggestion {
-            id,
-            display_name,
-            section_count,
-            score,
-        })
+        .map(
+            |(id, display_name, section_count, score)| InstructorSuggestion {
+                id,
+                display_name,
+                section_count,
+                score,
+            },
+        )
         .collect())
 }
 

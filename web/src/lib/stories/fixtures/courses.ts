@@ -13,6 +13,7 @@ export const courseWithSeats: CourseResponse = {
   courseNumber: "3443",
   title: "Application Programming",
   termCode: "202510",
+  termSlug: "Spring-2025",
   sequenceNumber: "001",
   instructionalMethod: { type: "InPerson" },
   instructionalMethodCode: "P",
@@ -58,6 +59,7 @@ export const courseWithSeats: CourseResponse = {
       firstName: "John",
       lastName: "Smith",
       email: "john.smith@university.edu",
+      slug: "john-smith-abc",
       isPrimary: true,
       rmp: {
         avgRating: 4.2,
@@ -92,6 +94,7 @@ export const fullCourse: CourseResponse = {
       firstName: "Jane",
       lastName: "Doe",
       email: "jane.doe@university.edu",
+      slug: "jane-doe-def",
       isPrimary: true,
       rmp: null,
     },
@@ -138,6 +141,7 @@ export const onlineCourse: CourseResponse = {
       firstName: "Robert",
       lastName: "Johnson",
       email: "robert.johnson@university.edu",
+      slug: "robert-johnson-ghi",
       isPrimary: true,
       rmp: {
         avgRating: 3.8,

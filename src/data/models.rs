@@ -335,6 +335,7 @@ pub struct CourseInstructorDetail {
     pub avg_rating: Option<f32>,
     pub num_ratings: Option<i32>,
     pub rmp_legacy_id: Option<i32>,
+    pub slug: Option<String>,
     /// Present when fetched via batch query; `None` for single-course queries.
     pub course_id: Option<i32>,
 }

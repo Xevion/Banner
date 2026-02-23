@@ -137,6 +137,7 @@ describe("getPrimaryInstructor", () => {
         email: "a@utsa.edu",
         isPrimary: false,
         rmp: null,
+        slug: null,
       },
       {
         instructorId: 2,
@@ -147,6 +148,7 @@ describe("getPrimaryInstructor", () => {
         email: "b@utsa.edu",
         isPrimary: true,
         rmp: null,
+        slug: null,
       },
     ];
     expect(getPrimaryInstructor(instructors)?.displayName).toBe("B");
@@ -162,6 +164,7 @@ describe("getPrimaryInstructor", () => {
         email: "a@utsa.edu",
         isPrimary: false,
         rmp: null,
+        slug: null,
       },
     ];
     expect(getPrimaryInstructor(instructors)?.displayName).toBe("A");
@@ -361,6 +364,7 @@ function makeCourse(overrides: Partial<CourseResponse> = {}): CourseResponse {
     courseNumber: "1234",
     title: "Test Course",
     termCode: "202510",
+    termSlug: "Spring-2025",
     sequenceNumber: null,
     instructionalMethod: null,
     instructionalMethodCode: null,

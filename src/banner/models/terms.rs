@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 /// The current year at the time of compilation
 const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 
-/// The valid years for terms
-/// We set a semi-static upper limit to avoid having to update this value while also keeping a tight bound
-/// TODO: Recheck the lower bound, it's just a guess right now.
+/// The valid years for terms.
+/// Lower bound is 2001 — the earliest term UTSA's Banner system serves is Fall 2001 (200110).
+/// Upper bound is compile-time year + 10 to stay tight without manual updates.
 const VALID_YEARS: RangeInclusive<u32> = 2001..=(CURRENT_YEAR + 10);
 
 /// Represents a term in the Banner system
@@ -238,7 +238,7 @@ impl Season {
 
     /// Parse a slug like "spring", "summer", "fall" into a Season
     pub fn from_slug(s: &str) -> Option<Self> {
-        match s {
+        match s.to_ascii_lowercase().as_str() {
             "fall" => Some(Season::Fall),
             "spring" => Some(Season::Spring),
             "summer" => Some(Season::Summer),
@@ -509,7 +509,28 @@ mod tests {
     fn test_season_from_slug_invalid() {
         assert_eq!(Season::from_slug("winter"), None);
         assert_eq!(Season::from_slug(""), None);
-        assert_eq!(Season::from_slug("Spring"), None); // case-sensitive
+    }
+
+    #[test]
+    fn test_season_from_slug_case_insensitive() {
+        assert_eq!(Season::from_slug("Spring"), Some(Season::Spring));
+        assert_eq!(Season::from_slug("FALL"), Some(Season::Fall));
+        assert_eq!(Season::from_slug("Summer"), Some(Season::Summer));
+    }
+
+    #[test]
+    fn test_term_from_slug_case_insensitive() {
+        let term = Term::from_slug("Spring-2026").unwrap();
+        assert_eq!(term.year, 2026);
+        assert_eq!(term.season, Season::Spring);
+    }
+
+    #[test]
+    fn test_resolve_to_code_case_insensitive() {
+        assert_eq!(
+            Term::resolve_to_code("Spring-2026"),
+            Some("202620".to_string())
+        );
     }
 
     // --- Term::slug / from_slug ---

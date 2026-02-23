@@ -50,6 +50,7 @@ use crate::web::admin;
 use crate::web::auth::{self, AuthConfig};
 use crate::web::calendar;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
+use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
 #[cfg(feature = "embed-assets")]
@@ -91,6 +92,12 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/reference/{category}", get(get_reference))
         .route("/search-options", get(get_search_options))
         .route("/suggest", get(suggest))
+        .route("/instructors", get(instructors::list_instructors))
+        .route("/instructors/{slug}", get(instructors::get_instructor))
+        .route(
+            "/instructors/{slug}/sections",
+            get(instructors::get_instructor_sections),
+        )
         .route("/timeline", post(timeline::timeline))
         .route("/ws", get(stream::stream_ws))
         .with_state(app_state.clone());
@@ -318,9 +325,11 @@ async fn metrics(
     let course_id = if let Some(id) = params.course_id {
         Some(id)
     } else if let (Some(term), Some(crn)) = (params.term.as_deref(), params.crn.as_deref()) {
+        use crate::banner::models::terms::Term;
+        let resolved = Term::resolve_to_code(term).unwrap_or_else(|| term.to_string());
         let row: Option<(i32,)> =
             sqlx::query_as("SELECT id FROM courses WHERE term_code = $1 AND crn = $2")
-                .bind(term)
+                .bind(&resolved)
                 .bind(crn)
                 .fetch_optional(&state.db_pool)
                 .await
@@ -488,6 +497,7 @@ pub struct CourseResponse {
     course_number: String,
     title: String,
     term_code: String,
+    term_slug: String,
     sequence_number: Option<String>,
     instructional_method: Option<InstructionalMethod>,
     /// Raw instructional method code, included when parsing fails (Tier 1 fallback).
@@ -520,6 +530,7 @@ pub struct InstructorResponse {
     first_name: Option<String>,
     last_name: Option<String>,
     email: String,
+    slug: Option<String>,
     is_primary: bool,
     rmp: Option<RmpRating>,
 }
@@ -580,7 +591,7 @@ pub struct SearchOptionsParams {
 const RMP_CONFIDENCE_THRESHOLD: i32 = 7;
 
 /// Build a `CourseResponse` from a DB course with pre-fetched instructor details.
-fn build_course_response(
+pub fn build_course_response(
     course: &models::Course,
     instructors: Vec<models::CourseInstructorDetail>,
 ) -> CourseResponse {
@@ -609,6 +620,7 @@ fn build_course_response(
                 first_name: i.first_name,
                 last_name: i.last_name,
                 email: i.email,
+                slug: i.slug,
                 is_primary: i.is_primary,
                 rmp,
             }
@@ -747,12 +759,20 @@ fn build_course_response(
         .clone()
         .map(|identifier| SectionLink { identifier });
 
+    use crate::banner::models::terms::Term;
+    let term_slug = course
+        .term_code
+        .parse::<Term>()
+        .map(|t| t.slug())
+        .unwrap_or_else(|_| course.term_code.clone());
+
     CourseResponse {
         crn: course.crn.clone(),
         subject: course.subject.clone(),
         course_number: course.course_number.clone(),
         title: course.title.clone(),
         term_code: course.term_code.clone(),
+        term_slug,
         sequence_number: course.sequence_number.clone(),
         instructional_method,
         instructional_method_code,
@@ -882,7 +902,9 @@ async fn get_course(
     State(state): State<AppState>,
     Path((term, crn)): Path<(String, String)>,
 ) -> Result<Json<CourseResponse>, ApiError> {
-    let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term)
+    use crate::banner::models::terms::Term;
+    let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
+    let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term_code)
         .await
         .map_err(|e| db_error("Course lookup", e))?
         .ok_or_else(|| ApiError::not_found("Course not found"))?;
@@ -900,8 +922,10 @@ async fn get_related_sections(
     State(state): State<AppState>,
     Path((term, subject, course_number)): Path<(String, String, String)>,
 ) -> Result<Json<Vec<CourseResponse>>, ApiError> {
+    use crate::banner::models::terms::Term;
+    let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let courses =
-        data::courses::get_related_sections(&state.db_pool, &term, &subject, &course_number)
+        data::courses::get_related_sections(&state.db_pool, &term_code, &subject, &course_number)
             .await
             .map_err(|e| db_error("Related sections lookup", e))?;
 

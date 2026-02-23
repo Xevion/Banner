@@ -119,6 +119,13 @@ impl App {
             warn!(error = ?e, "Failed to backfill instructor names (non-fatal)");
         }
 
+        // Backfill URL slugs for instructors that don't have one
+        match crate::data::instructors::backfill_instructor_slugs(&db_pool).await {
+            Ok(0) => {}
+            Ok(n) => info!(count = n, "Backfilled instructor slugs"),
+            Err(e) => warn!(error = ?e, "Failed to backfill instructor slugs (non-fatal)"),
+        }
+
         // Create AppState (BannerApi already created above for term sync)
         let app_state = AppState::new(banner_api_arc.clone(), db_pool.clone());
 
