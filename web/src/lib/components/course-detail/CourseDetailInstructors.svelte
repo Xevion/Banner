@@ -35,7 +35,7 @@ const clipboard = useClipboard();
           </div>
 
           <!-- Rating -->
-          {#if instructor.rmp != null}
+          {#if instructor.rmp?.avgRating != null}
             {@const rating = instructor.rmp.avgRating}
             {@const lowConfidence = !instructor.rmp.isConfident}
             <span

@@ -13,7 +13,7 @@ let display = $derived(primary ? abbreviateInstructor(primary.displayName) : "St
 let commaIdx = $derived(display.indexOf(", "));
 let profileUrl = $derived(primary?.slug ? `/instructors/${primary.slug}` : null);
 let ratingData = $derived(
-  primary?.rmp != null
+  primary?.rmp?.avgRating != null && primary?.rmp?.numRatings != null
     ? {
         rating: primary.rmp.avgRating,
         count: primary.rmp.numRatings,

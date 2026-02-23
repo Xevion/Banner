@@ -134,7 +134,7 @@ function handleNavigate(crn: string) {
                             {abbreviateInstructor(
                                 primary?.displayName ?? "Staff",
                             )}
-                            {#if primary?.rmp}
+                            {#if primary?.rmp?.avgRating != null}
                                 <span class="font-medium text-foreground/70"
                                     >{primary.rmp.avgRating.toFixed(1)}</span
                                 >

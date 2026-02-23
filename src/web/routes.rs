@@ -598,21 +598,17 @@ pub fn build_course_response(
     let instructors: Vec<InstructorResponse> = instructors
         .into_iter()
         .map(|i| {
-            let has_rating =
-                i.avg_rating.is_some_and(|r| r != 0.0) || i.num_ratings.is_some_and(|n| n != 0);
-            let rmp = if has_rating {
-                match (i.avg_rating, i.num_ratings, i.rmp_legacy_id) {
-                    (Some(avg_rating), Some(num_ratings), Some(legacy_id)) => Some(RmpRating {
-                        avg_rating,
-                        num_ratings,
-                        legacy_id,
-                        is_confident: num_ratings >= RMP_CONFIDENCE_THRESHOLD,
-                    }),
-                    _ => None,
+            let rmp = i.rmp_legacy_id.map(|legacy_id| {
+                let (avg_rating, num_ratings) =
+                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating, i.num_ratings);
+                let is_confident = num_ratings.is_some_and(|n| n >= RMP_CONFIDENCE_THRESHOLD);
+                RmpRating {
+                    avg_rating,
+                    num_ratings,
+                    legacy_id,
+                    is_confident,
                 }
-            } else {
-                None
-            };
+            });
             InstructorResponse {
                 instructor_id: i.instructor_id,
                 banner_id: i.banner_id,

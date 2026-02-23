@@ -5,7 +5,7 @@ import { ratingStyle } from "$lib/course";
 import { formatNumber } from "$lib/utils";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { goto } from "$app/navigation";
-import { Star, Search, Mail } from "@lucide/svelte";
+import { Star, Search, Mail, ExternalLink } from "@lucide/svelte";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import { Select } from "bits-ui";
@@ -213,19 +213,25 @@ function resolveSubject(code: string): string {
                   </div>
                 </div>
 
-                {#if instructor.avgRating != null && instructor.numRatings != null}
-                  <div class="flex items-center gap-1 shrink-0">
-                    <span
-                      class="text-sm font-semibold inline-flex items-center gap-0.5"
-                      style={ratingStyle(instructor.avgRating, themeStore.isDark)}
-                    >
-                      {instructor.avgRating.toFixed(1)}
-                      <Star class="size-3 fill-current" />
+                {#if instructor.rmp != null}
+                  {#if instructor.rmp.avgRating != null && instructor.rmp.numRatings != null}
+                    <div class="flex items-center gap-1 shrink-0">
+                      <span
+                        class="text-sm font-semibold inline-flex items-center gap-0.5"
+                        style={ratingStyle(instructor.rmp.avgRating, themeStore.isDark)}
+                      >
+                        {instructor.rmp.avgRating.toFixed(1)}
+                        <Star class="size-3 fill-current" />
+                      </span>
+                      <span class="text-[10px] text-muted-foreground">
+                        ({formatNumber(instructor.rmp.numRatings)})
+                      </span>
+                    </div>
+                  {:else}
+                    <span class="text-muted-foreground shrink-0" title="View on RateMyProfessors">
+                      <ExternalLink class="size-3.5" />
                     </span>
-                    <span class="text-[10px] text-muted-foreground">
-                      ({formatNumber(instructor.numRatings)})
-                    </span>
-                  </div>
+                  {/if}
                 {/if}
               </div>
 

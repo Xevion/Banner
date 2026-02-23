@@ -80,6 +80,19 @@ pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
 
 // --- Public API response types ---
 
+/// Lightweight RMP summary for instructor list cards.
+///
+/// Present whenever an RMP profile link exists. Rating fields are `None` when the
+/// profile has no reviews.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RmpListSummary {
+    pub avg_rating: Option<f32>,
+    pub num_ratings: Option<i32>,
+    pub legacy_id: i32,
+}
+
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -89,9 +102,7 @@ pub struct PublicInstructorListItem {
     pub display_name: String,
     pub email: String,
     pub subjects: Vec<String>,
-    pub avg_rating: Option<f32>,
-    pub num_ratings: Option<i32>,
-    pub rmp_legacy_id: Option<i32>,
+    pub rmp: Option<RmpListSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -119,14 +130,18 @@ pub struct PublicInstructorProfile {
     pub rmp: Option<PublicRmpSummary>,
 }
 
+/// Full RMP summary for instructor detail pages.
+///
+/// Present whenever an RMP profile link exists. Rating fields are `None` when the
+/// profile has no reviews.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct PublicRmpSummary {
-    pub avg_rating: f32,
+    pub avg_rating: Option<f32>,
     pub avg_difficulty: Option<f32>,
     pub would_take_again_pct: Option<f32>,
-    pub num_ratings: i32,
+    pub num_ratings: Option<i32>,
     pub legacy_id: i32,
 }
 
@@ -292,15 +307,24 @@ pub async fn list_public_instructors(
 
     let instructors = rows
         .into_iter()
-        .map(|r| PublicInstructorListItem {
-            id: r.id,
-            slug: r.slug.unwrap_or_default(),
-            display_name: r.display_name,
-            email: r.email,
-            subjects: r.subjects,
-            avg_rating: r.avg_rating,
-            num_ratings: r.num_ratings,
-            rmp_legacy_id: r.rmp_legacy_id,
+        .map(|r| {
+            let rmp = r.rmp_legacy_id.map(|legacy_id| {
+                let (avg_rating, num_ratings) =
+                    super::course_types::sanitize_rmp_ratings(r.avg_rating, r.num_ratings);
+                RmpListSummary {
+                    avg_rating,
+                    num_ratings,
+                    legacy_id,
+                }
+            });
+            PublicInstructorListItem {
+                id: r.id,
+                slug: r.slug.unwrap_or_default(),
+                display_name: r.display_name,
+                email: r.email,
+                subjects: r.subjects,
+                rmp,
+            }
         })
         .collect();
 
@@ -374,12 +398,24 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor rmp")?;
 
-    let rmp_summary = rmp.map(|r| PublicRmpSummary {
-        avg_rating: r.avg_rating,
-        avg_difficulty: r.avg_difficulty,
-        would_take_again_pct: r.would_take_again_pct,
-        num_ratings: r.num_ratings,
-        legacy_id: r.legacy_id,
+    let rmp_summary = rmp.map(|r| {
+        let (avg_rating, num_ratings) =
+            super::course_types::sanitize_rmp_ratings(Some(r.avg_rating), Some(r.num_ratings));
+        PublicRmpSummary {
+            avg_rating,
+            avg_difficulty: if avg_rating.is_some() {
+                r.avg_difficulty
+            } else {
+                None
+            },
+            would_take_again_pct: if avg_rating.is_some() {
+                r.would_take_again_pct
+            } else {
+                None
+            },
+            num_ratings,
+            legacy_id: r.legacy_id,
+        }
     });
 
     // Teaching history

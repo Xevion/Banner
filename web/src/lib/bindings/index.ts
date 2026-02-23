@@ -46,6 +46,7 @@ export type { PublicInstructorProfileResponse } from "./PublicInstructorProfileR
 export type { PublicRmpSummary } from "./PublicRmpSummary";
 export type { RejectCandidateBody } from "./RejectCandidateBody";
 export type { RescoreResponse } from "./RescoreResponse";
+export type { RmpListSummary } from "./RmpListSummary";
 export type { RmpRating } from "./RmpRating";
 export type { ScrapeJobDto } from "./ScrapeJobDto";
 export type { ScrapeJobEvent } from "./ScrapeJobEvent";

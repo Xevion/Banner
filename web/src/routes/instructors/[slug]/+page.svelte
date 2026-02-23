@@ -141,35 +141,41 @@ const displayName = $derived(formatInstructorName(instructor));
     {#if rmp}
       <div class="rounded-lg border border-border bg-card p-5 mb-6">
         <div class="flex items-center gap-6 flex-wrap">
-          <div class="text-center">
-            <div
-              class="text-3xl font-bold inline-flex items-center gap-1"
-              style={ratingStyle(rmp.avgRating, themeStore.isDark)}
-            >
-              {rmp.avgRating.toFixed(1)}
-              <Star class="size-5 fill-current" />
-            </div>
-            <div class="text-xs text-muted-foreground mt-0.5">Overall</div>
-          </div>
-
-          {#if rmp.avgDifficulty != null}
+          {#if rmp.avgRating != null}
             <div class="text-center">
-              <div class="text-xl font-semibold">{rmp.avgDifficulty.toFixed(1)}</div>
-              <div class="text-xs text-muted-foreground mt-0.5">Difficulty</div>
+              <div
+                class="text-3xl font-bold inline-flex items-center gap-1"
+                style={ratingStyle(rmp.avgRating, themeStore.isDark)}
+              >
+                {rmp.avgRating.toFixed(1)}
+                <Star class="size-5 fill-current" />
+              </div>
+              <div class="text-xs text-muted-foreground mt-0.5">Overall</div>
             </div>
-          {/if}
 
-          {#if rmp.wouldTakeAgainPct != null}
-            <div class="text-center">
-              <div class="text-xl font-semibold">{Math.round(rmp.wouldTakeAgainPct)}%</div>
-              <div class="text-xs text-muted-foreground mt-0.5">Would Take Again</div>
-            </div>
-          {/if}
+            {#if rmp.avgDifficulty != null}
+              <div class="text-center">
+                <div class="text-xl font-semibold">{rmp.avgDifficulty.toFixed(1)}</div>
+                <div class="text-xs text-muted-foreground mt-0.5">Difficulty</div>
+              </div>
+            {/if}
 
-          <div class="text-center">
-            <div class="text-xl font-semibold">{formatNumber(rmp.numRatings)}</div>
-            <div class="text-xs text-muted-foreground mt-0.5">Ratings</div>
-          </div>
+            {#if rmp.wouldTakeAgainPct != null}
+              <div class="text-center">
+                <div class="text-xl font-semibold">{Math.round(rmp.wouldTakeAgainPct)}%</div>
+                <div class="text-xs text-muted-foreground mt-0.5">Would Take Again</div>
+              </div>
+            {/if}
+
+            {#if rmp.numRatings != null}
+              <div class="text-center">
+                <div class="text-xl font-semibold">{formatNumber(rmp.numRatings)}</div>
+                <div class="text-xs text-muted-foreground mt-0.5">Ratings</div>
+              </div>
+            {/if}
+          {:else}
+            <span class="text-sm text-muted-foreground">No ratings yet</span>
+          {/if}
 
           <a
             href={rmpUrl(rmp.legacyId)}

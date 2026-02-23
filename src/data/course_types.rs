@@ -124,13 +124,28 @@ impl Enrollment {
     }
 }
 
+/// Treat 0 ratings / 0.0 average as "no data", returning `None` for both fields.
+/// Preserves meaningful values unchanged.
+pub fn sanitize_rmp_ratings(
+    avg_rating: Option<f32>,
+    num_ratings: Option<i32>,
+) -> (Option<f32>, Option<i32>) {
+    match (avg_rating, num_ratings) {
+        (Some(r), Some(n)) if r != 0.0 && n > 0 => (Some(r), Some(n)),
+        _ => (None, None),
+    }
+}
+
 /// RateMyProfessors rating summary for an instructor.
+///
+/// Present whenever an RMP profile link exists. Rating fields are `None` when the
+/// profile has no reviews (0 ratings / 0.0 average).
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RmpRating {
-    pub avg_rating: f32,
-    pub num_ratings: i32,
+    pub avg_rating: Option<f32>,
+    pub num_ratings: Option<i32>,
     pub legacy_id: i32,
     pub is_confident: bool,
 }
