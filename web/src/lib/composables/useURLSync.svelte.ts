@@ -36,6 +36,15 @@ export function useURLSync(options: UseURLSyncOptions): void {
       params.set("term", term);
     }
 
+    // Skip if the URL already matches — covers initial mount and
+    // URL→state re-sync (browser back/forward) without needing a flag.
+    // Avoids pushing/replacing history entries that would destroy forward nav.
+    // Sort both sides so parameter order differences don't cause false mismatches.
+    params.sort();
+    const currentParams = new URLSearchParams(window.location.search); // eslint-disable-line svelte/prefer-svelte-reactivity -- non-reactive read of current browser URL
+    currentParams.sort();
+    if (params.toString() === currentParams.toString()) return;
+
     const now = Date.now();
     const shouldBatch = now - lastNavigationTime < BATCH_WINDOW_MS;
     lastNavigationTime = now;

@@ -26,7 +26,6 @@ interface PageLoadData {
 
 let { data }: { data: PageLoadData } = $props();
 
-
 /** No-op function to register Svelte reactivity dependencies for `$effect` tracking */
 function track(..._deps: unknown[]) {
   /* noop */
@@ -116,6 +115,30 @@ const columns = new ColumnVisibilityController({
     { id: "location", label: "Location" },
     { id: "seats", label: "Seats" },
   ],
+});
+
+// Re-sync state from URL on browser back/forward navigation.
+// SvelteKit re-runs the load function and updates `data`, but component
+// state was initialized once — this effect bridges the gap.
+let prevUrlSearch = untrack(() => data.url.search);
+$effect(() => {
+  const search = data.url.search;
+  if (search === prevUrlSearch) return;
+  prevUrlSearch = search;
+
+  const params = new URLSearchParams(search);
+  const validSubjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
+
+  const urlTerm = params.get("term");
+  const termList = untrack(() => searchOptions?.terms ?? []);
+  selectedTerm = urlTerm && termList.some((t) => t.slug === urlTerm) ? urlTerm : defaultTermSlug;
+
+  filters.fromURLParams(params, validSubjects);
+  offset = Number(params.get("offset")) || 0;
+
+  const sortBy = params.get("sort_by");
+  const sortDir = params.get("sort_dir");
+  sorting = sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
 });
 
 // Keep URL params in sync with filter state

@@ -8,6 +8,7 @@ import FormatPopover from "./FormatPopover.svelte";
 import MobileFilterSheet from "./MobileFilterSheet.svelte";
 import MorePopover from "./MorePopover.svelte";
 import SchedulePopover from "./SchedulePopover.svelte";
+import SearchAutocomplete from "./SearchAutocomplete.svelte";
 import StatusPopover from "./StatusPopover.svelte";
 import SubjectCombobox from "./SubjectCombobox.svelte";
 import TermCombobox from "./TermCombobox.svelte";
@@ -56,15 +57,7 @@ let activeFilterCount = $derived(filters.activeCount);
 
 <!-- Mobile row 2: Search + Filters button -->
 <div class="flex gap-2 md:hidden">
-  <input
-    type="text"
-    placeholder="Search courses..."
-    aria-label="Search courses"
-    bind:value={filters.query}
-    class="h-9 border border-border bg-card text-foreground rounded-md px-3 text-sm flex-1 min-w-0
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
-           transition-colors"
-  />
+  <SearchAutocomplete {subjects} {selectedTerm} />
   <button
     onclick={() => (filterSheetOpen = true)}
     class="inline-flex items-center gap-1.5 rounded-md border h-9 px-3 text-sm font-medium transition-colors cursor-pointer select-none shrink-0
@@ -83,19 +76,11 @@ let activeFilterCount = $derived(filters.activeCount);
   </button>
 </div>
 
-<!-- Desktop row 1: Term + Subject + Search (unchanged) -->
+<!-- Desktop row 1: Term + Subject + Search -->
 <div class="hidden md:flex flex-wrap gap-3 items-start">
   <TermCombobox {terms} bind:value={selectedTerm} />
   <SubjectCombobox {subjects} bind:value={filters.subject} />
-  <input
-    type="text"
-    placeholder="Search courses..."
-    aria-label="Search courses"
-    bind:value={filters.query}
-    class="h-9 border border-border bg-card text-foreground rounded-md px-3 text-sm flex-1 min-w-[200px]
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
-           transition-colors"
-  />
+  <SearchAutocomplete {subjects} {selectedTerm} />
 </div>
 
 <!-- Desktop row 2: Category filter popovers -->

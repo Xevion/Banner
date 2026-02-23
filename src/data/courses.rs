@@ -398,6 +398,105 @@ pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<Filt
     })
 }
 
+/// A suggested course result for autocomplete.
+#[derive(Debug, serde::Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CourseSuggestion {
+    pub subject: String,
+    pub course_number: String,
+    pub title: String,
+    pub section_count: i32,
+    pub score: f32,
+}
+
+/// A suggested instructor result for autocomplete.
+#[derive(Debug, serde::Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct InstructorSuggestion {
+    pub id: i32,
+    pub display_name: String,
+    pub score: f32,
+}
+
+/// Get course title suggestions using trigram similarity.
+pub async fn suggest_courses(
+    db_pool: &PgPool,
+    term_code: &str,
+    query: &str,
+    limit: i32,
+) -> Result<Vec<CourseSuggestion>> {
+    let rows: Vec<(String, String, String, i32, f32)> = sqlx::query_as(
+        r#"
+        SELECT subject, course_number, title, COUNT(*)::int as section_count,
+               MAX(GREATEST(similarity(title, $2), similarity(subject || ' ' || course_number, $2))) as score
+        FROM courses
+        WHERE term_code = $1
+          AND (title % $2 OR title ILIKE '%' || $2 || '%'
+               OR (subject || ' ' || course_number) % $2
+               OR (subject || ' ' || course_number) ILIKE '%' || $2 || '%')
+        GROUP BY subject, course_number, title
+        ORDER BY score DESC
+        LIMIT $3
+        "#,
+    )
+    .bind(term_code)
+    .bind(query)
+    .bind(limit)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(subject, course_number, title, section_count, score)| CourseSuggestion {
+                subject,
+                course_number,
+                title,
+                section_count,
+                score,
+            },
+        )
+        .collect())
+}
+
+/// Get instructor suggestions using trigram similarity.
+pub async fn suggest_instructors(
+    db_pool: &PgPool,
+    term_code: &str,
+    query: &str,
+    limit: i32,
+) -> Result<Vec<InstructorSuggestion>> {
+    let rows: Vec<(i32, String, f32)> = sqlx::query_as(
+        r#"
+        SELECT i.id, i.display_name, MAX(similarity(i.display_name, $2)) as score
+        FROM instructors i
+        JOIN course_instructors ci ON ci.instructor_id = i.id
+        JOIN courses c ON c.id = ci.course_id
+        WHERE c.term_code = $1
+          AND (i.display_name % $2 OR i.display_name ILIKE '%' || $2 || '%')
+        GROUP BY i.id, i.display_name
+        ORDER BY score DESC
+        LIMIT $3
+        "#,
+    )
+    .bind(term_code)
+    .bind(query)
+    .bind(limit)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(id, display_name, score)| InstructorSuggestion {
+            id,
+            display_name,
+            score,
+        })
+        .collect())
+}
+
 /// Course operations with automatic event emission.
 pub struct CourseOps<'a> {
     ctx: &'a DbContext,

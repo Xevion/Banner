@@ -24,6 +24,7 @@ import type {
   StatusResponse,
   SubjectDetailResponse,
   SubjectsResponse,
+  SuggestResponse,
   TermResponse,
   TermSyncResponse,
   TermUpdateResponse,
@@ -111,10 +112,7 @@ export class ApiErrorClass extends Error {
 }
 
 /** Module-level cache shared by all BannerApiClient instances. */
-const _searchOptionsCache = new Map<
-  string,
-  { data: SearchOptionsResponse; fetchedAt: number }
->();
+const _searchOptionsCache = new Map<string, { data: SearchOptionsResponse; fetchedAt: number }>();
 const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
 
 export class BannerApiClient {
@@ -469,6 +467,16 @@ export class BannerApiClient {
 
   async syncTerms(): Promise<Result<TermSyncResponse, ApiErrorClass>> {
     return this.request<TermSyncResponse>("/admin/terms/sync", { method: "POST" });
+  }
+
+  async suggest(
+    term: string,
+    query: string,
+    limit?: number
+  ): Promise<Result<SuggestResponse, ApiErrorClass>> {
+    const params = new URLSearchParams({ term, q: query });
+    if (limit !== undefined) params.set("limit", String(limit));
+    return this.request<SuggestResponse>(`/suggest?${params.toString()}`);
   }
 }
 

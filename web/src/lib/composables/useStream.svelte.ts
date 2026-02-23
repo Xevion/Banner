@@ -96,7 +96,7 @@ export function useStream<S extends StreamKind, T>(
     subscription = client.subscribe(stream, filter, {
       onSnapshot: (snapshot) => {
         if (options.onSnapshot) {
-          state = options.onSnapshot(snapshot as SnapshotFor<S>);
+          state = options.onSnapshot(snapshot);
         } else {
           state = extractSnapshotState(stream, snapshot) as T;
         }

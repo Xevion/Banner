@@ -90,6 +90,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/courses/{term}/{crn}/gcal", get(calendar::course_gcal))
         .route("/reference/{category}", get(get_reference))
         .route("/search-options", get(get_search_options))
+        .route("/suggest", get(suggest))
         .route("/timeline", post(timeline::timeline))
         .route("/ws", get(stream::stream_ws))
         .with_state(app_state.clone());
@@ -472,7 +473,7 @@ pub struct SearchParams {
     pub instructor: Option<String>,
 }
 
-use crate::data::courses::{SortColumn, SortDirection};
+use crate::data::courses::{CourseSuggestion, InstructorSuggestion, SortColumn, SortDirection};
 
 fn default_limit() -> i32 {
     25
@@ -1076,5 +1077,63 @@ async fn get_search_options(
     Ok(with_cache_control(
         response,
         "private, max-age=600, stale-while-revalidate=60",
+    ))
+}
+
+#[derive(Deserialize, Serialize, TS)]
+#[ts(export)]
+pub struct SuggestParams {
+    pub term: String,
+    pub q: String,
+    #[serde(default = "default_suggest_limit")]
+    pub limit: i32,
+}
+
+fn default_suggest_limit() -> i32 {
+    10
+}
+
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SuggestResponse {
+    pub courses: Vec<CourseSuggestion>,
+    pub instructors: Vec<InstructorSuggestion>,
+}
+
+/// `GET /api/suggest?term={slug}&q={query}&limit=10`
+async fn suggest(
+    State(state): State<AppState>,
+    Query(params): Query<SuggestParams>,
+) -> Result<Response, ApiError> {
+    use crate::banner::models::terms::Term;
+
+    let term_code =
+        Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
+    let limit = params.limit.clamp(1, 25);
+    let q = params.q.trim();
+
+    if q.chars().count() < 2 {
+        return Ok(with_cache_control(
+            SuggestResponse {
+                courses: vec![],
+                instructors: vec![],
+            },
+            "private, max-age=60",
+        ));
+    }
+
+    let (courses, instructors) = tokio::try_join!(
+        data::courses::suggest_courses(&state.db_pool, &term_code, q, limit),
+        data::courses::suggest_instructors(&state.db_pool, &term_code, q, limit),
+    )
+    .map_err(|e| db_error("Suggest query", e))?;
+
+    Ok(with_cache_control(
+        SuggestResponse {
+            courses,
+            instructors,
+        },
+        "private, max-age=60",
     ))
 }
