@@ -13,16 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf 
 # Copy backend Cargo.toml for build-time version retrieval
 COPY ./Cargo.toml ./
 
-# Copy frontend package files
+# Copy frontend package files and install dependencies
 COPY ./web/package.json ./web/bun.lock* ./
-
-# Install dependencies
 RUN bun install --frozen-lockfile
 
 # Copy frontend source code
 COPY ./web ./
 
-# Build frontend, then pre-compress static assets (gzip, brotli, zstd)
+# Build SSR output, then pre-compress static client assets (gzip, brotli, zstd)
 RUN bun run build && bun run scripts/compress-assets.ts
 
 # --- Chef Base Stage ---
@@ -55,16 +53,18 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy source code and built frontend assets
+# Copy source code
 COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
 COPY .git* ./
 COPY src ./src
 COPY migrations ./migrations
 COPY .sqlx ./.sqlx
-COPY --from=frontend-builder /app/dist ./web/dist
 
-# Build web app with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
+# Copy SSR client assets for embedding (Rust serves /_app/* from binary)
+COPY --from=frontend-builder /app/build/client ./web/build/client
+
+# Build with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
 ENV SQLX_OFFLINE=true
 RUN cargo build --release --bin banner
 
@@ -72,12 +72,13 @@ RUN cargo build --release --bin banner
 RUN strip target/release/banner
 
 # --- Runtime Stage ---
-FROM debian:12-slim
+# Bun runtime needed for SSR server
+FROM oven/bun:1-slim
 
-ARG APP=/usr/src/app
+ARG APP=/app
 ARG APP_USER=appuser
-ARG UID=1000
-ARG GID=1000
+ARG UID=1001
+ARG GID=1001
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -90,15 +91,23 @@ ARG TZ=Etc/UTC
 ENV TZ=${TZ}
 
 # Create user with specific UID/GID
-RUN addgroup --gid $GID $APP_USER \
-    && adduser --uid $UID --disabled-password --gecos "" --ingroup $APP_USER $APP_USER \
+RUN groupadd --gid $GID $APP_USER \
+    && useradd --uid $UID --gid $GID --no-create-home $APP_USER \
     && mkdir -p ${APP}
 
-# Copy application binary
+# Copy Rust binary
 COPY --from=builder --chown=$APP_USER:$APP_USER /app/target/release/banner ${APP}/banner
-
-# Set proper permissions
 RUN chmod +x ${APP}/banner
+
+# Copy SvelteKit SSR build output
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
+
+# Copy entrypoint script and console logger preload
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/entrypoint.ts ${APP}/web/entrypoint.ts
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/console-logger.js ${APP}/web/console-logger.js
+
+# Copy runtime node_modules (SvelteKit SSR needs these)
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/node_modules ${APP}/web/node_modules
 
 USER $APP_USER
 WORKDIR ${APP}
@@ -107,15 +116,15 @@ WORKDIR ${APP}
 ARG PORT=8000
 # Runtime environment var for PORT, default to build-time arg
 ENV PORT=${PORT}
+ENV RUST_BINARY=${APP}/banner
 EXPOSE ${PORT}
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
+# Health check hits Rust (public-facing server)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1
 
 # Can be explicitly overriden with different hosts & ports
 ENV HOSTS=0.0.0.0,[::]
 
-# Implicitly uses PORT environment variable
-# Runs all services: web, bot, and scraper
-CMD ["sh", "-c", "exec ./banner"]
+# Entrypoint orchestrates Rust + Bun SSR
+ENTRYPOINT ["bun", "run", "/app/web/entrypoint.ts"]

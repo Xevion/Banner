@@ -27,6 +27,7 @@ rust-toolchain.toml
 # Frontend build artifacts and cache
 web/node_modules/
 web/dist/
+web/build/
 web/.vite/
 web/.tanstack/
 web/.vscode/

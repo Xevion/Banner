@@ -8,7 +8,6 @@ use axum::{
     routing::{get, post, put},
 };
 
-#[cfg(feature = "embed-assets")]
 use axum::extract::Request;
 
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpRating, SectionLink};
@@ -54,7 +53,7 @@ use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
 #[cfg(feature = "embed-assets")]
-use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -64,8 +63,6 @@ use ts_rs::TS;
 use crate::state::AppState;
 use crate::state::ServiceStatus;
 use crate::web::middleware::request_id::RequestIdLayer;
-#[cfg(not(feature = "embed-assets"))]
-use tower_http::cors::{Any, CorsLayer};
 use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
 use tracing::{error, trace, warn};
 
@@ -163,28 +160,12 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .with_state(app_state.clone());
 
-    let mut router = Router::new()
-        .with_state(app_state)
+    let router = Router::new()
         .nest("/api", api_router)
         .nest("/api", auth_router)
-        .nest("/api", admin_router);
-
-    // When embed-assets feature is enabled, serve embedded static assets
-    #[cfg(feature = "embed-assets")]
-    {
-        router = router.fallback(fallback);
-    }
-
-    // Without embed-assets, enable CORS for dev proxy to Vite
-    #[cfg(not(feature = "embed-assets"))]
-    {
-        router = router.layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        );
-    }
+        .nest("/api", admin_router)
+        .fallback(ssr_fallback)
+        .with_state(app_state);
 
     router.layer((
         // Outermost: per-request ULID span + severity-proportional response logging.
@@ -200,39 +181,30 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
     ))
 }
 
-/// SPA fallback handler with content encoding negotiation.
-///
-/// Serves embedded static assets with pre-compressed variants when available,
-/// falling back to `index.html` for SPA client-side routing.
-#[cfg(feature = "embed-assets")]
-async fn fallback(request: Request) -> axum::response::Response {
+/// SSR fallback: try embedded static assets first, then proxy to the SSR server.
+async fn ssr_fallback(State(state): State<AppState>, request: Request) -> axum::response::Response {
+    let method = request.method().clone();
     let uri = request.uri().clone();
-    let headers = request.headers().clone();
-    handle_spa_fallback(uri, headers).await
-}
-
-#[cfg(feature = "embed-assets")]
-async fn handle_spa_fallback(uri: Uri, request_headers: HeaderMap) -> axum::response::Response {
     let path = uri.path();
+    let query = uri.query();
+    let headers = request.headers().clone();
 
-    if let Some(response) = try_serve_asset_with_encoding(path, &request_headers) {
-        return response;
+    // Try serving embedded static assets (production only)
+    #[cfg(feature = "embed-assets")]
+    {
+        if let Some(response) = try_serve_asset_with_encoding(path, &headers) {
+            return response;
+        }
+
+        // SvelteKit assets under _app/ that don't exist are a hard 404
+        let trimmed = path.trim_start_matches('/');
+        if trimmed.starts_with("_app/") || trimmed.starts_with("assets/") {
+            return (StatusCode::NOT_FOUND, "Asset not found").into_response();
+        }
     }
 
-    // SvelteKit assets under _app/ that don't exist are a hard 404
-    let trimmed = path.trim_start_matches('/');
-    if trimmed.starts_with("_app/") || trimmed.starts_with("assets/") {
-        return (StatusCode::NOT_FOUND, "Asset not found").into_response();
-    }
-
-    match try_serve_asset_with_encoding("/index.html", &request_headers) {
-        Some(response) => response,
-        None => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to load index.html",
-        )
-            .into_response(),
-    }
+    // Proxy to the downstream SSR server
+    crate::web::proxy::proxy_to_ssr(&state, &method, path, query, headers).await
 }
 
 /// Health check endpoint

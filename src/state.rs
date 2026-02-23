@@ -145,15 +145,23 @@ pub struct AppState {
     pub events: Arc<EventBuffer>,
     pub search_options_cache: SearchOptionsCache,
     pub computed_streams: ComputedStreamManager,
+    /// HTTP client for proxying requests to the SvelteKit SSR server.
+    pub ssr_client: reqwest::Client,
+    /// Base URL of the downstream SSR server (e.g. "http://localhost:3001").
+    pub ssr_downstream: String,
 }
 
 impl AppState {
-    pub fn new(banner_api: Arc<BannerApi>, db_pool: PgPool) -> Self {
+    pub fn new(banner_api: Arc<BannerApi>, db_pool: PgPool, ssr_downstream: String) -> Self {
         let events = Arc::new(EventBuffer::new(1024));
         let schedule_cache = ScheduleCache::new(db_pool.clone());
         let reference_cache = Arc::new(RwLock::new(ReferenceCache::new()));
         let computed_streams =
             ComputedStreamManager::new(events.clone(), db_pool.clone(), reference_cache.clone());
+        let ssr_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Failed to create SSR proxy client");
         Self {
             session_cache: SessionCache::new(db_pool.clone()),
             oauth_state_store: OAuthStateStore::new(),
@@ -165,6 +173,8 @@ impl AppState {
             events,
             search_options_cache: SearchOptionsCache::new(),
             computed_streams,
+            ssr_client,
+            ssr_downstream,
         }
     }
 

@@ -127,7 +127,11 @@ impl App {
         }
 
         // Create AppState (BannerApi already created above for term sync)
-        let app_state = AppState::new(banner_api_arc.clone(), db_pool.clone());
+        let app_state = AppState::new(
+            banner_api_arc.clone(),
+            db_pool.clone(),
+            config.ssr_downstream.clone(),
+        );
 
         // Load reference data cache from DB (may be empty on first run)
         if let Err(e) = app_state.load_reference_cache().await {

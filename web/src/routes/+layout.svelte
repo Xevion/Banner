@@ -8,9 +8,17 @@ import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svel
 import { initNavigation } from "$lib/stores/navigation.svelte";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { Tooltip } from "bits-ui";
-import { onMount, type Snippet } from "svelte";
+import { type Snippet, onMount } from "svelte";
+import type { LayoutData } from "./$types";
 
-let { children }: { children: Snippet } = $props();
+let { children, data }: { children: Snippet; data: LayoutData } = $props();
+
+// Initialize auth from server-provided data so SSR renders correct auth state.
+// Intentionally captures initial value — auth changes are handled client-side
+// by the store (logout, 401 responses). Root layout server load only re-runs
+// on full page loads, so data.user is stable within a session.
+// svelte-ignore state_referenced_locally
+authStore.setFromServer(data.user);
 
 initNavigation();
 
@@ -23,7 +31,6 @@ useOverlayScrollbars(() => document.body, {
 
 onMount(() => {
   themeStore.init();
-  void authStore.init();
 });
 </script>
 

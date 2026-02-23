@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ServiceInfo, ServiceStatus, StatusResponse } from "$lib/bindings";
 import { client } from "$lib/api";
+import type { ServiceInfo, ServiceStatus, StatusResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
@@ -17,6 +17,9 @@ import {
   Server,
 } from "@lucide/svelte";
 import { onMount } from "svelte";
+import type { PageData } from "./$types";
+
+let { data }: { data: PageData } = $props();
 
 const REFRESH_INTERVAL = import.meta.env.DEV ? 3000 : 30000;
 const REQUEST_TIMEOUT = 10000;
@@ -73,7 +76,17 @@ type StatusState =
   | { mode: "error"; lastFetch: Date }
   | { mode: "timeout"; lastFetch: Date };
 
-let statusState = $state({ mode: "loading" } as StatusState);
+// svelte-ignore state_referenced_locally
+let statusState = $state<StatusState>(
+  data.initialStatus
+    ? {
+        mode: "response",
+        status: data.initialStatus,
+        timing: { health: null, status: null },
+        lastFetch: new Date(),
+      }
+    : { mode: "loading" }
+);
 let now = $state(new Date());
 let isRefreshing = $state(false);
 
@@ -210,7 +223,14 @@ onMount(() => {
   scheduleNowTick();
 
   _cancelled = false;
-  void doFetch();
+
+  // If we have data from the load function, schedule the next refresh
+  // instead of fetching immediately
+  if (statusState.mode === "response") {
+    _scheduledTimeoutId = setTimeout(() => void doFetch(), REFRESH_INTERVAL);
+  } else {
+    void doFetch();
+  }
 
   return () => {
     _cancelled = true;

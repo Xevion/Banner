@@ -7,5 +7,13 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": [".storybook/**/*", "src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+  "include": [
+    ".svelte-kit/ambient.d.ts",
+    ".svelte-kit/non-ambient.d.ts",
+    ".svelte-kit/types/**/*.d.ts",
+    ".storybook/**/*",
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "vite.config.ts"
+  ]
 }

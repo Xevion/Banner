@@ -114,8 +114,8 @@ async function compressFile(path: string): Promise<void> {
 async function main() {
   console.log("Pre-compressing static assets...");
 
-  // Banner uses adapter-static with output in dist/
-  const dirs = ["dist"];
+  // SSR adapter outputs client assets to build/client/
+  const dirs = ["build/client"];
   let scannedFiles = 0;
   let compressedFiles = 0;
 

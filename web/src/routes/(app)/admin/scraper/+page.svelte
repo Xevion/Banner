@@ -1,20 +1,22 @@
 <script lang="ts">
-import { client, type ScraperPeriod } from "$lib/api";
-import { useAutoRefresh } from "$lib/composables/useAutoRefresh.svelte";
-import { useStream } from "$lib/composables/useStream.svelte";
-import { mergeByKey } from "$lib/composables/reducers";
+import type { ScraperPeriod } from "$lib/api";
 import type { ScraperStatsResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
+import { mergeByKey } from "$lib/composables/reducers";
+import { useStream } from "$lib/composables/useStream.svelte";
 import { formatDurationMs } from "$lib/time";
 import { formatNumber } from "$lib/utils";
-import { Tabs } from "bits-ui";
 import { ChevronDown, ChevronUp, Info } from "@lucide/svelte";
+import { Tabs } from "bits-ui";
 import { Select } from "bits-ui";
+import type { PageData } from "./$types";
 
+import ScraperAudit from "./ScraperAudit.svelte";
 import ScraperCharts from "./ScraperCharts.svelte";
 import ScraperJobs from "./ScraperJobs.svelte";
-import ScraperAudit from "./ScraperAudit.svelte";
 import ScraperSubjects from "./ScraperSubjects.svelte";
+
+let { data }: { data: PageData } = $props();
 
 const PERIODS: ScraperPeriod[] = ["1h", "6h", "24h", "7d", "30d"];
 
@@ -43,20 +45,10 @@ const subjects = useStream("scraperSubjects", null, {
   onDelta: (state, delta) => mergeByKey(state, delta.changed, (s) => s.subject, delta.removed),
 });
 
-// Terms: keep as HTTP fetch (per plan)
-const terms = useAutoRefresh({
-  fetcher: async () => {
-    const r = await client.getAdminTerms();
-    if (r.isErr) throw r.error;
-    return r.value.terms;
-  },
-  interval: 0, // Fetch once, no auto-refresh
-});
-
 // Derived data with defaults
 let currentStats = $derived(stats.state);
 let currentSubjects = $derived(subjects.state);
-let currentTerms = $derived(terms.data ?? []);
+let currentTerms = $derived(data.terms);
 
 let termItems = $derived([
   { value: "", label: "All Terms" },

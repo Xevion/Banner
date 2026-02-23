@@ -1,6 +1,14 @@
 use std::process::Command;
 
 fn main() {
+    // rust-embed requires the folder to exist at compile time, even when empty.
+    // Create it so the backend compiles without a prior frontend build.
+    let embed_dir = std::path::Path::new("web/build/client");
+    if !embed_dir.exists() {
+        std::fs::create_dir_all(embed_dir).expect("failed to create web/build/client");
+    }
+    println!("cargo:rerun-if-changed=web/build/client");
+
     // Try to get Git commit hash from Railway environment variable first
     let git_hash = std::env::var("RAILWAY_GIT_COMMIT_SHA").unwrap_or_else(|_| {
         // Fallback to git command if not on Railway

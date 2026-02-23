@@ -1,6 +1,7 @@
+import { env } from "$env/dynamic/private";
 import type { Handle } from "@sveltejs/kit";
 
-const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8080";
+const backendUrl = env.BACKEND_URL ?? "http://localhost:8080";
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { method } = event.request;

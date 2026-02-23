@@ -1,15 +1,14 @@
-import adapter from "@sveltejs/adapter-static";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+import adapter from "@xevion/svelte-adapter-bun";
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter({
-      pages: "dist",
-      assets: "dist",
-      fallback: "index.html",
+      out: "build",
       precompress: false,
+      serveAssets: false,
     }),
   },
 };

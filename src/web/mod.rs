@@ -11,6 +11,7 @@ pub mod encoding;
 pub mod error;
 pub mod instructors;
 pub mod middleware;
+pub mod proxy;
 pub mod routes;
 pub mod schedule_cache;
 pub mod search_options_cache;

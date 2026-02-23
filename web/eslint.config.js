@@ -24,6 +24,8 @@ export default tseslint.config(
       ".storybook/",
       "src/**/*.stories.svelte",
       "src/**/*.stories.ts",
+      // Docker orchestration script — not part of SvelteKit source
+      "entrypoint.ts",
     ],
   },
   // Base JS rules

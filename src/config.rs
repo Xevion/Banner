@@ -60,6 +60,15 @@ pub struct Config {
     /// Discord user ID to seed as initial admin on startup (optional)
     #[serde(default)]
     pub admin_discord_id: Option<u64>,
+
+    /// URL of the SvelteKit SSR server (Vite in dev, Bun in production).
+    /// Default: http://localhost:3001
+    #[serde(default = "default_ssr_downstream")]
+    pub ssr_downstream: String,
+}
+
+fn default_ssr_downstream() -> String {
+    "http://localhost:3001".to_string()
 }
 
 /// Default log level of "info"

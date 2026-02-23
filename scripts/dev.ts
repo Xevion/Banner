@@ -85,6 +85,10 @@ const profile = release ? "release" : "dev";
 const profileDir = release ? "release" : "debug";
 const group = new ProcessGroup();
 
+// Rust proxies non-API requests to the Vite/Bun SSR server
+const SSR_PORT = "3001";
+process.env.SSR_DOWNSTREAM = `http://localhost:${SSR_PORT}`;
+
 // Build frontend first when embedding assets
 if (embed && !noBuild) {
   const buildMode = devBuild ? "development" : "production";

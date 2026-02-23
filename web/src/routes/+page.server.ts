@@ -1,7 +1,7 @@
 import { BannerApiClient } from "$lib/api";
 import type { SearchParams } from "$lib/bindings";
 import type { SortColumn, SortDirection } from "$lib/bindings";
-import type { PageLoad } from "./$types";
+import type { PageServerLoad } from "./$types";
 
 function parseIntOrNull(value: string | null): number | null {
   if (value === null || value === "") return null;
@@ -36,7 +36,7 @@ function buildSearchParams(url: URL, defaultTerm: string): SearchParams {
   };
 }
 
-export const load: PageLoad = async ({ url, fetch }) => {
+export const load: PageServerLoad = async ({ url, fetch }) => {
   const client = new BannerApiClient(undefined, fetch);
   const urlTerm = url.searchParams.get("term");
 
@@ -48,7 +48,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
       searchResult: null,
       searchError: "Failed to load search options",
       searchMeta: null,
-      url,
+      urlSearch: url.search,
     };
   }
 
@@ -70,7 +70,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
       searchResult: null,
       searchError: searchResult.error.message,
       searchMeta: null,
-      url,
+      urlSearch: url.search,
     };
   }
 
@@ -83,6 +83,6 @@ export const load: PageLoad = async ({ url, fetch }) => {
       durationMs,
       timestamp: new Date(),
     },
-    url,
+    urlSearch: url.search,
   };
 };

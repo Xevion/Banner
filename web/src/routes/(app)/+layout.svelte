@@ -1,5 +1,4 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { authStore } from "$lib/auth.svelte";
 import BottomSheet from "$lib/components/BottomSheet.svelte";
@@ -15,7 +14,7 @@ import {
   User,
   Users,
 } from "@lucide/svelte";
-import { tick, type Snippet } from "svelte";
+import { type Snippet, tick } from "svelte";
 
 let { children }: { children: Snippet } = $props();
 
@@ -40,12 +39,6 @@ $effect(() => {
     boundaryReset = null;
     errorPathname = null;
     void tick().then(() => reset());
-  }
-});
-
-$effect(() => {
-  if (authStore.state.mode === "unauthenticated") {
-    void goto("/login");
   }
 });
 
@@ -88,20 +81,7 @@ const moreSheetItems = [
 ] as const;
 </script>
 
-{#if authStore.isLoading}
-  <div class="flex flex-col items-center px-5 pb-5 pt-20">
-    <div class="w-full max-w-6xl">
-      <p class="text-muted-foreground py-12 text-center text-sm">Loading...</p>
-    </div>
-  </div>
-{:else if !authStore.isAuthenticated}
-  <div class="flex flex-col items-center px-5 pb-5 pt-20">
-    <div class="w-full max-w-6xl">
-      <p class="text-muted-foreground py-12 text-center text-sm">Redirecting to login...</p>
-    </div>
-  </div>
-{:else}
-  <div class="flex flex-col items-center px-3 md:px-5 pb-20 md:pb-5 pt-20">
+<div class="flex flex-col items-center px-3 md:px-5 pb-20 md:pb-5 pt-20">
     <div class="w-full max-w-6xl flex gap-8">
       <!-- Inline sidebar -->
       <aside class="hidden md:block w-48 shrink-0 pt-1">
@@ -232,4 +212,3 @@ const moreSheetItems = [
       </nav>
     </BottomSheet>
   {/if}
-{/if}

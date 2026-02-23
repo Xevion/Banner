@@ -13,9 +13,9 @@ use std::sync::LazyLock;
 
 use super::encoding::{COMPRESSION_MIN_SIZE, ContentEncoding, parse_accepted_encodings};
 
-/// Embedded web assets from the dist directory
+/// Embedded web assets from the SSR build's client directory
 #[derive(RustEmbed)]
-#[folder = "web/dist/"]
+#[folder = "web/build/client/"]
 #[include = "*"]
 #[exclude = "*.map"]
 pub struct WebAssets;

@@ -26,7 +26,7 @@ interface PageLoadData {
   searchResult: SearchResponse | null;
   searchError: string | null;
   searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null;
-  url: URL;
+  urlSearch: string;
 }
 
 let { data }: { data: PageLoadData } = $props();
@@ -44,26 +44,45 @@ const loading = $derived($navigating !== null);
 const filters = new SearchFilters();
 setFiltersContext(filters);
 
-let selectedTerm = $state("");
-let offset = $state(0);
-let sorting: SortingState = $state([]);
+function resolveState(urlSearch: string, options: SearchOptionsResponse | null) {
+  const params = new URLSearchParams(urlSearch);
+  const terms = options?.terms ?? [];
+  const defaultTerm = terms[0]?.slug ?? "";
+  const urlTerm = params.get("term");
+  return {
+    params,
+    selectedTerm: urlTerm && terms.some((t) => t.slug === urlTerm) ? urlTerm : defaultTerm,
+    offset: Number(params.get("offset")) || 0,
+    sorting: (() => {
+      const sortBy = params.get("sort_by");
+      const sortDir = params.get("sort_dir");
+      return sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
+    })() as SortingState,
+  };
+}
 
-// Hydrate mutable state from load data on every navigation
+const initial = resolveState(data.urlSearch, data.searchOptions);
+filters.fromURLParams(
+  initial.params,
+  new Set(data.searchOptions?.subjects.map((s) => s.code) ?? [])
+);
+
+let selectedTerm = $state(initial.selectedTerm);
+let offset = $state(initial.offset);
+let sorting: SortingState = $state(initial.sorting);
+
+// Re-sync mutable state on subsequent navigations
 $effect(() => {
-  const params = new URLSearchParams(data.url.search);
+  const resolved = resolveState(
+    data.urlSearch,
+    untrack(() => searchOptions)
+  );
   const validSubjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
 
-  const urlTerm = params.get("term");
-  const termList = untrack(() => searchOptions?.terms ?? []);
-  const defaultTerm = untrack(() => searchOptions?.terms[0]?.slug ?? "");
-  selectedTerm = urlTerm && termList.some((t) => t.slug === urlTerm) ? urlTerm : defaultTerm;
-
-  filters.fromURLParams(params, validSubjects);
-  offset = Number(params.get("offset")) || 0;
-
-  const sortBy = params.get("sort_by");
-  const sortDir = params.get("sort_dir");
-  sorting = sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
+  selectedTerm = resolved.selectedTerm;
+  filters.fromURLParams(resolved.params, validSubjects);
+  offset = resolved.offset;
+  sorting = resolved.sorting;
 });
 
 const defaultTermSlug = $derived(searchOptions?.terms[0]?.slug ?? "");
