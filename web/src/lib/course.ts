@@ -228,8 +228,9 @@ export function formatLocationTooltip(course: CourseResponse): string | null {
   return null;
 }
 
-/** Text color class for seat availability: red (full), yellow (low), green (open) */
+/** Text color class for seat availability: purple (overenrolled), red (full), yellow (low), green (open) */
 export function seatsColor(openSeats: number): string {
+  if (openSeats < 0) return "text-purple-500";
   if (openSeats === 0) return "text-status-red";
   if (openSeats <= 5) return "text-yellow-500";
   return "text-status-green";
@@ -237,6 +238,7 @@ export function seatsColor(openSeats: number): string {
 
 /** Background dot color class for seat availability */
 export function seatsDotColor(openSeats: number): string {
+  if (openSeats < 0) return "bg-purple-500";
   if (openSeats === 0) return "bg-red-500";
   if (openSeats <= 5) return "bg-yellow-500";
   return "bg-green-500";

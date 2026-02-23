@@ -1,7 +1,12 @@
 <script module>
 import { defineMeta } from "@storybook/addon-svelte-csf";
 import SeatsCell from "./SeatsCell.svelte";
-import { courseWithSeats, fullCourse, lowSeatsCourse } from "$lib/stories/fixtures/courses";
+import {
+  courseWithSeats,
+  fullCourse,
+  lowSeatsCourse,
+  overenrolledCourse,
+} from "$lib/stories/fixtures/courses";
 
 const { Story } = defineMeta({
   title: "Components/CourseTable/Cells/SeatsCell",
@@ -35,6 +40,16 @@ const { Story } = defineMeta({
     <tbody>
       <tr>
         <SeatsCell course={lowSeatsCourse} />
+      </tr>
+    </tbody>
+  </table>
+</Story>
+
+<Story name="Overenrolled">
+  <table class="text-sm">
+    <tbody>
+      <tr>
+        <SeatsCell course={overenrolledCourse} />
       </tr>
     </tbody>
   </table>

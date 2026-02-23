@@ -38,7 +38,7 @@ let {
         <span class="inline-flex items-center gap-1 shrink-0 text-xs select-none">
           <span class="size-1.5 rounded-full {seatsDotColor(openSeats)} shrink-0"></span>
           <span class="{seatsColor(openSeats)} font-medium tabular-nums">
-            {#if openSeats === 0}Full{:else}{openSeats}/{formatNumber(course.enrollment.max)}{/if}
+            {#if openSeats < 0}Over{:else if openSeats === 0}Full{:else}{openSeats}/{formatNumber(course.enrollment.max)}{/if}
           </span>
         </span>
       {/snippet}

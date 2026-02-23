@@ -116,6 +116,12 @@ impl Enrollment {
     pub fn is_open(&self) -> bool {
         !self.is_full()
     }
+
+    /// Whether more students are enrolled than the section's stated capacity.
+    #[allow(dead_code)]
+    pub fn is_overenrolled(&self) -> bool {
+        self.current > self.max
+    }
 }
 
 /// RateMyProfessors rating summary for an instructor.

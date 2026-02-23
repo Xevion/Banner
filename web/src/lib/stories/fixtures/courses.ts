@@ -224,6 +224,23 @@ export const multiMeetingCourse: CourseResponse = {
 };
 
 /**
+ * A course that is overenrolled (more students than capacity)
+ */
+export const overenrolledCourse: CourseResponse = {
+  ...courseWithSeats,
+  crn: "12351",
+  subject: "CS",
+  courseNumber: "2123",
+  title: "Data Structures",
+  enrollment: {
+    current: 42,
+    max: 40,
+    waitCount: 0,
+    waitCapacity: 10,
+  },
+};
+
+/**
  * Array of all mock courses for list/table stories
  */
 export const mockCourses: CourseResponse[] = [
@@ -233,4 +250,5 @@ export const mockCourses: CourseResponse[] = [
   lowSeatsCourse,
   staffInstructorCourse,
   multiMeetingCourse,
+  overenrolledCourse,
 ];
