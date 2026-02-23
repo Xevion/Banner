@@ -215,8 +215,8 @@ const table = createSvelteTable({
               animate:flip={{ duration: hadResults ? 300 : 0 }}
             >
               <tr
-                class="border-b border-border cursor-pointer hover:bg-muted/50 transition-colors whitespace-nowrap {expandedCrn === course.crn ? 'bg-muted/30' : ''}"
-                onclick={() => onToggle(course.crn)}
+                class="border-b border-border hover:bg-muted/50 transition-colors whitespace-nowrap {expandedCrn === course.crn ? 'bg-muted/30' : ''}"
+                onclick={(e) => { if (!(e.target as HTMLElement).closest('a')) onToggle(course.crn); }}
               >
                 {#each visibleColumnIds as colId (colId)}
                   {@const CellComponent = CELL_COMPONENTS[colId]}
