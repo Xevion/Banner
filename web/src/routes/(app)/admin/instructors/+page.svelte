@@ -1,12 +1,11 @@
 <script lang="ts">
-import type { PageProps } from "./$types";
+import { client } from "$lib/api";
 import type {
   CandidateResponse,
   InstructorDetailResponse,
   InstructorListItem,
   InstructorStats,
 } from "$lib/bindings";
-import { client } from "$lib/api";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { formatInstructorName, ratingStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
@@ -19,9 +18,10 @@ import {
   Search,
   X,
 } from "@lucide/svelte";
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { onDestroy } from "svelte";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { fade, slide } from "svelte/transition";
+import type { PageProps } from "./$types";
 import CandidateCard from "./CandidateCard.svelte";
 
 let { data }: PageProps = $props();

@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
+import CourseDetail from "$lib/components/CourseDetail.svelte";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
@@ -15,11 +16,10 @@ import {
 import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
-import CourseDetail from "$lib/components/CourseDetail.svelte";
-import { COLUMN_DEFS, CELL_COMPONENTS } from "./columns";
-import { buildSkeletonHtml } from "./skeletons";
 import EmptyState from "./EmptyState.svelte";
+import { CELL_COMPONENTS, COLUMN_DEFS } from "./columns";
 import { setTableContext } from "./context";
+import { buildSkeletonHtml } from "./skeletons";
 
 let {
   courses,

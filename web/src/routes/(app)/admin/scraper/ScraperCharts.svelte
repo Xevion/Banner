@@ -1,13 +1,13 @@
 <script lang="ts">
-import type { TimeseriesPoint } from "$lib/bindings";
 import type { ScraperPeriod } from "$lib/api";
-import { useStream } from "$lib/composables/useStream.svelte";
+import type { TimeseriesPoint } from "$lib/bindings";
 import { mergeByKey } from "$lib/composables/reducers";
-import { Chart, Svg, Area, Axis, Highlight, Tooltip } from "layerchart";
+import { useStream } from "$lib/composables/useStream.svelte";
+import { scaleLinear, scaleTime } from "d3-scale";
 import { curveMonotoneX } from "d3-shape";
+import { Area, Axis, Chart, Highlight, Svg, Tooltip } from "layerchart";
 import { cubicOut } from "svelte/easing";
 import { Tween } from "svelte/motion";
-import { scaleTime, scaleLinear } from "d3-scale";
 
 interface Props {
   period: ScraperPeriod;

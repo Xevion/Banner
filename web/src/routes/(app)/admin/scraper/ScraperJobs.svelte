@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ScrapeJobDto } from "$lib/bindings";
 import { client } from "$lib/api";
+import type { ScrapeJobDto } from "$lib/bindings";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
@@ -13,8 +13,8 @@ import {
   getCoreRowModel,
   getSortedRowModel,
 } from "@tanstack/table-core";
-import { SvelteMap } from "svelte/reactivity";
 import { onMount } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 
 // active prop no longer needed - Tabs.Content handles mount/unmount lifecycle
 interface Props {

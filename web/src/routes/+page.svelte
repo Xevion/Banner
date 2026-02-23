@@ -1,25 +1,25 @@
 <script lang="ts">
-import type { SearchOptionsResponse } from "$lib/bindings";
+import { invalidateAll } from "$app/navigation";
+import { navigating } from "$app/stores";
 import type { SearchResponse, Subject } from "$lib/api";
-import { CourseTable } from "$lib/components/course-table";
-import {
-  buildAttributeMap,
-  setCourseDetailContext,
-  type CourseDetailContext,
-} from "$lib/components/course-detail/context";
+import type { SearchOptionsResponse } from "$lib/bindings";
 import ActiveFilterChips from "$lib/components/ActiveFilterChips.svelte";
 import ColumnVisibilityDropdown from "$lib/components/ColumnVisibilityDropdown.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
 import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
 import SearchStatus from "$lib/components/SearchStatus.svelte";
+import {
+  type CourseDetailContext,
+  buildAttributeMap,
+  setCourseDetailContext,
+} from "$lib/components/course-detail/context";
+import { CourseTable } from "$lib/components/course-table";
+import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
+import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
+import { SearchFilters, setFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { SortingState } from "@tanstack/table-core";
 import { untrack } from "svelte";
-import { useURLSync, type URLSyncHandle } from "$lib/composables/useURLSync.svelte";
-import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
-import { SearchFilters, setFiltersContext } from "$lib/stores/search-filters.svelte";
-import { navigating } from "$app/stores";
-import { invalidateAll } from "$app/navigation";
 
 interface PageLoadData {
   searchOptions: SearchOptionsResponse | null;

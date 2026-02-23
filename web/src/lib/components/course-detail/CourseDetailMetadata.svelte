@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import { formatCreditHours } from "$lib/course";
+import { getAttributeLabel, getCampusLabel, getInstructionalMethodLabel } from "$lib/labels";
 import { formatNumber } from "$lib/utils";
-import { getInstructionalMethodLabel, getCampusLabel, getAttributeLabel } from "$lib/labels";
 import { Info } from "@lucide/svelte";
 import SimpleTooltip from "../SimpleTooltip.svelte";
 

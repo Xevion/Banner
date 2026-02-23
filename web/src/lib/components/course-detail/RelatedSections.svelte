@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/bindings";
 import { client } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import {
   abbreviateInstructor,
   formatMeetingTimeSummary,
@@ -8,8 +8,8 @@ import {
   seatsColor,
   seatsDotColor,
 } from "$lib/course";
-import { formatNumber } from "$lib/utils";
 import { getInstructionalMethodLabel } from "$lib/labels";
+import { formatNumber } from "$lib/utils";
 import { Loader2 } from "@lucide/svelte";
 import { getCourseDetailContext } from "./context";
 

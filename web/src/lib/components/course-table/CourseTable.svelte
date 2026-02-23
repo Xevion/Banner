@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import type { SortingState, VisibilityState } from "@tanstack/table-core";
-import { useCourseTableState } from "./useCourseTableState.svelte";
 import CourseTableDesktop from "./CourseTableDesktop.svelte";
 import CourseTableMobile from "./CourseTableMobile.svelte";
+import { useCourseTableState } from "./useCourseTableState.svelte";
 
 let {
   courses,

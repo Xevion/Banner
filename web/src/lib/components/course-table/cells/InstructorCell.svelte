@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
+import LazyRichTooltip from "$lib/components/LazyRichTooltip.svelte";
 import { abbreviateInstructor, getPrimaryInstructor, ratingStyle, rmpUrl } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { formatNumber } from "$lib/utils";
 import { ExternalLink, Star, Triangle } from "@lucide/svelte";
-import LazyRichTooltip from "$lib/components/LazyRichTooltip.svelte";
 
 let { course }: { course: CourseResponse } = $props();
 

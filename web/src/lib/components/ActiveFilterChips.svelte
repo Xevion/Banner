@@ -1,16 +1,16 @@
 <script lang="ts">
 import type { DayOfWeek } from "$lib/bindings";
+import FilterChip from "$lib/components/FilterChip.svelte";
+import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 import { dayCode } from "$lib/days";
 import { formatCompactTime } from "$lib/filters";
 import {
-  getCampusFilterLabel,
   getAttributeFilterLabel,
+  getCampusFilterLabel,
   getPartOfTermFilterLabel,
 } from "$lib/labels";
 import { type ScrollMetrics, maskGradient as computeMaskGradient } from "$lib/scroll-fade";
 import type { SearchFilters } from "$lib/stores/search-filters.svelte";
-import FilterChip from "$lib/components/FilterChip.svelte";
-import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 
 let { filters }: { filters: SearchFilters } = $props();
 

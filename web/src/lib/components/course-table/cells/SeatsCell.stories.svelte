@@ -1,12 +1,12 @@
 <script module>
-import { defineMeta } from "@storybook/addon-svelte-csf";
-import SeatsCell from "./SeatsCell.svelte";
 import {
   courseWithSeats,
   fullCourse,
   lowSeatsCourse,
   overenrolledCourse,
 } from "$lib/stories/fixtures/courses";
+import { defineMeta } from "@storybook/addon-svelte-csf";
+import SeatsCell from "./SeatsCell.svelte";
 
 const { Story } = defineMeta({
   title: "Components/CourseTable/Cells/SeatsCell",

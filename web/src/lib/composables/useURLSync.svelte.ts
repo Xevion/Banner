@@ -1,6 +1,6 @@
 import { goto } from "$app/navigation";
-import type { SortingState } from "@tanstack/table-core";
 import type { SearchFilters } from "$lib/stores/search-filters.svelte";
+import type { SortingState } from "@tanstack/table-core";
 
 export interface UseURLSyncOptions {
   filters: SearchFilters;

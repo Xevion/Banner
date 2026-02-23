@@ -1,5 +1,5 @@
-import { beforeNavigate, onNavigate } from "$app/navigation";
 import { browser } from "$app/environment";
+import { beforeNavigate, onNavigate } from "$app/navigation";
 
 export type NavDirection = "left" | "right" | "fade";
 export type NavAxis = "horizontal" | "vertical";

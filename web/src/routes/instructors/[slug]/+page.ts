@@ -22,9 +22,11 @@ export const load: PageLoad = async ({ params, fetch }) => {
   const profile = profileResult.value;
   const searchOptions = searchOptionsResult.isOk ? searchOptionsResult.value : null;
 
-  // Fetch sections for the latest term
-  const terms = searchOptions?.terms ?? [];
-  const defaultTerm = terms[0]?.slug;
+  // Fetch sections for the instructor's most recent known term
+  const allTerms = searchOptions?.terms ?? [];
+  const instructorTermCodes = new Set(profile.teachingHistory.map((h) => h.termCode));
+  const instructorTerms = allTerms.filter((t) => instructorTermCodes.has(t.code));
+  const defaultTerm = instructorTerms[0]?.slug ?? null;
   let initialSections = null;
   if (defaultTerm) {
     const sectionsResult = await client.getInstructorSections(params.slug, defaultTerm);

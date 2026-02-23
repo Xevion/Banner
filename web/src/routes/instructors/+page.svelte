@@ -1,13 +1,13 @@
 <script lang="ts">
-import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/bindings";
-import { client } from "$lib/api";
-import { ratingStyle } from "$lib/course";
-import { formatNumber } from "$lib/utils";
-import { themeStore } from "$lib/stores/theme.svelte";
 import { goto } from "$app/navigation";
-import { Star, Search, Mail, ExternalLink } from "@lucide/svelte";
+import { client } from "$lib/api";
+import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
+import { ratingStyle } from "$lib/course";
+import { themeStore } from "$lib/stores/theme.svelte";
+import { formatNumber } from "$lib/utils";
+import { ExternalLink, Mail, Search, Star } from "@lucide/svelte";
 import { Select } from "bits-ui";
 import { untrack } from "svelte";
 

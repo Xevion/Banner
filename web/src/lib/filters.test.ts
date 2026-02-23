@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseTimeInput, formatCompactTime, toggleDay, toggleValue } from "$lib/filters";
+import { formatCompactTime, parseTimeInput, toggleDay, toggleValue } from "$lib/filters";
+import { describe, expect, it } from "vitest";
 
 describe("parseTimeInput", () => {
   it("parses AM time", () => {

@@ -1,9 +1,9 @@
+import type { ScrapeJobDto, ScrapeJobEvent } from "$lib/bindings";
 /**
  * Unit tests for stream reducer utilities.
  */
-import { describe, it, expect } from "vitest";
-import { updateById, removeById, addItem } from "./reducers";
-import type { ScrapeJobDto, ScrapeJobEvent } from "$lib/bindings";
+import { describe, expect, it } from "vitest";
+import { addItem, removeById, updateById } from "./reducers";
 
 // Helper to create mock ScrapeJobDto
 function mockJob(overrides: Partial<ScrapeJobDto> = {}): ScrapeJobDto {

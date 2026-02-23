@@ -1,15 +1,15 @@
 import { browser } from "$app/environment";
 import type {
-  StreamKind,
-  StreamFilter,
-  StreamClientMessage,
-  StreamDelta,
-  StreamServerMessage,
-  StreamSnapshot,
   AuditLogFilter,
   ScrapeJobsFilter,
   ScraperStatsFilter,
   ScraperTimeseriesFilter,
+  StreamClientMessage,
+  StreamDelta,
+  StreamFilter,
+  StreamKind,
+  StreamServerMessage,
+  StreamSnapshot,
 } from "$lib/bindings";
 
 export type ConnectionState = "connected" | "reconnecting" | "disconnected";

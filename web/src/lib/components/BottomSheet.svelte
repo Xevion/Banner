@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { fly, fade } from "svelte/transition";
+import { fade, fly } from "svelte/transition";
 
 const DISMISS_THRESHOLD = 100;
 

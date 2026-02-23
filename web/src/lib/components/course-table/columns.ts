@@ -1,21 +1,21 @@
 // columns.ts
 import type { CourseResponse } from "$lib/bindings";
-import type { ColumnDef } from "@tanstack/table-core";
-import type { Component } from "svelte";
 import {
   abbreviateInstructor,
   formatMeetingDays,
   formatTimeRange,
   getPrimaryInstructor,
 } from "$lib/course";
+import type { ColumnDef } from "@tanstack/table-core";
+import type { Component } from "svelte";
 
-import CrnCell from "./cells/CrnCell.svelte";
 import CourseCodeCell from "./cells/CourseCodeCell.svelte";
-import TitleCell from "./cells/TitleCell.svelte";
+import CrnCell from "./cells/CrnCell.svelte";
 import InstructorCell from "./cells/InstructorCell.svelte";
-import TimeCell from "./cells/TimeCell.svelte";
 import LocationCell from "./cells/LocationCell.svelte";
 import SeatsCell from "./cells/SeatsCell.svelte";
+import TimeCell from "./cells/TimeCell.svelte";
+import TitleCell from "./cells/TitleCell.svelte";
 
 export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
   {

@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import CourseCard from "$lib/components/CourseCard.svelte";
-import { buildCardSkeletonHtml } from "./skeletons";
 import EmptyState from "./EmptyState.svelte";
+import { buildCardSkeletonHtml } from "./skeletons";
 
 let {
   courses,

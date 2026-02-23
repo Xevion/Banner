@@ -1,6 +1,6 @@
 <script module>
 import { defineMeta } from "@storybook/addon-svelte-csf";
-import { fn, expect, within, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import SegmentedChip from "./SegmentedChip.svelte";
 
 const { Story } = defineMeta({

@@ -1,19 +1,19 @@
 import type { CourseResponse, DbMeetingTime, InstructorResponse } from "$lib/bindings";
-import { formatDate, formatDateShort } from "$lib/date";
 import {
   abbreviateInstructor,
   formatCreditHours,
+  formatISOTime,
   formatInstructorName,
   formatMeetingDays,
   formatMeetingDaysLong,
   formatMeetingDaysVerbose,
+  formatMeetingTimeSummary,
   formatMeetingTimeTooltip,
   formatMeetingTimesTooltip,
-  formatMeetingTimeSummary,
-  formatISOTime,
   formatTimeRange,
   getPrimaryInstructor,
 } from "$lib/course";
+import { formatDate, formatDateShort } from "$lib/date";
 import { describe, expect, it } from "vitest";
 
 function makeMeetingTime(overrides: Partial<DbMeetingTime> = {}): DbMeetingTime {

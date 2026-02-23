@@ -1,5 +1,5 @@
 <script lang="ts">
-import { parseTimeInput, formatCompactTime } from "$lib/filters";
+import { formatCompactTime, parseTimeInput } from "$lib/filters";
 
 let {
   timeStart = $bindable<string | null>(null),

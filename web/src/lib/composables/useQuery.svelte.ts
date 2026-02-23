@@ -9,8 +9,8 @@
  * - Cleaning up timers on destroy
  */
 
-import type Result from "true-myth/result";
 import type { ApiErrorClass } from "$lib/api";
+import type Result from "true-myth/result";
 
 export interface UseQueryOptions<T> {
   /** Async function returning a Result */

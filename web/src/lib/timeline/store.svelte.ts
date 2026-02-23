@@ -1,3 +1,5 @@
+import { client } from "$lib/api";
+import type { TimeRange } from "$lib/bindings";
 /**
  * Reactive timeline data store with gap-aware on-demand loading.
  *
@@ -6,8 +8,6 @@
  * Fetches are throttled so rapid panning/zooming doesn't flood the API.
  */
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
-import type { TimeRange } from "$lib/bindings";
-import { client } from "$lib/api";
 import { SLOT_INTERVAL_MS } from "./constants";
 import type { TimeSlot } from "./types";
 

@@ -8,7 +8,7 @@
  *  - `data-tooltip-side`  — placement (default "top")
  *  - `data-tooltip-delay` — show delay in ms (default 150)
  */
-import { computePosition, flip, offset, shift, type Placement } from "@floating-ui/dom";
+import { type Placement, computePosition, flip, offset, shift } from "@floating-ui/dom";
 
 const TOOLTIP_CLASS =
   "fixed z-50 bg-card text-card-foreground text-xs border border-border " +

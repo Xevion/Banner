@@ -1,11 +1,11 @@
 <script lang="ts">
 import type { Subject } from "$lib/api";
-import type { CourseSuggestion, InstructorSuggestion, SuggestResponse } from "$lib/bindings";
 import { client } from "$lib/api";
+import type { CourseSuggestion, InstructorSuggestion, SuggestResponse } from "$lib/bindings";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
+import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
 import createFuzzySearch from "@nozbe/microfuzz";
 import { Command, Popover } from "bits-ui";
-import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
 import { fly } from "svelte/transition";
 
 let {

@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { CodeDescription } from "$lib/bindings";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
-import FilterPopover from "./FilterPopover.svelte";
 import DaysOfWeekPicker from "./DaysOfWeekPicker.svelte";
-import TimeRangeInput from "./TimeRangeInput.svelte";
+import FilterPopover from "./FilterPopover.svelte";
 import PartOfTermPicker from "./PartOfTermPicker.svelte";
+import TimeRangeInput from "./TimeRangeInput.svelte";
 
 let {
   referenceData,

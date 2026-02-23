@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
 import {
   FADE_DISTANCE,
   FADE_PERCENT,
-  leftOpacity,
-  rightOpacity,
-  maskGradient,
   type ScrollMetrics,
+  leftOpacity,
+  maskGradient,
+  rightOpacity,
 } from "$lib/scroll-fade";
+import { describe, expect, it } from "vitest";
 
 describe("leftOpacity", () => {
   it("returns 0 when scrollLeft is 0", () => {

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ok, err } from "true-myth/result";
 import type { ApiErrorClass } from "$lib/api";
+import { err, ok } from "true-myth/result";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QueryController } from "./useQuery.svelte";
 

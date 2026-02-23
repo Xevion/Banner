@@ -1,7 +1,7 @@
 <script lang="ts">
 import { scaleLinear, scaleTime } from "d3-scale";
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { onMount } from "svelte";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import {
   createAnimMap,

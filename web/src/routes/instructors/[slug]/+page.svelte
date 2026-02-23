@@ -1,18 +1,18 @@
 <script lang="ts">
+import { client } from "$lib/api";
 import type {
   CourseResponse,
   PublicInstructorProfileResponse,
   SearchOptionsResponse,
 } from "$lib/bindings";
-import { client } from "$lib/api";
-import { formatInstructorName, ratingStyle, rmpUrl } from "$lib/course";
-import { formatNumber } from "$lib/utils";
-import { themeStore } from "$lib/stores/theme.svelte";
-import { CourseTable } from "$lib/components/course-table";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
 import Footer from "$lib/components/Footer.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
-import { Star, Mail, ExternalLink, Copy } from "@lucide/svelte";
+import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import { CourseTable } from "$lib/components/course-table";
+import { formatInstructorName, ratingStyle, rmpUrl } from "$lib/course";
+import { themeStore } from "$lib/stores/theme.svelte";
+import { formatNumber } from "$lib/utils";
+import { Copy, ExternalLink, Mail, Star } from "@lucide/svelte";
 import { untrack } from "svelte";
 
 interface PageData {
@@ -34,7 +34,9 @@ let sections = $state<CourseResponse[]>(untrack(() => data.initialSections ?? []
 let sectionsLoading = $state(false);
 let copiedEmail = $state(false);
 
-const terms = $derived(data.searchOptions?.terms ?? []);
+const allTerms = $derived(data.searchOptions?.terms ?? []);
+const instructorTermCodes = $derived(new Set(profile.teachingHistory.map((t) => t.termCode)));
+const terms = $derived(allTerms.filter((t) => instructorTermCodes.has(t.code)));
 const subjects = $derived(data.searchOptions?.subjects ?? []);
 const subjectMap = $derived(
   new Map(subjects.map((s: { code: string; description: string }) => [s.code, s.description]))
@@ -194,7 +196,11 @@ const displayName = $derived(formatInstructorName(instructor));
     <section class="mb-8">
       <div class="flex items-center gap-3 mb-3">
         <h2 class="text-lg font-semibold">Sections</h2>
-        <TermCombobox {terms} bind:value={selectedTerm} />
+        {#if terms.length > 1}
+          <TermCombobox {terms} bind:value={selectedTerm} />
+        {:else if terms.length === 1}
+          <span class="text-sm text-muted-foreground">{terms[0].description}</span>
+        {/if}
       </div>
 
       {#if sectionsLoading}
@@ -220,7 +226,11 @@ const displayName = $derived(formatInstructorName(instructor));
         />
       {:else}
         <div class="text-center py-8 text-muted-foreground text-sm border border-border rounded-lg">
-          No sections found for this term.
+          {#if terms.length === 0}
+            No sections on record for this instructor.
+          {:else}
+            No sections found for this term.
+          {/if}
         </div>
       {/if}
     </section>

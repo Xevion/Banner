@@ -1,14 +1,14 @@
 <script module>
-import { defineMeta } from "@storybook/addon-svelte-csf";
-import { fn, expect, within, userEvent } from "storybook/test";
-import CourseCard from "./CourseCard.svelte";
 import {
   courseWithSeats,
   fullCourse,
-  onlineCourse,
   lowSeatsCourse,
+  onlineCourse,
   staffInstructorCourse,
 } from "$lib/stories/fixtures/courses";
+import { defineMeta } from "@storybook/addon-svelte-csf";
+import { expect, fn, userEvent, within } from "storybook/test";
+import CourseCard from "./CourseCard.svelte";
 
 const { Story } = defineMeta({
   title: "Components/CourseCard",

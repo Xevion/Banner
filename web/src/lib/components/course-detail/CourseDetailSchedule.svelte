@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
+import { formatISOTime, formatMeetingDaysLong } from "$lib/course";
 import { formatDate } from "$lib/date";
-import { formatMeetingDaysLong, formatISOTime } from "$lib/course";
 import { Calendar, Download, ExternalLink, MapPin } from "@lucide/svelte";
 import { DropdownMenu } from "bits-ui";
 

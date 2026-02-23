@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import { client } from "$lib/api";
+import type { SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { formatAbsoluteDate } from "$lib/date";

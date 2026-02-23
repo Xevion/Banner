@@ -1,6 +1,6 @@
 import type { VisibilityState } from "@tanstack/table-core";
-import { SvelteSet } from "svelte/reactivity";
 import { untrack } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
 
 export interface ColumnDef {
   id: string;

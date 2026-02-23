@@ -3,9 +3,9 @@ import type { CodeDescription } from "$lib/bindings";
 import { groupAttributes } from "$lib/filters";
 import { ATTRIBUTE_GROUPS } from "$lib/labels";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
-import FilterPopover from "./FilterPopover.svelte";
-import AvailabilityFilter from "./AvailabilityFilter.svelte";
 import AttributeSection from "./AttributeSection.svelte";
+import AvailabilityFilter from "./AvailabilityFilter.svelte";
+import FilterPopover from "./FilterPopover.svelte";
 
 let {
   referenceData,

@@ -1,25 +1,25 @@
+import type {
+  AuditLogEntry,
+  ScrapeJobEvent,
+  ScraperStatsResponse,
+  StreamDelta,
+  StreamKind,
+  StreamSnapshot,
+  SubjectSummary,
+  TimeseriesPoint,
+} from "$lib/bindings";
 /**
  * useStream composable for type-safe WebSocket stream subscriptions.
  *
  * Provides declarative event handling with Svelte 5 runes.
  */
 import {
-  acquireStreamClient,
-  releaseStreamClient,
   type ConnectionState,
   type FilterFor,
   type SnapshotFor,
+  acquireStreamClient,
+  releaseStreamClient,
 } from "$lib/ws";
-import type {
-  StreamKind,
-  StreamSnapshot,
-  StreamDelta,
-  ScrapeJobEvent,
-  AuditLogEntry,
-  ScraperStatsResponse,
-  SubjectSummary,
-  TimeseriesPoint,
-} from "$lib/bindings";
 
 type EventFor<S extends StreamKind> = S extends "scrapeJobs"
   ? ScrapeJobEvent

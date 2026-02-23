@@ -4,14 +4,14 @@ import { groupAttributes } from "$lib/filters";
 import { ATTRIBUTE_GROUPS, FORMAT_BUTTONS } from "$lib/labels";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { ChevronDown } from "@lucide/svelte";
+import AttributeSection from "./AttributeSection.svelte";
+import AvailabilityFilter from "./AvailabilityFilter.svelte";
 import BottomSheet from "./BottomSheet.svelte";
 import CompoundFilterButton from "./CompoundFilterButton.svelte";
-import AvailabilityFilter from "./AvailabilityFilter.svelte";
-import RangeSlider from "./RangeSlider.svelte";
 import DaysOfWeekPicker from "./DaysOfWeekPicker.svelte";
-import TimeRangeInput from "./TimeRangeInput.svelte";
 import PartOfTermPicker from "./PartOfTermPicker.svelte";
-import AttributeSection from "./AttributeSection.svelte";
+import RangeSlider from "./RangeSlider.svelte";
+import TimeRangeInput from "./TimeRangeInput.svelte";
 
 type AttributeReferenceData = Record<
   "instructionalMethods" | "campuses" | "partsOfTerm" | "attributes",

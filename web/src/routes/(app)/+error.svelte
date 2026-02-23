@@ -1,7 +1,7 @@
 <script lang="ts">
 import { page } from "$app/state";
-import { House, LogOut } from "@lucide/svelte";
 import { authStore } from "$lib/auth.svelte";
+import { House, LogOut } from "@lucide/svelte";
 
 const status = $derived(page.status);
 

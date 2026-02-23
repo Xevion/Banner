@@ -1,6 +1,4 @@
 import { authStore } from "$lib/auth.svelte";
-import type Result from "true-myth/result";
-import { ok, err } from "true-myth/result";
 import type {
   AdminStatusResponse,
   ApiError,
@@ -9,13 +7,13 @@ import type {
   CodeDescription,
   CourseResponse,
   InstructorDetailResponse,
-  PublicInstructorListResponse,
-  PublicInstructorProfileResponse,
   ListInstructorsParams as ListInstructorsParamsGenerated,
   ListInstructorsResponse,
   MatchBody,
   MetricsParams as MetricsParamsGenerated,
   MetricsResponse,
+  PublicInstructorListResponse,
+  PublicInstructorProfileResponse,
   RejectCandidateBody,
   RescoreResponse,
   ScrapeJobsResponse,
@@ -37,6 +35,8 @@ import type {
   TimeseriesResponse,
   User,
 } from "$lib/bindings";
+import type Result from "true-myth/result";
+import { err, ok } from "true-myth/result";
 
 const API_BASE_URL = "/api";
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { ServiceStatus } from "$lib/bindings";
-import type { PageProps } from "./$types";
 import { formatNumber } from "$lib/utils";
+import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 let status = $derived(data.status);

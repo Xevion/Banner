@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { PageProps } from "./$types";
 import { client } from "$lib/api";
 import type { User } from "$lib/bindings";
 import { Shield, ShieldOff } from "@lucide/svelte";
+import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 let users = $state<User[]>(data.users);

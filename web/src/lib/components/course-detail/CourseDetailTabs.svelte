@@ -1,15 +1,15 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
-import { formatCreditHours } from "$lib/course";
-import { formatNumber } from "$lib/utils";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
-import { getInstructionalMethodLabel, getCampusLabel, getAttributeLabel } from "$lib/labels";
+import { formatCreditHours } from "$lib/course";
+import { getAttributeLabel, getCampusLabel, getInstructionalMethodLabel } from "$lib/labels";
+import { formatNumber } from "$lib/utils";
 import { Check, ClipboardCopy, Info, Link } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
+import SimpleTooltip from "../SimpleTooltip.svelte";
 import CourseDetailInstructors from "./CourseDetailInstructors.svelte";
 import CourseDetailSchedule from "./CourseDetailSchedule.svelte";
 import RelatedSections from "./RelatedSections.svelte";
-import SimpleTooltip from "../SimpleTooltip.svelte";
 
 let { course }: { course: CourseResponse } = $props();
 
