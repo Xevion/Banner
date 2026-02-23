@@ -2,6 +2,7 @@
 
 pub mod admin_rmp;
 pub mod batch;
+pub mod bluebook;
 mod context;
 pub mod course_types;
 pub mod courses;

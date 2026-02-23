@@ -7,6 +7,7 @@ use tracing::info;
 
 mod app;
 mod banner;
+mod bluebook;
 mod bot;
 mod calendar;
 mod cli;
