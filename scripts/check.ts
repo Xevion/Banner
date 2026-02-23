@@ -216,6 +216,7 @@ const allChecks: Check[] = [
 		cmd: [...getCommand('backend', 'test').cmd, '-E', 'not test(export_bindings)'],
 	},
 	{ name: 'frontend-test', subsystem: 'frontend', ...cmdOf('frontend', 'test') },
+	{ name: 'frontend-build', subsystem: 'frontend', ...cmdOf('frontend', 'build') },
 	{ name: 'actionlint', subsystem: 'security', cmd: ['actionlint'] },
 	{ name: 'backend-audit', subsystem: 'security', cmd: ['cargo', 'audit'] },
 	{

@@ -7,7 +7,7 @@
 
 import type { Subsystem } from './targets';
 
-export type Action = 'format-check' | 'format-apply' | 'lint' | 'type-check' | 'test';
+export type Action = 'format-check' | 'format-apply' | 'lint' | 'type-check' | 'test' | 'build';
 
 export interface CommandDef {
 	/** Command array [program, ...args] */
@@ -39,6 +39,10 @@ const REGISTRY: Record<Subsystem, Partial<Record<Action, CommandDef>>> = {
 		test: {
 			cmd: ['bun', 'run', '--cwd', 'web', 'test'],
 			description: 'Vitest unit tests',
+		},
+		build: {
+			cmd: ['bun', 'run', '--cwd', 'web', 'build'],
+			description: 'Vite production build',
 		},
 	},
 	backend: {
