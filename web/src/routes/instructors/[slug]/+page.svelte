@@ -241,7 +241,7 @@ const displayName = $derived(formatInstructorName(instructor));
             </thead>
             <tbody>
               {#each profile.teachingHistory as term (term.termCode)}
-                {#each term.courses as course, ci (`${term.termCode}-${course.subject}-${course.courseNumber}`)}
+                {#each term.courses as course, ci (`${term.termCode}-${course.subject}-${course.courseNumber}-${course.title}`)}
                   <tr class="border-t border-border first:border-t-0 hover:bg-muted/20 transition-colors">
                     <td class="px-3 py-2 text-muted-foreground whitespace-nowrap">
                       {#if ci === 0}
