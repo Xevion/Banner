@@ -417,6 +417,7 @@ pub struct CourseSuggestion {
 pub struct InstructorSuggestion {
     pub id: i32,
     pub display_name: String,
+    pub section_count: i32,
     pub score: f32,
 }
 
@@ -468,9 +469,11 @@ pub async fn suggest_instructors(
     query: &str,
     limit: i32,
 ) -> Result<Vec<InstructorSuggestion>> {
-    let rows: Vec<(i32, String, f32)> = sqlx::query_as(
+    let rows: Vec<(i32, String, i32, f32)> = sqlx::query_as(
         r#"
-        SELECT i.id, i.display_name, MAX(similarity(i.display_name, $2)) as score
+        SELECT i.id, i.display_name,
+               COUNT(DISTINCT c.id)::int as section_count,
+               MAX(similarity(i.display_name, $2)) as score
         FROM instructors i
         JOIN course_instructors ci ON ci.instructor_id = i.id
         JOIN courses c ON c.id = ci.course_id
@@ -489,9 +492,10 @@ pub async fn suggest_instructors(
 
     Ok(rows
         .into_iter()
-        .map(|(id, display_name, score)| InstructorSuggestion {
+        .map(|(id, display_name, section_count, score)| InstructorSuggestion {
             id,
             display_name,
+            section_count,
             score,
         })
         .collect())

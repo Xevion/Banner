@@ -941,8 +941,9 @@ async fn upsert_course_instructors(
     // Compare old vs new instructor names and emit audit entries
     let mut audits = Vec::new();
     for &course_id in &unique_cids {
-        let old = old_names.get(&course_id).cloned().unwrap_or_default();
+        let mut old = old_names.get(&course_id).cloned().unwrap_or_default();
         let mut new = new_names.get(&course_id).cloned().unwrap_or_default();
+        old.sort();
         new.sort();
 
         if old != new {

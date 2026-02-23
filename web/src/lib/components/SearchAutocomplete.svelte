@@ -301,7 +301,7 @@ const popoverListId = "search-autocomplete-list";
                         >
                         <span class="flex-1 truncate">{c.title}</span>
                         <span class="text-xs text-muted-foreground shrink-0"
-                          >{c.sectionCount} sec.</span
+                          >{c.sectionCount} {c.sectionCount === 1 ? 'section' : 'sections'}</span
                         >
                       </Command.Item>
                     {:else if item.kind === "instructor"}
@@ -315,6 +315,9 @@ const popoverListId = "search-autocomplete-list";
                       >
                         <User class="size-3.5 shrink-0 text-muted-foreground" />
                         <span class="flex-1 truncate">{i.displayName}</span>
+                        <span class="text-xs text-muted-foreground shrink-0"
+                          >{i.sectionCount} {i.sectionCount === 1 ? 'section' : 'sections'}</span
+                        >
                       </Command.Item>
                     {/if}
                   {/each}
