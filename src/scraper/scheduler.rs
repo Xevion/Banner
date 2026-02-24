@@ -1,4 +1,5 @@
 use crate::banner::{BannerApi, Term};
+use crate::bluebook::BlueBookClient;
 use crate::data::DbContext;
 use crate::data::models::{ReferenceData, ScrapePriority, TargetType};
 use crate::data::{kv, term_subjects, terms};
@@ -16,7 +17,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{Notify, RwLock, broadcast};
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
@@ -30,12 +31,16 @@ const RMP_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 /// How often terms are synced from Banner API (8 hours).
 const TERM_SYNC_INTERVAL: Duration = Duration::from_secs(8 * 60 * 60);
 
+/// How often BlueBook evaluations are synced (30 days).
+const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_secs(30 * 24 * 3600);
+
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
 
 // app_kv keys for persisting scheduler timestamps across restarts.
 pub const KV_REF_SCRAPE: &str = "scheduler.ref_scrape";
 pub const KV_RMP_SYNC: &str = "scheduler.rmp_sync";
 pub const KV_TERM_SYNC: &str = "scheduler.term_sync";
+pub const KV_BLUEBOOK_SYNC: &str = "scheduler.bluebook_sync";
 
 /// Convert a persisted UTC timestamp to an `Instant`, preserving remaining cooldown.
 ///
@@ -65,6 +70,7 @@ pub struct Scheduler {
     /// the expensive `get_subjects()` API call when no subjects can possibly
     /// be eligible yet (archived interval is 48 hours).
     archived_eval_times: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
+    bluebook_notify: Arc<Notify>,
 }
 
 impl Scheduler {
@@ -72,12 +78,14 @@ impl Scheduler {
         db: DbContext,
         banner_api: Arc<BannerApi>,
         reference_cache: Arc<RwLock<ReferenceCache>>,
+        bluebook_notify: Arc<Notify>,
     ) -> Self {
         Self {
             db,
             banner_api,
             reference_cache,
             archived_eval_times: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            bluebook_notify,
         }
     }
 
@@ -102,12 +110,20 @@ impl Scheduler {
         let persisted_ref = kv::get_timestamp(pool, KV_REF_SCRAPE).await.unwrap_or(None);
         let persisted_rmp = kv::get_timestamp(pool, KV_RMP_SYNC).await.unwrap_or(None);
         let persisted_term = kv::get_timestamp(pool, KV_TERM_SYNC).await.unwrap_or(None);
+        let persisted_bb = kv::get_timestamp(pool, KV_BLUEBOOK_SYNC)
+            .await
+            .unwrap_or(None);
 
-        if persisted_ref.is_some() || persisted_rmp.is_some() || persisted_term.is_some() {
+        if persisted_ref.is_some()
+            || persisted_rmp.is_some()
+            || persisted_term.is_some()
+            || persisted_bb.is_some()
+        {
             info!(
                 last_ref_scrape = ?persisted_ref,
                 last_rmp_sync = ?persisted_rmp,
                 last_term_sync = ?persisted_term,
+                last_bluebook_sync = ?persisted_bb,
                 "Loaded persisted scheduler timestamps"
             );
         }
@@ -115,9 +131,18 @@ impl Scheduler {
         let mut last_ref_scrape = persisted_to_instant(persisted_ref, REFERENCE_DATA_INTERVAL);
         let mut last_rmp_sync = persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL);
         let mut last_term_sync = persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL);
+        let mut last_bluebook_sync = persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL);
+        let mut bluebook_notified = false;
 
         loop {
             tokio::select! {
+                _ = self.bluebook_notify.notified() => {
+                    info!("BlueBook sync triggered manually via notify");
+                    bluebook_notified = true;
+                    // Fall through to let the next sleep_until cycle pick it up immediately.
+                    next_run = time::Instant::now();
+                    continue;
+                }
                 _ = time::sleep_until(next_run) => {
                     // Skip this cycle if the previous one is still running.
                     if let Some((ref handle, _)) = current_work
@@ -133,6 +158,9 @@ impl Scheduler {
                     let should_scrape_ref = last_ref_scrape.elapsed() >= REFERENCE_DATA_INTERVAL;
                     let should_sync_rmp = last_rmp_sync.elapsed() >= RMP_SYNC_INTERVAL;
                     let should_sync_terms = last_term_sync.elapsed() >= TERM_SYNC_INTERVAL;
+                    let should_sync_bluebook = bluebook_notified
+                        || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL;
+                    bluebook_notified = false;
 
                     // Spawn work in separate task to allow graceful cancellation during shutdown.
                     // Timestamps are persisted to DB on success so restarts don't redo recent work.
@@ -187,7 +215,20 @@ impl Scheduler {
                                                 }
                                             };
 
-                                            tokio::join!(term_fut, rmp_fut, ref_fut);
+                                            let bb_fut = async {
+                                                if should_sync_bluebook {
+                                                    match Self::sync_bluebook(db.pool()).await {
+                                                        Ok(()) => {
+                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_BLUEBOOK_SYNC, Utc::now()).await {
+                                                                warn!(error = ?e, "Failed to persist BlueBook sync timestamp");
+                                                            }
+                                                        }
+                                                        Err(e) => error!(error = ?e, "Failed to sync BlueBook data"),
+                                                    }
+                                                }
+                                            };
+
+                                            tokio::join!(term_fut, rmp_fut, ref_fut, bb_fut);
 
                                             if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
                                                 error!(error = ?e, "Failed to schedule jobs");
@@ -211,6 +252,9 @@ impl Scheduler {
                     }
                     if should_sync_terms {
                         last_term_sync = Instant::now();
+                    }
+                    if should_sync_bluebook {
+                        last_bluebook_sync = Instant::now();
                     }
 
                     current_work = Some((work_handle, cancel_token));
@@ -580,6 +624,18 @@ impl Scheduler {
             "RMP sync complete"
         );
 
+        Ok(())
+    }
+
+    /// Scrape all BlueBook course evaluations and upsert to DB.
+    #[tracing::instrument(skip_all)]
+    async fn sync_bluebook(db_pool: &PgPool) -> Result<()> {
+        info!("Starting BlueBook evaluation sync");
+
+        let client = BlueBookClient::new();
+        let total = client.scrape_all(db_pool).await?;
+
+        info!(total, "BlueBook evaluation sync complete");
         Ok(())
     }
 

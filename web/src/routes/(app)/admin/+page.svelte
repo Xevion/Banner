@@ -1,11 +1,32 @@
 <script lang="ts">
+import { client } from "$lib/api";
 import type { ServiceStatus } from "$lib/bindings";
 import { formatNumber } from "$lib/utils";
+import { RefreshCw } from "@lucide/svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 let status = $derived(data.status);
 let error = $derived(data.error);
+
+let syncingBlueBook = $state(false);
+let blueBookMessage = $state<string | null>(null);
+
+async function syncBlueBook() {
+  syncingBlueBook = true;
+  blueBookMessage = null;
+
+  const result = await client.syncBlueBook();
+
+  syncingBlueBook = false;
+
+  if (result.isErr) {
+    blueBookMessage = result.error.message;
+    return;
+  }
+
+  blueBookMessage = result.value.message;
+}
 
 const STATUS_COLORS: Record<ServiceStatus, string> = {
   active: "var(--status-green)",
@@ -68,5 +89,27 @@ function toTitleCase(s: string): string {
         </span>
       </div>
     {/each}
+  </div>
+
+  <h2 class="mt-6 mb-3 text-sm font-semibold text-foreground">Quick Actions</h2>
+  <div class="bg-card border-border rounded-lg border p-4 flex items-center justify-between">
+    <div>
+      <p class="font-medium text-foreground">BlueBook Sync</p>
+      <p class="text-sm text-muted-foreground">Trigger a full BlueBook course evaluation scrape</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {#if blueBookMessage}
+        <span class="text-sm text-green-600 dark:text-green-400">{blueBookMessage}</span>
+      {/if}
+      <button
+        onclick={syncBlueBook}
+        disabled={syncingBlueBook}
+        class="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-1.5 text-sm font-medium
+          text-foreground transition-colors hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      >
+        <RefreshCw class="size-3.5 {syncingBlueBook ? 'animate-spin' : ''}" />
+        {syncingBlueBook ? "Syncing..." : "Sync BlueBook"}
+      </button>
+    </div>
   </div>
 {/if}

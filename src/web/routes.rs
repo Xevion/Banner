@@ -148,6 +148,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             "/admin/scraper/subjects/{subject}",
             get(admin::scraper::scraper_subject_detail),
         )
+        .route("/admin/bluebook/sync", post(admin::bluebook::sync_bluebook))
         .route("/admin/terms", get(admin::terms::list_terms))
         .route("/admin/terms/sync", post(admin::terms::sync_terms))
         .route(

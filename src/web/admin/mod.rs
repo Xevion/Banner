@@ -2,6 +2,7 @@
 //!
 //! All endpoints require the `AdminUser` extractor, returning 401/403 as needed.
 
+pub mod bluebook;
 pub mod rmp;
 pub mod scraper;
 pub mod terms;

@@ -126,11 +126,15 @@ impl App {
             Err(e) => warn!(error = ?e, "Failed to backfill instructor slugs (non-fatal)"),
         }
 
+        // Create shared BlueBook sync notify for manual trigger from admin endpoints
+        let bluebook_sync_notify = Arc::new(tokio::sync::Notify::new());
+
         // Create AppState (BannerApi already created above for term sync)
         let app_state = AppState::new(
             banner_api_arc.clone(),
             db_pool.clone(),
             config.ssr_downstream.clone(),
+            bluebook_sync_notify,
         );
 
         // Load reference data cache from DB (may be empty on first run)
@@ -188,6 +192,7 @@ impl App {
                 self.app_state.reference_cache.clone(),
                 self.app_state.service_statuses.clone(),
                 self.app_state.events.clone(),
+                self.app_state.bluebook_sync_notify.clone(),
             ));
             self.service_manager
                 .register_service(ServiceName::Scraper.as_str(), scraper_service);

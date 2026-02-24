@@ -9,8 +9,10 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+use sqlx::PgPool;
+
 use crate::banner::models::terms::{Season, Term};
-use crate::data::bluebook::BlueBookEvaluation;
+use crate::data::bluebook::{batch_upsert_bluebook_evaluations, BlueBookEvaluation};
 
 #[allow(dead_code)]
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
@@ -54,7 +56,7 @@ impl BlueBookSeason {
 ///
 /// Summer I and Summer II are both collapsed to `Season::Summer`.
 #[allow(dead_code)]
-pub fn normalize_term(bluebook_term: &str) -> Option<Term> {
+fn normalize_term(bluebook_term: &str) -> Option<Term> {
     let parts: Vec<&str> = bluebook_term.trim().rsplitn(2, ' ').collect();
     if parts.len() != 2 {
         warn!(term = bluebook_term, "Unrecognized BlueBook term format");
@@ -94,6 +96,15 @@ pub fn normalize_term(bluebook_term: &str) -> Option<Term> {
 #[allow(dead_code)]
 struct FormFields(Vec<(String, String)>);
 
+const TERM_FILTER_RADIO: &str = "ctl00$MainContent$mainContent1$CourseTermSelectRBL";
+
+impl FormFields {
+    /// Check whether the form contains a specific named field.
+    fn has(&self, name: &str) -> bool {
+        self.0.iter().any(|(n, _)| n == name)
+    }
+}
+
 /// A subject entry from the BlueBook ComboBox.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -108,7 +119,7 @@ struct SubjectEntry {
 
 /// Client for scraping BlueBook course evaluations.
 #[allow(dead_code)]
-pub struct BlueBookClient {
+pub(crate) struct BlueBookClient {
     http: reqwest::Client,
     delay: Duration,
 }
@@ -122,7 +133,7 @@ impl Default for BlueBookClient {
 
 #[allow(dead_code)]
 impl BlueBookClient {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             http: reqwest::Client::builder()
                 .cookie_store(true)
@@ -167,6 +178,19 @@ impl BlueBookClient {
         }
 
         if !has_viewstate {
+            // Log the title and first part of the page to diagnose server responses
+            let title = html
+                .select(&Selector::parse("title").unwrap())
+                .next()
+                .map(|t| t.text().collect::<String>());
+            let body_text: String = html.root_element().text().take(500).collect();
+            let body_preview: String = body_text.chars().take(300).collect();
+            warn!(
+                ?title,
+                body_preview,
+                input_count = fields.len(),
+                "No __VIEWSTATE found in response"
+            );
             anyhow::bail!("No __VIEWSTATE found in response");
         }
 
@@ -313,12 +337,11 @@ impl BlueBookClient {
             _ => anyhow::bail!("Unknown term filter: {filter}"),
         };
 
-        let event_target =
-            format!("ctl00$MainContent$mainContent1$CourseTermSelectRBL${radio_index}");
+        let event_target = format!("{TERM_FILTER_RADIO}${radio_index}");
         let params = Self::build_postback(
             fields,
             &event_target,
-            &[("ctl00$MainContent$mainContent1$CourseTermSelectRBL", filter)],
+            &[(TERM_FILTER_RADIO, filter)],
         );
 
         let resp = self
@@ -329,7 +352,14 @@ impl BlueBookClient {
             .await
             .context("Failed to switch BlueBook term filter")?;
 
+        let status = resp.status();
         let body = resp.text().await?;
+        debug!(
+            filter,
+            status = %status,
+            body_len = body.len(),
+            "switch_term_filter response"
+        );
         let html = Html::parse_document(&body);
         let new_fields = Self::extract_form_fields(&html)?;
 
@@ -340,10 +370,20 @@ impl BlueBookClient {
     async fn next_page(&self, fields: &FormFields, top: bool) -> Result<(Html, FormFields)> {
         tokio::time::sleep(self.delay).await;
 
-        let suffix = if top { "TOP" } else { "BOTTOM" };
-        // Page navigation uses image buttons — the event target includes coordinates
-        let event_target = format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
-        let params = Self::build_postback(fields, &event_target, &[]);
+        // Pager buttons are `<input type="image">`, which submit as `name.x=N&name.y=N`
+        // coordinates rather than via __EVENTTARGET. __EVENTTARGET must be empty.
+        let suffix = if top { "TOP" } else { "" };
+        let button_name =
+            format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
+
+        let mut params = fields.0.clone();
+        // Clear __EVENTTARGET — image buttons don't use it
+        if let Some(et) = params.iter_mut().find(|(n, _)| n == "__EVENTTARGET") {
+            et.1 = String::new();
+        }
+        // Send image button click coordinates
+        params.push((format!("{button_name}.x"), "10".to_string()));
+        params.push((format!("{button_name}.y"), "10".to_string()));
 
         let resp = self
             .http
@@ -537,46 +577,73 @@ impl BlueBookClient {
         Some((caps[1].parse().ok()?, caps[2].parse().ok()?))
     }
 
-    /// Scrape all subjects and return collected evaluation records.
+    /// Scrape all subjects and upsert evaluations to the database per-subject.
     ///
-    /// Searches each subject with the PAST term filter and paginates through all pages.
-    pub async fn scrape_all(&self) -> Result<Vec<BlueBookEvaluation>> {
+    /// Searches each subject with the PAST term filter, paginates through all
+    /// pages, and upserts immediately after each subject completes. Returns the
+    /// total number of evaluations upserted.
+    pub(crate) async fn scrape_all(&self, db_pool: &PgPool) -> Result<u32> {
         let (subjects, initial_fields) = self.fetch_subjects().await?;
-        let mut all_evals = Vec::new();
+        let subject_count = subjects.len();
+        let mut total_evals = 0u32;
+        let mut skipped_no_radio = 0u32;
+        let mut skipped_errors = 0u32;
 
-        for subject in &subjects {
-            info!(
-                code = subject.code.as_str(),
-                "Scraping BlueBook evaluations"
-            );
+        for (i, subject) in subjects.iter().enumerate() {
+            let progress = i + 1;
 
-            // Search for the subject
-            let (_html, fields) = match self.search_subject(subject, &initial_fields).await {
-                Ok(result) => result,
+            // Search for the subject (drop Html before next await — Html is !Send)
+            let fields = match self.search_subject(subject, &initial_fields).await {
+                Ok((_html, fields)) => fields,
                 Err(e) => {
-                    warn!(code = subject.code.as_str(), error = %e, "Failed to search subject, skipping");
+                    warn!(
+                        code = subject.code.as_str(),
+                        progress, subject_count,
+                        error = %e,
+                        "Failed to search subject, skipping"
+                    );
+                    skipped_errors += 1;
                     continue;
                 }
             };
+
+            // Subjects with no current-term results don't render the term filter radio
+            // buttons. Attempting to POST a PAST switch would fail with ASP.NET
+            // EventValidation rejection, so detect this early and skip.
+            if !fields.has(TERM_FILTER_RADIO) {
+                info!(
+                    code = subject.code.as_str(),
+                    progress, subject_count,
+                    "Skipped (no term filter radio)"
+                );
+                skipped_no_radio += 1;
+                continue;
+            }
 
             // Switch to PAST courses to get completed evaluations
-            let (html, mut fields) = match self.switch_term_filter("PAST", &fields).await {
-                Ok(result) => result,
+            let mut subject_evals = Vec::new();
+            let (total_pages, mut fields) = match self.switch_term_filter("PAST", &fields).await {
+                Ok((html, fields)) => {
+                    let page_evals = Self::parse_evaluations(&html, &subject.code);
+                    subject_evals.extend(page_evals);
+                    let total_pages = Self::parse_page_info(&html)
+                        .map(|(_, total)| total)
+                        .unwrap_or(1);
+                    (total_pages, fields)
+                }
                 Err(e) => {
-                    warn!(code = subject.code.as_str(), error = %e, "Failed to switch to PAST filter, skipping");
+                    warn!(
+                        code = subject.code.as_str(),
+                        progress, subject_count,
+                        error = %e,
+                        "Failed to switch to PAST filter, skipping"
+                    );
+                    skipped_errors += 1;
                     continue;
                 }
             };
 
-            // Parse first page
-            let page_evals = Self::parse_evaluations(&html, &subject.code);
-            all_evals.extend(page_evals);
-
             // Paginate through remaining pages
-            let total_pages = Self::parse_page_info(&html)
-                .map(|(_, total)| total)
-                .unwrap_or(1);
-
             for page in 2..=total_pages {
                 debug!(
                     code = subject.code.as_str(),
@@ -587,7 +654,7 @@ impl BlueBookClient {
                     Ok((page_html, new_fields)) => {
                         fields = new_fields;
                         let page_evals = Self::parse_evaluations(&page_html, &subject.code);
-                        all_evals.extend(page_evals);
+                        subject_evals.extend(page_evals);
                     }
                     Err(e) => {
                         warn!(
@@ -601,21 +668,59 @@ impl BlueBookClient {
                 }
             }
 
-            debug!(
+            let subject_eval_count = subject_evals.len() as u32;
+
+            // Upsert immediately so data is available without waiting for the full scrape
+            if !subject_evals.is_empty() {
+                if let Err(e) = batch_upsert_bluebook_evaluations(&subject_evals, db_pool).await {
+                    warn!(
+                        code = subject.code.as_str(),
+                        evals = subject_eval_count,
+                        error = %e,
+                        "Failed to upsert evaluations for subject"
+                    );
+                    skipped_errors += 1;
+                    continue;
+                }
+            }
+
+            total_evals += subject_eval_count;
+            info!(
                 code = subject.code.as_str(),
-                total = all_evals.len(),
-                "Finished subject"
+                progress, subject_count,
+                pages = total_pages,
+                evals = subject_eval_count,
+                total_evals,
+                "Scraped subject"
             );
         }
 
-        info!(total = all_evals.len(), "BlueBook scrape complete");
-        Ok(all_evals)
+        info!(
+            total_evals,
+            subjects = subject_count,
+            skipped_no_radio,
+            skipped_errors,
+            "BlueBook scrape complete"
+        );
+        Ok(total_evals)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tracing_subscriber::EnvFilter;
+
+    /// Initialize tracing for tests that need log output.
+    fn init_tracing() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| EnvFilter::new("banner::bluebook=debug")),
+            )
+            .with_test_writer()
+            .try_init();
+    }
 
     /// (term, crn, course_section, title, instructor, inst_eval, course_eval, department)
     type AccordionEntry<'a> = (
@@ -1258,351 +1363,104 @@ mod tests {
         assert_eq!(BlueBookClient::parse_department(detail), None);
     }
 
-    // --- parse_evaluations_from_dump (requires manual data generation) ---
+    // --- Integration tests (require network, use #[ignore] by default) ---
 
-    /// Parse the previously dumped page 7 to validate the parser extracts real data.
-    /// Requires running `dump_past_evaluations` first to generate the fixture.
-    #[test]
-    #[ignore]
-    fn test_parse_evaluations_from_dump() {
-        let path = std::path::Path::new("target/bluebook_dump/search_CS_past_page7.html");
-        let body = std::fs::read_to_string(path).expect("Run dump_past_evaluations first");
-        let html = Html::parse_document(&body);
-        let evals = BlueBookClient::parse_evaluations(&html, "CS");
-
-        println!("Parsed {} evaluations from page 7:", evals.len());
-        for eval in &evals {
-            println!(
-                "  {} {}.{} {} (CRN {}) by {} — inst:{:?} ({:?} resp), course:{:?} ({:?} resp)",
-                eval.term,
-                eval.course_number,
-                eval.section,
-                eval.subject,
-                eval.crn,
-                eval.instructor_name,
-                eval.instructor_rating,
-                eval.instructor_response_count,
-                eval.course_rating,
-                eval.course_response_count,
-            );
-        }
-
-        assert!(!evals.is_empty(), "Should parse at least one evaluation");
-
-        // Verify a known entry from the test output: CS 1083.01T, Sum 2025, instructor rating 3.9
-        let cs1083 = evals
-            .iter()
-            .find(|e| e.course_number == "1083" && e.section == "01T");
-        assert!(cs1083.is_some(), "Should find CS 1083.01T");
-        let cs1083 = cs1083.unwrap();
-        assert_eq!(cs1083.instructor_rating, Some(3.9));
-        assert_eq!(cs1083.instructor_response_count, Some(17));
-        assert_eq!(cs1083.course_rating, Some(3.9));
-        assert_eq!(cs1083.course_response_count, Some(17));
-        assert_eq!(
-            cs1083.department.as_deref(),
-            Some("Department of Computer Science"),
-            "Department should be extracted from the detail pane"
-        );
-
-        // All CS evaluations should have the same department
-        for eval in &evals {
-            assert_eq!(
-                eval.department.as_deref(),
-                Some("Department of Computer Science"),
-                "All CS evals should have department, but {} {} is missing it",
-                eval.course_number,
-                eval.section
-            );
-        }
-    }
-
-    /// Fetch the BlueBook landing page and dump raw HTML to target/bluebook_dump/.
-    /// Run with: cargo test -p banner bluebook::tests::dump_landing_page -- --ignored --nocapture
+    /// Verify that searching CS and switching to PAST produces evaluations across
+    /// multiple pages (the core bug was broken pagination via image button handling).
     #[tokio::test]
-    #[ignore]
-    async fn dump_landing_page() {
+    #[ignore = "requires network access to bluebook.utsa.edu"]
+    async fn test_live_cs_past_pagination() {
+        init_tracing();
+
         let client = BlueBookClient::new();
-        let (subjects, fields) = client
-            .fetch_subjects()
-            .await
-            .expect("Failed to fetch subjects");
+        let (subjects, initial_fields) = client.fetch_subjects().await.unwrap();
+        let cs = subjects.iter().find(|s| s.code == "CS").expect("CS subject must exist");
 
-        let dump_dir = std::path::Path::new("target/bluebook_dump");
-        std::fs::create_dir_all(dump_dir).expect("Failed to create dump dir");
-
-        println!("Extracted {} form fields", fields.0.len());
-        for (name, value) in &fields.0 {
-            let display_val = if value.len() > 60 {
-                format!("{}... ({} chars)", &value[..60], value.len())
-            } else {
-                value.clone()
-            };
-            println!("  {name} = {display_val}");
-        }
-
-        println!(
-            "\nFound {} subjects (first 20): {:?}",
-            subjects.len(),
-            &subjects[..subjects.len().min(20)]
-        );
-    }
-
-    /// Search CS with PAST filter and expand first accordion pane to see rating data.
-    /// Run with: cargo test -p banner bluebook::tests::dump_past_evaluations -- --ignored --nocapture
-    #[tokio::test]
-    #[ignore]
-    async fn dump_past_evaluations() {
-        let client = BlueBookClient::new();
-        let (subjects, fields) = client
-            .fetch_subjects()
-            .await
-            .expect("Failed to fetch subjects");
-
-        let dump_dir = std::path::Path::new("target/bluebook_dump");
-        std::fs::create_dir_all(dump_dir).expect("Failed to create dump dir");
-
-        let subject = subjects
-            .iter()
-            .find(|s| s.code == "CS")
-            .expect("CS not found");
-        println!("Searching for {}", subject.code);
-
-        // Search for current first (to get results page)
-        let (_html, fields) = client
-            .search_subject(subject, &fields)
-            .await
-            .expect("Failed to search subject");
+        // Search CS
+        let (_html, fields) = client.search_subject(cs, &initial_fields).await.unwrap();
+        assert!(fields.has(TERM_FILTER_RADIO), "CS search should render term filter radio");
 
         // Switch to PAST
-        println!("Switching to PAST courses...");
-        let (html, fields) = client
-            .switch_term_filter("PAST", &fields)
-            .await
-            .expect("Failed to switch to PAST");
+        let (html, mut fields) = client.switch_term_filter("PAST", &fields).await.unwrap();
+        let page1_evals = BlueBookClient::parse_evaluations(&html, "CS");
+        let (current_page, total_pages) =
+            BlueBookClient::parse_page_info(&html).expect("PAST results should have pager");
+        eprintln!("Page {current_page}/{total_pages}: {} evals", page1_evals.len());
+        assert!(total_pages > 1, "CS PAST should have multiple pages");
 
-        let body = html.html();
-        let path = dump_dir.join("search_CS_past.html");
-        std::fs::write(&path, &body).expect("Failed to write HTML");
-        println!(
-            "Wrote PAST results to {} ({} bytes)",
-            path.display(),
-            body.len()
+        let mut all_evals = page1_evals;
+
+        // Pages 1-~8 are Fall 2025 (n/a evals). Spr 2025 data with real ratings
+        // starts around page 9-10. Paginate enough to reach them.
+        let pages_to_check = 12.min(total_pages);
+        for page in 2..=pages_to_check {
+            let (page_html, new_fields) = client.next_page(&fields, true).await.unwrap();
+            fields = new_fields;
+            let page_evals = BlueBookClient::parse_evaluations(&page_html, "CS");
+            // Log the semester of the first accordion to track pagination progress
+            let semester_sel = Selector::parse("span[id*='SemYrLbl']").unwrap();
+            let first_semester: String = page_html
+                .select(&semester_sel)
+                .next()
+                .map(|el| el.text().collect())
+                .unwrap_or_default();
+            eprintln!("Page {page}/{total_pages}: {} evals (semester: {first_semester})", page_evals.len());
+            all_evals.extend(page_evals);
+        }
+
+        eprintln!("Total evaluations from {pages_to_check} pages: {}", all_evals.len());
+        assert!(
+            !all_evals.is_empty(),
+            "Should have evaluations from CS PAST pages (page 1 may be n/a Fall 2025, but later pages have Spr 2025+ data)"
         );
 
-        // Check page count
-        let page_re = regex::Regex::new(r"(\d+) of (\d+)").unwrap();
-        if let Some(caps) = page_re.captures(&body) {
-            println!("Page {} of {}", &caps[1], &caps[2]);
-        }
-
-        // Show first few accordion headers
-        let header_sel = Selector::parse("table.infoTable").unwrap();
-        let td_sel = Selector::parse("td").unwrap();
-
-        for (i, table) in html.select(&header_sel).enumerate().take(5) {
-            let cells: Vec<String> = table
-                .select(&td_sel)
-                .map(|td| td.text().collect::<String>().trim().to_string())
-                .collect();
-            println!("Pane {i}: {cells:?}");
-        }
-
-        // Check if any pane already has evaluation data visible
-        let eval_sel = Selector::parse("div.accordionDetailPane").unwrap();
-        for (i, pane) in html.select(&eval_sel).enumerate().take(3) {
-            let text = pane.text().collect::<String>();
-            let text = text.trim();
-            if !text.is_empty() {
-                println!("\nDetail pane {i} text (first 500 chars):");
-                println!("{}", &text[..text.len().min(500)]);
-            }
-        }
-
-        // Page forward until we find entries with actual evaluation data (not "n/a")
-        let inst_eval_sel = Selector::parse("span[id*='InstEval']").unwrap();
-        let mut current_fields = fields;
-        let mut found_evals = false;
-
-        for page in 2..=10 {
-            println!("\nNavigating to page {page}...");
-            let (page_html, new_fields) = client
-                .next_page(&current_fields, true)
-                .await
-                .expect("Failed to navigate page");
-            current_fields = new_fields;
-
-            // Check if any InstEval span has content other than "n/a" or a future date
-            for eval_span in page_html.select(&inst_eval_sel) {
-                let text = eval_span.text().collect::<String>();
-                let text = text.trim();
-                if !text.is_empty() && text != "n/a" {
-                    found_evals = true;
-                    let id = eval_span.attr("id").unwrap_or("?");
-                    println!("  Found non-n/a evaluation: id={id} text='{text}'");
-                }
-            }
-
-            if found_evals {
-                // Dump this page with actual evaluations
-                let body = page_html.html();
-                let path = dump_dir.join(format!("search_CS_past_page{page}.html"));
-                std::fs::write(&path, &body).expect("Failed to write HTML");
-                println!(
-                    "Wrote page {page} to {} ({} bytes)",
-                    path.display(),
-                    body.len()
-                );
-
-                // Show the header rows on this page
-                for (i, table) in page_html.select(&header_sel).enumerate().take(10) {
-                    let cells: Vec<String> = table
-                        .select(&td_sel)
-                        .map(|td| td.text().collect::<String>().trim().to_string())
-                        .collect();
-                    println!("  Pane {i}: {cells:?}");
-                }
-
-                // Check what's in the detail panes on this page
-                let detail_sel = Selector::parse("div.accordionDetailPane").unwrap();
-                for (i, pane) in page_html.select(&detail_sel).enumerate().take(3) {
-                    let inner = pane.inner_html();
-                    if inner.contains("survey")
-                        || inner.contains("Survey")
-                        || inner.contains("rating")
-                        || inner.contains("Rating")
-                    {
-                        println!(
-                            "\nDetail pane {i} contains survey/rating content (first 2000 chars):"
-                        );
-                        println!("{}", &inner[..inner.len().min(2000)]);
-                    }
-                }
-
-                break;
-            }
-
-            // Check what semester we're on now
-            for table in page_html.select(&header_sel).take(1) {
-                let cells: Vec<String> = table
-                    .select(&td_sel)
-                    .map(|td| td.text().collect::<String>().trim().to_string())
-                    .collect();
-                println!("  First row on page {page}: {cells:?}");
-            }
-        }
-
-        if !found_evals {
-            println!("\nDid not find completed evaluations in first 10 pages");
+        // Verify evaluation data quality
+        for eval in all_evals.iter().take(3) {
+            eprintln!(
+                "  {} {} {}.{} | {} | inst={:?} course={:?}",
+                eval.term, eval.crn, eval.subject, eval.course_number,
+                eval.instructor_name, eval.instructor_rating, eval.course_rating
+            );
         }
     }
 
-    /// Fetch subjects, then search one subject and dump the results page.
-    /// Run with: cargo test -p banner bluebook::tests::dump_subject_search -- --ignored --nocapture
+    /// Verify that BAN (no current-term results) is detected early via missing radio.
     #[tokio::test]
-    #[ignore]
-    async fn dump_subject_search() {
+    #[ignore = "requires network access to bluebook.utsa.edu"]
+    async fn test_live_ban_no_term_filter() {
+        init_tracing();
+
         let client = BlueBookClient::new();
-        let (subjects, fields) = client
-            .fetch_subjects()
-            .await
-            .expect("Failed to fetch subjects");
+        let (subjects, initial_fields) = client.fetch_subjects().await.unwrap();
+        let ban = subjects.iter().find(|s| s.code == "BAN").expect("BAN subject must exist");
 
-        println!(
-            "Found {} subjects: {:?}",
-            subjects.len(),
-            &subjects[..subjects.len().min(20)]
+        let (_html, fields) = client.search_subject(ban, &initial_fields).await.unwrap();
+        assert!(
+            !fields.has(TERM_FILTER_RADIO),
+            "BAN search should NOT have term filter radio (no current-term results)"
         );
+        eprintln!("BAN correctly detected as having no term filter");
+    }
 
-        let dump_dir = std::path::Path::new("target/bluebook_dump");
-        std::fs::create_dir_all(dump_dir).expect("Failed to create dump dir");
+    /// Test the full scrape_all flow to see how many evaluations are collected.
+    /// Requires a running PostgreSQL database.
+    #[tokio::test]
+    #[ignore = "requires network access to bluebook.utsa.edu and database; runs full scrape"]
+    async fn test_live_scrape_all() {
+        init_tracing();
 
-        // Search for CS (or first available subject)
-        let subject = subjects
-            .iter()
-            .find(|s| s.code == "CS")
-            .unwrap_or_else(|| subjects.first().expect("No subjects found"));
-        println!(
-            "\nSearching for subject: {} ({}) [index={}]",
-            subject.code, subject.display_text, subject.combo_index
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for this test");
+        let db_pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+
+        let client = BlueBookClient::new();
+        let total = client.scrape_all(&db_pool).await.unwrap();
+        eprintln!(
+            "Total evaluations upserted: {total} (0 means all subjects failed)",
         );
-
-        let (html, _new_fields) = client
-            .search_subject(subject, &fields)
-            .await
-            .expect("Failed to search subject");
-
-        let body = html.html();
-        let path = dump_dir.join(format!("search_{}.html", subject.code));
-        std::fs::write(&path, &body).expect("Failed to write HTML");
-        println!("Wrote search results to {}", path.display());
-        println!("Body length: {} bytes", body.len());
-
-        // Inspect result structure
-        let table_sel = Selector::parse("table").unwrap();
-        let tr_sel = Selector::parse("tr").unwrap();
-        let td_sel = Selector::parse("td").unwrap();
-        let th_sel = Selector::parse("th").unwrap();
-
-        for table in html.select(&table_sel) {
-            let id = table.attr("id").unwrap_or("(no id)");
-            let class = table.attr("class").unwrap_or("(no class)");
-            let rows: Vec<_> = table.select(&tr_sel).collect();
-            println!("\nTable id={id} class={class} rows={}", rows.len());
-
-            // Print headers if present
-            if let Some(first_row) = rows.first() {
-                let headers: Vec<String> = first_row
-                    .select(&th_sel)
-                    .map(|th| th.text().collect::<String>().trim().to_string())
-                    .collect();
-                if !headers.is_empty() {
-                    println!("  Headers: {headers:?}");
-                }
-            }
-
-            // Print first few data rows
-            for (i, row) in rows.iter().take(5).enumerate() {
-                let cells: Vec<String> = row
-                    .select(&td_sel)
-                    .map(|td| {
-                        let text = td.text().collect::<String>().trim().to_string();
-                        if text.len() > 80 {
-                            format!("{}...", &text[..80])
-                        } else {
-                            text
-                        }
-                    })
-                    .collect();
-                if !cells.is_empty() {
-                    println!("  Row {i}: {cells:?}");
-                }
-            }
-        }
-
-        // Also look for accordion/panel structures
-        for sel_str in [
-            "div.accordion",
-            "div[id*='Accordion']",
-            "div[id*='Panel']",
-            "div[id*='pane']",
-        ] {
-            if let Ok(sel) = Selector::parse(sel_str) {
-                let count = html.select(&sel).count();
-                if count > 0 {
-                    println!("\nFound {count} elements matching '{sel_str}'");
-                }
-            }
-        }
-
-        // Try parsing evaluations with current logic
-        let evals = BlueBookClient::parse_evaluations(&html, &subject.code);
-        println!(
-            "\nParsed {len} evaluations with current logic",
-            len = evals.len()
+        assert!(
+            total > 0,
+            "Should collect at least some evaluations from the live site"
         );
-        for eval in evals.iter().take(3) {
-            println!("  {eval:?}");
-        }
     }
 }

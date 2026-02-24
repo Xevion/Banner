@@ -4,6 +4,7 @@ import type {
   ApiError,
   ApiErrorCode,
   AuditLogResponse,
+  BlueBookSyncTriggerResponse,
   CodeDescription,
   CourseResponse,
   InstructorDetailResponse,
@@ -503,6 +504,10 @@ export class BannerApiClient {
 
   async syncTerms(): Promise<Result<TermSyncResponse, ApiErrorClass>> {
     return this.request<TermSyncResponse>("/admin/terms/sync", { method: "POST" });
+  }
+
+  async syncBlueBook(): Promise<Result<BlueBookSyncTriggerResponse, ApiErrorClass>> {
+    return this.request<BlueBookSyncTriggerResponse>("/admin/bluebook/sync", { method: "POST" });
   }
 
   async suggest(

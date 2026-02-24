@@ -1,5 +1,6 @@
 pub mod app;
 pub mod banner;
+pub mod bluebook;
 pub mod bot;
 pub mod calendar;
 pub mod cli;

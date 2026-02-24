@@ -1,5 +1,7 @@
 //! Database operations for BlueBook evaluation data.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use sqlx::PgPool;
 
@@ -19,10 +21,41 @@ pub struct BlueBookEvaluation {
     pub department: Option<String>,
 }
 
+/// Deduplicate evaluations by the unique constraint key
+/// `(subject, course_number, section, term, instructor_name)`.
+///
+/// When duplicates exist (e.g. Summer I and Summer II collapsing to the same
+/// term code), keeps whichever entry has more response data.
+fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
+    let mut best: HashMap<(&str, &str, &str, &str, &str), &BlueBookEvaluation> = HashMap::new();
+
+    for eval in evaluations {
+        let key = (
+            eval.subject.as_str(),
+            eval.course_number.as_str(),
+            eval.section.as_str(),
+            eval.term.as_str(),
+            eval.instructor_name.as_str(),
+        );
+        let entry = best.entry(key).or_insert(eval);
+        // Prefer the entry with more response data
+        let existing_responses = entry.instructor_response_count.unwrap_or(0)
+            + entry.course_response_count.unwrap_or(0);
+        let new_responses = eval.instructor_response_count.unwrap_or(0)
+            + eval.course_response_count.unwrap_or(0);
+        if new_responses > existing_responses {
+            *entry = eval;
+        }
+    }
+
+    best.into_values().collect()
+}
+
 /// Bulk upsert BlueBook evaluations using the UNNEST pattern.
 ///
-/// On conflict (same section/term/instructor), updates all evaluation fields
-/// and resets `scraped_at` to NOW().
+/// Deduplicates by the unique constraint key before inserting — PostgreSQL's
+/// `ON CONFLICT DO UPDATE` cannot handle the same row appearing twice in one
+/// statement. On conflict, updates all evaluation fields and resets `scraped_at`.
 #[allow(dead_code)]
 pub async fn batch_upsert_bluebook_evaluations(
     evaluations: &[BlueBookEvaluation],
@@ -32,30 +65,32 @@ pub async fn batch_upsert_bluebook_evaluations(
         return Ok(());
     }
 
-    let subjects: Vec<&str> = evaluations.iter().map(|e| e.subject.as_str()).collect();
-    let course_numbers: Vec<&str> = evaluations
+    let deduped = deduplicate(evaluations);
+
+    let subjects: Vec<&str> = deduped.iter().map(|e| e.subject.as_str()).collect();
+    let course_numbers: Vec<&str> = deduped
         .iter()
         .map(|e| e.course_number.as_str())
         .collect();
-    let sections: Vec<&str> = evaluations.iter().map(|e| e.section.as_str()).collect();
-    let crns: Vec<&str> = evaluations.iter().map(|e| e.crn.as_str()).collect();
-    let terms: Vec<&str> = evaluations.iter().map(|e| e.term.as_str()).collect();
-    let instructor_names: Vec<&str> = evaluations
+    let sections: Vec<&str> = deduped.iter().map(|e| e.section.as_str()).collect();
+    let crns: Vec<&str> = deduped.iter().map(|e| e.crn.as_str()).collect();
+    let terms: Vec<&str> = deduped.iter().map(|e| e.term.as_str()).collect();
+    let instructor_names: Vec<&str> = deduped
         .iter()
         .map(|e| e.instructor_name.as_str())
         .collect();
     let instructor_ratings: Vec<Option<f32>> =
-        evaluations.iter().map(|e| e.instructor_rating).collect();
-    let instructor_response_counts: Vec<Option<i32>> = evaluations
+        deduped.iter().map(|e| e.instructor_rating).collect();
+    let instructor_response_counts: Vec<Option<i32>> = deduped
         .iter()
         .map(|e| e.instructor_response_count)
         .collect();
-    let course_ratings: Vec<Option<f32>> = evaluations.iter().map(|e| e.course_rating).collect();
-    let course_response_counts: Vec<Option<i32>> = evaluations
+    let course_ratings: Vec<Option<f32>> = deduped.iter().map(|e| e.course_rating).collect();
+    let course_response_counts: Vec<Option<i32>> = deduped
         .iter()
         .map(|e| e.course_response_count)
         .collect();
-    let departments: Vec<Option<&str>> = evaluations
+    let departments: Vec<Option<&str>> = deduped
         .iter()
         .map(|e| e.department.as_deref())
         .collect();

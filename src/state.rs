@@ -15,7 +15,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 use ts_rs::TS;
 
 /// Health status of a service.
@@ -149,10 +149,17 @@ pub struct AppState {
     pub ssr_client: reqwest::Client,
     /// Base URL of the downstream SSR server (e.g. "http://localhost:3001").
     pub ssr_downstream: String,
+    /// Notify handle to manually trigger a BlueBook sync from admin endpoints.
+    pub bluebook_sync_notify: Arc<Notify>,
 }
 
 impl AppState {
-    pub fn new(banner_api: Arc<BannerApi>, db_pool: PgPool, ssr_downstream: String) -> Self {
+    pub fn new(
+        banner_api: Arc<BannerApi>,
+        db_pool: PgPool,
+        ssr_downstream: String,
+        bluebook_sync_notify: Arc<Notify>,
+    ) -> Self {
         let events = Arc::new(EventBuffer::new(1024));
         let schedule_cache = ScheduleCache::new(db_pool.clone());
         let reference_cache = Arc::new(RwLock::new(ReferenceCache::new()));
@@ -175,6 +182,7 @@ impl AppState {
             computed_streams,
             ssr_client,
             ssr_downstream,
+            bluebook_sync_notify,
         }
     }
 

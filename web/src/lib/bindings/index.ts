@@ -6,6 +6,7 @@ export type { Attribute } from "./Attribute";
 export type { AuditLogEntry } from "./AuditLogEntry";
 export type { AuditLogFilter } from "./AuditLogFilter";
 export type { AuditLogResponse } from "./AuditLogResponse";
+export type { BlueBookSyncTriggerResponse } from "./BlueBookSyncTriggerResponse";
 export type { Campus } from "./Campus";
 export type { CandidateResponse } from "./CandidateResponse";
 export type { CodeDescription } from "./CodeDescription";
