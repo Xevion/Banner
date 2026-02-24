@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Subject, Term } from "$lib/api";
 import type { CodeDescription } from "$lib/bindings";
+import { countActive } from "$lib/filters";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { SlidersHorizontal } from "@lucide/svelte";
 import CatalogPopover from "./CatalogPopover.svelte";
@@ -41,8 +42,7 @@ const filters = getFiltersContext();
 // Mobile bottom sheet state
 let filterSheetOpen = $state(false);
 
-// Active filter count is now derived from the filters instance
-let activeFilterCount = $derived(filters.activeCount);
+let activeFilterCount = $derived(countActive(filters));
 </script>
 
 <!-- Mobile row 1: Term + Subject side by side -->

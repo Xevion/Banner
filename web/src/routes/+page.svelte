@@ -17,7 +17,8 @@ import {
 import { CourseTable } from "$lib/components/course-table";
 import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
 import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
-import { SearchFilters, setFiltersContext } from "$lib/stores/search-filters.svelte";
+import { parseFilters, searchKey } from "$lib/filters";
+import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { SortingState } from "@tanstack/table-core";
 import { untrack } from "svelte";
 
@@ -40,10 +41,6 @@ const searchMeta = $derived(data.searchMeta);
 const searchError = $derived(data.searchError);
 const loading = $derived($navigating !== null);
 
-// Mutable filter state — UI's writable handle, synced to URL
-const filters = new SearchFilters();
-setFiltersContext(filters);
-
 function resolveState(urlSearch: string, options: SearchOptionsResponse | null) {
   const params = new URLSearchParams(urlSearch);
   const terms = options?.terms ?? [];
@@ -61,11 +58,11 @@ function resolveState(urlSearch: string, options: SearchOptionsResponse | null) 
   };
 }
 
+// Hydrate initial filter state from URL
 const initial = resolveState(data.urlSearch, data.searchOptions);
-filters.fromURLParams(
-  initial.params,
-  new Set(data.searchOptions?.subjects.map((s) => s.code) ?? [])
-);
+const validSubjects = new Set(data.searchOptions?.subjects.map((s) => s.code) ?? []);
+const filters = createFilterState(initial.params, validSubjects);
+setFiltersContext(filters);
 
 let selectedTerm = $state(initial.selectedTerm);
 let offset = $state(initial.offset);
@@ -77,10 +74,12 @@ $effect(() => {
     data.urlSearch,
     untrack(() => searchOptions)
   );
-  const validSubjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
+  const subjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
+  const parsed = parseFilters(resolved.params, subjects);
 
   selectedTerm = resolved.selectedTerm;
-  filters.fromURLParams(resolved.params, validSubjects);
+  // Apply parsed filter state to the reactive object
+  Object.assign(filters, parsed);
   offset = resolved.offset;
   sorting = resolved.sorting;
 });
@@ -141,7 +140,7 @@ const columns = new ColumnVisibilityController({
 // Reset offset when filters change
 let prevFilterKey = $state("");
 $effect(() => {
-  const key = filters.toSearchKey();
+  const key = searchKey(filters);
   if (prevFilterKey && key !== prevFilterKey) {
     offset = 0;
   }

@@ -13,7 +13,7 @@ const filters = getFiltersContext();
 const hasActiveFilters = $derived(
   filters.creditHourMin !== null ||
     filters.creditHourMax !== null ||
-    filters.instructor !== "" ||
+    !!filters.instructor ||
     filters.courseNumberLow !== null ||
     filters.courseNumberHigh !== null
 );
@@ -49,7 +49,10 @@ function formatCourseNumberPip(v: number): string {
         type="text"
         placeholder="Search by name..."
         autocomplete="off"
-        bind:value={filters.instructor}
+        value={filters.instructor ?? ""}
+        oninput={(e) => {
+          filters.instructor = e.currentTarget.value || null;
+        }}
         class="h-8 border border-border bg-card text-foreground rounded-md px-2 text-sm
                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       />

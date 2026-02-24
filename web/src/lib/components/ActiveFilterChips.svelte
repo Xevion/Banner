@@ -3,16 +3,16 @@ import type { DayOfWeek } from "$lib/bindings";
 import FilterChip from "$lib/components/FilterChip.svelte";
 import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 import { dayCode } from "$lib/days";
-import { formatCompactTime } from "$lib/filters";
+import type { FilterState } from "$lib/filters";
+import { clearFilters, countActive, formatCompactTime } from "$lib/filters";
 import {
   getAttributeFilterLabel,
   getCampusFilterLabel,
   getPartOfTermFilterLabel,
 } from "$lib/labels";
 import { type ScrollMetrics, maskGradient as computeMaskGradient } from "$lib/scroll-fade";
-import type { SearchFilters } from "$lib/stores/search-filters.svelte";
 
-let { filters }: { filters: SearchFilters } = $props();
+let { filters }: { filters: FilterState } = $props();
 
 function formatDaysChip(d: string[]): string {
   return d.map((day) => dayCode(day as DayOfWeek)).join("");
@@ -188,10 +188,10 @@ $effect(() => {
       }}
     />
   {/if}
-  {#if filters.instructor !== ""}
+  {#if filters.instructor !== null && filters.instructor !== ""}
     <FilterChip
       label="Instructor: {filters.instructor}"
-      onRemove={() => (filters.instructor = "")}
+      onRemove={() => (filters.instructor = null)}
     />
   {/if}
   {#if filters.courseNumberLow !== null || filters.courseNumberHigh !== null}
@@ -207,11 +207,11 @@ $effect(() => {
       }}
     />
   {/if}
-  {#if filters.activeCount >= 2}
+  {#if countActive(filters) >= 2}
     <button
       type="button"
       class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none ml-1 shrink-0"
-      onclick={() => filters.clear()}
+      onclick={() => clearFilters(filters)}
     >
       Clear all
     </button>

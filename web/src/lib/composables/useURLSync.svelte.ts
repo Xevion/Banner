@@ -1,9 +1,10 @@
 import { goto } from "$app/navigation";
-import type { SearchFilters } from "$lib/stores/search-filters.svelte";
+import type { FilterState } from "$lib/filters";
+import { serializeFilters } from "$lib/filters";
 import type { SortingState } from "@tanstack/table-core";
 
 export interface UseURLSyncOptions {
-  filters: SearchFilters;
+  filters: FilterState;
   selectedTerm: () => string;
   defaultTermSlug: () => string;
   offset: () => number;
@@ -44,7 +45,7 @@ export function useURLSync(options: UseURLSyncOptions): URLSyncHandle {
   $effect(() => {
     const term = options.selectedTerm();
     const defaultTermSlug = options.defaultTermSlug();
-    const filterParams = options.filters.toURLParams();
+    const filterParams = serializeFilters(options.filters);
     const currentOffset = options.offset();
     const currentSorting = options.sorting();
 
