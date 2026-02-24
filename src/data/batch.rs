@@ -494,13 +494,12 @@ pub async fn batch_upsert_courses(
 
     // Count courses that had at least one field change (existing rows only)
     let changed_ids: HashSet<i32> = audits.iter().map(|a| a.course_id).collect();
-    let existing_count = diff_rows.iter().filter(|r| r.old_id.is_some()).count() as i32;
     let courses_changed = changed_ids.len() as i32;
 
     let counts = UpsertCounts {
         courses_fetched: course_count as i32,
         courses_changed,
-        courses_unchanged: existing_count - courses_changed,
+        courses_unchanged: course_count as i32 - courses_changed,
         audits_generated: audits.len() as i32,
         metrics_generated: metrics.len() as i32,
     };

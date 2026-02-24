@@ -137,6 +137,11 @@ function sortJobs(jobs: ScrapeJobDto[]): ScrapeJobDto[] {
   });
 }
 
+function getTermCode(job: ScrapeJobDto): string | null {
+  const payload = job.targetPayload as Record<string, unknown>;
+  return typeof payload.term === "string" ? payload.term : null;
+}
+
 function formatJobDetails(job: ScrapeJobDto, subjects: Map<string, string>): string {
   const payload = job.targetPayload as Record<string, unknown>;
   switch (job.targetType) {
@@ -249,6 +254,12 @@ const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
     enableSorting: false,
   },
   {
+    id: "term",
+    accessorFn: (row) => getTermCode(row) ?? "",
+    header: "Term",
+    enableSorting: true,
+  },
+  {
     id: "priority",
     accessorKey: "priority",
     header: "Priority",
@@ -300,6 +311,7 @@ const skeletonWidths: Record<string, string> = {
   status: "w-20",
   targetType: "w-16",
   details: "w-32",
+  term: "w-16",
   priority: "w-16",
   timing: "w-32",
 };
@@ -521,6 +533,14 @@ function getTimingDisplay(
                     title={formatJobDetails(job, subjectMap)}
                   >
                     {formatJobDetails(job, subjectMap)}
+                  </td>
+                {:else if colId === "term"}
+                  <td class="px-3 py-2.5 whitespace-nowrap">
+                    {#if getTermCode(job)}
+                      <span class="font-mono text-xs text-muted-foreground">{getTermCode(job)}</span>
+                    {:else}
+                      <span class="text-xs text-muted-foreground/40">—</span>
+                    {/if}
                   </td>
                 {:else if colId === "priority"}
                   <td class="px-3 py-2.5 whitespace-nowrap">

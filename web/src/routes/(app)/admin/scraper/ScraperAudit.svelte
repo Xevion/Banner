@@ -136,6 +136,12 @@ const columns: ColumnDef<AuditLogEntry, unknown>[] = [
     enableSorting: true,
   },
   {
+    id: "term",
+    accessorKey: "termCode",
+    header: "Term",
+    enableSorting: true,
+  },
+  {
     id: "course",
     accessorKey: "courseId",
     header: "Course",
@@ -174,6 +180,7 @@ const table = createSvelteTable({
 
 const skeletonWidths: Record<string, string> = {
   time: "w-24",
+  term: "w-16",
   course: "w-20",
   field: "w-20",
   change: "w-40",
@@ -265,6 +272,14 @@ const columnCount = columns.length;
                   <SimpleTooltip text={formatAbsoluteDate(entry.timestamp)} side="right" passthrough>
                     <span class="font-mono text-xs text-muted-foreground">{rel.text === "now" ? "just now" : `${rel.text} ago`}</span>
                   </SimpleTooltip>
+                </td>
+              {:else if colId === "term"}
+                <td class="px-4 py-3 whitespace-nowrap">
+                  {#if entry.termCode}
+                    <span class="font-mono text-xs text-muted-foreground">{entry.termCode}</span>
+                  {:else}
+                    <span class="text-xs text-muted-foreground/40">—</span>
+                  {/if}
                 </td>
               {:else if colId === "course"}
                 <td class="px-4 py-3 whitespace-nowrap">
