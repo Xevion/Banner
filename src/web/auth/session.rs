@@ -44,13 +44,18 @@ impl SessionCache {
     /// cached user immediately. On miss or stale entry, queries the database for
     /// the session and user, populates the cache, and fire-and-forgets a
     /// `touch_session` call to update `last_active_at`.
+    ///
+    /// Permanent sessions (those with `session_expires_at == MAX_UTC`, i.e. the
+    /// dev-admin bypass) are never considered stale and bypass the cache TTL.
     pub async fn get_user(&self, token: &str) -> Option<User> {
         // Check cache first
         if let Some(entry) = self.cache.get(token) {
             let now_instant = Instant::now();
             let now_utc = Utc::now();
 
-            let cache_fresh = entry.cached_at + self.cache_ttl > now_instant;
+            // Permanent dev sessions (MAX_UTC expiry) bypass the cache TTL entirely.
+            let is_permanent = entry.session_expires_at == DateTime::<Utc>::MAX_UTC;
+            let cache_fresh = is_permanent || entry.cached_at + self.cache_ttl > now_instant;
             let session_valid = entry.session_expires_at > now_utc;
 
             if cache_fresh && session_valid {
@@ -97,6 +102,23 @@ impl SessionCache {
     /// Remove a single session from the cache (e.g. on logout).
     pub fn evict(&self, token: &str) {
         self.cache.remove(token);
+    }
+
+    /// Inject a static dev session that never expires.
+    ///
+    /// Used in debug builds to provide zero-config admin access for local testing.
+    /// Call this on startup with the seed admin user — thereafter, any request with
+    /// `Cookie: session=dev-admin` is authenticated as that user without hitting the DB.
+    #[cfg(debug_assertions)]
+    pub fn inject_dev_session(&self, token: &str, user: User) {
+        self.cache.insert(
+            token.to_owned(),
+            CachedSession {
+                user,
+                session_expires_at: chrono::DateTime::<chrono::Utc>::MAX_UTC,
+                cached_at: std::time::Instant::now(),
+            },
+        );
     }
 
     /// Remove all cached sessions belonging to a user.

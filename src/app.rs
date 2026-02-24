@@ -159,6 +159,14 @@ impl App {
                 .await
                 .context("Failed to seed admin user")?;
             info!(discord_id = admin_id, username = %user.discord_username, "Seed admin ensured");
+
+            #[cfg(debug_assertions)]
+            {
+                app_state
+                    .session_cache
+                    .inject_dev_session("dev-admin", user);
+                info!("Dev auth bypass active — use: Cookie: session=dev-admin");
+            }
         }
 
         Ok(App {
