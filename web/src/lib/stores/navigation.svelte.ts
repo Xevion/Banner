@@ -20,9 +20,12 @@ const SIDEBAR_NAV_ORDER = [
   "/profile",
   "/settings",
   "/admin",
-  "/admin/jobs",
-  "/admin/audit",
+  "/admin/scraper",
+  "/admin/terms",
   "/admin/users",
+  "/admin/instructors",
+  "/admin/instructors/rmp",
+  "/admin/instructors/bluebook",
 ];
 
 const APP_PREFIXES = ["/profile", "/settings", "/admin"];

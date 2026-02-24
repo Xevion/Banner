@@ -3,11 +3,17 @@ import type {
   AdminStatusResponse,
   ApiError,
   ApiErrorCode,
+  AssignBody,
   AuditLogResponse,
-  BlueBookSyncTriggerResponse,
+  BluebookLinkDetail,
+  BluebookMatchResponse,
+  BluebookOkResponse,
+  BluebookSyncTriggerResponse,
   CodeDescription,
   CourseResponse,
   InstructorDetailResponse,
+  ListBluebookLinksParams,
+  ListBluebookLinksResponse,
   ListInstructorsParams as ListInstructorsParamsGenerated,
   ListInstructorsResponse,
   MatchBody,
@@ -506,8 +512,51 @@ export class BannerApiClient {
     return this.request<TermSyncResponse>("/admin/terms/sync", { method: "POST" });
   }
 
-  async syncBlueBook(): Promise<Result<BlueBookSyncTriggerResponse, ApiErrorClass>> {
-    return this.request<BlueBookSyncTriggerResponse>("/admin/bluebook/sync", { method: "POST" });
+  async syncBlueBook(): Promise<Result<BluebookSyncTriggerResponse, ApiErrorClass>> {
+    return this.request<BluebookSyncTriggerResponse>("/admin/bluebook/sync", { method: "POST" });
+  }
+
+  async getAdminBluebookLinks(
+    params?: Partial<ListBluebookLinksParams>
+  ): Promise<Result<ListBluebookLinksResponse, ApiErrorClass>> {
+    if (!params) {
+      return this.request<ListBluebookLinksResponse>("/admin/bluebook/links");
+    }
+    const query = toURLSearchParams(params as Record<string, unknown>);
+    const qs = query.toString();
+    return this.request<ListBluebookLinksResponse>(`/admin/bluebook/links${qs ? `?${qs}` : ""}`);
+  }
+
+  async getAdminBluebookLink(id: number): Promise<Result<BluebookLinkDetail, ApiErrorClass>> {
+    return this.request<BluebookLinkDetail>(`/admin/bluebook/links/${id}`);
+  }
+
+  async approveBluebookLink(id: number): Promise<Result<BluebookOkResponse, ApiErrorClass>> {
+    return this.request<BluebookOkResponse>(`/admin/bluebook/links/${id}/approve`, {
+      method: "POST",
+    });
+  }
+
+  async rejectBluebookLink(id: number): Promise<Result<BluebookOkResponse, ApiErrorClass>> {
+    return this.request<BluebookOkResponse>(`/admin/bluebook/links/${id}/reject`, {
+      method: "POST",
+    });
+  }
+
+  async assignBluebookLink(
+    id: number,
+    instructorId: number
+  ): Promise<Result<BluebookOkResponse, ApiErrorClass>> {
+    return this.request<BluebookOkResponse>(`/admin/bluebook/links/${id}/assign`, {
+      method: "POST",
+      body: { instructorId } satisfies AssignBody,
+    });
+  }
+
+  async runBluebookMatching(): Promise<Result<BluebookMatchResponse, ApiErrorClass>> {
+    return this.request<BluebookMatchResponse>("/admin/bluebook/match", {
+      method: "POST",
+    });
   }
 
   async suggest(

@@ -14,9 +14,17 @@ import {
   User,
   Users,
 } from "@lucide/svelte";
+import type { Component } from "svelte";
 import { type Snippet, tick } from "svelte";
 
 let { children }: { children: Snippet } = $props();
+
+interface AdminItem {
+  href: string;
+  label: string;
+  icon: Component<{ size?: number; strokeWidth?: number; class?: string }>;
+  children?: { href: string; label: string }[];
+}
 
 let moreSheetOpen = $state(false);
 
@@ -47,17 +55,30 @@ const userItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const adminItems = [
+const adminItems: AdminItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/scraper", label: "Scraper", icon: Activity },
   { href: "/admin/terms", label: "Terms", icon: Calendar },
   { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/instructors", label: "Instructors", icon: GraduationCap },
+  {
+    href: "/admin/instructors",
+    label: "Instructors",
+    icon: GraduationCap,
+    children: [
+      { href: "/admin/instructors", label: "Overview" },
+      { href: "/admin/instructors/rmp", label: "RMP Matching" },
+      { href: "/admin/instructors/bluebook", label: "BlueBook" },
+    ],
+  },
 ];
 
-function isActive(href: string): boolean {
-  if (href === "/admin") return page.url.pathname === "/admin";
+function isActive(href: string, exact = false): boolean {
+  if (href === "/admin" || exact) return page.url.pathname === href;
   return page.url.pathname.startsWith(href);
+}
+
+function isChildActive(parentHref: string): boolean {
+  return page.url.pathname.startsWith(parentHref);
 }
 
 // Bottom tab bar definitions
@@ -73,12 +94,19 @@ const nonAdminTabs = [
 ] as const;
 
 // "More" sheet items (admin only, items not in the tab bar)
-const moreSheetItems = [
+const moreSheetItems: {
+  href: string;
+  icon: Component<{ size?: number; strokeWidth?: number; class?: string }>;
+  label: string;
+  indent?: boolean;
+}[] = [
   { href: "/settings", icon: Settings, label: "Settings" },
   { href: "/admin/terms", icon: Calendar, label: "Terms" },
   { href: "/admin/users", icon: Users, label: "Users" },
   { href: "/admin/instructors", icon: GraduationCap, label: "Instructors" },
-] as const;
+  { href: "/admin/instructors/rmp", icon: GraduationCap, label: "RMP Matching", indent: true },
+  { href: "/admin/instructors/bluebook", icon: GraduationCap, label: "BlueBook", indent: true },
+];
 </script>
 
 <div class="flex flex-col items-center px-3 md:px-5 pb-20 md:pb-5 pt-20">
@@ -113,13 +141,28 @@ const moreSheetItems = [
               <a
                 href={item.href}
                 class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline transition-colors
-                  {isActive(item.href)
+                  {isActive(item.href, !!item.children)
                     ? 'text-foreground bg-muted font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}"
+                    : isChildActive(item.href) && item.children
+                      ? 'text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}"
               >
                 <item.icon size={15} strokeWidth={2} />
                 {item.label}
               </a>
+              {#if item.children && isChildActive(item.href)}
+                {#each item.children as child (child.href)}
+                  <a
+                    href={child.href}
+                    class="flex items-center rounded-md pl-7 pr-2 py-1 text-xs no-underline transition-colors
+                      {isActive(child.href, child.href === item.href)
+                        ? 'text-foreground bg-muted font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}"
+                  >
+                    {child.label}
+                  </a>
+                {/each}
+              {/if}
             {/each}
           {/if}
 
@@ -191,12 +234,15 @@ const moreSheetItems = [
           <a
             href={item.href}
             onclick={() => (moreSheetOpen = false)}
-            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline transition-colors
-              {isActive(item.href)
+            class="flex items-center gap-2 rounded-md py-1.5 text-sm no-underline transition-colors
+              {item.indent ? 'pl-7 pr-2 text-xs' : 'px-2'}
+              {isActive(item.href, item.href === '/admin/instructors')
                 ? 'text-foreground bg-muted font-medium'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}"
           >
-            <item.icon size={15} strokeWidth={2} />
+            {#if !item.indent}
+              <item.icon size={15} strokeWidth={2} />
+            {/if}
             {item.label}
           </a>
         {/each}

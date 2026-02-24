@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 /// The current year at the time of compilation
 const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 
-/// The valid years for terms.
-/// Lower bound is 2001 — the earliest term UTSA's Banner system serves is Fall 2001 (200110).
+/// The valid years for terms, in **display-year** terms (not Banner code prefix).
+///
+/// Banner encodes Fall terms as `(display_year + 1)10`: Fall 2001 → code `200210`.
+/// This range validates the human-readable year, so Fall 2001 (display_year 2001) is accepted.
+///
+/// Lower bound is 2001 — the earliest term UTSA's Banner system serves is Fall 2001 (200210).
 /// Upper bound is compile-time year + 10 to stay tight without manual updates.
 const VALID_YEARS: RangeInclusive<u32> = 2001..=(CURRENT_YEAR + 10);
 
@@ -89,18 +93,19 @@ impl Term {
                 },
             }
         } else if day_of_year < ranges.fall.start {
-            // Summer over, Fall not yet begun
+            // Summer over, Fall not yet begun.
+            // Fall display year matches the literal calendar year (e.g., Fall 2025 runs in 2025).
             TermPoint::BetweenTerms {
                 next: Term {
-                    year: term_year,
+                    year: literal_year,
                     season: Season::Fall,
                 },
             }
         } else if (day_of_year >= ranges.fall.start) && (day_of_year < ranges.fall.end) {
-            // Fall
+            // Fall. Display year matches the literal calendar year.
             TermPoint::InTerm {
                 current: Term {
-                    year: term_year,
+                    year: literal_year,
                     season: Season::Fall,
                 },
             }
@@ -206,14 +211,17 @@ struct YearDayRange {
 }
 
 impl std::fmt::Display for Term {
-    /// Returns the term in the format YYYYXX, where YYYY is the year and XX is the season code
+    /// Returns the Banner term code in the format YYYYXX.
+    ///
+    /// Banner encodes Fall terms as `(display_year + 1)10`, so `Term { year: 2025, season: Fall }`
+    /// produces `"202610"` — the prefix is `2025 + 1 = 2026`. Spring and Summer use the
+    /// display year directly as the prefix.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{year}{season}",
-            year = self.year,
-            season = self.season.to_str()
-        )
+        let code_year = match self.season {
+            Season::Fall => self.year + 1,
+            _ => self.year,
+        };
+        write!(f, "{code_year}{season}", season = self.season.to_str())
     }
 }
 
@@ -279,13 +287,20 @@ impl FromStr for Term {
             return Err(anyhow::anyhow!("Term string must be 6 characters"));
         }
 
-        let year = s[0..4].parse::<u32>().context("Failed to parse year")?;
+        let code_year = s[0..4].parse::<u32>().context("Failed to parse year")?;
+        let season =
+            Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {}", e))?;
+
+        // Banner encodes Fall as (display_year + 1)10, so we subtract 1 to get the year
+        // that matches the human-readable description (e.g., "200210" → Fall 2001).
+        let year = match season {
+            Season::Fall => code_year - 1,
+            _ => code_year,
+        };
+
         if !VALID_YEARS.contains(&year) {
             return Err(anyhow::anyhow!("Year out of range"));
         }
-
-        let season =
-            Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {}", e))?;
 
         Ok(Term { year, season })
     }
@@ -336,9 +351,29 @@ mod tests {
 
     #[test]
     fn test_term_from_str_valid_fall() {
+        // "202510": code_year=2025, Fall → display_year = 2025 - 1 = 2024
         let term = Term::from_str("202510").unwrap();
+        assert_eq!(term.year, 2024);
+        assert_eq!(term.season, Season::Fall);
+    }
+
+    #[test]
+    fn test_term_from_str_fall_earliest() {
+        // Fall 2001 is the earliest UTSA term — Banner code "200210"
+        let term = Term::from_str("200210").unwrap();
+        assert_eq!(term.year, 2001);
+        assert_eq!(term.season, Season::Fall);
+    }
+
+    #[test]
+    fn test_term_from_str_fall_display_year() {
+        // "202610" → Fall 2025: code prefix is 2026 (display_year + 1)
+        let term = Term::from_str("202610").unwrap();
         assert_eq!(term.year, 2025);
         assert_eq!(term.season, Season::Fall);
+        assert_eq!(term.description(), "Fall 2025");
+        assert_eq!(term.slug(), "fall-2025");
+        assert_eq!(term.to_string(), "202610");
     }
 
     #[test]
@@ -382,7 +417,10 @@ mod tests {
 
     #[test]
     fn test_term_from_str_year_below_range() {
+        // "200010": code_year=2000, Fall → display_year=1999, below VALID_YEARS lower bound
         assert!(Term::from_str("200010").is_err());
+        // "200110": code_year=2001, Fall → display_year=2000, still below lower bound
+        assert!(Term::from_str("200110").is_err());
     }
 
     #[test]

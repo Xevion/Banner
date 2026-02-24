@@ -158,13 +158,17 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
     Ok(())
 }
 
-/// Parse a 6-digit term code into (year, season).
+/// Parse a 6-digit term code into (display_year, season).
+///
+/// Returns the **display year** — the year shown in the term description — not the raw
+/// code prefix. Banner encodes Fall as `(display_year + 1)10`, so "202610" (Fall 2025)
+/// returns `(2025, "Fall")` rather than `(2026, "Fall")`.
 ///
 /// Returns `None` for unrecognized formats (e.g., legacy terms with non-standard
 /// season codes like "11"). This allows the sync to skip invalid terms gracefully.
 ///
 /// # Examples
-/// - "202510" -> Some((2025, "Fall"))
+/// - "202510" -> Some((2024, "Fall"))   // Fall 2024, code prefix is 2025
 /// - "202520" -> Some((2025, "Spring"))
 /// - "202530" -> Some((2025, "Summer"))
 /// - "201411" -> None (invalid season code)
@@ -173,16 +177,17 @@ fn parse_term_code(code: &str) -> Option<(i16, String)> {
         return None;
     }
 
-    let year = code[0..4].parse::<i16>().ok()?;
+    let code_year = code[0..4].parse::<i16>().ok()?;
 
-    let season = match &code[4..6] {
-        "10" => "Fall",
-        "20" => "Spring",
-        "30" => "Summer",
+    let (season, display_year) = match &code[4..6] {
+        // Fall display year is one less than the code prefix (Banner convention)
+        "10" => ("Fall", code_year - 1),
+        "20" => ("Spring", code_year),
+        "30" => ("Summer", code_year),
         _ => return None,
     };
 
-    Some((year, season.to_string()))
+    Some((display_year, season.to_string()))
 }
 
 /// Sync terms from Banner API to database.
@@ -294,8 +299,17 @@ mod tests {
 
     #[test]
     fn test_parse_term_code_fall() {
+        // "202510": code_year=2025, Fall → display_year = 2025 - 1 = 2024
         let (year, season) = parse_term_code("202510").unwrap();
-        assert_eq!(year, 2025);
+        assert_eq!(year, 2024);
+        assert_eq!(season, "Fall");
+    }
+
+    #[test]
+    fn test_parse_term_code_fall_earliest() {
+        // Fall 2001: Banner code "200210", code_year=2002 → display_year=2001
+        let (year, season) = parse_term_code("200210").unwrap();
+        assert_eq!(year, 2001);
         assert_eq!(season, "Fall");
     }
 

@@ -149,6 +149,21 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             get(admin::scraper::scraper_subject_detail),
         )
         .route("/admin/bluebook/sync", post(admin::bluebook::sync_bluebook))
+        .route("/admin/bluebook/links", get(admin::bluebook::list_links))
+        .route("/admin/bluebook/links/{id}", get(admin::bluebook::get_link))
+        .route(
+            "/admin/bluebook/links/{id}/approve",
+            post(admin::bluebook::approve_link),
+        )
+        .route(
+            "/admin/bluebook/links/{id}/reject",
+            post(admin::bluebook::reject_link),
+        )
+        .route(
+            "/admin/bluebook/links/{id}/assign",
+            post(admin::bluebook::assign_link),
+        )
+        .route("/admin/bluebook/match", post(admin::bluebook::run_matching))
         .route("/admin/terms", get(admin::terms::list_terms))
         .route("/admin/terms/sync", post(admin::terms::sync_terms))
         .route(

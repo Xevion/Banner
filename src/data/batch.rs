@@ -928,6 +928,13 @@ async fn upsert_course_instructors(
     // Build new instructor names per course for auditing
     let mut new_names: HashMap<i32, Vec<String>> = HashMap::new();
 
+    // Guard against duplicate (course_id, instructor_id) pairs in the batch.
+    // Banner occasionally returns two FacultyItem entries for the same section
+    // with different banner_ids but the same email, which both resolve to the
+    // same instructor_id after the instructor collapse. A single UNNEST with
+    // two identical conflict keys causes PostgreSQL to reject the whole statement.
+    let mut seen_pairs: HashSet<(i32, i32)> = HashSet::new();
+
     for course in courses {
         let key = (
             course.course_reference_number.as_str(),
@@ -945,6 +952,9 @@ async fn upsert_course_instructors(
         let names = new_names.entry(course_id).or_default();
         for faculty in &course.faculty {
             if let Some(instructor_id) = instructor_lookup.resolve(faculty) {
+                if !seen_pairs.insert((course_id, instructor_id)) {
+                    continue;
+                }
                 cids.push(course_id);
                 instructor_ids.push(instructor_id);
                 banner_ids.push(faculty.banner_id.as_str());
@@ -985,7 +995,7 @@ async fn upsert_course_instructors(
 
     // Delete existing links for these courses then re-insert
     sqlx::query("DELETE FROM course_instructors WHERE course_id = ANY($1)")
-        .bind(&cids)
+        .bind(&unique_cids)
         .execute(&mut *conn)
         .await?;
 

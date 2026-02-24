@@ -2,6 +2,7 @@
 import { goto } from "$app/navigation";
 import { client } from "$lib/api";
 import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/bindings";
+import { useQuery } from "$lib/composables";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import { ratingStyle } from "$lib/course";
@@ -19,7 +20,6 @@ interface PageData {
 
 let { data }: { data: PageData } = $props();
 
-let instructors = $state(untrack(() => data.instructors));
 let search = $state(untrack(() => data.url.searchParams.get("search") ?? ""));
 let selectedSubjects = $state<string[]>(
   untrack(() =>
@@ -27,14 +27,11 @@ let selectedSubjects = $state<string[]>(
   )
 );
 let selectedSort = $state(untrack(() => data.url.searchParams.get("sort") ?? "name_asc"));
-let loading = $state(false);
+let page = $state(untrack(() => Number(data.url.searchParams.get("page")) || 1));
 
 const subjects = $derived(data.searchOptions?.subjects ?? []);
 const subjectMap = $derived(
   new Map(subjects.map((s: { code: string; description: string }) => [s.code, s.description]))
-);
-const totalPages = $derived(
-  instructors ? Math.ceil(Number(instructors.total) / instructors.perPage) : 0
 );
 
 const sortItems = [
@@ -44,53 +41,44 @@ const sortItems = [
 ];
 const sortLabel = $derived(sortItems.find((s) => s.value === selectedSort)?.label ?? "Sort");
 
-let searchTimeout: ReturnType<typeof setTimeout> | undefined;
+const query = useQuery({
+  fetcher: () =>
+    client.getInstructors({
+      search: search || undefined,
+      subject: selectedSubjects[0] || undefined,
+      sort: selectedSort,
+      page,
+    }),
+  deps: () => [search, selectedSubjects[0], selectedSort, page],
+  debounce: 300,
+  initial: untrack(() => data.instructors),
+});
 
-function updateURL() {
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive; used only for serializing to query string
+const totalPages = $derived(
+  query.data ? Math.ceil(Number(query.data.total) / query.data.perPage) : 0
+);
+
+// Reset to page 1 when subject changes
+let _prevSubject = $state(untrack(() => selectedSubjects[0]));
+$effect(() => {
+  const s = selectedSubjects[0]; // tracked
+  if (s !== _prevSubject) {
+    _prevSubject = s;
+    page = 1;
+  }
+});
+
+// Sync filters to URL
+$effect(() => {
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   if (selectedSubjects.length === 1) params.set("subject", selectedSubjects[0]);
-  if (selectedSort && selectedSort !== "name_asc") params.set("sort", selectedSort);
-  if (instructors?.page && instructors.page > 1) params.set("page", String(instructors.page));
+  if (selectedSort !== "name_asc") params.set("sort", selectedSort);
+  if (page > 1) params.set("page", String(page));
   const qs = params.toString();
   void goto(`/instructors${qs ? `?${qs}` : ""}`, { replaceState: true, keepFocus: true });
-}
-
-async function fetchInstructors(page = 1) {
-  loading = true;
-  const result = await client.getInstructors({
-    search: search || undefined,
-    subject: selectedSubjects[0] || undefined,
-    sort: selectedSort,
-    page,
-  });
-  if (result.isOk) {
-    instructors = result.value;
-  }
-  loading = false;
-  updateURL();
-}
-
-function onSearchInput() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => void fetchInstructors(), 300);
-}
-
-let mounted = false;
-$effect(() => {
-  void selectedSubjects;
-  void selectedSort;
-  if (!mounted) {
-    mounted = true;
-    return;
-  }
-  void fetchInstructors();
 });
-
-function goToPage(page: number) {
-  void fetchInstructors(page);
-}
 
 function resolveSubject(code: string): string {
   return subjectMap.get(code) ?? code;
@@ -113,7 +101,6 @@ function resolveSubject(code: string): string {
           type="text"
           placeholder="Search instructors..."
           bind:value={search}
-          oninput={onSearchInput}
           class="w-full h-9 pl-9 pr-3 text-sm rounded-md border border-border bg-card
                  focus:outline-none focus:ring-2 focus:ring-ring"
         />
@@ -124,7 +111,7 @@ function resolveSubject(code: string): string {
       <Select.Root
         type="single"
         value={selectedSort}
-        onValueChange={(v: string) => { if (v) selectedSort = v; }}
+        onValueChange={(v: string) => { if (v) { selectedSort = v; page = 1; } }}
         items={sortItems}
       >
         <Select.Trigger
@@ -166,14 +153,14 @@ function resolveSubject(code: string): string {
     </div>
 
     <!-- Results count -->
-    {#if instructors && !loading}
+    {#if query.data && !query.isLoading}
       <p class="text-xs text-muted-foreground mb-3">
-        {formatNumber(Number(instructors.total))} instructor{Number(instructors.total) !== 1 ? "s" : ""} found
+        {formatNumber(Number(query.data.total))} instructor{Number(query.data.total) !== 1 ? "s" : ""} found
       </p>
     {/if}
 
     <!-- Card grid -->
-    {#if loading && !instructors}
+    {#if query.isLoading && !query.data}
       <!-- Skeleton grid for initial load -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {#each Array(12) as _, i (i)}
@@ -195,10 +182,10 @@ function resolveSubject(code: string): string {
     {:else}
       <div
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity duration-150"
-        class:opacity-50={loading}
+        class:opacity-50={query.isLoading}
       >
-        {#if instructors}
-          {#each instructors.instructors as instructor (instructor.id)}
+        {#if query.data}
+          {#each query.data.instructors as instructor (instructor.id)}
             <a
               href="/instructors/{instructor.slug}"
               class="block rounded-lg border border-border bg-card p-4
@@ -261,31 +248,31 @@ function resolveSubject(code: string): string {
     {/if}
 
     <!-- Empty state -->
-    {#if instructors?.instructors.length === 0 && !loading}
+    {#if query.data?.instructors.length === 0 && !query.isLoading}
       <div class="text-center py-16 text-muted-foreground">
         <p class="text-sm">No instructors found matching your criteria.</p>
       </div>
     {/if}
 
     <!-- Pagination -->
-    {#if instructors && totalPages > 1}
+    {#if query.data && totalPages > 1}
       <div class="flex justify-center items-center gap-2 mt-6 text-sm">
         <button
           class="px-3 py-1.5 rounded-md border border-border bg-card text-sm
                  hover:bg-muted/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-          disabled={instructors.page <= 1}
-          onclick={() => goToPage(instructors!.page - 1)}
+          disabled={page <= 1}
+          onclick={() => page--}
         >
           Previous
         </button>
         <span class="text-muted-foreground tabular-nums">
-          Page {instructors.page} of {totalPages}
+          Page {page} of {totalPages}
         </span>
         <button
           class="px-3 py-1.5 rounded-md border border-border bg-card text-sm
                  hover:bg-muted/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-          disabled={instructors.page >= totalPages}
-          onclick={() => goToPage(instructors!.page + 1)}
+          disabled={page >= totalPages}
+          onclick={() => page++}
         >
           Next
         </button>

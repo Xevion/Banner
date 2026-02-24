@@ -1,5 +1,6 @@
 //! Database models and schema.
 
+pub mod admin_bluebook;
 pub mod admin_rmp;
 pub mod batch;
 pub mod bluebook;
