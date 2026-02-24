@@ -1,7 +1,7 @@
 //! Batch database operations for improved performance.
 
 use crate::banner::Course;
-use crate::banner::models::meetings::TimeRange;
+use crate::banner::models::meetings::{FacultyItem, TimeRange};
 use crate::data::course_types::{DateRange, MeetingLocation};
 use crate::data::models::{DayOfWeek, DbMeetingTime, UpsertCounts};
 use crate::data::names::{decode_html_entities, parse_banner_name};
@@ -484,12 +484,12 @@ pub async fn batch_upsert_courses(
     // Step 3: Compute audit/metric diffs
     let (mut audits, metrics) = compute_diffs(&diff_rows);
 
-    // Step 4: Upsert instructors (returns email -> id map)
-    let email_to_id = upsert_instructors(courses, &mut tx).await?;
+    // Step 4: Upsert instructors (returns lookup maps for email and display_name)
+    let instructor_lookup = upsert_instructors(courses, &mut tx).await?;
 
     // Step 5: Link courses to instructors via junction table, collecting instructor audits
     let instructor_audits =
-        upsert_course_instructors(courses, &crn_term_to_id, &email_to_id, &mut tx).await?;
+        upsert_course_instructors(courses, &crn_term_to_id, &instructor_lookup, &mut tx).await?;
     audits.extend(instructor_audits);
 
     // Count courses that had at least one field change (existing rows only)
@@ -772,78 +772,145 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
     Ok(rows)
 }
 
-/// Deduplicate and upsert all instructors from the batch by email.
-/// Returns a map of lowercased_email -> instructor id for junction linking.
+/// Lookup maps returned by [`upsert_instructors`] for resolving faculty to instructor IDs.
+struct InstructorLookup {
+    /// Lowercased email → instructor_id (for faculty with email).
+    by_email: HashMap<String, i32>,
+    /// Display name → instructor_id (for faculty without email).
+    by_display_name: HashMap<String, i32>,
+}
+
+impl InstructorLookup {
+    fn resolve(&self, faculty: &FacultyItem) -> Option<i32> {
+        if let Some(email) = &faculty.email_address {
+            self.by_email.get(&email.to_lowercase()).copied()
+        } else {
+            self.by_display_name
+                .get(&decode_html_entities(&faculty.display_name))
+                .copied()
+        }
+    }
+}
+
+/// Deduplicate and upsert all instructors from the batch.
+///
+/// Two-phase upsert:
+///   1. Instructors with email → dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
+///   2. Instructors without email → dedup by display_name (ON CONFLICT (display_name) WHERE email IS NULL)
 async fn upsert_instructors(
     courses: &[Course],
     conn: &mut PgConnection,
-) -> Result<HashMap<String, i32>> {
-    let mut seen = HashSet::new();
-    let mut display_names: Vec<String> = Vec::new();
-    let mut first_names: Vec<Option<String>> = Vec::new();
-    let mut last_names: Vec<Option<String>> = Vec::new();
-    let mut emails_lower: Vec<String> = Vec::new();
-    let mut skipped_no_email = 0u32;
+) -> Result<InstructorLookup> {
+    // Phase 1: Collect instructors WITH email, deduped by lowercased email
+    let mut seen_emails = HashSet::new();
+    let mut e_display_names = Vec::new();
+    let mut e_first_names: Vec<Option<String>> = Vec::new();
+    let mut e_last_names: Vec<Option<String>> = Vec::new();
+    let mut e_emails = Vec::new();
+
+    // Phase 2: Collect instructors WITHOUT email, deduped by display_name
+    let mut seen_names = HashSet::new();
+    let mut ne_display_names = Vec::new();
+    let mut ne_first_names: Vec<Option<String>> = Vec::new();
+    let mut ne_last_names: Vec<Option<String>> = Vec::new();
 
     for course in courses {
         for faculty in &course.faculty {
+            let display_name = decode_html_entities(&faculty.display_name);
+            let parts = parse_banner_name(&faculty.display_name);
             if let Some(email) = &faculty.email_address {
                 let email_lower = email.to_lowercase();
-                if seen.insert(email_lower.clone()) {
-                    let parts = parse_banner_name(&faculty.display_name);
-                    display_names.push(decode_html_entities(&faculty.display_name));
-                    first_names.push(parts.as_ref().map(|p| p.first.clone()));
-                    last_names.push(parts.as_ref().map(|p| p.last.clone()));
-                    emails_lower.push(email_lower);
+                if seen_emails.insert(email_lower.clone()) {
+                    e_display_names.push(display_name);
+                    e_first_names.push(parts.as_ref().map(|p| p.first.clone()));
+                    e_last_names.push(parts.as_ref().map(|p| p.last.clone()));
+                    e_emails.push(email_lower);
                 }
-            } else {
-                skipped_no_email += 1;
+            } else if seen_names.insert(display_name.clone()) {
+                ne_display_names.push(display_name);
+                ne_first_names.push(parts.as_ref().map(|p| p.first.clone()));
+                ne_last_names.push(parts.as_ref().map(|p| p.last.clone()));
             }
         }
     }
 
-    if skipped_no_email > 0 {
-        warn!(
-            count = skipped_no_email,
-            "Skipped instructors with no email address"
-        );
+    let mut by_email = HashMap::new();
+    let mut by_display_name = HashMap::new();
+
+    // Phase 1: Upsert instructors with email
+    if !e_display_names.is_empty() {
+        let email_refs: Vec<&str> = e_emails.iter().map(|s| s.as_str()).collect();
+        let first_name_refs: Vec<Option<&str>> =
+            e_first_names.iter().map(|s| s.as_deref()).collect();
+        let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
+        let slugs: Vec<String> = e_display_names
+            .iter()
+            .map(|name| crate::data::instructors::generate_slug(name))
+            .collect();
+
+        let rows: Vec<(i32, String)> = sqlx::query_as(
+            r#"
+            INSERT INTO instructors (display_name, email, first_name, last_name, slug)
+            SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
+            ON CONFLICT (email) WHERE email IS NOT NULL
+            DO UPDATE SET
+                display_name = EXCLUDED.display_name,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                slug = COALESCE(instructors.slug, EXCLUDED.slug)
+            RETURNING id, email
+            "#,
+        )
+        .bind(&e_display_names)
+        .bind(&email_refs)
+        .bind(&first_name_refs)
+        .bind(&last_name_refs)
+        .bind(&slugs)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {}", e))?;
+
+        by_email = rows.into_iter().map(|(id, email)| (email, id)).collect();
     }
 
-    if display_names.is_empty() {
-        return Ok(HashMap::new());
+    // Phase 2: Upsert instructors without email
+    if !ne_display_names.is_empty() {
+        let first_name_refs: Vec<Option<&str>> =
+            ne_first_names.iter().map(|s| s.as_deref()).collect();
+        let last_name_refs: Vec<Option<&str>> =
+            ne_last_names.iter().map(|s| s.as_deref()).collect();
+        let slugs: Vec<String> = ne_display_names
+            .iter()
+            .map(|name| crate::data::instructors::generate_slug(name))
+            .collect();
+
+        let rows: Vec<(i32, String)> = sqlx::query_as(
+            r#"
+            INSERT INTO instructors (display_name, first_name, last_name, slug)
+            SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
+            ON CONFLICT (display_name) WHERE email IS NULL
+            DO UPDATE SET
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                slug = COALESCE(instructors.slug, EXCLUDED.slug)
+            RETURNING id, display_name
+            "#,
+        )
+        .bind(&ne_display_names)
+        .bind(&first_name_refs)
+        .bind(&last_name_refs)
+        .bind(&slugs)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {}", e))?;
+
+        by_display_name = rows.into_iter().map(|(id, name)| (name, id)).collect();
     }
 
-    let email_refs: Vec<&str> = emails_lower.iter().map(|s| s.as_str()).collect();
-    let first_name_refs: Vec<Option<&str>> = first_names.iter().map(|s| s.as_deref()).collect();
-    let last_name_refs: Vec<Option<&str>> = last_names.iter().map(|s| s.as_deref()).collect();
-    let slugs: Vec<String> = display_names
-        .iter()
-        .map(|name| crate::data::instructors::generate_slug(name))
-        .collect();
-
-    let rows: Vec<(i32, String)> = sqlx::query_as(
-        r#"
-        INSERT INTO instructors (display_name, email, first_name, last_name, slug)
-        SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
-        ON CONFLICT (email)
-        DO UPDATE SET
-            display_name = EXCLUDED.display_name,
-            first_name = EXCLUDED.first_name,
-            last_name = EXCLUDED.last_name,
-            slug = COALESCE(instructors.slug, EXCLUDED.slug)
-        RETURNING id, email
-        "#,
-    )
-    .bind(&display_names)
-    .bind(&email_refs)
-    .bind(&first_name_refs)
-    .bind(&last_name_refs)
-    .bind(&slugs)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors: {}", e))?;
-
-    Ok(rows.into_iter().map(|(id, email)| (email, id)).collect())
+    Ok(InstructorLookup {
+        by_email,
+        by_display_name,
+    })
 }
 
 /// Link courses to their instructors via the junction table.
@@ -851,7 +918,7 @@ async fn upsert_instructors(
 async fn upsert_course_instructors(
     courses: &[Course],
     crn_term_to_id: &HashMap<(&str, &str), i32>,
-    email_to_id: &HashMap<String, i32>,
+    instructor_lookup: &InstructorLookup,
     conn: &mut PgConnection,
 ) -> Result<Vec<AuditEntry>> {
     let mut cids = Vec::new();
@@ -878,15 +945,12 @@ async fn upsert_course_instructors(
 
         let names = new_names.entry(course_id).or_default();
         for faculty in &course.faculty {
-            if let Some(email) = &faculty.email_address {
-                let email_lower = email.to_lowercase();
-                if let Some(&instructor_id) = email_to_id.get(&email_lower) {
-                    cids.push(course_id);
-                    instructor_ids.push(instructor_id);
-                    banner_ids.push(faculty.banner_id.as_str());
-                    primaries.push(faculty.primary_indicator);
-                    names.push(decode_html_entities(&faculty.display_name));
-                }
+            if let Some(instructor_id) = instructor_lookup.resolve(faculty) {
+                cids.push(course_id);
+                instructor_ids.push(instructor_id);
+                banner_ids.push(faculty.banner_id.as_str());
+                primaries.push(faculty.primary_indicator);
+                names.push(decode_html_entities(&faculty.display_name));
             }
         }
     }

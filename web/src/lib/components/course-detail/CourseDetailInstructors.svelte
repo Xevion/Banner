@@ -55,7 +55,7 @@ const clipboard = useClipboard();
           <div class="flex items-center gap-3 text-xs text-muted-foreground">
             {#if instructor.email}
               <button
-                onclick={(e) => clipboard.copy(instructor.email, e)}
+                onclick={(e) => clipboard.copy(instructor.email!, e)}
                 class="inline-flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
               >
                 {#if clipboard.copiedValue === instructor.email}

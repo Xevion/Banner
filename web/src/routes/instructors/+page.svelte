@@ -207,10 +207,12 @@ function resolveSubject(code: string): string {
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0 flex-1">
                   <h2 class="font-semibold text-sm truncate">{instructor.displayName}</h2>
-                  <div class="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-                    <Mail class="size-3 shrink-0" />
-                    <span class="truncate">{instructor.email}</span>
-                  </div>
+                  {#if instructor.email}
+                    <div class="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+                      <Mail class="size-3 shrink-0" />
+                      <span class="truncate">{instructor.email}</span>
+                    </div>
+                  {/if}
                 </div>
 
                 {#if instructor.rmp != null}

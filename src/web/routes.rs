@@ -502,7 +502,7 @@ pub struct InstructorResponse {
     display_name: String,
     first_name: Option<String>,
     last_name: Option<String>,
-    email: String,
+    email: Option<String>,
     slug: Option<String>,
     is_primary: bool,
     rmp: Option<RmpRating>,

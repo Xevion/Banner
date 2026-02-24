@@ -3,4 +3,4 @@
 /**
  * Instructor summary in the detail view.
  */
-export type InstructorDetail = { id: number, displayName: string, email: string, rmpMatchStatus: string, subjectsTaught: Array<string>, courseCount: number, };
+export type InstructorDetail = { id: number, displayName: string, email: string | null, rmpMatchStatus: string, subjectsTaught: Array<string>, courseCount: number, };

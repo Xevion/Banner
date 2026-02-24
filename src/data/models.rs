@@ -307,7 +307,7 @@ pub struct Course {
 pub struct Instructor {
     pub id: i32,
     pub display_name: String,
-    pub email: String,
+    pub email: Option<String>,
     pub rmp_match_status: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
@@ -330,7 +330,7 @@ pub struct CourseInstructorDetail {
     pub display_name: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
-    pub email: String,
+    pub email: Option<String>,
     pub is_primary: bool,
     pub avg_rating: Option<f32>,
     pub num_ratings: Option<i32>,

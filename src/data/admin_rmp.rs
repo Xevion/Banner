@@ -31,7 +31,7 @@ pub struct TopCandidateResponse {
 pub struct InstructorListItem {
     pub id: i32,
     pub display_name: String,
-    pub email: String,
+    pub email: Option<String>,
     pub rmp_match_status: String,
     #[ts(as = "i32")]
     pub rmp_link_count: i64,
@@ -68,7 +68,7 @@ pub struct InstructorStats {
 pub struct InstructorDetail {
     pub id: i32,
     pub display_name: String,
-    pub email: String,
+    pub email: Option<String>,
     pub rmp_match_status: String,
     pub subjects_taught: Vec<String>,
     #[ts(as = "i32")]
@@ -151,7 +151,7 @@ pub struct RescoreResponse {
 struct InstructorRow {
     id: i32,
     display_name: String,
-    email: String,
+    email: Option<String>,
     rmp_match_status: String,
     rmp_link_count: Option<i64>,
     top_candidate_rmp_id: Option<i32>,
@@ -347,7 +347,7 @@ pub async fn list_instructors(
 
 /// Fetch full instructor detail with candidates and linked profiles.
 pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
-    let instructor: Option<(i32, String, String, String)> = sqlx::query_as(
+    let instructor: Option<(i32, String, Option<String>, String)> = sqlx::query_as(
         "SELECT id, display_name, email, rmp_match_status FROM instructors WHERE id = $1",
     )
     .bind(id)

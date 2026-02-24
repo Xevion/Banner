@@ -12,7 +12,7 @@ use tracing::{debug, info, warn};
 use sqlx::PgPool;
 
 use crate::banner::models::terms::{Season, Term};
-use crate::data::bluebook::{batch_upsert_bluebook_evaluations, BlueBookEvaluation};
+use crate::data::bluebook::{BlueBookEvaluation, batch_upsert_bluebook_evaluations};
 
 #[allow(dead_code)]
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
@@ -338,11 +338,7 @@ impl BlueBookClient {
         };
 
         let event_target = format!("{TERM_FILTER_RADIO}${radio_index}");
-        let params = Self::build_postback(
-            fields,
-            &event_target,
-            &[(TERM_FILTER_RADIO, filter)],
-        );
+        let params = Self::build_postback(fields, &event_target, &[(TERM_FILTER_RADIO, filter)]);
 
         let resp = self
             .http
@@ -373,8 +369,7 @@ impl BlueBookClient {
         // Pager buttons are `<input type="image">`, which submit as `name.x=N&name.y=N`
         // coordinates rather than via __EVENTTARGET. __EVENTTARGET must be empty.
         let suffix = if top { "TOP" } else { "" };
-        let button_name =
-            format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
+        let button_name = format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
 
         let mut params = fields.0.clone();
         // Clear __EVENTTARGET — image buttons don't use it
@@ -613,8 +608,7 @@ impl BlueBookClient {
             if !fields.has(TERM_FILTER_RADIO) {
                 info!(
                     code = subject.code.as_str(),
-                    progress, subject_count,
-                    "Skipped (no term filter radio)"
+                    progress, subject_count, "Skipped (no term filter radio)"
                 );
                 skipped_no_radio += 1;
                 continue;
@@ -671,23 +665,24 @@ impl BlueBookClient {
             let subject_eval_count = subject_evals.len() as u32;
 
             // Upsert immediately so data is available without waiting for the full scrape
-            if !subject_evals.is_empty() {
-                if let Err(e) = batch_upsert_bluebook_evaluations(&subject_evals, db_pool).await {
-                    warn!(
-                        code = subject.code.as_str(),
-                        evals = subject_eval_count,
-                        error = %e,
-                        "Failed to upsert evaluations for subject"
-                    );
-                    skipped_errors += 1;
-                    continue;
-                }
+            if !subject_evals.is_empty()
+                && let Err(e) = batch_upsert_bluebook_evaluations(&subject_evals, db_pool).await
+            {
+                warn!(
+                    code = subject.code.as_str(),
+                    evals = subject_eval_count,
+                    error = %e,
+                    "Failed to upsert evaluations for subject"
+                );
+                skipped_errors += 1;
+                continue;
             }
 
             total_evals += subject_eval_count;
             info!(
                 code = subject.code.as_str(),
-                progress, subject_count,
+                progress,
+                subject_count,
                 pages = total_pages,
                 evals = subject_eval_count,
                 total_evals,
@@ -1374,18 +1369,27 @@ mod tests {
 
         let client = BlueBookClient::new();
         let (subjects, initial_fields) = client.fetch_subjects().await.unwrap();
-        let cs = subjects.iter().find(|s| s.code == "CS").expect("CS subject must exist");
+        let cs = subjects
+            .iter()
+            .find(|s| s.code == "CS")
+            .expect("CS subject must exist");
 
         // Search CS
         let (_html, fields) = client.search_subject(cs, &initial_fields).await.unwrap();
-        assert!(fields.has(TERM_FILTER_RADIO), "CS search should render term filter radio");
+        assert!(
+            fields.has(TERM_FILTER_RADIO),
+            "CS search should render term filter radio"
+        );
 
         // Switch to PAST
         let (html, mut fields) = client.switch_term_filter("PAST", &fields).await.unwrap();
         let page1_evals = BlueBookClient::parse_evaluations(&html, "CS");
         let (current_page, total_pages) =
             BlueBookClient::parse_page_info(&html).expect("PAST results should have pager");
-        eprintln!("Page {current_page}/{total_pages}: {} evals", page1_evals.len());
+        eprintln!(
+            "Page {current_page}/{total_pages}: {} evals",
+            page1_evals.len()
+        );
         assert!(total_pages > 1, "CS PAST should have multiple pages");
 
         let mut all_evals = page1_evals;
@@ -1404,11 +1408,17 @@ mod tests {
                 .next()
                 .map(|el| el.text().collect())
                 .unwrap_or_default();
-            eprintln!("Page {page}/{total_pages}: {} evals (semester: {first_semester})", page_evals.len());
+            eprintln!(
+                "Page {page}/{total_pages}: {} evals (semester: {first_semester})",
+                page_evals.len()
+            );
             all_evals.extend(page_evals);
         }
 
-        eprintln!("Total evaluations from {pages_to_check} pages: {}", all_evals.len());
+        eprintln!(
+            "Total evaluations from {pages_to_check} pages: {}",
+            all_evals.len()
+        );
         assert!(
             !all_evals.is_empty(),
             "Should have evaluations from CS PAST pages (page 1 may be n/a Fall 2025, but later pages have Spr 2025+ data)"
@@ -1418,8 +1428,13 @@ mod tests {
         for eval in all_evals.iter().take(3) {
             eprintln!(
                 "  {} {} {}.{} | {} | inst={:?} course={:?}",
-                eval.term, eval.crn, eval.subject, eval.course_number,
-                eval.instructor_name, eval.instructor_rating, eval.course_rating
+                eval.term,
+                eval.crn,
+                eval.subject,
+                eval.course_number,
+                eval.instructor_name,
+                eval.instructor_rating,
+                eval.course_rating
             );
         }
     }
@@ -1432,7 +1447,10 @@ mod tests {
 
         let client = BlueBookClient::new();
         let (subjects, initial_fields) = client.fetch_subjects().await.unwrap();
-        let ban = subjects.iter().find(|s| s.code == "BAN").expect("BAN subject must exist");
+        let ban = subjects
+            .iter()
+            .find(|s| s.code == "BAN")
+            .expect("BAN subject must exist");
 
         let (_html, fields) = client.search_subject(ban, &initial_fields).await.unwrap();
         assert!(
@@ -1455,9 +1473,7 @@ mod tests {
 
         let client = BlueBookClient::new();
         let total = client.scrape_all(&db_pool).await.unwrap();
-        eprintln!(
-            "Total evaluations upserted: {total} (0 means all subjects failed)",
-        );
+        eprintln!("Total evaluations upserted: {total} (0 means all subjects failed)",);
         assert!(
             total > 0,
             "Should collect at least some evaluations from the live site"

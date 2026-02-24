@@ -39,10 +39,10 @@ fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
         );
         let entry = best.entry(key).or_insert(eval);
         // Prefer the entry with more response data
-        let existing_responses = entry.instructor_response_count.unwrap_or(0)
-            + entry.course_response_count.unwrap_or(0);
-        let new_responses = eval.instructor_response_count.unwrap_or(0)
-            + eval.course_response_count.unwrap_or(0);
+        let existing_responses =
+            entry.instructor_response_count.unwrap_or(0) + entry.course_response_count.unwrap_or(0);
+        let new_responses =
+            eval.instructor_response_count.unwrap_or(0) + eval.course_response_count.unwrap_or(0);
         if new_responses > existing_responses {
             *entry = eval;
         }
@@ -68,17 +68,11 @@ pub async fn batch_upsert_bluebook_evaluations(
     let deduped = deduplicate(evaluations);
 
     let subjects: Vec<&str> = deduped.iter().map(|e| e.subject.as_str()).collect();
-    let course_numbers: Vec<&str> = deduped
-        .iter()
-        .map(|e| e.course_number.as_str())
-        .collect();
+    let course_numbers: Vec<&str> = deduped.iter().map(|e| e.course_number.as_str()).collect();
     let sections: Vec<&str> = deduped.iter().map(|e| e.section.as_str()).collect();
     let crns: Vec<&str> = deduped.iter().map(|e| e.crn.as_str()).collect();
     let terms: Vec<&str> = deduped.iter().map(|e| e.term.as_str()).collect();
-    let instructor_names: Vec<&str> = deduped
-        .iter()
-        .map(|e| e.instructor_name.as_str())
-        .collect();
+    let instructor_names: Vec<&str> = deduped.iter().map(|e| e.instructor_name.as_str()).collect();
     let instructor_ratings: Vec<Option<f32>> =
         deduped.iter().map(|e| e.instructor_rating).collect();
     let instructor_response_counts: Vec<Option<i32>> = deduped
@@ -86,14 +80,9 @@ pub async fn batch_upsert_bluebook_evaluations(
         .map(|e| e.instructor_response_count)
         .collect();
     let course_ratings: Vec<Option<f32>> = deduped.iter().map(|e| e.course_rating).collect();
-    let course_response_counts: Vec<Option<i32>> = deduped
-        .iter()
-        .map(|e| e.course_response_count)
-        .collect();
-    let departments: Vec<Option<&str>> = deduped
-        .iter()
-        .map(|e| e.department.as_deref())
-        .collect();
+    let course_response_counts: Vec<Option<i32>> =
+        deduped.iter().map(|e| e.course_response_count).collect();
+    let departments: Vec<Option<&str>> = deduped.iter().map(|e| e.department.as_deref()).collect();
 
     sqlx::query(
         r#"

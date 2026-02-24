@@ -572,7 +572,9 @@ function formatScore(score: number): string {
                   <div class="font-medium text-foreground">
                     {formatInstructorName(instructor.displayName)}
                   </div>
-                  <div class="text-xs text-muted-foreground">{instructor.email}</div>
+                  {#if instructor.email}
+                    <div class="text-xs text-muted-foreground">{instructor.email}</div>
+                  {/if}
                 </td>
                 <td class="px-4 py-2.5">
                   <span
@@ -685,8 +687,10 @@ function formatScore(score: number): string {
                                 {formatInstructorName(detail.instructor.displayName)}
                               </dd>
 
-                              <dt class="text-muted-foreground">Email</dt>
-                              <dd class="text-foreground break-all">{detail.instructor.email}</dd>
+                              {#if detail.instructor.email}
+                                <dt class="text-muted-foreground">Email</dt>
+                                <dd class="text-foreground break-all">{detail.instructor.email}</dd>
+                              {/if}
 
                               <dt class="text-muted-foreground">Courses</dt>
                               <dd class="text-foreground tabular-nums">

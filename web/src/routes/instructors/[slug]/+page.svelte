@@ -74,6 +74,7 @@ $effect(() => {
 });
 
 async function copyEmail() {
+  if (!instructor.email) return;
   await navigator.clipboard.writeText(instructor.email);
   copiedEmail = true;
   setTimeout(() => (copiedEmail = false), 2000);
@@ -110,20 +111,22 @@ const displayName = $derived(formatInstructorName(instructor));
     <!-- Header -->
     <div class="mb-6">
       <h1 class="text-2xl font-bold">{displayName}</h1>
-      <div class="flex items-center gap-2 mt-1.5">
-        <Mail class="size-3.5 text-muted-foreground" />
-        <span class="text-sm text-muted-foreground">{instructor.email}</span>
-        <button
-          onclick={copyEmail}
-          class="text-muted-foreground hover:text-foreground transition-colors"
-          title="Copy email"
-        >
-          <Copy class="size-3.5" />
-        </button>
-        {#if copiedEmail}
-          <span class="text-xs text-green-500">Copied!</span>
-        {/if}
-      </div>
+      {#if instructor.email}
+        <div class="flex items-center gap-2 mt-1.5">
+          <Mail class="size-3.5 text-muted-foreground" />
+          <span class="text-sm text-muted-foreground">{instructor.email}</span>
+          <button
+            onclick={copyEmail}
+            class="text-muted-foreground hover:text-foreground transition-colors"
+            title="Copy email"
+          >
+            <Copy class="size-3.5" />
+          </button>
+          {#if copiedEmail}
+            <span class="text-xs text-green-500">Copied!</span>
+          {/if}
+        </div>
+      {/if}
 
       {#if instructor.subjects.length > 0}
         <div class="flex flex-wrap gap-1.5 mt-3">
