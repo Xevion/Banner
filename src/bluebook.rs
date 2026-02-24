@@ -503,7 +503,7 @@ impl BlueBookClient {
                 None => {
                     warn!(
                         raw = course_section,
-                        "Failed to parse course.section from header"
+                        subject, "Failed to parse course.section from header"
                     );
                     continue;
                 }
@@ -569,20 +569,61 @@ impl BlueBookClient {
 
     /// Parse a course.section string like "CS 1083.001" into ("1083", "001").
     ///
-    /// Returns `None` if the subject prefix doesn't match or the course number
-    /// doesn't start with a digit (rejects garbage like "ISA 1234" when subject is "IS").
+    /// Returns `None` if the format is unrecognized or the course number
+    /// doesn't start with a digit.
+    ///
+    /// The `subject` parameter is accepted for call-site clarity but is NOT used
+    /// to validate the display prefix. BlueBook's ComboBox subject codes don't
+    /// always match the prefix shown in the accordion cell (e.g., ComboBox "MTC"
+    /// → display prefix "MAT"), so prefix matching would silently drop valid rows.
     fn parse_course_section(raw: &str, subject: &str) -> Option<(String, String)> {
-        // Strip "{subject} " prefix. We require the space to avoid false matches
-        // when one subject code is a prefix of another (e.g. "IS" vs "ISA").
-        let with_space = format!("{subject} ");
-        let without_prefix = raw.strip_prefix(&with_space)?.trim();
+        // Normalize all Unicode whitespace (including non-breaking spaces \u{00A0})
+        // to regular ASCII spaces. Some BlueBook HTML cells use non-breaking spaces.
+        let normalized: String = raw
+            .split(|c: char| c.is_whitespace())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let raw = normalized.as_str();
 
-        let (course_number, section) = without_prefix.split_once('.')?;
+        // Format: "DISPLAY_PREFIX COURSE_NUMBER.SECTION"
+        // Skip the display prefix (which may differ from the ComboBox subject code)
+        // by splitting on the first space.
+        let Some((display_prefix, rest)) = raw.split_once(' ') else {
+            debug!(
+                normalized = raw,
+                subject, "parse_course_section: no space separator"
+            );
+            return None;
+        };
+
+        if display_prefix != subject {
+            debug!(
+                normalized = raw,
+                subject,
+                display_prefix,
+                "parse_course_section: display prefix differs from ComboBox subject code"
+            );
+        }
+
+        let Some((course_number, section)) = rest.split_once('.') else {
+            debug!(
+                normalized = raw,
+                subject, rest, "parse_course_section: no dot separator"
+            );
+            return None;
+        };
         let course_number = course_number.trim();
         let section = section.trim();
 
         // Course numbers must start with a digit (e.g. "1083", "3343")
         if !course_number.starts_with(|c: char| c.is_ascii_digit()) {
+            debug!(
+                normalized = raw,
+                subject,
+                course_number,
+                "parse_course_section: course_number does not start with digit"
+            );
             return None;
         }
 
@@ -681,15 +722,24 @@ impl BlueBookClient {
                 }
             };
 
-            // Subjects with no current-term results don't render the term filter radio
-            // buttons. Attempting to POST a PAST switch would fail with ASP.NET
+            // Subjects with no results don't render the term filter radio buttons.
+            // The response contains TotalRows=0 and a "Revise your search criteria"
+            // message. Attempting to POST a PAST switch would fail with ASP.NET
             // EventValidation rejection, so detect this early and skip.
+            // Mark as scraped so these subjects are not retried every cycle.
             if !fields.has(TERM_FILTER_RADIO) {
                 info!(
                     code = subject.code.as_str(),
-                    progress, subject_count, "Skipped (no term filter radio)"
+                    progress, subject_count, "Skipped (no results)"
                 );
                 skipped_no_radio += 1;
+                if let Err(e) = mark_subject_scraped(&subject.code, db_pool).await {
+                    warn!(
+                        code = subject.code.as_str(),
+                        error = %e,
+                        "Failed to record scrape timestamp for empty subject"
+                    );
+                }
                 continue;
             }
 
@@ -781,7 +831,7 @@ impl BlueBookClient {
         info!(
             total_evals,
             subjects = subject_count,
-            skipped_no_radio,
+            skipped_no_results = skipped_no_radio,
             skipped_errors,
             "BlueBook scrape complete"
         );
@@ -976,13 +1026,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_course_section_mismatched_subject_rejected() {
-        // "ISA 1234.001" doesn't match subject "IS" — prefix "IS " doesn't
-        // match "ISA ", so this correctly returns None rather than producing
-        // garbage like ("ISA 1234", "001").
+    fn test_parse_course_section_display_prefix_differs_from_subject() {
+        // The display prefix in the accordion cell may differ from the ComboBox
+        // subject code (e.g., code "IS" → display "ISA", code "MTC" → display "MAT").
+        // We no longer reject on mismatch — the page is subject-scoped by BlueBook
+        // and we trust its contents. Course number and section are still parsed.
         assert_eq!(
             BlueBookClient::parse_course_section("ISA 1234.001", "IS"),
-            None
+            Some(("1234".to_string(), "001".to_string()))
         );
     }
 
@@ -992,6 +1043,75 @@ mod tests {
             BlueBookClient::parse_course_section("IS 1234.001", "IS"),
             Some(("1234".to_string(), "001".to_string()))
         );
+    }
+
+    /// BlueBook lists some subjects twice in the ComboBox under different internal
+    /// codes. E.g., "Mathematics (MAT)" and "Mathematics (MTC)" both exist, but
+    /// accordion cells always display the prefix "MAT". Scraping with code "MTC"
+    /// must still parse "MAT 1043.06B" successfully.
+    #[test]
+    fn test_parse_course_section_combobox_code_differs_from_display_prefix() {
+        assert_eq!(
+            BlueBookClient::parse_course_section("MAT 1043.06B", "MTC"),
+            Some(("1043".to_string(), "06B".to_string()))
+        );
+    }
+
+    /// BlueBook HTML sometimes uses non-breaking spaces (\u{00A0}) between the
+    /// subject code and course number. strip_prefix with a regular space fails.
+    #[test]
+    fn test_parse_course_section_non_breaking_space() {
+        assert_eq!(
+            BlueBookClient::parse_course_section("MAT\u{00A0}1213.001", "MAT"),
+            Some(("1213".to_string(), "001".to_string()))
+        );
+    }
+
+    /// Non-breaking space also appears in parse_evaluations via the HTML cell text.
+    #[test]
+    fn test_parse_evaluations_non_breaking_space_in_course_section() {
+        // Simulate the BlueBook HTML where course section uses \u{00A0} instead of a space
+        let html_str = format!(
+            r#"<html><body>
+            <div class="accordionMasterPane">
+                <table class="infoTable"><tr>
+                    <td>Fall 2025</td>
+                    <td>12345</td>
+                    <td>MAT{nbsp}1213.001</td>
+                    <td>Calculus I</td>
+                    <td>Smith, John</td>
+                    <td>4.5 / 5.0\n30 students responded</td>
+                    <td>n/a</td>
+                    <td>n/a</td>
+                    <td>4.0 / 5.0\n30 students responded</td>
+                </tr></table>
+            </div>
+            <div class="accordionDetailPane" style="display:none;"></div>
+            </body></html>"#,
+            nbsp = '\u{00A0}'
+        );
+        let html = Html::parse_document(&html_str);
+        let evals = BlueBookClient::parse_evaluations(&html, "MAT");
+        assert_eq!(
+            evals.len(),
+            1,
+            "Should parse MAT course with non-breaking space"
+        );
+        assert_eq!(evals[0].course_number, "1213");
+        assert_eq!(evals[0].section, "001");
+    }
+
+    /// Alphanumeric sections (ON1, ON2, 09A, 901) seen in production logs must parse.
+    #[test]
+    fn test_parse_course_section_alphanumeric_sections() {
+        for section in &["ON1", "ON2", "09A", "10A", "01B", "901"] {
+            let raw = format!("MAT\u{00A0}1023.{section}");
+            assert_eq!(
+                BlueBookClient::parse_course_section(&raw, "MAT"),
+                Some(("1023".to_string(), section.to_string())),
+                "Failed to parse section: {section}"
+            );
+        }
     }
 
     #[test]
