@@ -1,8 +1,37 @@
 import type { SearchParams } from "$lib/api";
 import type { SortColumn, SortDirection } from "$lib/bindings";
+import { CAMPUS_GROUPS } from "$lib/labels";
 import type { SortingState } from "@tanstack/table-core";
 import { createContext } from "svelte";
 import { SvelteURLSearchParams } from "svelte/reactivity";
+
+/**
+ * Known availability group names for compact URL serialization.
+ * Maps a short name to the set of campus codes it represents.
+ */
+const AVAILABILITY_GROUPS: Record<string, readonly string[]> = {
+  campus: CAMPUS_GROUPS.campusStudents,
+  online: CAMPUS_GROUPS.onlinePrograms,
+};
+
+/** Check if two string arrays contain the same elements (order-independent). */
+function arraysEqualAsSet(a: string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(b);
+  return a.every((v) => set.has(v));
+}
+
+/**
+ * Expand an `availability` param into campus codes if present,
+ * otherwise fall back to reading individual `campus` params.
+ */
+export function expandCampusFromParams(params: URLSearchParams): string[] {
+  const availability = params.get("availability");
+  if (availability && availability in AVAILABILITY_GROUPS) {
+    return [...AVAILABILITY_GROUPS[availability]];
+  }
+  return params.getAll("campus");
+}
 
 /**
  * Extract just the filter-related fields from SearchParams.
@@ -93,7 +122,7 @@ export class SearchFilters implements FilterFields {
     this.timeStart = params.get("time_start");
     this.timeEnd = params.get("time_end");
     this.instructionalMethod = params.getAll("instructional_method");
-    this.campus = params.getAll("campus");
+    this.campus = expandCampusFromParams(params);
     this.partOfTerm = params.getAll("part_of_term");
     this.attributes = params.getAll("attributes");
     this.creditHourMin = parseIntOrNull(params.get("credit_hour_min"));
@@ -118,7 +147,17 @@ export class SearchFilters implements FilterFields {
     if (this.timeStart) params.set("time_start", this.timeStart);
     if (this.timeEnd) params.set("time_end", this.timeEnd);
     this.instructionalMethod.forEach((m) => params.append("instructional_method", m));
-    this.campus.forEach((c) => params.append("campus", c));
+
+    // Compress known campus groups into a single `availability` param
+    const matchedGroup = Object.entries(AVAILABILITY_GROUPS).find(([, codes]) =>
+      arraysEqualAsSet(this.campus, codes)
+    );
+    if (matchedGroup) {
+      params.set("availability", matchedGroup[0]);
+    } else {
+      this.campus.forEach((c) => params.append("campus", c));
+    }
+
     this.partOfTerm.forEach((p) => params.append("part_of_term", p));
     this.attributes.forEach((a) => params.append("attributes", a));
     if (this.creditHourMin !== null) params.set("credit_hour_min", String(this.creditHourMin));

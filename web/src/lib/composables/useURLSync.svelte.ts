@@ -55,8 +55,7 @@ export function useURLSync(options: UseURLSyncOptions): URLSyncHandle {
       params.set("sort_dir", currentSorting[0].desc ? "desc" : "asc");
     }
 
-    const hasOtherParams = params.size > 0;
-    if (term !== defaultTermSlug || hasOtherParams) {
+    if (term !== defaultTermSlug) {
       params.set("term", term);
     }
 

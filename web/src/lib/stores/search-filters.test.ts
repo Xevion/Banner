@@ -1,5 +1,6 @@
+import { CAMPUS_GROUPS } from "$lib/labels";
 import { beforeEach, describe, expect, it } from "vitest";
-import { SearchFilters } from "./search-filters.svelte";
+import { SearchFilters, expandCampusFromParams } from "./search-filters.svelte";
 
 describe("SearchFilters", () => {
   let filters: SearchFilters;
@@ -64,6 +65,26 @@ describe("SearchFilters", () => {
       expect(filters.instructionalMethod).toEqual(["InPerson"]);
     });
 
+    it("should expand availability=campus into campus codes", () => {
+      const params = new URLSearchParams({ availability: "campus" });
+      filters.fromURLParams(params);
+      expect(filters.campus).toEqual(CAMPUS_GROUPS.campusStudents);
+    });
+
+    it("should expand availability=online into campus codes", () => {
+      const params = new URLSearchParams({ availability: "online" });
+      filters.fromURLParams(params);
+      expect(filters.campus).toEqual(CAMPUS_GROUPS.onlinePrograms);
+    });
+
+    it("should fall back to individual campus params when no availability param", () => {
+      const params = new URLSearchParams();
+      params.append("campus", "Main");
+      params.append("campus", "Downtown");
+      filters.fromURLParams(params);
+      expect(filters.campus).toEqual(["Main", "Downtown"]);
+    });
+
     it("should filter invalid subjects when validSubjects provided", () => {
       const params = new URLSearchParams();
       params.append("subject", "MATH");
@@ -112,6 +133,27 @@ describe("SearchFilters", () => {
 
       expect(params.getAll("days")).toEqual(["monday", "wednesday"]);
       expect(params.getAll("campus")).toEqual(["main"]);
+    });
+
+    it("should compress campus-students group into availability=campus", () => {
+      filters.campus = [...CAMPUS_GROUPS.campusStudents];
+      const params = filters.toURLParams();
+      expect(params.get("availability")).toBe("campus");
+      expect(params.has("campus")).toBe(false);
+    });
+
+    it("should compress online-programs group into availability=online", () => {
+      filters.campus = [...CAMPUS_GROUPS.onlinePrograms];
+      const params = filters.toURLParams();
+      expect(params.get("availability")).toBe("online");
+      expect(params.has("campus")).toBe(false);
+    });
+
+    it("should serialize individual campus codes when not matching a group", () => {
+      filters.campus = ["Main", "Downtown"];
+      const params = filters.toURLParams();
+      expect(params.has("availability")).toBe(false);
+      expect(params.getAll("campus")).toEqual(["Main", "Downtown"]);
     });
   });
 
@@ -235,5 +277,34 @@ describe("SearchFilters", () => {
 
       expect(key1).not.toBe(key2);
     });
+  });
+});
+
+describe("expandCampusFromParams", () => {
+  it("should expand availability=campus to campus codes", () => {
+    const params = new URLSearchParams({ availability: "campus" });
+    expect(expandCampusFromParams(params)).toEqual(CAMPUS_GROUPS.campusStudents);
+  });
+
+  it("should expand availability=online to campus codes", () => {
+    const params = new URLSearchParams({ availability: "online" });
+    expect(expandCampusFromParams(params)).toEqual(CAMPUS_GROUPS.onlinePrograms);
+  });
+
+  it("should fall back to individual campus params", () => {
+    const params = new URLSearchParams();
+    params.append("campus", "Main");
+    params.append("campus", "Downtown");
+    expect(expandCampusFromParams(params)).toEqual(["Main", "Downtown"]);
+  });
+
+  it("should return empty array when no campus or availability params", () => {
+    const params = new URLSearchParams();
+    expect(expandCampusFromParams(params)).toEqual([]);
+  });
+
+  it("should ignore unknown availability values", () => {
+    const params = new URLSearchParams({ availability: "unknown" });
+    expect(expandCampusFromParams(params)).toEqual([]);
   });
 });

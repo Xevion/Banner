@@ -1,6 +1,7 @@
 import { BannerApiClient } from "$lib/api";
 import type { SearchParams } from "$lib/bindings";
 import type { SortColumn, SortDirection } from "$lib/bindings";
+import { expandCampusFromParams } from "$lib/stores/search-filters.svelte";
 import type { PageServerLoad } from "./$types";
 
 function parseIntOrNull(value: string | null): number | null {
@@ -25,7 +26,7 @@ function buildSearchParams(url: URL, defaultTerm: string): SearchParams {
     timeStart: p.get("time_start"),
     timeEnd: p.get("time_end"),
     instructionalMethod: p.getAll("instructional_method"),
-    campus: p.getAll("campus"),
+    campus: expandCampusFromParams(p),
     partOfTerm: p.getAll("part_of_term"),
     attributes: p.getAll("attributes"),
     creditHourMin: parseIntOrNull(p.get("credit_hour_min")),
