@@ -815,8 +815,6 @@ fn write_bold(writer: &mut Writer<'_>, s: impl fmt::Display) -> fmt::Result {
     }
 }
 
-// ── CompactFields ─────────────────────────────────────────────────────────────
-
 /// Closure that transforms a field's display string.
 type FieldTransform = Box<dyn Fn(&str) -> Cow<'_, str> + Send + Sync>;
 

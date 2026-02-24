@@ -59,19 +59,16 @@ import {
 import TimelineDrawer from "./TimelineDrawer.svelte";
 import TimelineTooltip from "./TimelineTooltip.svelte";
 
-// ── Reactive DOM state ──────────────────────────────────────────────
 let canvasEl: HTMLCanvasElement | undefined = $state();
 let containerEl: HTMLDivElement | undefined = $state();
 let width = $state(800);
 let height = $state(400);
 let dpr = $state(1);
 
-// ── View window ─────────────────────────────────────────────────────
 let viewCenter = $state(Date.now());
 let viewSpan = $state(DEFAULT_SPAN_MS);
 let viewYRatio = $state(DEFAULT_AXIS_RATIO);
 
-// ── Interaction state ───────────────────────────────────────────────
 let isDragging = $state(false);
 let dragStartX = $state(0);
 let dragStartY = $state(0);
@@ -80,12 +77,10 @@ let dragStartYRatio = $state(0);
 let followEnabled = $state(true);
 let ctrlHeld = $state(false);
 
-// ── Animation state (intentionally non-reactive — updated in rAF) ──
 let panVelocity = 0;
 let panVelocityY = 0;
 let pointerSamples: { time: number; x: number; y: number }[] = [];
 
-// ── Multi-touch / pinch state ────────────────────────────────────────
 let activePointers = new SvelteMap<number, { x: number; y: number }>();
 let isPinching = false;
 let pinchStartDist = 0;
@@ -93,7 +88,6 @@ let pinchStartSpan = 0;
 let pinchAnchorTime = 0;
 let pinchAnchorRatio = 0.5;
 
-// ── Tap detection ────────────────────────────────────────────────────
 let pointerDownTime = 0;
 let pointerDownPos = { x: 0, y: 0 };
 
@@ -113,7 +107,6 @@ let animatedMaxY = MIN_MAXY;
 
 const animMap = createAnimMap();
 
-// ── Tooltip + hover ─────────────────────────────────────────────────
 let tooltipVisible = $state(false);
 let tooltipX = $state(0);
 let tooltipY = $state(0);

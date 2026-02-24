@@ -72,8 +72,6 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // --- Valid dispatch ---
-
     #[test]
     fn test_from_target_subject_valid() {
         let result =
@@ -87,8 +85,6 @@ mod tests {
             JobType::from_target_type_and_payload(TargetType::Subject, json!({"subject": ""}));
         assert!(matches!(result, Ok(JobType::Subject(_))));
     }
-
-    // --- Invalid JSON ---
 
     #[test]
     fn test_from_target_subject_missing_field() {
@@ -109,8 +105,6 @@ mod tests {
         assert!(matches!(result, Err(JobParseError::InvalidJson(_))));
     }
 
-    // --- Unsupported target types ---
-
     #[test]
     fn test_from_target_unsupported_variants() {
         let unsupported = [
@@ -127,8 +121,6 @@ mod tests {
             );
         }
     }
-
-    // --- Error Display ---
 
     #[test]
     fn test_job_parse_error_display() {

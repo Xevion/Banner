@@ -27,17 +27,13 @@ import { getSubjectColor } from "./data";
 import type { ChartContext, TimeSlot } from "./types";
 import { getStackSubjects } from "./viewport";
 
-// ── Formatters (allocated once) ─────────────────────────────────────
 const fmtHour = timeFormat("%-I %p");
 const fmtAxisDetailed = timeFormat("%-I:%M %p");
 const fmtAxisCoarse = timeFormat("%-I %p");
 const fmtNow = timeFormat("%-I:%M %p");
 
-// ── Stacked-area types ──────────────────────────────────────────────
 type StackPoint = Series<TimeSlot, string>[number];
 export type VisibleStack = Series<TimeSlot, string>[];
-
-// ── Tick count heuristic ────────────────────────────────────────────
 
 /** Choose the number of x-axis ticks based on the viewport span. */
 export function chooseTickCount(viewSpan: number): number {
@@ -48,8 +44,6 @@ export function chooseTickCount(viewSpan: number): number {
   if (spanHours <= 14) return 14;
   return 10;
 }
-
-// ── Stack computation ───────────────────────────────────────────────
 
 /**
  * Stack only the visible slice using *animated* values so transitions
@@ -92,8 +86,6 @@ export function stackVisibleSlots(
     .value((d, key) => d.subjects[key] || 0);
   return gen(animatedSlots);
 }
-
-// ── Drawing functions ───────────────────────────────────────────────
 
 export function drawGrid(chart: ChartContext): void {
   const { ctx, xScale, chartTop, chartBottom, width, viewSpan, viewStart, viewEnd } = chart;

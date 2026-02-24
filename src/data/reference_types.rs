@@ -380,8 +380,6 @@ impl FilterParseable for InstructionalMethod {
 mod tests {
     use super::*;
 
-    // --- InstructionalMethod (Tier 1) ---
-
     #[test]
     fn instructional_method_code_round_trip() {
         let cases = [
@@ -464,8 +462,6 @@ mod tests {
             "FF"
         );
     }
-
-    // --- Tier 2 enums (macro-generated: Campus, Attribute, PartOfTerm) ---
 
     #[test]
     fn tier2_code_round_trip() {
@@ -551,8 +547,6 @@ mod tests {
         }
     }
 
-    // --- FilterValue ---
-
     #[test]
     fn filter_value_to_code() {
         let typed = FilterValue::Typed(InstructionalMethod::Online(OnlineVariant::Async));
@@ -612,8 +606,6 @@ mod tests {
             serde_json::from_value(serde_json::Value::String(filter_str.to_owned())).unwrap();
         assert_eq!(&*fv.to_code(), "H2");
     }
-
-    // --- parse_filter edge cases ---
 
     #[test]
     fn parse_filter_edge_cases() {

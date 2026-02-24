@@ -193,20 +193,16 @@ pub fn compute_match_score(
     candidate_count: usize,
     rmp_num_ratings: i32,
 ) -> MatchScore {
-    // --- Name (0.50) — always 1.0, candidates only exist for exact matches ---
     let name_score = 1.0;
 
-    // --- Department (0.25) ---
     let dept_score = department_similarity(instructor_subjects, rmp_department);
 
-    // --- Uniqueness (0.15) ---
     let uniqueness_score = match candidate_count {
         0 | 1 => 1.0,
         2 => 0.5,
         _ => 0.2,
     };
 
-    // --- Volume (0.10) ---
     let volume_score = ((rmp_num_ratings as f32).ln_1p() / 5.0_f32.ln_1p()).clamp(0.0, 1.0);
 
     let composite = name_score * WEIGHT_NAME

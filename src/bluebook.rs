@@ -821,8 +821,6 @@ mod tests {
         Term { year, season }
     }
 
-    // --- BlueBookSeason ---
-
     #[test]
     fn test_bluebook_season_from_str() {
         assert_eq!(
@@ -858,8 +856,6 @@ mod tests {
         assert_eq!(BlueBookSeason::SummerI.to_season(), Season::Summer);
         assert_eq!(BlueBookSeason::SummerII.to_season(), Season::Summer);
     }
-
-    // --- normalize_term ---
 
     #[test]
     fn test_normalize_term_spring() {
@@ -923,8 +919,6 @@ mod tests {
         assert_eq!(normalize_term("Fall abcd"), None);
     }
 
-    // --- parse_rating_cell ---
-
     #[test]
     fn test_parse_rating_cell_with_rating() {
         let (rating, count) = BlueBookClient::parse_rating_cell("3.9 / 5.0\n17 students responded");
@@ -959,8 +953,6 @@ mod tests {
         assert_eq!(rating, Some(5.0));
         assert_eq!(count, Some(1));
     }
-
-    // --- parse_course_section ---
 
     #[test]
     fn test_parse_course_section_standard() {
@@ -1001,8 +993,6 @@ mod tests {
             Some(("1234".to_string(), "001".to_string()))
         );
     }
-
-    // --- extract_form_fields ---
 
     #[test]
     fn test_extract_form_fields_basic() {
@@ -1060,8 +1050,6 @@ mod tests {
         assert!(BlueBookClient::extract_form_fields(&html).is_err());
     }
 
-    // --- build_postback ---
-
     #[test]
     fn test_build_postback_sets_event_target() {
         let fields = FormFields(vec![
@@ -1103,8 +1091,6 @@ mod tests {
         );
     }
 
-    // --- parse_page_info ---
-
     #[test]
     fn test_parse_page_info_found() {
         let html_str = r#"<html><body>
@@ -1120,8 +1106,6 @@ mod tests {
         let html = Html::parse_document(html_str);
         assert_eq!(BlueBookClient::parse_page_info(&html), None);
     }
-
-    // --- parse_subjects ---
 
     #[test]
     fn test_parse_subjects_standard() {
@@ -1189,8 +1173,6 @@ mod tests {
         let subjects = BlueBookClient::parse_subjects(&html);
         assert!(subjects.is_empty());
     }
-
-    // --- parse_evaluations (synthetic HTML) ---
 
     /// Build a minimal BlueBook accordion HTML page for testing.
     /// Each entry is (term, crn, course_section, title, instructor, inst_eval, course_eval, department).
@@ -1400,8 +1382,6 @@ mod tests {
         assert!(evals.is_empty(), "Should skip rows with empty instructor");
     }
 
-    // --- parse_department ---
-
     #[test]
     fn test_parse_department_standard() {
         let html_str = r#"<html><body><div class="detail">
@@ -1445,8 +1425,6 @@ mod tests {
         let detail = html.select(&detail_sel).next().unwrap();
         assert_eq!(BlueBookClient::parse_department(detail), None);
     }
-
-    // --- Integration tests (require network, use #[ignore] by default) ---
 
     /// Verify that searching CS and switching to PAST produces evaluations across
     /// multiple pages (the core bug was broken pagination via image button handling).

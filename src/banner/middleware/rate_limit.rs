@@ -182,8 +182,6 @@ impl Middleware for RateLimitMiddleware {
 mod tests {
     use super::*;
 
-    // --- BannerRateLimiter tests (from rate_limiter.rs) ---
-
     #[test]
     fn test_new_with_default_config() {
         let _limiter = BannerRateLimiter::new(RateLimitingConfig::default());
@@ -302,8 +300,6 @@ mod tests {
         }
     }
 
-    // --- rpm() tests ---
-
     #[test]
     fn test_rpm_returns_config_values() {
         let config = RateLimitingConfig {
@@ -320,8 +316,6 @@ mod tests {
         assert_eq!(limiter.rpm(RequestType::Metadata), 40);
         assert_eq!(limiter.rpm(RequestType::Reset), 30);
     }
-
-    // --- Classification tests ---
 
     #[test]
     fn test_classify_metadata_endpoints() {

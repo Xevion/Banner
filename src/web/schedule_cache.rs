@@ -376,8 +376,6 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
 
-    // -- parse_time tests (covers both formats) --
-
     #[test]
     fn parse_time_hhmm() {
         assert_eq!(parse_time("0000"), Some(0));
@@ -434,8 +432,6 @@ mod tests {
             Some(NaiveDate::from_ymd_opt(2025, 8, 26).unwrap())
         );
     }
-
-    // -- parse_meeting_row tests --
 
     #[test]
     fn parse_meeting_row_old_format() {
@@ -522,8 +518,6 @@ mod tests {
         assert!(parse_meeting_row(&row).is_none());
     }
 
-    // -- intern_subject tests --
-
     #[test]
     fn intern_subject_deduplicates() {
         let mut set = HashSet::new();
@@ -536,8 +530,6 @@ mod tests {
         assert!(!Arc::ptr_eq(&a, &c));
         assert_eq!(set.len(), 2);
     }
-
-    // -- active_during tests --
 
     #[test]
     fn active_during_matching_slot() {

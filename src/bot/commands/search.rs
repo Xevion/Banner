@@ -155,8 +155,6 @@ fn parse_course_code(input: &str) -> Result<(i32, i32), Error> {
 mod tests {
     use super::*;
 
-    // --- Single codes ---
-
     #[test]
     fn test_parse_single_code() {
         assert_eq!(parse_course_code("3743").unwrap(), (3743, 3743));
@@ -187,8 +185,6 @@ mod tests {
     fn test_parse_single_code_trimmed() {
         assert_eq!(parse_course_code("  3743  ").unwrap(), (3743, 3743));
     }
-
-    // --- Ranges ---
 
     #[test]
     fn test_parse_range_full() {
@@ -224,8 +220,6 @@ mod tests {
     fn test_parse_range_full_valid() {
         assert_eq!(parse_course_code("1000-9999").unwrap(), (1000, 9999));
     }
-
-    // --- Wildcards ---
 
     #[test]
     fn test_parse_wildcard_one_x() {

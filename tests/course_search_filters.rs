@@ -211,10 +211,6 @@ async fn insert_test_courses(pool: &PgPool) {
         .expect("Failed to insert test courses");
 }
 
-// ---------------------------------------------------------------------------
-// Basic single-filter tests
-// ---------------------------------------------------------------------------
-
 #[sqlx::test]
 async fn test_filter_open_only(pool: PgPool) {
     insert_test_courses(&pool).await;
@@ -345,10 +341,6 @@ async fn test_filter_by_time_end(pool: PgPool) {
         );
     }
 }
-
-// ---------------------------------------------------------------------------
-// Combined filter tests
-// ---------------------------------------------------------------------------
 
 #[sqlx::test]
 async fn test_combined_subject_and_days(pool: PgPool) {

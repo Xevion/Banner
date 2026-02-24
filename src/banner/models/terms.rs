@@ -295,8 +295,6 @@ impl FromStr for Term {
 mod tests {
     use super::*;
 
-    // --- Season::from_str ---
-
     #[test]
     fn test_season_from_str_fall() {
         assert_eq!(Season::from_str("10").unwrap(), Season::Fall);
@@ -322,8 +320,6 @@ mod tests {
         }
     }
 
-    // --- Season Display ---
-
     #[test]
     fn test_season_display() {
         assert_eq!(Season::Fall.to_string(), "Fall");
@@ -337,8 +333,6 @@ mod tests {
             assert_eq!(Season::from_str(season.to_str()).unwrap(), season);
         }
     }
-
-    // --- Term::from_str ---
 
     #[test]
     fn test_term_from_str_valid_fall() {
@@ -398,8 +392,6 @@ mod tests {
             assert_eq!(term.to_string(), code);
         }
     }
-
-    // --- Term::get_status_for_date ---
 
     #[test]
     fn test_status_mid_spring() {
@@ -463,8 +455,6 @@ mod tests {
         assert_eq!(next_term.year, 2026);
     }
 
-    // --- TermPoint::inner ---
-
     #[test]
     fn test_term_point_inner() {
         let in_term = TermPoint::InTerm {
@@ -495,8 +485,6 @@ mod tests {
             }
         );
     }
-
-    // --- Season::slug / from_slug ---
 
     #[test]
     fn test_season_slug_roundtrip() {
@@ -533,8 +521,6 @@ mod tests {
         );
     }
 
-    // --- Term::slug / from_slug ---
-
     #[test]
     fn test_term_slug() {
         let term = Term {
@@ -561,8 +547,6 @@ mod tests {
         assert_eq!(Term::from_slug(""), None);
     }
 
-    // --- Term::description ---
-
     #[test]
     fn test_term_description() {
         let term = Term {
@@ -571,8 +555,6 @@ mod tests {
         };
         assert_eq!(term.description(), "Spring 2026");
     }
-
-    // --- Term::resolve_to_code ---
 
     #[test]
     fn test_resolve_to_code_from_code() {

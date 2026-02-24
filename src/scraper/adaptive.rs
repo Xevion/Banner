@@ -196,8 +196,6 @@ mod tests {
         }
     }
 
-    // -- compute_base_interval tests --
-
     #[test]
     fn test_cold_start_returns_floor() {
         let mut stats = make_stats("CS");
@@ -256,8 +254,6 @@ mod tests {
         stats.consecutive_zero_changes = 20;
         assert_eq!(compute_base_interval(&stats), CEILING_INTERVAL);
     }
-
-    // -- evaluate_subject tests --
 
     #[test]
     fn test_pause_empty_fetches() {
@@ -340,8 +336,6 @@ mod tests {
         let result = evaluate_subject(&stats, peak, TermCategory::Current);
         assert!(matches!(result, SubjectSchedule::Eligible(_)));
     }
-
-    // -- time_of_day_multiplier tests --
 
     #[test]
     fn test_time_multiplier_peak() {

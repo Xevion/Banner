@@ -5,8 +5,6 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
-// --- Slug generation ---
-
 const NANOID_ALPHABET: &[char] = &[
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
     'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -77,8 +75,6 @@ pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
 
     Ok(count)
 }
-
-// --- Public API response types ---
 
 /// Lightweight RMP summary for instructor list cards.
 ///
@@ -172,8 +168,6 @@ pub struct PublicInstructorProfileResponse {
     pub teaching_history: Vec<TeachingHistoryTerm>,
 }
 
-// --- Query params ---
-
 #[derive(Debug, serde::Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -197,8 +191,6 @@ fn default_page() -> i32 {
 fn default_per_page() -> i32 {
     24
 }
-
-// --- Query functions ---
 
 /// List instructors for the public directory: paginated, searchable, filterable.
 pub async fn list_public_instructors(
