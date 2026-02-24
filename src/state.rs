@@ -14,6 +14,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
 use ts_rs::TS;
@@ -151,6 +152,8 @@ pub struct AppState {
     pub ssr_downstream: String,
     /// Notify handle to manually trigger a BlueBook sync from admin endpoints.
     pub bluebook_sync_notify: Arc<Notify>,
+    /// When set to true before notifying, the next BlueBook sync will skip interval checks.
+    pub bluebook_force_flag: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -159,6 +162,7 @@ impl AppState {
         db_pool: PgPool,
         ssr_downstream: String,
         bluebook_sync_notify: Arc<Notify>,
+        bluebook_force_flag: Arc<AtomicBool>,
     ) -> Self {
         let events = Arc::new(EventBuffer::new(1024));
         let schedule_cache = ScheduleCache::new(db_pool.clone());
@@ -183,6 +187,7 @@ impl AppState {
             ssr_client,
             ssr_downstream,
             bluebook_sync_notify,
+            bluebook_force_flag,
         }
     }
 

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 /// A parsed BlueBook course evaluation record.
@@ -131,6 +132,52 @@ pub async fn batch_upsert_bluebook_evaluations(
     .execute(db_pool)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch upsert BlueBook evaluations: {}", e))?;
+
+    Ok(())
+}
+
+/// Load the last-scraped timestamp for every subject in `bluebook_subject_scrapes`.
+pub async fn get_all_subject_scrape_times(
+    db_pool: &PgPool,
+) -> Result<HashMap<String, DateTime<Utc>>> {
+    let rows = sqlx::query_as::<_, (String, DateTime<Utc>)>(
+        "SELECT subject, last_scraped_at FROM bluebook_subject_scrapes",
+    )
+    .fetch_all(db_pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to load subject scrape times: {}", e))?;
+
+    Ok(rows.into_iter().collect())
+}
+
+/// Returns the MAX(term) code per subject from `bluebook_evaluations`.
+///
+/// Used to classify subjects as recent vs. historical when deciding scrape intervals.
+pub async fn get_subject_max_terms(db_pool: &PgPool) -> Result<HashMap<String, String>> {
+    let rows = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT subject, MAX(term) FROM bluebook_evaluations GROUP BY subject",
+    )
+    .fetch_all(db_pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to load subject max terms: {}", e))?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|(subject, max_term)| max_term.map(|t| (subject, t)))
+        .collect())
+}
+
+/// Upsert `last_scraped_at = NOW()` for the given subject in `bluebook_subject_scrapes`.
+pub async fn mark_subject_scraped(subject: &str, db_pool: &PgPool) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO bluebook_subject_scrapes (subject, last_scraped_at)
+         VALUES ($1, NOW())
+         ON CONFLICT (subject) DO UPDATE SET last_scraped_at = NOW()",
+    )
+    .bind(subject)
+    .execute(db_pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to mark subject scraped: {}", e))?;
 
     Ok(())
 }

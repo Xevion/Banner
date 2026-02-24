@@ -11,6 +11,7 @@ use crate::state::ReferenceCache;
 use crate::state::{ServiceStatus, ServiceStatusRegistry};
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::{Notify, RwLock, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -29,6 +30,7 @@ pub struct ScraperService {
     service_statuses: ServiceStatusRegistry,
     events: Arc<EventBuffer>,
     bluebook_notify: Arc<Notify>,
+    bluebook_force_flag: Arc<AtomicBool>,
     scheduler_handle: Option<JoinHandle<()>>,
     worker_handles: Vec<JoinHandle<()>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
@@ -43,6 +45,7 @@ impl ScraperService {
         service_statuses: ServiceStatusRegistry,
         events: Arc<EventBuffer>,
         bluebook_notify: Arc<Notify>,
+        bluebook_force_flag: Arc<AtomicBool>,
     ) -> Self {
         Self {
             db_pool,
@@ -51,6 +54,7 @@ impl ScraperService {
             service_statuses,
             events,
             bluebook_notify,
+            bluebook_force_flag,
             scheduler_handle: None,
             worker_handles: Vec::new(),
             shutdown_tx: None,
@@ -82,6 +86,7 @@ impl ScraperService {
             self.banner_api.clone(),
             self.reference_cache.clone(),
             self.bluebook_notify.clone(),
+            self.bluebook_force_flag.clone(),
         );
         let shutdown_rx = shutdown_tx.subscribe();
         let scheduler_handle = tokio::spawn(async move {

@@ -18,6 +18,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::process::ExitCode;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tracing::{error, info, warn};
 
@@ -126,8 +127,9 @@ impl App {
             Err(e) => warn!(error = ?e, "Failed to backfill instructor slugs (non-fatal)"),
         }
 
-        // Create shared BlueBook sync notify for manual trigger from admin endpoints
+        // Create shared BlueBook sync notify and force flag for manual trigger from admin endpoints
         let bluebook_sync_notify = Arc::new(tokio::sync::Notify::new());
+        let bluebook_force_flag = Arc::new(AtomicBool::new(false));
 
         // Create AppState (BannerApi already created above for term sync)
         let app_state = AppState::new(
@@ -135,6 +137,7 @@ impl App {
             db_pool.clone(),
             config.ssr_downstream.clone(),
             bluebook_sync_notify,
+            bluebook_force_flag.clone(),
         );
 
         // Load reference data cache from DB (may be empty on first run)
@@ -193,6 +196,7 @@ impl App {
                 self.app_state.service_statuses.clone(),
                 self.app_state.events.clone(),
                 self.app_state.bluebook_sync_notify.clone(),
+                self.app_state.bluebook_force_flag.clone(),
             ));
             self.service_manager
                 .register_service(ServiceName::Scraper.as_str(), scraper_service);

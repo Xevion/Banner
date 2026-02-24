@@ -16,6 +16,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{Notify, RwLock, broadcast};
 use tokio::time;
@@ -31,8 +32,11 @@ const RMP_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 /// How often terms are synced from Banner API (8 hours).
 const TERM_SYNC_INTERVAL: Duration = Duration::from_secs(8 * 60 * 60);
 
-/// How often BlueBook evaluations are synced (30 days).
-const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_secs(30 * 24 * 3600);
+/// How often to check which BlueBook subjects need re-scraping (1 day).
+///
+/// Per-subject re-scrape frequency is governed by `RECENT_SUBJECT_INTERVAL` (14 days)
+/// and `HISTORICAL_SUBJECT_INTERVAL` (90 days) in `src/bluebook.rs`.
+const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 3600);
 
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
 
@@ -71,6 +75,8 @@ pub struct Scheduler {
     /// be eligible yet (archived interval is 48 hours).
     archived_eval_times: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
     bluebook_notify: Arc<Notify>,
+    /// When true, the next BlueBook sync ignores per-subject interval checks.
+    bluebook_force_flag: Arc<AtomicBool>,
 }
 
 impl Scheduler {
@@ -79,6 +85,7 @@ impl Scheduler {
         banner_api: Arc<BannerApi>,
         reference_cache: Arc<RwLock<ReferenceCache>>,
         bluebook_notify: Arc<Notify>,
+        bluebook_force_flag: Arc<AtomicBool>,
     ) -> Self {
         Self {
             db,
@@ -86,6 +93,7 @@ impl Scheduler {
             reference_cache,
             archived_eval_times: Arc::new(std::sync::Mutex::new(HashMap::new())),
             bluebook_notify,
+            bluebook_force_flag,
         }
     }
 
@@ -162,6 +170,12 @@ impl Scheduler {
                         || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL;
                     bluebook_notified = false;
 
+                    // Read and clear the force flag before spawning so the flag
+                    // state at decision time is used by the spawned task.
+                    let bluebook_force = self
+                        .bluebook_force_flag
+                        .swap(false, Ordering::Relaxed);
+
                     // Spawn work in separate task to allow graceful cancellation during shutdown.
                     // Timestamps are persisted to DB on success so restarts don't redo recent work.
                     let work_handle = tokio::spawn({
@@ -217,7 +231,7 @@ impl Scheduler {
 
                                             let bb_fut = async {
                                                 if should_sync_bluebook {
-                                                    match Self::sync_bluebook(db.pool()).await {
+                                                    match Self::sync_bluebook(db.pool(), bluebook_force).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_BLUEBOOK_SYNC, Utc::now()).await {
                                                                 warn!(error = ?e, "Failed to persist BlueBook sync timestamp");
@@ -628,12 +642,14 @@ impl Scheduler {
     }
 
     /// Scrape all BlueBook course evaluations and upsert to DB.
+    ///
+    /// When `force` is true, all subjects are scraped regardless of their per-subject timestamps.
     #[tracing::instrument(skip_all)]
-    async fn sync_bluebook(db_pool: &PgPool) -> Result<()> {
-        info!("Starting BlueBook evaluation sync");
+    async fn sync_bluebook(db_pool: &PgPool, force: bool) -> Result<()> {
+        info!(force, "Starting BlueBook evaluation sync");
 
         let client = BlueBookClient::new();
-        let total = client.scrape_all(db_pool).await?;
+        let total = client.scrape_all(db_pool, force).await?;
 
         info!(total, "BlueBook evaluation sync complete");
         Ok(())

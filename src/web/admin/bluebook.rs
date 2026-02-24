@@ -1,5 +1,7 @@
 //! Admin API handler for triggering BlueBook evaluation sync.
 
+use std::sync::atomic::Ordering;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Json;
@@ -25,6 +27,7 @@ pub async fn sync_bluebook(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<BlueBookSyncTriggerResponse>) {
     info!("Admin triggered BlueBook sync");
+    state.bluebook_force_flag.store(true, Ordering::Relaxed);
     state.bluebook_sync_notify.notify_one();
     (
         StatusCode::ACCEPTED,

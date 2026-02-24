@@ -4,6 +4,7 @@
 //! ViewState/EventValidation round-tripping and cookie-based sessions.
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use html_scraper::{Html, Selector};
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -12,10 +13,19 @@ use tracing::{debug, info, warn};
 use sqlx::PgPool;
 
 use crate::banner::models::terms::{Season, Term};
-use crate::data::bluebook::{BlueBookEvaluation, batch_upsert_bluebook_evaluations};
+use crate::data::bluebook::{
+    BlueBookEvaluation, batch_upsert_bluebook_evaluations, get_all_subject_scrape_times,
+    get_subject_max_terms, mark_subject_scraped,
+};
 
 #[allow(dead_code)]
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
+
+/// Re-scrape interval for subjects with evaluations in a recent term (within ~2 years).
+const RECENT_SUBJECT_INTERVAL: Duration = Duration::from_secs(14 * 24 * 3600);
+
+/// Re-scrape interval for subjects with only old evaluations or zero evaluations.
+const HISTORICAL_SUBJECT_INTERVAL: Duration = Duration::from_secs(90 * 24 * 3600);
 
 /// BlueBook-specific season representation.
 ///
@@ -115,6 +125,47 @@ struct SubjectEntry {
     display_text: String,
     /// 0-based index in the ComboBox <li> list (needed for the HiddenField value)
     combo_index: usize,
+}
+
+/// Returns true if a subject should be scraped this cycle.
+///
+/// Subjects never seen before always scrape. Otherwise the interval depends on
+/// whether the subject has recent evaluations: 14 days for recent subjects,
+/// 90 days for historical ones.
+fn needs_scrape(
+    last_scraped: Option<DateTime<Utc>>,
+    max_term: Option<&str>,
+    current_term_code: &str,
+    force: bool,
+) -> bool {
+    if force {
+        return true;
+    }
+    let Some(last) = last_scraped else {
+        return true;
+    };
+    let interval = if is_recent_subject(max_term, current_term_code) {
+        RECENT_SUBJECT_INTERVAL
+    } else {
+        HISTORICAL_SUBJECT_INTERVAL
+    };
+    (Utc::now() - last).to_std().unwrap_or(interval) >= interval
+}
+
+/// Returns true if the subject has evaluations within ~2 years of the current term.
+///
+/// Term codes are formatted as YYYYSS (e.g. 202620 = Spring 2026).
+/// "Recent" is defined as max_term year >= current year - 2.
+fn is_recent_subject(max_term: Option<&str>, current_term_code: &str) -> bool {
+    let Some(mt) = max_term else {
+        return false;
+    };
+    if mt.len() < 4 || current_term_code.len() < 4 {
+        return false;
+    }
+    let max_year: u32 = mt[..4].parse().unwrap_or(0);
+    let curr_year: u32 = current_term_code[..4].parse().unwrap_or(0);
+    max_year + 2 >= curr_year
 }
 
 /// Client for scraping BlueBook course evaluations.
@@ -577,14 +628,42 @@ impl BlueBookClient {
     /// Searches each subject with the PAST term filter, paginates through all
     /// pages, and upserts immediately after each subject completes. Returns the
     /// total number of evaluations upserted.
-    pub(crate) async fn scrape_all(&self, db_pool: &PgPool) -> Result<u32> {
+    ///
+    /// When `force` is true all subjects are scraped regardless of timestamps.
+    pub(crate) async fn scrape_all(&self, db_pool: &PgPool, force: bool) -> Result<u32> {
         let (subjects, initial_fields) = self.fetch_subjects().await?;
-        let subject_count = subjects.len();
+
+        let scrape_times = get_all_subject_scrape_times(db_pool)
+            .await
+            .unwrap_or_default();
+        let max_terms = get_subject_max_terms(db_pool).await.unwrap_or_default();
+        let current_term_code = Term::get_current().inner().to_string();
+
+        let total = subjects.len();
+        let eligible_subjects: Vec<_> = subjects
+            .iter()
+            .filter(|s| {
+                let last = scrape_times.get(&s.code).copied();
+                let max_term = max_terms.get(&s.code).map(|t| t.as_str());
+                needs_scrape(last, max_term, &current_term_code, force)
+            })
+            .collect();
+        let eligible = eligible_subjects.len();
+        let skipped_interval = total - eligible;
+
+        info!(
+            total,
+            eligible,
+            skipped = skipped_interval,
+            "BlueBook incremental scrape starting"
+        );
+
+        let subject_count = eligible;
         let mut total_evals = 0u32;
         let mut skipped_no_radio = 0u32;
         let mut skipped_errors = 0u32;
 
-        for (i, subject) in subjects.iter().enumerate() {
+        for (i, subject) in eligible_subjects.iter().enumerate() {
             let progress = i + 1;
 
             // Search for the subject (drop Html before next await — Html is !Send)
@@ -679,6 +758,15 @@ impl BlueBookClient {
             }
 
             total_evals += subject_eval_count;
+
+            if let Err(e) = mark_subject_scraped(&subject.code, db_pool).await {
+                warn!(
+                    code = subject.code.as_str(),
+                    error = %e,
+                    "Failed to record subject scrape timestamp"
+                );
+            }
+
             info!(
                 code = subject.code.as_str(),
                 progress,
@@ -1472,7 +1560,7 @@ mod tests {
         let db_pool = sqlx::PgPool::connect(&database_url).await.unwrap();
 
         let client = BlueBookClient::new();
-        let total = client.scrape_all(&db_pool).await.unwrap();
+        let total = client.scrape_all(&db_pool, false).await.unwrap();
         eprintln!("Total evaluations upserted: {total} (0 means all subjects failed)",);
         assert!(
             total > 0,
