@@ -51,15 +51,15 @@ pub struct MeetingLocation {
 #[ts(export)]
 pub enum CreditHours {
     /// A single fixed credit hour value.
-    Fixed { hours: i32 },
+    Fixed { hours: f64 },
     /// A range of credit hours with the invariant that `low <= high`.
-    Range { low: i32, high: i32 },
+    Range { low: f64, high: f64 },
 }
 
 impl CreditHours {
     /// Creates a `CreditHours::Range`, returning an error if `low > high`.
     #[allow(dead_code)]
-    pub fn range(low: i32, high: i32) -> Result<Self, String> {
+    pub fn range(low: f64, high: f64) -> Result<Self, String> {
         if low > high {
             return Err(format!(
                 "invalid credit hour range: low ({low}) is greater than high ({high})"

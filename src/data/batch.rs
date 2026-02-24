@@ -189,13 +189,13 @@ struct UpsertDiffRow {
     old_campus: Option<String>,
     new_campus: Option<String>,
 
-    // nullable int fields
-    old_credit_hours: Option<i32>,
-    new_credit_hours: Option<i32>,
-    old_credit_hour_low: Option<i32>,
-    new_credit_hour_low: Option<i32>,
-    old_credit_hour_high: Option<i32>,
-    new_credit_hour_high: Option<i32>,
+    // nullable float fields
+    old_credit_hours: Option<f64>,
+    new_credit_hours: Option<f64>,
+    old_credit_hour_low: Option<f64>,
+    new_credit_hour_low: Option<f64>,
+    old_credit_hour_high: Option<f64>,
+    new_credit_hour_high: Option<f64>,
 
     // cross-list fields
     old_cross_list: Option<String>,
@@ -620,9 +620,9 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
         .map(|c| c.instructional_method.as_deref())
         .collect();
     let campuses: Vec<Option<String>> = courses.iter().map(extract_campus_code).collect();
-    let credit_hours: Vec<Option<i32>> = courses.iter().map(|c| c.credit_hours).collect();
-    let credit_hour_lows: Vec<Option<i32>> = courses.iter().map(|c| c.credit_hour_low).collect();
-    let credit_hour_highs: Vec<Option<i32>> = courses.iter().map(|c| c.credit_hour_high).collect();
+    let credit_hours: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hours).collect();
+    let credit_hour_lows: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_low).collect();
+    let credit_hour_highs: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_high).collect();
     let cross_lists: Vec<Option<&str>> = courses.iter().map(|c| c.cross_list.as_deref()).collect();
     let cross_list_capacities: Vec<Option<i32>> =
         courses.iter().map(|c| c.cross_list_capacity).collect();
@@ -675,7 +675,7 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
                 $1::text[], $2::text[], $3::text[], $4::text[], $5::text[],
                 $6::int4[], $7::int4[], $8::int4[], $9::int4[],
                 $10::text[], $11::text[], $12::text[], $13::text[],
-                $14::int4[], $15::int4[], $16::int4[],
+                $14::float8[], $15::float8[], $16::float8[],
                 $17::text[], $18::int4[], $19::int4[],
                 $20::text[], $21::bool[],
                 $22::jsonb[], $23::jsonb[]

@@ -33,7 +33,7 @@ pub fn make_course(
         campus_description: "Main Campus".to_owned(),
         schedule_type_description: Some("Lecture".to_owned()),
         course_title: title.to_owned(),
-        credit_hours: Some(3),
+        credit_hours: Some(3.0),
         maximum_enrollment: max_enrollment,
         enrollment,
         seats_available: max_enrollment - enrollment,

@@ -448,9 +448,9 @@ pub struct SearchParams {
     #[ts(type = "Array<string>")]
     pub attributes: Vec<FilterValue<Attribute>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "credit_hour_min")]
-    pub credit_hour_min: Option<i32>,
+    pub credit_hour_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "credit_hour_max")]
-    pub credit_hour_max: Option<i32>,
+    pub credit_hour_max: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instructor: Option<String>,
 }

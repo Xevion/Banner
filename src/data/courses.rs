@@ -38,8 +38,8 @@ pub enum SortDirection {
 pub struct FilterRanges {
     pub course_number_min: i32,
     pub course_number_max: i32,
-    pub credit_hour_min: i32,
-    pub credit_hour_max: i32,
+    pub credit_hour_min: f64,
+    pub credit_hour_max: f64,
     pub wait_count_max: i32,
 }
 
@@ -80,8 +80,8 @@ const SEARCH_WHERE: &str = r#"
           SELECT 1 FROM jsonb_array_elements_text(attributes) a
           WHERE a = ANY($14)
       ))
-      AND ($15::int IS NULL OR COALESCE(credit_hours, credit_hour_low, 0) >= $15)
-      AND ($16::int IS NULL OR COALESCE(credit_hours, credit_hour_high, 0) <= $16)
+      AND ($15::float8 IS NULL OR COALESCE(credit_hours, credit_hour_low, 0) >= $15)
+      AND ($16::float8 IS NULL OR COALESCE(credit_hours, credit_hour_high, 0) <= $16)
       AND ($17::text IS NULL OR EXISTS (
           SELECT 1 FROM course_instructors ci
           JOIN instructors i ON i.id = ci.instructor_id
@@ -143,8 +143,8 @@ pub async fn search_courses(
     time_end: Option<&str>,
     part_of_term: Option<&[String]>,
     attributes: Option<&[String]>,
-    credit_hour_min: Option<i32>,
-    credit_hour_max: Option<i32>,
+    credit_hour_min: Option<f64>,
+    credit_hour_max: Option<f64>,
     instructor: Option<&str>,
     limit: i32,
     offset: i32,
@@ -352,8 +352,8 @@ pub async fn get_available_terms(db_pool: &PgPool) -> Result<Vec<String>> {
 type RangeRow = (
     Option<i32>,
     Option<i32>,
-    Option<i32>,
-    Option<i32>,
+    Option<f64>,
+    Option<f64>,
     Option<i32>,
 );
 
@@ -377,8 +377,8 @@ pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<Filt
     .await?;
 
     let cn_max = row.1.unwrap_or(9000);
-    let ch_min = row.2.unwrap_or(0);
-    let ch_max = row.3.unwrap_or(8);
+    let ch_min = row.2.unwrap_or(0.0);
+    let ch_max = row.3.unwrap_or(8.0);
     let wc_max_raw = row.4.unwrap_or(0);
 
     // Round course number to hundreds: floor min, ceil max
