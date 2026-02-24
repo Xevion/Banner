@@ -6,20 +6,19 @@ import type {
   InstructorListItem,
   InstructorStats,
 } from "$lib/bindings";
+import FilterCards from "$lib/components/FilterCards.svelte";
+import Pagination from "$lib/components/Pagination.svelte";
+import ProgressBar from "$lib/components/ProgressBar.svelte";
+import SearchInput from "$lib/components/SearchInput.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
+import { useDebounceSearch, useRowHighlight } from "$lib/composables";
 import { formatInstructorName, ratingStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-  X,
-} from "@lucide/svelte";
-import { onDestroy } from "svelte";
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
+import type { FilterCard, ProgressSegment, StatusBadge } from "$lib/ui";
+import { getBadge } from "$lib/ui";
+import { Check, ChevronRight, LoaderCircle, RefreshCw, X } from "@lucide/svelte";
+import { onDestroy, untrack } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 import { fade, slide } from "svelte/transition";
 import type { PageProps } from "./$types";
 import CandidateCard from "./CandidateCard.svelte";
@@ -37,25 +36,26 @@ function buildSubjectMap(
   return map;
 }
 
-let subjectMap = $state(buildSubjectMap(data.subjects));
-let instructors = $state<InstructorListItem[]>(data.instructors?.instructors ?? []);
+let subjectMap = $state(untrack(() => buildSubjectMap(data.subjects)));
+let instructors = $state<InstructorListItem[]>(untrack(() => data.instructors?.instructors ?? []));
 let stats = $state<InstructorStats>(
-  data.instructors?.stats ?? {
-    total: 0,
-    unmatched: 0,
-    auto: 0,
-    confirmed: 0,
-    rejected: 0,
-    withCandidates: 0,
-  }
+  untrack(
+    () =>
+      data.instructors?.stats ?? {
+        total: 0,
+        unmatched: 0,
+        auto: 0,
+        confirmed: 0,
+        rejected: 0,
+        withCandidates: 0,
+      }
+  )
 );
-let totalCount = $state(data.instructors?.total ?? 0);
+let totalCount = $state(untrack(() => data.instructors?.total ?? 0));
 let currentPage = $state(1);
 let perPage = $state(25);
 let activeFilter = $state<string | undefined>(undefined);
-let searchQuery = $state("");
-let searchInput = $state("");
-let error = $state<string | null>(data.error);
+let error = $state<string | null>(untrack(() => data.error));
 let loading = $state(false);
 
 // Expanded row detail
@@ -69,23 +69,23 @@ let actionLoading = $state<string | null>(null);
 let rescoreLoading = $state(false);
 let rescoreResult = $state<{ message: string; isError: boolean } | null>(null);
 
-// Stale row tracking: rows that changed status but haven't been refetched yet
-let recentlyChanged = new SvelteSet<number>();
-let highlightTimeouts = new SvelteMap<number, ReturnType<typeof setTimeout>>();
+// Row highlight tracking
+const highlight = useRowHighlight();
 
 // Reject-all inline confirmation
 let showRejectConfirm = $state<number | null>(null);
 
-// Search debounce
-let searchTimeout: ReturnType<typeof setTimeout> | undefined;
+// Debounced search
+let searchQuery = $state("");
+const search = useDebounceSearch((q) => {
+  searchQuery = q;
+  currentPage = 1;
+  expandedId = null;
+  showRejectConfirm = null;
+  void fetchInstructors();
+});
 
-const filterCards: {
-  label: string;
-  value: string | undefined;
-  stat: keyof InstructorStats;
-  textColor: string;
-  ringColor: string;
-}[] = [
+const filterCards: FilterCard<InstructorStats>[] = [
   {
     label: "Total",
     value: undefined,
@@ -123,25 +123,23 @@ const filterCards: {
   },
 ];
 
-const progressSegments = [
-  { stat: "auto" as keyof InstructorStats, color: "bg-blue-500", label: "Auto" },
-  { stat: "confirmed" as keyof InstructorStats, color: "bg-green-500", label: "Confirmed" },
-  { stat: "unmatched" as keyof InstructorStats, color: "bg-amber-500", label: "Unmatched" },
-  { stat: "rejected" as keyof InstructorStats, color: "bg-red-500", label: "Rejected" },
+const progressSegments: ProgressSegment<InstructorStats>[] = [
+  { stat: "auto", color: "bg-blue-500", label: "Auto" },
+  { stat: "confirmed", color: "bg-green-500", label: "Confirmed" },
+  { stat: "unmatched", color: "bg-amber-500", label: "Unmatched" },
+  { stat: "rejected", color: "bg-red-500", label: "Rejected" },
 ];
 
 let matchedLegacyIds = $derived(
   new Set(detail?.currentMatches.map((m: { legacyId: number }) => m.legacyId) ?? [])
 );
 
-let progressDenom = $derived(stats.total || 1);
 let totalPages = $derived(Math.max(1, Math.ceil(totalCount / perPage)));
 
 async function fetchInstructors() {
   loading = true;
   error = null;
-  recentlyChanged.clear();
-  clearHighlightTimeouts();
+  highlight.clear();
   const result = await client.getAdminInstructors({
     status: activeFilter,
     search: searchQuery || undefined,
@@ -173,8 +171,7 @@ async function fetchDetail(id: number) {
 }
 
 onDestroy(() => {
-  clearTimeout(searchTimeout);
-  clearHighlightTimeouts();
+  highlight.clear();
 });
 
 function setFilter(value: string | undefined) {
@@ -185,31 +182,9 @@ function setFilter(value: string | undefined) {
   void fetchInstructors();
 }
 
-function handleSearch() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    searchQuery = searchInput;
-    currentPage = 1;
-    expandedId = null;
-    void fetchInstructors();
-  }, 300);
-}
-
-function clearSearch() {
-  searchInput = "";
-  searchQuery = "";
-  currentPage = 1;
-  expandedId = null;
-  void fetchInstructors();
-}
-
 function clearAllFilters() {
-  searchInput = "";
-  searchQuery = "";
   activeFilter = undefined;
-  currentPage = 1;
-  expandedId = null;
-  void fetchInstructors();
+  search.clear();
 }
 
 function goToPage(page: number) {
@@ -244,28 +219,7 @@ function updateLocalStatus(instructorId: number, newStatus: string) {
   instructors = instructors.map((i) =>
     i.id === instructorId ? { ...i, rmpMatchStatus: newStatus } : i
   );
-  markChanged(instructorId);
-}
-
-function markChanged(id: number) {
-  // Clear any existing timeout for this ID
-  const existing = highlightTimeouts.get(id);
-  if (existing) clearTimeout(existing);
-
-  recentlyChanged.add(id);
-
-  const timeout = setTimeout(() => {
-    recentlyChanged.delete(id);
-    highlightTimeouts.delete(id);
-  }, 2000);
-  highlightTimeouts.set(id, timeout);
-}
-
-function clearHighlightTimeouts() {
-  for (const timeout of highlightTimeouts.values()) {
-    clearTimeout(timeout);
-  }
-  highlightTimeouts.clear();
+  highlight.mark(instructorId);
 }
 
 function matchesFilter(status: string): boolean {
@@ -349,32 +303,21 @@ async function handleRescore() {
   rescoreLoading = false;
 }
 
-function statusBadge(status: string): { label: string; classes: string } {
-  switch (status) {
-    case "unmatched":
-      return {
-        label: "Unmatched",
-        classes: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-      };
-    case "auto":
-      return {
-        label: "Auto",
-        classes: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      };
-    case "confirmed":
-      return {
-        label: "Confirmed",
-        classes: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      };
-    case "rejected":
-      return {
-        label: "Rejected",
-        classes: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      };
-    default:
-      return { label: status, classes: "bg-muted text-muted-foreground" };
-  }
-}
+const BADGES: Record<string, StatusBadge> = {
+  unmatched: {
+    label: "Unmatched",
+    classes: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  },
+  auto: { label: "Auto", classes: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
+  confirmed: {
+    label: "Confirmed",
+    classes: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  },
+  rejected: {
+    label: "Rejected",
+    classes: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  },
+};
 
 function formatScore(score: number): string {
   return (score * 100).toFixed(0);
@@ -393,29 +336,12 @@ function formatScore(score: number): string {
   <div class="flex-1"></div>
 
   <!-- Search -->
-  <div class="relative">
-    <Search
-      size={14}
-      class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-    />
-    <input
-      type="text"
-      placeholder="Search name or email..."
-      bind:value={searchInput}
-      oninput={handleSearch}
-      class="bg-card border-border rounded-md border pl-8 pr-8 py-1.5 text-sm text-foreground
-             placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-64 transition-shadow"
-    />
-    {#if searchInput}
-      <button
-        onclick={clearSearch}
-        class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        aria-label="Clear search"
-      >
-        <X size={14} />
-      </button>
-    {/if}
-  </div>
+  <SearchInput
+    bind:value={search.input}
+    placeholder="Search name or email..."
+    onSearch={search.trigger}
+    onClear={() => search.clear()}
+  />
 
   <!-- Rescore -->
   <button
@@ -501,33 +427,10 @@ function formatScore(score: number): string {
     {/if}
 
     <!-- Stats / Filter Cards -->
-    <div class="mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      {#each filterCards as card (card.value)}
-        <button
-          onclick={() => setFilter(card.value)}
-          class="bg-card border-border rounded-lg border p-3 text-left transition-all duration-200
-                 cursor-pointer hover:shadow-sm hover:border-border/80
-                 {activeFilter === card.value ? `ring-2 ${card.ringColor} shadow-sm` : ''}"
-        >
-          <div class="text-xs {card.textColor}">{card.label}</div>
-          <div class="text-lg font-semibold tabular-nums">{stats[card.stat]}</div>
-        </button>
-      {/each}
-    </div>
+    <FilterCards {stats} cards={filterCards} {activeFilter} onSelect={setFilter} />
 
     <!-- Progress Bar -->
-    <div class="mb-6">
-      <div class="bg-muted h-2 rounded-full overflow-hidden flex">
-        {#each progressSegments as seg (seg.stat)}
-          {@const pct = (stats[seg.stat] / progressDenom) * 100}
-          <div
-            class="{seg.color} h-full transition-all duration-500"
-            style="width: {pct}%"
-            title="{seg.label}: {stats[seg.stat]}"
-          ></div>
-        {/each}
-      </div>
-    </div>
+    <ProgressBar {stats} segments={progressSegments} total={stats.total} />
 
     {#if instructors.length === 0}
       <div class="py-12 text-center">
@@ -557,10 +460,10 @@ function formatScore(score: number): string {
           </thead>
           <tbody>
             {#each instructors as instructor (instructor.id)}
-              {@const badge = statusBadge(instructor.rmpMatchStatus)}
+              {@const badge = getBadge(BADGES, instructor.rmpMatchStatus)}
               {@const isExpanded = expandedId === instructor.id}
               {@const isStale = !matchesFilter(instructor.rmpMatchStatus)}
-              {@const isHighlighted = recentlyChanged.has(instructor.id)}
+              {@const isHighlighted = highlight.has(instructor.id)}
               <tr
                 class="border-border border-b cursor-pointer transition-colors duration-700
                        {isExpanded ? 'bg-muted/30' : 'hover:bg-muted/50'}
@@ -823,37 +726,13 @@ function formatScore(score: number): string {
       </div>
 
       <!-- Pagination -->
-      <div class="mt-4 flex items-center justify-between text-sm">
-        <span class="text-muted-foreground">
-          Showing {(currentPage - 1) * perPage + 1}&ndash;{Math.min(
-            currentPage * perPage,
-            totalCount
-          )} of {totalCount}
-        </span>
-        <div class="flex items-center gap-1">
-          <button
-            onclick={() => goToPage(currentPage - 1)}
-            disabled={currentPage <= 1}
-            class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
-                   hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
-            aria-label="Previous page"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span class="text-muted-foreground tabular-nums px-2">
-            {currentPage} / {totalPages}
-          </span>
-          <button
-            onclick={() => goToPage(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
-                   hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
-            aria-label="Next page"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
+      <Pagination
+        variant="simple"
+        currentPage={currentPage}
+        {totalCount}
+        perPage={perPage}
+        onPageChange={goToPage}
+      />
     {/if}
   </div>
 {/if}

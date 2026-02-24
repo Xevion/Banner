@@ -7,34 +7,30 @@ import type {
   BluebookMatchResponse,
   InstructorListItem,
 } from "$lib/bindings";
+import FilterCards from "$lib/components/FilterCards.svelte";
+import Pagination from "$lib/components/Pagination.svelte";
+import ProgressBar from "$lib/components/ProgressBar.svelte";
+import SearchInput from "$lib/components/SearchInput.svelte";
+import { useDebounceSearch, useRowHighlight } from "$lib/composables";
 import { formatInstructorName } from "$lib/course";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-  X,
-} from "@lucide/svelte";
-import { onDestroy } from "svelte";
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
+import type { FilterCard, ProgressSegment, StatusBadge } from "$lib/ui";
+import { getBadge } from "$lib/ui";
+import { Check, ChevronRight, LoaderCircle, RefreshCw, Search, X } from "@lucide/svelte";
+import { onDestroy, untrack } from "svelte";
 import { fade, slide } from "svelte/transition";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 
-let links = $state<BluebookLinkListItem[]>(data.links?.links ?? []);
+let links = $state<BluebookLinkListItem[]>(untrack(() => data.links?.links ?? []));
 let stats = $state<BluebookLinkStats>(
-  data.links?.stats ?? { total: 0, auto: 0, pending: 0, approved: 0, rejected: 0 }
+  untrack(() => data.links?.stats ?? { total: 0, auto: 0, pending: 0, approved: 0, rejected: 0 })
 );
-let totalCount = $state(data.links?.total ?? 0);
+let totalCount = $state(untrack(() => data.links?.total ?? 0));
 let currentPage = $state(1);
 let perPage = $state(25);
 let activeFilter = $state<string | undefined>(undefined);
-let searchQuery = $state("");
-let searchInput = $state("");
-let error = $state<string | null>(data.error);
+let error = $state<string | null>(untrack(() => data.error));
 let loading = $state(false);
 
 // Expanded row detail
@@ -48,9 +44,8 @@ let actionLoading = $state<string | null>(null);
 let matchLoading = $state(false);
 let matchResult = $state<{ message: string; isError: boolean } | null>(null);
 
-// Stale row tracking
-let recentlyChanged = new SvelteSet<number>();
-let highlightTimeouts = new SvelteMap<number, ReturnType<typeof setTimeout>>();
+// Row highlight tracking
+const highlight = useRowHighlight();
 
 // Instructor search for manual assignment
 let instructorSearchQuery = $state("");
@@ -58,16 +53,16 @@ let instructorSearchResults = $state<InstructorListItem[]>([]);
 let instructorSearchLoading = $state(false);
 let instructorSearchTimeout: ReturnType<typeof setTimeout> | undefined;
 
-// Search debounce
-let searchTimeout: ReturnType<typeof setTimeout> | undefined;
+// Debounced search
+let searchQuery = $state("");
+const search = useDebounceSearch((q) => {
+  searchQuery = q;
+  currentPage = 1;
+  expandedId = null;
+  void fetchLinks();
+});
 
-const filterCards: {
-  label: string;
-  value: string | undefined;
-  stat: keyof BluebookLinkStats;
-  textColor: string;
-  ringColor: string;
-}[] = [
+const filterCards: FilterCard<BluebookLinkStats>[] = [
   {
     label: "Total",
     value: undefined,
@@ -105,21 +100,19 @@ const filterCards: {
   },
 ];
 
-const progressSegments = [
-  { stat: "auto" as keyof BluebookLinkStats, color: "bg-blue-500", label: "Auto" },
-  { stat: "pending" as keyof BluebookLinkStats, color: "bg-amber-500", label: "Pending" },
-  { stat: "approved" as keyof BluebookLinkStats, color: "bg-green-500", label: "Approved" },
-  { stat: "rejected" as keyof BluebookLinkStats, color: "bg-red-500", label: "Rejected" },
+const progressSegments: ProgressSegment<BluebookLinkStats>[] = [
+  { stat: "auto", color: "bg-blue-500", label: "Auto" },
+  { stat: "pending", color: "bg-amber-500", label: "Pending" },
+  { stat: "approved", color: "bg-green-500", label: "Approved" },
+  { stat: "rejected", color: "bg-red-500", label: "Rejected" },
 ];
 
-let progressDenom = $derived(stats.total || 1);
 let totalPages = $derived(Math.max(1, Math.ceil(totalCount / perPage)));
 
 async function fetchLinks() {
   loading = true;
   error = null;
-  recentlyChanged.clear();
-  clearHighlightTimeouts();
+  highlight.clear();
   const result = await client.getAdminBluebookLinks({
     status: activeFilter ?? null,
     search: searchQuery || null,
@@ -152,9 +145,8 @@ async function fetchDetail(id: number) {
 }
 
 onDestroy(() => {
-  clearTimeout(searchTimeout);
   clearTimeout(instructorSearchTimeout);
-  clearHighlightTimeouts();
+  highlight.clear();
 });
 
 function setFilter(value: string | undefined) {
@@ -164,31 +156,9 @@ function setFilter(value: string | undefined) {
   void fetchLinks();
 }
 
-function handleSearch() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    searchQuery = searchInput;
-    currentPage = 1;
-    expandedId = null;
-    void fetchLinks();
-  }, 300);
-}
-
-function clearSearch() {
-  searchInput = "";
-  searchQuery = "";
-  currentPage = 1;
-  expandedId = null;
-  void fetchLinks();
-}
-
 function clearAllFilters() {
-  searchInput = "";
-  searchQuery = "";
   activeFilter = undefined;
-  currentPage = 1;
-  expandedId = null;
-  void fetchLinks();
+  search.clear();
 }
 
 function goToPage(page: number) {
@@ -217,25 +187,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 function updateLocalStatus(linkId: number, newStatus: string) {
   links = links.map((l) => (l.id === linkId ? { ...l, status: newStatus } : l));
-  markChanged(linkId);
-}
-
-function markChanged(id: number) {
-  const existing = highlightTimeouts.get(id);
-  if (existing) clearTimeout(existing);
-  recentlyChanged.add(id);
-  const timeout = setTimeout(() => {
-    recentlyChanged.delete(id);
-    highlightTimeouts.delete(id);
-  }, 2000);
-  highlightTimeouts.set(id, timeout);
-}
-
-function clearHighlightTimeouts() {
-  for (const timeout of highlightTimeouts.values()) {
-    clearTimeout(timeout);
-  }
-  highlightTimeouts.clear();
+  highlight.mark(linkId);
 }
 
 function matchesFilter(status: string): boolean {
@@ -323,32 +275,21 @@ function handleInstructorSearch() {
   }, 300);
 }
 
-function statusBadge(status: string): { label: string; classes: string } {
-  switch (status) {
-    case "auto":
-      return {
-        label: "Auto",
-        classes: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      };
-    case "pending":
-      return {
-        label: "Pending",
-        classes: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-      };
-    case "approved":
-      return {
-        label: "Approved",
-        classes: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      };
-    case "rejected":
-      return {
-        label: "Rejected",
-        classes: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      };
-    default:
-      return { label: status, classes: "bg-muted text-muted-foreground" };
-  }
-}
+const BADGES: Record<string, StatusBadge> = {
+  auto: { label: "Auto", classes: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
+  pending: {
+    label: "Pending",
+    classes: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  },
+  approved: {
+    label: "Approved",
+    classes: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  },
+  rejected: {
+    label: "Rejected",
+    classes: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  },
+};
 
 function formatConfidence(confidence: number | null): string {
   if (confidence === null) return "\u2014";
@@ -368,29 +309,12 @@ function formatConfidence(confidence: number | null): string {
   <div class="flex-1"></div>
 
   <!-- Search -->
-  <div class="relative">
-    <Search
-      size={14}
-      class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-    />
-    <input
-      type="text"
-      placeholder="Search by name..."
-      bind:value={searchInput}
-      oninput={handleSearch}
-      class="bg-card border-border rounded-md border pl-8 pr-8 py-1.5 text-sm text-foreground
-             placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-64 transition-shadow"
-    />
-    {#if searchInput}
-      <button
-        onclick={clearSearch}
-        class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        aria-label="Clear search"
-      >
-        <X size={14} />
-      </button>
-    {/if}
-  </div>
+  <SearchInput
+    bind:value={search.input}
+    placeholder="Search by name..."
+    onSearch={search.trigger}
+    onClear={() => search.clear()}
+  />
 
   <!-- Run Auto-Match -->
   <button
@@ -476,33 +400,10 @@ function formatConfidence(confidence: number | null): string {
     {/if}
 
     <!-- Stats / Filter Cards -->
-    <div class="mb-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
-      {#each filterCards as card (card.value)}
-        <button
-          onclick={() => setFilter(card.value)}
-          class="bg-card border-border rounded-lg border p-3 text-left transition-all duration-200
-                 cursor-pointer hover:shadow-sm hover:border-border/80
-                 {activeFilter === card.value ? `ring-2 ${card.ringColor} shadow-sm` : ''}"
-        >
-          <div class="text-xs {card.textColor}">{card.label}</div>
-          <div class="text-lg font-semibold tabular-nums">{stats[card.stat]}</div>
-        </button>
-      {/each}
-    </div>
+    <FilterCards {stats} cards={filterCards} {activeFilter} onSelect={setFilter} />
 
     <!-- Progress Bar -->
-    <div class="mb-6">
-      <div class="bg-muted h-2 rounded-full overflow-hidden flex">
-        {#each progressSegments as seg (seg.stat)}
-          {@const pct = (stats[seg.stat] / progressDenom) * 100}
-          <div
-            class="{seg.color} h-full transition-all duration-500"
-            style="width: {pct}%"
-            title="{seg.label}: {stats[seg.stat]}"
-          ></div>
-        {/each}
-      </div>
-    </div>
+    <ProgressBar {stats} segments={progressSegments} total={stats.total} />
 
     {#if links.length === 0}
       <div class="py-12 text-center">
@@ -534,10 +435,10 @@ function formatConfidence(confidence: number | null): string {
           </thead>
           <tbody>
             {#each links as link (link.id)}
-              {@const badge = statusBadge(link.status)}
+              {@const badge = getBadge(BADGES, link.status)}
               {@const isExpanded = expandedId === link.id}
               {@const isStale = !matchesFilter(link.status)}
-              {@const isHighlighted = recentlyChanged.has(link.id)}
+              {@const isHighlighted = highlight.has(link.id)}
               <tr
                 class="border-border border-b cursor-pointer transition-colors duration-700
                        {isExpanded ? 'bg-muted/30' : 'hover:bg-muted/50'}
@@ -683,9 +584,9 @@ function formatConfidence(confidence: number | null): string {
                               <dt class="text-muted-foreground">Status</dt>
                               <dd>
                                 <span
-                                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {statusBadge(detail.status).classes}"
+                                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {getBadge(BADGES, detail.status).classes}"
                                 >
-                                  {statusBadge(detail.status).label}
+                                  {getBadge(BADGES, detail.status).label}
                                 </span>
                               </dd>
                             </dl>
@@ -850,37 +751,13 @@ function formatConfidence(confidence: number | null): string {
       </div>
 
       <!-- Pagination -->
-      <div class="mt-4 flex items-center justify-between text-sm">
-        <span class="text-muted-foreground">
-          Showing {(currentPage - 1) * perPage + 1}&ndash;{Math.min(
-            currentPage * perPage,
-            totalCount,
-          )} of {totalCount}
-        </span>
-        <div class="flex items-center gap-1">
-          <button
-            onclick={() => goToPage(currentPage - 1)}
-            disabled={currentPage <= 1}
-            class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
-                   hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
-            aria-label="Previous page"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span class="text-muted-foreground tabular-nums px-2">
-            {currentPage} / {totalPages}
-          </span>
-          <button
-            onclick={() => goToPage(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
-                   hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
-            aria-label="Next page"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
+      <Pagination
+        variant="simple"
+        currentPage={currentPage}
+        {totalCount}
+        perPage={perPage}
+        onPageChange={goToPage}
+      />
     {/if}
   </div>
 {/if}

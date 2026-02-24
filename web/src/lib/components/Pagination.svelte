@@ -1,6 +1,6 @@
 <script lang="ts">
 import { formatNumber } from "$lib/utils";
-import { ChevronDown, ChevronUp } from "@lucide/svelte";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "@lucide/svelte";
 import { Select } from "bits-ui";
 import type { Action } from "svelte/action";
 
@@ -20,17 +20,27 @@ const slideIn: Action<HTMLElement, number> = (node, direction) => {
 };
 
 let {
+  variant = "default",
   totalCount,
-  offset,
-  limit,
-  loading = false,
   onPageChange,
+  // default variant
+  offset = 0,
+  limit = 25,
+  loading = false,
+  // simple variant (renamed to avoid conflict with derived currentPage)
+  currentPage: simplePage = 1,
+  perPage = 25,
 }: {
+  variant?: "default" | "simple";
   totalCount: number;
-  offset: number;
-  limit: number;
+  onPageChange: (value: number) => void;
+  // default
+  offset?: number;
+  limit?: number;
   loading?: boolean;
-  onPageChange: (newOffset: number) => void;
+  // simple
+  currentPage?: number;
+  perPage?: number;
 } = $props();
 
 const currentPage = $derived(Math.floor(offset / limit) + 1);
@@ -64,7 +74,39 @@ const pageItems = $derived(
 const selectValue = $derived(String(currentPage));
 </script>
 
-{#if totalCount > 0 && totalPages > 1}
+{#if variant === "simple"}
+  {@const simpleTotalPages = Math.max(1, Math.ceil(totalCount / perPage))}
+  {@const simpleStart = (simplePage - 1) * perPage + 1}
+  {@const simpleEnd = Math.min(simplePage * perPage, totalCount)}
+  <div class="mt-4 flex items-center justify-between text-sm">
+    <span class="text-muted-foreground">
+      Showing {simpleStart}&ndash;{simpleEnd} of {totalCount}
+    </span>
+    <div class="flex items-center gap-1">
+      <button
+        onclick={() => onPageChange(simplePage - 1)}
+        disabled={simplePage <= 1}
+        class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
+               hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
+        aria-label="Previous page"
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <span class="text-muted-foreground tabular-nums px-2">
+        {simplePage} / {simpleTotalPages}
+      </span>
+      <button
+        onclick={() => onPageChange(simplePage + 1)}
+        disabled={simplePage >= simpleTotalPages}
+        class="inline-flex items-center justify-center size-8 rounded-md bg-muted text-foreground
+               hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-default"
+        aria-label="Next page"
+      >
+        <ChevronRight size={16} />
+      </button>
+    </div>
+  </div>
+{:else if totalCount > 0 && totalPages > 1}
     <div class="flex items-start text-xs mt-2 pl-2">
         <!-- Left zone: result count -->
         <div class="flex-1">

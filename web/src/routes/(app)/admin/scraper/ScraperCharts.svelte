@@ -6,6 +6,7 @@ import { useStream } from "$lib/composables/useStream.svelte";
 import { scaleLinear, scaleTime } from "d3-scale";
 import { curveMonotoneX } from "d3-shape";
 import { Area, Axis, Chart, Highlight, Svg, Tooltip } from "layerchart";
+import { untrack } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { Tween } from "svelte/motion";
 
@@ -24,7 +25,7 @@ interface TimeseriesState {
 
 const timeseries = useStream(
   "scraperTimeseries",
-  { period, term },
+  untrack(() => ({ period, term })),
   {
     initial: { points: [], period: "", bucket: "" } as TimeseriesState,
     onSnapshot: (s) => ({ points: s.points, period: s.period, bucket: s.bucket }),

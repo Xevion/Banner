@@ -58,9 +58,12 @@ function resolveState(urlSearch: string, options: SearchOptionsResponse | null) 
   };
 }
 
-// Hydrate initial filter state from URL
-const initial = resolveState(data.urlSearch, data.searchOptions);
-const validSubjects = new Set(data.searchOptions?.subjects.map((s) => s.code) ?? []);
+// Hydrate initial filter state from URL — intentionally one-time reads; $effect below handles re-sync
+const initial = resolveState(
+  untrack(() => data.urlSearch),
+  untrack(() => data.searchOptions)
+);
+const validSubjects = new Set(untrack(() => data.searchOptions?.subjects.map((s) => s.code) ?? []));
 const filters = createFilterState(initial.params, validSubjects);
 setFiltersContext(filters);
 

@@ -687,6 +687,4 @@ mod tests {
         let err: anyhow::Error = BluebookError::NoSuchLink.into();
         assert!(err.downcast_ref::<BluebookError>().is_some());
     }
-
-
 }

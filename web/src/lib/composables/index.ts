@@ -8,3 +8,5 @@ export { useOverlayScrollbars } from "./useOverlayScrollbars.svelte";
 export { useTooltipDelegation } from "./useTooltipDelegation";
 export { ColumnVisibilityController } from "./useColumnVisibility.svelte";
 export type { UseColumnVisibilityOptions, ColumnDef } from "./useColumnVisibility.svelte";
+export { useRowHighlight } from "./useRowHighlight.svelte";
+export { useDebounceSearch } from "./useDebounceSearch.svelte";

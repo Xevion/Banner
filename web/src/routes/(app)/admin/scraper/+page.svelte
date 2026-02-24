@@ -11,6 +11,7 @@ import { Tabs } from "bits-ui";
 import { Select } from "bits-ui";
 import type { PageData } from "./$types";
 
+import { untrack } from "svelte";
 import ScraperAudit from "./ScraperAudit.svelte";
 import ScraperCharts from "./ScraperCharts.svelte";
 import ScraperJobs from "./ScraperJobs.svelte";
@@ -28,7 +29,7 @@ let activeTab = $state("charts");
 
 const stats = useStream(
   "scraperStats",
-  { period: selectedPeriod, term: selectedTerm },
+  untrack(() => ({ period: selectedPeriod, term: selectedTerm })),
   {
     initial: null as ScraperStatsResponse | null,
     onDelta: (_, delta) => delta.stats,

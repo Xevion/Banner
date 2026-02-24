@@ -3,12 +3,13 @@ import { client } from "$lib/api";
 import type { DbTerm } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { formatAbsoluteDate, formatRelativeDate } from "$lib/date";
+import { untrack } from "svelte";
 import { RefreshCw } from "@lucide/svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
-let terms = $state<DbTerm[]>(data.terms);
-let error = $state<string | null>(data.error);
+let terms = $state<DbTerm[]>(untrack(() => data.terms));
+let error = $state<string | null>(untrack(() => data.error));
 
 // Track in-flight toggle per term code
 let togglingCodes = $state(new Set<string>());

@@ -115,6 +115,60 @@ const utils = getContext<TableUtils>(TABLE_CONTEXT_KEY);
 
 Module-level stores use class-based patterns with `$state` runes — no legacy `writable`/`readable` stores.
 
+### Filter Registry Pattern
+
+Course search filters use a **declarative registry** pattern: a single `FILTER_REGISTRY` object in `$lib/filters.ts` defines every filter once (URL key, serializer, default, grouping). All operations — parse, serialize, count active, change detection, API conversion — are pure functions derived from that registry.
+
+**Key design decisions:**
+
+- **`FilterState` is a plain object**, not a class with rune fields. Its type is inferred from the registry via mapped types. Reactivity is added externally by wrapping with `$state()` in `createFilterState()`.
+- **Composable serializers** (`ParamSerializer<T>`) encapsulate encode/decode/default/isActive per value type. Built-ins: `stringParam()`, `boolParam()`, `intParam()`, `arrayParam()`, `campusParam()`.
+- **Compile-time sync** with the backend — a type assertion in `filters.ts` ensures `FilterState` stays structurally equal to the `SearchParams` binding (minus pagination/sort fields). If Rust adds a filter field and you don't add a registry entry, the build fails.
+- **Groups** — filters sharing a `group` name (e.g. `creditHourMin`/`creditHourMax` → `"creditHour"`) count as one in `countActive()`.
+- **Aliases** — legacy URL param names (e.g. `q` → `query`) are tried when the primary key is absent.
+
+**Adding a new filter:**
+
+1. Add the field to `SearchParams` in Rust (with `#[ts(export)]`)
+2. Run `just bindings` — the compile-time assertion will fail until you add the entry
+3. Add one entry to `FILTER_REGISTRY` in `$lib/filters.ts`
+4. Wire up the UI control in the relevant filter component
+
+No other files need changes — parsing, serialization, URL sync, active count, and API conversion all derive from the registry automatically.
+
+```typescript
+// $lib/filters.ts — registry drives everything
+export const FILTER_REGISTRY = {
+  subject: { urlKey: "subject", serializer: arrayParam() },
+  query:   { urlKey: "query",   serializer: stringParam(), aliases: ["q"], countAsActive: false },
+  openOnly: { urlKey: "open",   serializer: boolParam() },
+  // ... one entry per filter
+} as const satisfies Record<string, FilterDef>;
+
+// Type derived from registry — never manually defined
+export type FilterState = {
+  -readonly [K in keyof typeof FILTER_REGISTRY]: InferValue<...>;
+};
+
+// Pure operations — no Svelte dependency
+defaultFilters(): FilterState
+parseFilters(params: URLSearchParams): FilterState
+serializeFilters(state: FilterState): URLSearchParams
+countActive(state: FilterState): number
+clearFilters(state: FilterState): void  // mutates in-place
+toAPIParams(state: FilterState, meta): SearchParams
+```
+
+```typescript
+// Thin reactive wrapper — $lib/stores/search-filters.svelte.ts
+export function createFilterState(params?: URLSearchParams): FilterState {
+  const state: FilterState = $state(params ? parseFilters(params) : defaultFilters());
+  return state;
+}
+```
+
+This pattern keeps the registry importable in universal load functions (`+page.ts`) since it has no Svelte runtime dependency.
+
 ## Component Patterns
 
 ### Granularity

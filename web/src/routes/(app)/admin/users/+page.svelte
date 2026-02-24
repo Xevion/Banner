@@ -1,12 +1,13 @@
 <script lang="ts">
 import { client } from "$lib/api";
 import type { User } from "$lib/bindings";
+import { untrack } from "svelte";
 import { Shield, ShieldOff } from "@lucide/svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
-let users = $state<User[]>(data.users);
-let error = $state<string | null>(data.error);
+let users = $state<User[]>(untrack(() => data.users));
+let error = $state<string | null>(untrack(() => data.error));
 let updating = $state<string | null>(null);
 
 async function toggleAdmin(user: User) {
