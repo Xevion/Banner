@@ -180,13 +180,11 @@ const popoverListId = "search-autocomplete-list";
   <Popover.Root bind:open>
     <Popover.Trigger bind:ref={triggerRef}>
       {#snippet child({ props })}
+        {@const { onkeydown: _a, onclick: _b, ...triggerProps } = props as Record<string, unknown>}
         <div
-          {...props}
-          onclick={(e) => {
-            if (searchValue.trim().length < 2) e.preventDefault();
-          }}
-          onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+          {...triggerProps}
+          onclick={() => {
+            if (searchValue.trim().length >= 2) open = !open;
           }}
           class="relative"
         >
@@ -226,8 +224,7 @@ const popoverListId = "search-autocomplete-list";
         </div>
       {/snippet}
     </Popover.Trigger>
-    <Popover.Portal>
-      <Popover.Content
+    <Popover.Content
         sideOffset={4}
         align="start"
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -239,7 +236,7 @@ const popoverListId = "search-autocomplete-list";
       >
         {#snippet child({ wrapperProps, props, open: isOpen })}
           {#if isOpen}
-            <div {...wrapperProps}>
+            <div {...wrapperProps} class="z-50">
               <div
                 {...props}
                 transition:fly={{ duration: 150, y: -4 }}
@@ -333,6 +330,5 @@ const popoverListId = "search-autocomplete-list";
           {/if}
         {/snippet}
       </Popover.Content>
-    </Popover.Portal>
   </Popover.Root>
 </Command.Root>
