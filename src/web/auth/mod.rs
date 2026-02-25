@@ -32,7 +32,7 @@ const CALLBACK_PATH: &str = "/api/auth/callback";
 ///
 /// Priority:
 /// 1. Configured `redirect_base` (production override)
-/// 2. `Referer` header — preserves the real browser origin even through
+/// 2. `Referer` header -- preserves the real browser origin even through
 ///    reverse proxies that rewrite `Host` (e.g. Vite dev proxy with
 ///    `changeOrigin: true`)
 /// 3. `Origin` header (present on POST / CORS requests)
@@ -103,7 +103,7 @@ fn session_cookie(token: &str, max_age: i64, secure: bool) -> String {
     cookie
 }
 
-/// `GET /api/auth/login` — Redirect to Discord OAuth2 authorization page.
+/// `GET /api/auth/login` -- Redirect to Discord OAuth2 authorization page.
 #[instrument(skip_all)]
 pub async fn auth_login(
     State(state): State<AppState>,
@@ -128,7 +128,7 @@ pub async fn auth_login(
     Redirect::temporary(&url)
 }
 
-/// `GET /api/auth/callback` — Handle Discord OAuth2 callback.
+/// `GET /api/auth/callback` -- Handle Discord OAuth2 callback.
 #[instrument(skip_all)]
 pub async fn auth_callback(
     State(state): State<AppState>,
@@ -268,7 +268,7 @@ pub async fn auth_callback(
         .into_response())
 }
 
-/// `POST /api/auth/logout` — Destroy the current session.
+/// `POST /api/auth/logout` -- Destroy the current session.
 #[instrument(skip_all)]
 pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(token) = extract_session_token(&headers) {
@@ -288,7 +288,7 @@ pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> R
         .into_response()
 }
 
-/// `GET /api/auth/me` — Return the current authenticated user's info.
+/// `GET /api/auth/me` -- Return the current authenticated user's info.
 #[instrument(skip_all)]
 pub async fn auth_me(
     State(state): State<AppState>,

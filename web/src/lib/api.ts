@@ -188,7 +188,7 @@ export class BannerApiClient {
       try {
         apiError = (await response.json()) as ApiError;
       } catch {
-        // Fall through — responseToErr uses a default
+        // Fall through -- responseToErr uses a default
       }
       return this.responseToErr(response, apiError);
     }
@@ -222,7 +222,7 @@ export class BannerApiClient {
       try {
         apiError = (await response.json()) as ApiError;
       } catch {
-        // Fall through — responseToErr uses a default
+        // Fall through -- responseToErr uses a default
       }
       return this.responseToErr(response, apiError);
     }
@@ -365,7 +365,7 @@ export class BannerApiClient {
       try {
         apiError = (await response.json()) as ApiError;
       } catch {
-        // Fall through — responseToErr uses a default
+        // Fall through -- responseToErr uses a default
       }
       return this.responseToErr(response, apiError);
     }

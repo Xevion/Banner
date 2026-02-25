@@ -75,20 +75,20 @@ async fn search(pool: &PgPool, p: &SearchParams<'_>) -> (Vec<String>, i64) {
 ///
 /// | CRN   | Subject | Num  | Title           | Enrl | Max | Days    | Time          |
 /// |-------|---------|------|-----------------|------|-----|---------|---------------|
-/// | 20001 | CS      | 1100 | Intro to CS     | 25   | 30  | MWF     | 09:00–09:50   |
-/// | 20002 | CS      | 2200 | Data Structures | 30   | 30  | TTh     | 14:00–15:15   |
-/// | 20003 | CS      | 3300 | Algorithms      | 20   | 25  | MW      | 16:00–17:15   |
-/// | 20004 | MATH    | 1100 | College Algebra | 28   | 35  | MWF     | 08:00–08:50   |
-/// | 20005 | MATH    | 2400 | Linear Algebra  | 22   | 25  | TTh     | 10:00–11:15   |
-/// | 20006 | ENG     | 1010 | English Comp    | 20   | 20  | MW      | 11:00–12:15   |
-/// | 20007 | PHYS    | 1600 | Physics I       | 15   | 30  | MWF+TTh | 09:00–09:50 + 14:00–15:15 |
-/// | 20008 | ART     | 2100 | Studio Art      | 10   | 15  | Sat     | 09:00–12:00   |
+/// | 20001 | CS      | 1100 | Intro to CS     | 25   | 30  | MWF     | 09:00-09:50   |
+/// | 20002 | CS      | 2200 | Data Structures | 30   | 30  | TTh     | 14:00-15:15   |
+/// | 20003 | CS      | 3300 | Algorithms      | 20   | 25  | MW      | 16:00-17:15   |
+/// | 20004 | MATH    | 1100 | College Algebra | 28   | 35  | MWF     | 08:00-08:50   |
+/// | 20005 | MATH    | 2400 | Linear Algebra  | 22   | 25  | TTh     | 10:00-11:15   |
+/// | 20006 | ENG     | 1010 | English Comp    | 20   | 20  | MW      | 11:00-12:15   |
+/// | 20007 | PHYS    | 1600 | Physics I       | 15   | 30  | MWF+TTh | 09:00-09:50 + 14:00-15:15 |
+/// | 20008 | ART     | 2100 | Studio Art      | 10   | 15  | Sat     | 09:00-12:00   |
 /// | 20009 | CS      | 4400 | Senior Project  | 8    | 15  | (none)  | (none)        |
 async fn insert_test_courses(pool: &PgPool) {
     let term = "202620";
 
     let courses = vec![
-        // 20001: CS 1100, MWF 09:00–09:50, open (25/30)
+        // 20001: CS 1100, MWF 09:00-09:50, open (25/30)
         with_meetings(
             make_course("20001", term, "CS", "1100", "Intro to CS", (25, 30, 0, 10)),
             vec![
@@ -99,7 +99,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20002: CS 2200, TTh 14:00–15:15, full (30/30)
+        // 20002: CS 2200, TTh 14:00-15:15, full (30/30)
         with_meetings(
             make_course(
                 "20002",
@@ -117,7 +117,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20003: CS 3300, MW 16:00–17:15, open (20/25)
+        // 20003: CS 3300, MW 16:00-17:15, open (20/25)
         with_meetings(
             make_course("20003", term, "CS", "3300", "Algorithms", (20, 25, 0, 5)),
             vec![
@@ -128,7 +128,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20004: MATH 1100, MWF 08:00–08:50, open (28/35)
+        // 20004: MATH 1100, MWF 08:00-08:50, open (28/35)
         with_meetings(
             make_course(
                 "20004",
@@ -146,7 +146,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20005: MATH 2400, TTh 10:00–11:15, open (22/25)
+        // 20005: MATH 2400, TTh 10:00-11:15, open (22/25)
         with_meetings(
             make_course(
                 "20005",
@@ -164,7 +164,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20006: ENG 1010, MW 11:00–12:15, full (20/20)
+        // 20006: ENG 1010, MW 11:00-12:15, full (20/20)
         with_meetings(
             make_course("20006", term, "ENG", "1010", "English Comp", (20, 20, 0, 5)),
             vec![
@@ -175,7 +175,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20007: PHYS 1600, two meetings: MWF 09:00–09:50 + TTh 14:00–15:15, open (15/30)
+        // 20007: PHYS 1600, two meetings: MWF 09:00-09:50 + TTh 14:00-15:15, open (15/30)
         with_meetings(
             make_course("20007", term, "PHYS", "1600", "Physics I", (15, 30, 0, 10)),
             vec![
@@ -191,7 +191,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // 20008: ART 2100, Sat 09:00–12:00, open (10/15)
+        // 20008: ART 2100, Sat 09:00-12:00, open (10/15)
         with_meetings(
             make_course("20008", term, "ART", "2100", "Studio Art", (10, 15, 0, 5)),
             vec![
@@ -421,18 +421,18 @@ async fn test_combined_days_and_time_range(pool: PgPool) {
     .await;
 
     // MWF courses where some meeting starts >= 09:00 AND some meeting ends <= 10:00.
-    // 20001 (MWF 09:00–09:50): start 09:00 >= 09:00 ✓, end 09:50 <= 10:00 ✓
-    // 20004 (MWF 08:00–08:50): start 08:00 < 09:00 ✗
-    // 20007 (has MWF 09:00–09:50): start 09:00 >= 09:00 ✓, end 09:50 <= 10:00 ✓
-    assert_eq!(total, 2, "2 MWF courses fit the 09:00–10:00 window");
+    // 20001 (MWF 09:00-09:50): start 09:00 >= 09:00 (ok), end 09:50 <= 10:00 (ok)
+    // 20004 (MWF 08:00-08:50): start 08:00 < 09:00 (x)
+    // 20007 (has MWF 09:00-09:50): start 09:00 >= 09:00 (ok), end 09:50 <= 10:00 (ok)
+    assert_eq!(total, 2, "2 MWF courses fit the 09:00-10:00 window");
     assert_eq!(crns.len(), 2);
     assert!(
         crns.contains(&"20001".to_owned()),
-        "CS 1100 MWF 09:00–09:50"
+        "CS 1100 MWF 09:00-09:50"
     );
     assert!(
         crns.contains(&"20007".to_owned()),
-        "PHYS 1600 MWF 09:00–09:50 meeting"
+        "PHYS 1600 MWF 09:00-09:50 meeting"
     );
     assert!(
         !crns.contains(&"20004".to_owned()),

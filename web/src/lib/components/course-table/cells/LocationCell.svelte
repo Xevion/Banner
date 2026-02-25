@@ -20,6 +20,6 @@ let locDisplay = $derived(course.primaryLocation);
       {locDisplay}
     </span>
   {:else}
-    <span class="text-xs text-muted-foreground/50">—</span>
+    <span class="text-xs text-muted-foreground/50">&mdash;</span>
   {/if}
 </td>

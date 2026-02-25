@@ -153,14 +153,14 @@ input[type="checkbox"]:checked::before {
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
 }
 
-/* View Transitions API — base root rules (overridden by directional rules below) */
+/* View Transitions API -- base root rules (overridden by directional rules below) */
 
-/* OverlayScrollbars — handle colors via inherited custom properties (set in :root / .dark) */
+/* OverlayScrollbars -- handle colors via inherited custom properties (set in :root / .dark) */
 .os-scrollbar-handle {
   border-radius: 4px;
 }
 
-/* Hide native scrollbars on body — OverlayScrollbars takes over */
+/* Hide native scrollbars on body -- OverlayScrollbars takes over */
 html,
 body {
   scrollbar-width: none;
@@ -172,7 +172,7 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* Hide scrollbar utility — for horizontal scroll strips.
+/* Hide scrollbar utility -- for horizontal scroll strips.
    Custom utility since Tailwind CSS v4 doesn't provide a built-in scrollbar-hiding class. */
 .scrollbar-none {
   scrollbar-width: none;
@@ -183,7 +183,7 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* Native scrollbars — theme-aware via inherited custom properties (no .dark * selectors) */
+/* Native scrollbars -- theme-aware via inherited custom properties (no .dark * selectors) */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -279,7 +279,7 @@ body::-webkit-scrollbar {
   view-transition-name: none !important;
 }
 
-/* View Transitions — page navigation animations */
+/* View Transitions -- page navigation animations */
 
 /* Exclude navbar from page transitions */
 ::view-transition-group(navbar) {

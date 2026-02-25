@@ -8,7 +8,7 @@ let { course }: { course: CourseResponse } = $props();
 let open = $derived(course.enrollment.max - course.enrollment.current);
 let seatsTip = $derived(
   open < 0
-    ? `Overenrolled by ${Math.abs(open)} — ${formatNumber(course.enrollment.current)}/${formatNumber(course.enrollment.max)} enrolled${course.enrollment.waitCount > 0 ? `, ${formatNumber(course.enrollment.waitCount)} waitlisted` : ""}`
+    ? `Overenrolled by ${Math.abs(open)} &mdash; ${formatNumber(course.enrollment.current)}/${formatNumber(course.enrollment.max)} enrolled${course.enrollment.waitCount > 0 ? `, ${formatNumber(course.enrollment.waitCount)} waitlisted` : ""}`
     : `${formatNumber(open)} of ${formatNumber(course.enrollment.max)} seats open, ${formatNumber(course.enrollment.current)} enrolled${course.enrollment.waitCount > 0 ? `, ${formatNumber(course.enrollment.waitCount)} waitlisted` : ""}`
 );
 </script>
@@ -26,7 +26,7 @@ let seatsTip = $derived(
     >
     <span class="text-muted-foreground/60 tabular-nums"
       >{formatNumber(course.enrollment.current)}/{formatNumber(course.enrollment.max)}{#if course.enrollment.waitCount > 0}
-        · WL {formatNumber(course.enrollment.waitCount)}/{formatNumber(course.enrollment.waitCapacity)}{/if}</span
+        &middot; WL {formatNumber(course.enrollment.waitCount)}/{formatNumber(course.enrollment.waitCapacity)}{/if}</span
     >
   </span>
 </td>

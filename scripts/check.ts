@@ -59,16 +59,16 @@ const has = (s: Subsystem) => targets.subsystems.has(s);
 const targeted = !isAll(targets);
 
 if (targeted) {
-	process.stdout.write(c('1;36', `→ Checking: ${targetLabel(targets)}`) + '\n');
+	process.stdout.write(c('1;36', `➡️ Checking: ${targetLabel(targets)}`) + '\n');
 }
 
 const fix = flags.fix;
 
 if (fix) {
-	process.stdout.write(c('1;36', '→ Fixing...') + '\n');
+	process.stdout.write(c('1;36', '➡️ Fixing...') + '\n');
 	if (has('frontend')) run(getCommand('frontend', 'format-apply').cmd);
 	if (has('backend')) run(getCommand('backend', 'format-apply').cmd);
-	process.stdout.write(c('1;36', '→ Verifying...') + '\n');
+	process.stdout.write(c('1;36', '➡️ Verifying...') + '\n');
 }
 
 const rustSrcMtime = Math.max(
@@ -277,7 +277,7 @@ const interval = isStderrTTY
 	? setInterval(() => {
 			const cols = process.stderr.columns || 80;
 			const line = `${elapsed(start)}s [${Array.from(remaining).join(', ')}]`;
-			process.stderr.write(`\r\x1b[K${line.length > cols ? line.slice(0, cols - 1) + '…' : line}`);
+			process.stderr.write(`\r\x1b[K${line.length > cols ? line.slice(0, cols - 1) + '...' : line}`);
 		}, 100)
 	: null;
 
@@ -290,7 +290,7 @@ await raceInOrder(promises, checks, (r) => {
 
 	const subsystemLabel = c('2', `[${r.subsystem}]`);
 	if (r.exitCode !== 0) {
-		process.stdout.write(c('31', `✗ ${r.name}`) + ` ${subsystemLabel} (${r.elapsed}s)\n`);
+		process.stdout.write(c('31', `❌ ${r.name}`) + ` ${subsystemLabel} (${r.elapsed}s)\n`);
 		if (r.hint) {
 			process.stdout.write(c('2', `  ${r.hint}`) + '\n');
 		} else {
@@ -298,7 +298,7 @@ await raceInOrder(promises, checks, (r) => {
 			if (r.stderr) process.stderr.write(r.stderr);
 		}
 	} else {
-		process.stdout.write(c('32', `✓ ${r.name}`) + ` ${subsystemLabel} (${r.elapsed}s)\n`);
+		process.stdout.write(c('32', `✅ ${r.name}`) + ` ${subsystemLabel} (${r.elapsed}s)\n`);
 	}
 });
 
@@ -317,12 +317,12 @@ for (const [fmtName, domain] of Object.entries(activeDomains)) {
 
 	process.stdout.write(
 		'\n' +
-			c('1;36', `→ Auto-formatting ${fmtName} (peers passed, only formatting failed)...`) +
+			c('1;36', `➡️ Auto-formatting ${fmtName} (peers passed, only formatting failed)...`) +
 			'\n',
 	);
 	const fmtOut = domain.format();
 	if (fmtOut.exitCode !== 0) {
-		process.stdout.write(c('31', `  ✗ ${fmtName} formatter failed`) + '\n');
+		process.stdout.write(c('31', `  ❌ ${fmtName} formatter failed`) + '\n');
 		if (fmtOut.stdout) process.stdout.write(fmtOut.stdout);
 		if (fmtOut.stderr) process.stderr.write(fmtOut.stderr);
 		continue;
@@ -338,19 +338,19 @@ for (const [fmtName, domain] of Object.entries(activeDomains)) {
 	await raceInOrder(recheckPromises, domain.recheck, (r) => {
 		if (r.exitCode !== 0) {
 			recheckFailed = true;
-			process.stdout.write(c('31', `  ✗ ${r.name}`) + ` (${r.elapsed}s)\n`);
+			process.stdout.write(c('31', `  ❌ ${r.name}`) + ` (${r.elapsed}s)\n`);
 			if (r.stdout) process.stdout.write(r.stdout);
 			if (r.stderr) process.stderr.write(r.stderr);
 		} else {
-			process.stdout.write(c('32', `  ✓ ${r.name}`) + ` (${r.elapsed}s)\n`);
+			process.stdout.write(c('32', `  ✅ ${r.name}`) + ` (${r.elapsed}s)\n`);
 		}
 	});
 
 	if (!recheckFailed) {
-		process.stdout.write(c('32', `  ✓ ${fmtName} auto-fix succeeded`) + '\n');
+		process.stdout.write(c('32', `  ✅ ${fmtName} auto-fix succeeded`) + '\n');
 		autoFixedDomains.add(fmtName);
 	} else {
-		process.stdout.write(c('31', `  ✗ ${fmtName} auto-fix failed sanity check`) + '\n');
+		process.stdout.write(c('31', `  ❌ ${fmtName} auto-fix failed sanity check`) + '\n');
 	}
 }
 
@@ -359,7 +359,7 @@ const finalFailed = Object.entries(results).some(
 );
 
 if (autoFixedDomains.size > 0 && !finalFailed) {
-	process.stdout.write('\n' + c('1;32', '✓ All checks passed (formatting was auto-fixed)') + '\n');
+	process.stdout.write('\n' + c('1;32', '✅ All checks passed (formatting was auto-fixed)') + '\n');
 }
 
 process.exit(finalFailed ? 1 : 0);

@@ -217,7 +217,7 @@ impl BannerApi {
     /// Retrieves a list of terms from the Banner API.
     ///
     /// Delegates to the session pool's HTTP client. Prefer calling this
-    /// over `banner_api.sessions.get_terms()` — terms are a session-independent
+    /// over `banner_api.sessions.get_terms()` -- terms are a session-independent
     /// resource and this method expresses that.
     pub async fn get_terms(
         &self,

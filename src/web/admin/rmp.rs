@@ -57,7 +57,7 @@ pub struct OkResponse {
     pub ok: bool,
 }
 
-/// Body for unmatch — optional `rmpLegacyId` to remove a specific link.
+/// Body for unmatch -- optional `rmpLegacyId` to remove a specific link.
 /// If omitted (or null), all links are removed.
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +65,7 @@ pub struct UnmatchBody {
     rmp_legacy_id: Option<i32>,
 }
 
-/// `GET /api/admin/instructors` — List instructors with filtering and pagination.
+/// `GET /api/admin/instructors` -- List instructors with filtering and pagination.
 #[instrument(skip_all)]
 pub async fn list_instructors(
     AdminUser(_user): AdminUser,
@@ -87,7 +87,7 @@ pub async fn list_instructors(
     Ok(Json(response))
 }
 
-/// `GET /api/admin/instructors/{id}` — Full instructor detail with candidates.
+/// `GET /api/admin/instructors/{id}` -- Full instructor detail with candidates.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn get_instructor(
     AdminUser(_user): AdminUser,
@@ -107,7 +107,7 @@ pub async fn get_instructor(
     Ok(Json(response))
 }
 
-/// `POST /api/admin/instructors/{id}/match` — Accept a candidate match.
+/// `POST /api/admin/instructors/{id}/match` -- Accept a candidate match.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn match_instructor(
     AdminUser(user): AdminUser,
@@ -141,7 +141,7 @@ pub async fn match_instructor(
     Ok(Json(detail))
 }
 
-/// `POST /api/admin/instructors/{id}/reject-candidate` — Reject a single candidate.
+/// `POST /api/admin/instructors/{id}/reject-candidate` -- Reject a single candidate.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn reject_candidate(
     AdminUser(user): AdminUser,
@@ -167,7 +167,7 @@ pub async fn reject_candidate(
     Ok(Json(OkResponse { ok: true }))
 }
 
-/// `POST /api/admin/instructors/{id}/reject-all` — Mark instructor as having no valid RMP match.
+/// `POST /api/admin/instructors/{id}/reject-all` -- Mark instructor as having no valid RMP match.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn reject_all(
     AdminUser(user): AdminUser,
@@ -182,7 +182,7 @@ pub async fn reject_all(
                 ApiError::not_found("instructor not found")
             } else if msg.contains("cannot reject instructor with confirmed matches") {
                 ApiError::conflict(
-                    "cannot reject instructor with confirmed matches — unmatch first",
+                    "cannot reject instructor with confirmed matches -- unmatch first",
                 )
             } else {
                 db_error("reject all candidates", e)
@@ -194,7 +194,7 @@ pub async fn reject_all(
     Ok(Json(OkResponse { ok: true }))
 }
 
-/// `POST /api/admin/instructors/{id}/unmatch` — Remove RMP link(s).
+/// `POST /api/admin/instructors/{id}/unmatch` -- Remove RMP link(s).
 ///
 /// Send `{ "rmpLegacyId": N }` to remove a specific link, or an empty body / `{}`
 /// to remove all links for the instructor.
@@ -227,7 +227,7 @@ pub async fn unmatch_instructor(
     Ok(Json(OkResponse { ok: true }))
 }
 
-/// `POST /api/admin/rmp/rescore` — Re-run RMP candidate generation.
+/// `POST /api/admin/rmp/rescore` -- Re-run RMP candidate generation.
 #[instrument(skip_all)]
 pub async fn rescore(
     AdminUser(_user): AdminUser,

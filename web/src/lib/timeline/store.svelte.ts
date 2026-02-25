@@ -121,7 +121,7 @@ export function createTimelineStore() {
   let hasFetchedOnce = false;
 
   // Sorted array derived from the map. The O(n log n) sort only runs when
-  // slotMap is reassigned, which happens on fetch completion — not per frame.
+  // slotMap is reassigned, which happens on fetch completion -- not per frame.
   const data: TimeSlot[] = $derived(
     [...slotMap.values()].sort((a, b) => a.time.getTime() - b.time.getTime())
   );

@@ -54,21 +54,21 @@ function getTermStatus(term: DbTerm): "past" | "current" | "future" {
     currentSeason = "Spring";
     currentYear = year;
   } else if (mmdd >= 502 && mmdd <= 524) {
-    // Gap between Spring and Summer — treat Summer as current
+    // Gap between Spring and Summer -- treat Summer as current
     currentSeason = "Summer";
     currentYear = year;
   } else if (mmdd >= 525 && mmdd <= 815) {
     currentSeason = "Summer";
     currentYear = year;
   } else if (mmdd >= 816 && mmdd <= 817) {
-    // Gap between Summer and Fall — treat Fall as current
+    // Gap between Summer and Fall -- treat Fall as current
     currentSeason = "Fall";
     currentYear = year;
   } else if (mmdd >= 818 && mmdd <= 1210) {
     currentSeason = "Fall";
     currentYear = year;
   } else {
-    // Dec 11–31 or Jan 1–13: between Fall and Spring — treat Spring as current
+    // Dec 11-31 or Jan 1-13: between Fall and Spring -- treat Spring as current
     currentSeason = "Spring";
     currentYear = mmdd >= 1211 ? year + 1 : year;
   }

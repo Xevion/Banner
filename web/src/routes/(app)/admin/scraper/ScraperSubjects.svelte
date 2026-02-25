@@ -379,7 +379,7 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
                                     {#if result.coursesFetched != null && result.coursesFetched > 0 && result.coursesChanged != null}
                                       <span class={emphasisClass(result.coursesChanged)}>{(result.coursesChanged / result.coursesFetched * 100).toFixed(1)}%</span>
                                     {:else}
-                                      <span class="text-muted-foreground">—</span>
+                                      <span class="text-muted-foreground">&mdash;</span>
                                     {/if}
                                   </div>
                                   <div class="px-3 py-1.5">
@@ -391,7 +391,7 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
                                         <span class="text-red-600 dark:text-red-400 max-w-[12rem] truncate inline-block align-middle">{result.errorMessage}</span>
                                       </SimpleTooltip>
                                     {:else}
-                                      <span class="text-muted-foreground">—</span>
+                                      <span class="text-muted-foreground">&mdash;</span>
                                     {/if}
                                   </div>
                                 </div>

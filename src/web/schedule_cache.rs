@@ -3,7 +3,7 @@
 //! Loads all courses with their meeting times from the database, parses the
 //! JSONB meeting times into a compact in-memory representation, and caches
 //! the result. The cache is refreshed in the background every hour using a
-//! stale-while-revalidate pattern with singleflight deduplication — readers
+//! stale-while-revalidate pattern with singleflight deduplication -- readers
 //! always get the current cached value instantly, never blocking on a refresh.
 //!
 //! ## Optimizations
@@ -68,7 +68,7 @@ pub struct ScheduleCache {
     rx: watch::Receiver<Arc<ScheduleSnapshot>>,
     /// Sender side, held to push new snapshots.
     tx: Arc<watch::Sender<Arc<ScheduleSnapshot>>>,
-    /// Singleflight guard — true while a refresh task is in flight.
+    /// Singleflight guard -- true while a refresh task is in flight.
     refreshing: Arc<AtomicBool>,
     /// Database pool for refresh queries.
     pool: PgPool,
@@ -96,7 +96,7 @@ impl ScheduleCache {
     }
 
     /// Check freshness and trigger a background refresh if stale.
-    /// Always returns immediately — the caller uses the current snapshot.
+    /// Always returns immediately -- the caller uses the current snapshot.
     pub(crate) fn ensure_fresh(&self) {
         let snap = self.rx.borrow();
         if snap.refreshed_at.elapsed() < REFRESH_INTERVAL {
@@ -144,7 +144,7 @@ impl ScheduleCache {
 ///
 /// - **Time**: `begin_time`/`end_time` (legacy "HHMM") or `timeRange.start`/`.end` (current "HH:MM:SS")
 /// - **Date**: `start_date`/`end_date` (legacy "MM/DD/YYYY") or `dateRange.start`/`.end` (current "YYYY-MM-DD")
-/// - **Days**: Boolean flags (legacy) or `days` string array (current) → computed as a bitmask
+/// - **Days**: Boolean flags (legacy) or `days` string array (current) -> computed as a bitmask
 ///
 /// Ordered by `c.id` so the streaming consumer can group rows by course.
 const SCHEDULE_QUERY: &str = r#"
@@ -301,8 +301,8 @@ fn parse_meeting_row(row: &MeetingRow) -> Option<ParsedSchedule> {
 /// Parse a time string to minutes since midnight.
 ///
 /// Accepts two formats:
-/// - Legacy "HHMM" (e.g. "1000" → 600)
-/// - Current "HH:MM:SS" or "HH:MM" (e.g. "10:00:00" → 600)
+/// - Legacy "HHMM" (e.g. "1000" -> 600)
+/// - Current "HH:MM:SS" or "HH:MM" (e.g. "10:00:00" -> 600)
 fn parse_time(s: &str) -> Option<u16> {
     if let Some((h, rest)) = s.split_once(':') {
         // "HH:MM:SS" or "HH:MM"
@@ -319,7 +319,7 @@ fn parse_time(s: &str) -> Option<u16> {
     }
 }
 
-/// Parse "HHMM" → minutes since midnight.
+/// Parse "HHMM" -> minutes since midnight.
 fn parse_hhmm(s: &str) -> Option<u16> {
     if s.len() != 4 {
         return None;
@@ -572,9 +572,9 @@ mod tests {
         };
 
         let date = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap(); // Monday
-        // Slot 11:00-11:15 — after the meeting ends
+        // Slot 11:00-11:15 -- after the meeting ends
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 660, 675));
-        // Slot 9:45-10:00 — just before meeting starts (end=600, begin=600 → no overlap)
+        // Slot 9:45-10:00 -- just before meeting starts (end=600, begin=600 -> no overlap)
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 585, 600));
     }
 
@@ -588,7 +588,7 @@ mod tests {
             end_date: NaiveDate::from_ymd_opt(2025, 12, 13).unwrap(),
         };
 
-        // Monday Jan 6 2025 — before semester
+        // Monday Jan 6 2025 -- before semester
         let date = NaiveDate::from_ymd_opt(2025, 1, 6).unwrap();
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 600, 615));
     }
@@ -604,11 +604,11 @@ mod tests {
         };
 
         let date = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap();
-        // Slot 10:45-11:00 — overlaps last 5 minutes of meeting
+        // Slot 10:45-11:00 -- overlaps last 5 minutes of meeting
         assert!(sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 645, 660));
-        // Slot 9:45-10:00 — ends exactly when meeting starts, no overlap
+        // Slot 9:45-10:00 -- ends exactly when meeting starts, no overlap
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 585, 600));
-        // Slot 10:50-11:05 — starts exactly when meeting ends, no overlap
+        // Slot 10:50-11:05 -- starts exactly when meeting ends, no overlap
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 650, 665));
     }
 }

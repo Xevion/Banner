@@ -54,7 +54,7 @@ fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
 
 /// Bulk upsert BlueBook evaluations using the UNNEST pattern.
 ///
-/// Deduplicates by the unique constraint key before inserting — PostgreSQL's
+/// Deduplicates by the unique constraint key before inserting -- PostgreSQL's
 /// `ON CONFLICT DO UPDATE` cannot handle the same row appearing twice in one
 /// statement. On conflict, updates all evaluation fields and resets `scraped_at`.
 #[allow(dead_code)]

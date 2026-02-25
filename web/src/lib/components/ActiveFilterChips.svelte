@@ -19,7 +19,7 @@ function formatDaysChip(d: string[]): string {
 }
 
 function formatTimeChip(start: string | null, end: string | null): string {
-  if (start && end) return `${formatCompactTime(start)} – ${formatCompactTime(end)}`;
+  if (start && end) return `${formatCompactTime(start)} &ndash; ${formatCompactTime(end)}`;
   if (start) return `After ${formatCompactTime(start)}`;
   if (end) return `Before ${formatCompactTime(end)}`;
   return "";
@@ -138,7 +138,7 @@ $effect(() => {
   {/if}
   {#if filters.waitCountMax !== null}
     <FilterChip
-      label="Waitlist ≤ {filters.waitCountMax}"
+      label="Waitlist &le; {filters.waitCountMax}"
       onRemove={() => (filters.waitCountMax = null)}
     />
   {/if}
@@ -178,10 +178,10 @@ $effect(() => {
   {#if filters.creditHourMin !== null || filters.creditHourMax !== null}
     <FilterChip
       label={filters.creditHourMin !== null && filters.creditHourMax !== null
-        ? `${filters.creditHourMin}–${filters.creditHourMax} credits`
+        ? `${filters.creditHourMin}&ndash;${filters.creditHourMax} credits`
         : filters.creditHourMin !== null
-          ? `≥ ${filters.creditHourMin} credits`
-          : `≤ ${filters.creditHourMax} credits`}
+          ? `&ge; ${filters.creditHourMin} credits`
+          : `&le; ${filters.creditHourMax} credits`}
       onRemove={() => {
         filters.creditHourMin = null;
         filters.creditHourMax = null;
@@ -197,10 +197,10 @@ $effect(() => {
   {#if filters.courseNumberLow !== null || filters.courseNumberHigh !== null}
     <FilterChip
       label={filters.courseNumberLow !== null && filters.courseNumberHigh !== null
-        ? `Course ${filters.courseNumberLow}–${filters.courseNumberHigh}`
+        ? `Course ${filters.courseNumberLow}&ndash;${filters.courseNumberHigh}`
         : filters.courseNumberLow !== null
-          ? `Course ≥ ${filters.courseNumberLow}`
-          : `Course ≤ ${filters.courseNumberHigh}`}
+          ? `Course &ge; ${filters.courseNumberLow}`
+          : `Course &le; ${filters.courseNumberHigh}`}
       onRemove={() => {
         filters.courseNumberLow = null;
         filters.courseNumberHigh = null;

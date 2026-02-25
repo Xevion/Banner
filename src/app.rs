@@ -165,7 +165,7 @@ impl App {
                 app_state
                     .session_cache
                     .inject_dev_session("dev-admin", user);
-                info!("Dev auth bypass active — use: Cookie: session=dev-admin");
+                info!("Dev auth bypass active -- use: Cookie: session=dev-admin");
             }
         }
 

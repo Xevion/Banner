@@ -10,22 +10,22 @@ File-based routing with SvelteKit conventions:
 
 ```
 src/routes/
-├── +layout.svelte        # Root layout (nav, theme, error boundary)
-├── +page.svelte           # Home page
-├── +error.svelte          # Global error page
-├── (app)/
-│   ├── +layout.svelte    # App layout (sidebar, auth)
-│   ├── search/
-│   │   ├── +page.svelte  # Course search
-│   │   └── +page.ts      # Load function
-│   ├── timeline/         # Schedule timeline
-│   ├── course/[term]/[crn]/  # Course detail
-│   └── admin/            # Admin routes (dashboard, scraper, RMP)
-└── auth/                 # OAuth callback
++-- +layout.svelte        # Root layout (nav, theme, error boundary)
++-- +page.svelte           # Home page
++-- +error.svelte          # Global error page
++-- (app)/
+|   +-- +layout.svelte    # App layout (sidebar, auth)
+|   +-- search/
+|   |   +-- +page.svelte  # Course search
+|   |   +-- +page.ts      # Load function
+|   +-- timeline/         # Schedule timeline
+|   +-- course/[term]/[crn]/  # Course detail
+|   +-- admin/            # Admin routes (dashboard, scraper, RMP)
++-- auth/                 # OAuth callback
 ```
 
 - Load functions in `+page.ts` (universal, not server-side)
-- No `+page.server.ts` — all data fetching goes through the API client
+- No `+page.server.ts` -- all data fetching goes through the API client
 - Load functions receive SvelteKit's `fetch` for SSR compatibility
 
 ### Data Fetching
@@ -42,7 +42,7 @@ export const load: PageLoad = async ({ fetch }) => {
 ```
 
 - Pass `fetch` from load context to `BannerApiClient` constructor for SSR
-- Handle errors in load functions — return fallback data, don't throw
+- Handle errors in load functions -- return fallback data, don't throw
 - Component receives data via `let { data } = $props()`
 
 ## Error Handling
@@ -50,11 +50,11 @@ export const load: PageLoad = async ({ fetch }) => {
 - **API layer**: `true-myth` Result pattern with `.match({ Ok, Err })` for exhaustive handling
 - **Components**: `<svelte:boundary onerror={handler}>` for render-time errors
 - **Load functions**: Two patterns depending on page type (see below)
-- Never let API errors bubble unhandled — always match or catch
+- Never let API errors bubble unhandled -- always match or catch
 
 ### Load Function Error Patterns
 
-**List pages** — return fallback data + optional error message:
+**List pages** -- return fallback data + optional error message:
 ```typescript
 return result.match({
     Ok: (data) => ({ courses: data.courses }),
@@ -62,7 +62,7 @@ return result.match({
 });
 ```
 
-**Detail pages** — throw SvelteKit `error()` for the error page:
+**Detail pages** -- throw SvelteKit `error()` for the error page:
 ```typescript
 return result.match({
     Ok: (course) => ({ course }),
@@ -84,16 +84,16 @@ return result.match({
 </svelte:boundary>
 ```
 
-Use error boundaries around components that do complex rendering (canvas timelines, dynamic layouts, user-generated content). The app layout auto-resets boundaries on navigation — no manual cleanup needed when the user navigates away from an errored page.
+Use error boundaries around components that do complex rendering (canvas timelines, dynamic layouts, user-generated content). The app layout auto-resets boundaries on navigation -- no manual cleanup needed when the user navigates away from an errored page.
 
 ## State Management
 
-**Escalation ladder** — use the simplest pattern that works:
+**Escalation ladder** -- use the simplest pattern that works:
 
-1. **Component-local `$state()`** — default for most state
-2. **Module-level runes** (`.svelte.ts` files) — when 2+ unrelated components share state
-3. **Svelte context** — for deep component trees, avoiding prop drilling
-4. **Global stores** — only for truly global concerns (theme, auth)
+1. **Component-local `$state()`** -- default for most state
+2. **Module-level runes** (`.svelte.ts` files) -- when 2+ unrelated components share state
+3. **Svelte context** -- for deep component trees, avoiding prop drilling
+4. **Global stores** -- only for truly global concerns (theme, auth)
 
 ```typescript
 // 1. Component-local
@@ -113,31 +113,31 @@ setContext(TABLE_CONTEXT_KEY, tableUtils);
 const utils = getContext<TableUtils>(TABLE_CONTEXT_KEY);
 ```
 
-Module-level stores use class-based patterns with `$state` runes — no legacy `writable`/`readable` stores.
+Module-level stores use class-based patterns with `$state` runes -- no legacy `writable`/`readable` stores.
 
 ### Filter Registry Pattern
 
-Course search filters use a **declarative registry** pattern: a single `FILTER_REGISTRY` object in `$lib/filters.ts` defines every filter once (URL key, serializer, default, grouping). All operations — parse, serialize, count active, change detection, API conversion — are pure functions derived from that registry.
+Course search filters use a **declarative registry** pattern: a single `FILTER_REGISTRY` object in `$lib/filters.ts` defines every filter once (URL key, serializer, default, grouping). All operations -- parse, serialize, count active, change detection, API conversion -- are pure functions derived from that registry.
 
 **Key design decisions:**
 
 - **`FilterState` is a plain object**, not a class with rune fields. Its type is inferred from the registry via mapped types. Reactivity is added externally by wrapping with `$state()` in `createFilterState()`.
 - **Composable serializers** (`ParamSerializer<T>`) encapsulate encode/decode/default/isActive per value type. Built-ins: `stringParam()`, `boolParam()`, `intParam()`, `arrayParam()`, `campusParam()`.
-- **Compile-time sync** with the backend — a type assertion in `filters.ts` ensures `FilterState` stays structurally equal to the `SearchParams` binding (minus pagination/sort fields). If Rust adds a filter field and you don't add a registry entry, the build fails.
-- **Groups** — filters sharing a `group` name (e.g. `creditHourMin`/`creditHourMax` → `"creditHour"`) count as one in `countActive()`.
-- **Aliases** — legacy URL param names (e.g. `q` → `query`) are tried when the primary key is absent.
+- **Compile-time sync** with the backend -- a type assertion in `filters.ts` ensures `FilterState` stays structurally equal to the `SearchParams` binding (minus pagination/sort fields). If Rust adds a filter field and you don't add a registry entry, the build fails.
+- **Groups** -- filters sharing a `group` name (e.g. `creditHourMin`/`creditHourMax` -> `"creditHour"`) count as one in `countActive()`.
+- **Aliases** -- legacy URL param names (e.g. `q` -> `query`) are tried when the primary key is absent.
 
 **Adding a new filter:**
 
 1. Add the field to `SearchParams` in Rust (with `#[ts(export)]`)
-2. Run `just bindings` — the compile-time assertion will fail until you add the entry
+2. Run `just bindings` -- the compile-time assertion will fail until you add the entry
 3. Add one entry to `FILTER_REGISTRY` in `$lib/filters.ts`
 4. Wire up the UI control in the relevant filter component
 
-No other files need changes — parsing, serialization, URL sync, active count, and API conversion all derive from the registry automatically.
+No other files need changes -- parsing, serialization, URL sync, active count, and API conversion all derive from the registry automatically.
 
 ```typescript
-// $lib/filters.ts — registry drives everything
+// $lib/filters.ts -- registry drives everything
 export const FILTER_REGISTRY = {
   subject: { urlKey: "subject", serializer: arrayParam() },
   query:   { urlKey: "query",   serializer: stringParam(), aliases: ["q"], countAsActive: false },
@@ -145,12 +145,12 @@ export const FILTER_REGISTRY = {
   // ... one entry per filter
 } as const satisfies Record<string, FilterDef>;
 
-// Type derived from registry — never manually defined
+// Type derived from registry -- never manually defined
 export type FilterState = {
   -readonly [K in keyof typeof FILTER_REGISTRY]: InferValue<...>;
 };
 
-// Pure operations — no Svelte dependency
+// Pure operations -- no Svelte dependency
 defaultFilters(): FilterState
 parseFilters(params: URLSearchParams): FilterState
 serializeFilters(state: FilterState): URLSearchParams
@@ -160,7 +160,7 @@ toAPIParams(state: FilterState, meta): SearchParams
 ```
 
 ```typescript
-// Thin reactive wrapper — $lib/stores/search-filters.svelte.ts
+// Thin reactive wrapper -- $lib/stores/search-filters.svelte.ts
 export function createFilterState(params?: URLSearchParams): FilterState {
   const state: FilterState = $state(params ? parseFilters(params) : defaultFilters());
   return state;
@@ -174,7 +174,7 @@ This pattern keeps the registry importable in universal load functions (`+page.t
 ### Granularity
 
 - Extract components when they're **reused**, **too large** (100+ lines of template), or **mature enough** to be a stable abstraction
-- Don't extract prematurely — inline code in `+page.svelte` is fine while iterating
+- Don't extract prematurely -- inline code in `+page.svelte` is fine while iterating
 - `bits-ui` components are the base layer for interactive primitives; compose from these
 
 ### Props
@@ -208,7 +208,7 @@ Svelte 5 `$props()` with TypeScript types:
 - `$derived()` for computed values (replaces `$:` reactive statements)
 - `$derived.by()` for complex computations that need a function body
 - `$effect()` for side effects (DOM manipulation, event listeners, external subscriptions)
-- Avoid `$effect` for data transformations — use `$derived` instead
+- Avoid `$effect` for data transformations -- use `$derived` instead
 
 ### Snippets
 
@@ -243,12 +243,12 @@ Headless UI primitives with compound component pattern:
 ```
 
 - Use `data-[state=active]:` and similar data attribute selectors for state-based styling
-- Compose bits-ui primitives with Tailwind classes via `cn()` — no wrapper components unless heavily reused
+- Compose bits-ui primitives with Tailwind classes via `cn()` -- no wrapper components unless heavily reused
 - Available primitives: Tooltip, Tabs, ContextMenu, DropdownMenu, Combobox, and more
 
 ## TanStack Table
 
-Tables use `createSvelteTable` — a runes-based wrapper around TanStack Table core:
+Tables use `createSvelteTable` -- a runes-based wrapper around TanStack Table core:
 
 ```typescript
 const table = createSvelteTable({
@@ -270,7 +270,7 @@ const table = createSvelteTable({
 - **Tailwind utility classes** directly on elements
 - **`cn()` helper** (clsx + tailwind-merge) for conditional class composition
 - **`tailwind-variants`** for component variants with structured APIs (buttons, badges, cards)
-- **Dark mode** via `dark:` prefix with class-based strategy — theme store manages the `.dark` class on `<html>`
+- **Dark mode** via `dark:` prefix with class-based strategy -- theme store manages the `.dark` class on `<html>`
 - No CSS modules, no scoped `<style>` blocks except where Tailwind can't reach
 - **Shared class constants** for repeated patterns (e.g., `tooltipContentClass`)
 
@@ -298,8 +298,8 @@ const button = tv({
 ## Type Safety
 
 - Import backend types: `import type { CourseResponse } from "$lib/bindings"`
-- `type` imports enforced — `import type { ... }` not `import { ... }` for types
-- Generated bindings are the source of truth for API shapes — never duplicate them manually
+- `type` imports enforced -- `import type { ... }` not `import { ... }` for types
+- Generated bindings are the source of truth for API shapes -- never duplicate them manually
 - Use `$types` imports for SvelteKit page data: `import type { PageData } from "./$types"`
 - Type aliases are acceptable for convenience: `export type Term = TermResponse;`
 
@@ -313,7 +313,7 @@ const result = await api.searchCourses({ term, subject });  // Result<SearchResp
 const course = await api.getCourse(term, crn);               // Result<CourseResponse, ApiError>
 ```
 
-- All methods return `Result<T, ApiError>` — never throw
+- All methods return `Result<T, ApiError>` -- never throw
 - SSR-compatible via `fetch` parameter injection in the constructor
 - Search options cached in-memory with TTL (10 minutes)
 - 401 responses trigger `authStore.handleUnauthorized()` automatically
@@ -329,7 +329,7 @@ const { modify, unsubscribe } = streamClient.subscribe("scrapeJobs", filter, {
 });
 ```
 
-- Subscriptions are type-safe — stream name determines filter and payload types via `StreamKind` discriminated union
+- Subscriptions are type-safe -- stream name determines filter and payload types via `StreamKind` discriminated union
 - `modify()` updates the subscription filter without resubscribing
 - Auto-reconnects with exponential backoff (max 30s, max 10 attempts)
 - Auto-resubscribes on reconnect with current filters
@@ -370,7 +370,7 @@ D3 and Layerchart for data visualization:
 
 - **Timeline**: D3 scales + canvas rendering for interactive course schedule visualization (pan/zoom)
 - **Analytics**: Layerchart components for scraper metrics, timeseries data
-- Keep chart logic in dedicated components — don't inline D3 code in page components
+- Keep chart logic in dedicated components -- don't inline D3 code in page components
 - Use `$effect` for D3 bindings that need DOM access
 
 ## Storybook
@@ -379,14 +379,14 @@ Component stories for visual development and testing:
 
 - **File naming**: `ComponentName.stories.svelte` alongside the component
 - **When to write stories**: Reusable components, components with multiple visual states, interactive primitives
-- **a11y addon**: Enabled — stories are automatically tested for accessibility violations
+- **a11y addon**: Enabled -- stories are automatically tested for accessibility violations
 - **Visual testing**: Storybook tests run via Playwright (`just storybook-test`)
-- Don't write stories for page-level components or one-off layouts — focus on the component library
+- Don't write stories for page-level components or one-off layouts -- focus on the component library
 
 ## Logging
 
 - Use `console.warn` / `console.error` for issues that need developer attention
-- No logging framework — browser devtools are sufficient for a SvelteKit app
+- No logging framework -- browser devtools are sufficient for a SvelteKit app
 - Avoid `console.log` in committed code (use only for temporary debugging)
 
 ## Testing
@@ -400,7 +400,7 @@ Component stories for visual development and testing:
 
 ### Formatting
 
-Biome handles all frontend formatting. ESLint handles TypeScript and Svelte linting rules. They coexist — Biome for style, ESLint for correctness.
+Biome handles all frontend formatting. ESLint handles TypeScript and Svelte linting rules. They coexist -- Biome for style, ESLint for correctness.
 
 - Line width: 100 characters
 - Indent: 2 spaces

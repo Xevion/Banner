@@ -6,11 +6,11 @@
  * successful build. On build failure, the old server stays up.
  *
  * State machine:
- *   BUILDING (initial)         → success → RUNNING, failure → IDLE
- *   IDLE                       → file change → BUILDING
- *   RUNNING                    → file change → BUILDING_WITH_SERVER, crash → IDLE
- *   BUILDING_WITH_SERVER       → success → swap → RUNNING, failure → RUNNING (keep old)
- *   SWAPPING                   → SIGTERM → wait → SIGKILL → start → RUNNING
+ *   BUILDING (initial)         -> success -> RUNNING, failure -> IDLE
+ *   IDLE                       -> file change -> BUILDING
+ *   RUNNING                    -> file change -> BUILDING_WITH_SERVER, crash -> IDLE
+ *   BUILDING_WITH_SERVER       -> success -> swap -> RUNNING, failure -> RUNNING (keep old)
+ *   SWAPPING                   -> SIGTERM -> wait -> SIGKILL -> start -> RUNNING
  */
 
 import { watch, type FSWatcher } from "fs";
@@ -57,7 +57,7 @@ export class BackendWatcher {
   }
 
   /**
-   * Synchronous cleanup — kills all child processes immediately.
+   * Synchronous cleanup -- kills all child processes immediately.
    * Suitable for signal handlers where async work isn't possible.
    */
   killSync(): void {
@@ -82,7 +82,7 @@ export class BackendWatcher {
   }
 
   /**
-   * Graceful async shutdown — SIGTERM with timeout, then SIGKILL.
+   * Graceful async shutdown -- SIGTERM with timeout, then SIGKILL.
    * Closes watchers, kills build, and drains the running server.
    */
   async shutdown(): Promise<void> {
@@ -154,14 +154,14 @@ export class BackendWatcher {
     );
     this.watchers.push(manifestWatcher);
 
-    // Watch .sqlx/ cache — offline query validation at compile time
+    // Watch .sqlx/ cache -- offline query validation at compile time
     this.tryWatch(".sqlx", { recursive: true }, (_event, filename) => {
       if (filename && filename.toString().endsWith(".json")) {
         this.onFileChange();
       }
     });
 
-    // Watch migrations — schema changes invalidate the .sqlx cache
+    // Watch migrations -- schema changes invalidate the .sqlx cache
     this.tryWatch(
       "migrations",
       { recursive: true },
@@ -172,7 +172,7 @@ export class BackendWatcher {
       },
     );
 
-    // Watch .cargo/config.toml — env vars and build configuration
+    // Watch .cargo/config.toml -- env vars and build configuration
     this.tryWatch(
       ".cargo",
       { recursive: false },
@@ -184,7 +184,7 @@ export class BackendWatcher {
     );
   }
 
-  /** Watch a path if it exists — some directories (e.g., .sqlx) may not exist yet. */
+  /** Watch a path if it exists -- some directories (e.g., .sqlx) may not exist yet. */
   private tryWatch(
     path: string,
     options: { recursive: boolean },
@@ -193,7 +193,7 @@ export class BackendWatcher {
     try {
       this.watchers.push(watch(path, options, cb));
     } catch {
-      // Directory doesn't exist — skip silently
+      // Directory doesn't exist -- skip silently
     }
   }
 
@@ -224,7 +224,7 @@ export class BackendWatcher {
       case "building_with_server":
         if (this.opts.interrupt && this.buildProc) {
           console.log(
-            c("1;33", "→ Change detected, restarting compilation..."),
+            c("1;33", "➡️ Change detected, restarting compilation..."),
           );
           this.buildInterrupted = true;
           try {
@@ -236,7 +236,7 @@ export class BackendWatcher {
           console.log(
             c(
               "1;33",
-              "→ Change detected, will rebuild after current compilation",
+              "➡️ Change detected, will rebuild after current compilation",
             ),
           );
           this.dirty = true;
@@ -244,7 +244,7 @@ export class BackendWatcher {
         break;
 
       case "swapping":
-        // Mid-swap — rebuild after swap completes
+        // Mid-swap -- rebuild after swap completes
         this.dirty = true;
         break;
     }
@@ -258,7 +258,7 @@ export class BackendWatcher {
     this.state = hadServer ? "building_with_server" : "building";
     this.dirty = false;
 
-    console.log(c("1;36", "→ Compiling backend..."));
+    console.log(c("1;36", "➡️ Compiling backend..."));
     const startTime = Date.now();
 
     const cargoArgs = ["cargo", "build", "--bin", "banner", ...this.opts.cargoExtra];
@@ -287,7 +287,7 @@ export class BackendWatcher {
 
     if (this.shutdownRequested) return;
 
-    // Interrupted by a newer change — restart immediately
+    // Interrupted by a newer change -- restart immediately
     if (this.buildInterrupted) {
       this.buildInterrupted = false;
       this.triggerBuild();
@@ -295,7 +295,7 @@ export class BackendWatcher {
     }
 
     if (exitCode === 0) {
-      console.log(c("1;32", `→ Backend compiled (${elapsed(startTime)})`));
+      console.log(c("1;32", `➡️ Backend compiled (${elapsed(startTime)})`));
 
       if (this.dirty) {
         this.triggerBuild();
@@ -308,16 +308,16 @@ export class BackendWatcher {
         await this.startServer();
       }
     } else {
-      console.log(c("1;31", `→ Build failed (${elapsed(startTime)}):`));
+      console.log(c("1;31", `➡️ Build failed (${elapsed(startTime)}):`));
       if (piped && stderr) {
         process.stderr.write(stderr);
       }
 
       if (this.state === "building_with_server") {
-        console.log(c("1;33", "→ Keeping previous server running"));
+        console.log(c("1;33", "➡️ Keeping previous server running"));
         this.state = "running";
       } else {
-        console.log(c("1;33", "→ Waiting for changes..."));
+        console.log(c("1;33", "➡️ Waiting for changes..."));
         this.state = "idle";
       }
 
@@ -336,7 +336,7 @@ export class BackendWatcher {
     });
     this.serverProc = proc;
     this.state = "running";
-    console.log(c("1;32", `→ Backend running (pid ${proc.pid})`));
+    console.log(c("1;32", `➡️ Backend running (pid ${proc.pid})`));
 
     // Monitor for unexpected exit (crash)
     proc.exited.then((code) => {
@@ -344,15 +344,15 @@ export class BackendWatcher {
       this.serverProc = null;
       if (this.shutdownRequested) return;
 
-      console.log(c("1;31", `→ Backend exited (code ${code})`));
+      console.log(c("1;31", `➡️ Backend exited (code ${code})`));
       if (this.state === "building_with_server") {
         this.state = "building";
         console.log(
-          c("1;33", "→ Build in progress, will start server on completion"),
+          c("1;33", "➡️ Build in progress, will start server on completion"),
         );
       } else {
         this.state = "idle";
-        console.log(c("1;33", "→ Waiting for changes..."));
+        console.log(c("1;33", "➡️ Waiting for changes..."));
       }
     });
   }
@@ -363,7 +363,7 @@ export class BackendWatcher {
     this.state = "swapping";
 
     if (this.serverProc) {
-      console.log(c("1;36", "→ Restarting backend..."));
+      console.log(c("1;36", "➡️ Restarting backend..."));
       const oldProc = this.serverProc;
       this.serverProc = null;
 

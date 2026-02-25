@@ -45,7 +45,7 @@ pub struct MeetingLocation {
     pub campus: Option<String>,
 }
 
-/// Credit hours for a course section — either a fixed value or a range.
+/// Credit hours for a course section -- either a fixed value or a range.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export)]

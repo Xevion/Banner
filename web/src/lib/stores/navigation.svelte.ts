@@ -15,7 +15,7 @@ class NavbarState {
 
 export const navbar = new NavbarState();
 
-/** Sidebar nav order — indexes determine slide direction for same-depth siblings */
+/** Sidebar nav order -- indexes determine slide direction for same-depth siblings */
 const SIDEBAR_NAV_ORDER = [
   "/profile",
   "/settings",
@@ -45,7 +45,7 @@ function computeDirection(from: string, to: string): NavDirection {
   if (toDepth > fromDepth) return "right";
   if (toDepth < fromDepth) return "left";
 
-  // Same depth — use sidebar ordering if both are sidebar routes
+  // Same depth -- use sidebar ordering if both are sidebar routes
   const fromIdx = getSidebarIndex(from);
   const toIdx = getSidebarIndex(to);
   if (fromIdx >= 0 && toIdx >= 0) {
@@ -105,7 +105,7 @@ export function initNavigation() {
           });
         });
       }
-      // No table element (different page or not mounted yet) — skip transition
+      // No table element (different page or not mounted yet) -- skip transition
       void navigation.complete.then(() => {
         navbar.path = window.location.pathname;
       });

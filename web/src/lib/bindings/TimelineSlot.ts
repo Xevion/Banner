@@ -6,6 +6,6 @@ export type TimelineSlot = {
  */
 time: string, 
 /**
- * Subject code → total enrollment in this slot.
+ * Subject code -> total enrollment in this slot.
  */
 subjects: Record<string, number>, };

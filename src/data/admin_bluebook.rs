@@ -432,11 +432,11 @@ struct CrnCandidate {
 /// Matching strategy per name:
 ///
 /// 1. **CRN+term join**: Find evals with non-null `crn`, join to `courses`
-///    via `(crn, term)`, then to `course_instructors` → `instructors`.
+///    via `(crn, term)`, then to `course_instructors` -> `instructors`.
 /// 2. **Name confirmation**: Compare via structured name parsing and matching keys.
 /// 3. Insert into `instructor_bluebook_links` with appropriate status/confidence.
 ///
-/// The matching uses [`find_best_candidate`] from the `names` module — pure
+/// The matching uses [`find_best_candidate`] from the `names` module -- pure
 /// functions with no database dependency.
 pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     let mut tx = pool.begin().await.context("failed to start transaction")?;
@@ -504,7 +504,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     for row in &unlinked {
         let name = &row.instructor_name;
 
-        // Step 1: CRN+term join — find instructor candidates via course matching
+        // Step 1: CRN+term join -- find instructor candidates via course matching
         let crn_candidates: Vec<CrnCandidate> = sqlx::query_as(
             r#"
             SELECT DISTINCT i.id AS instructor_id, i.display_name
@@ -536,7 +536,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
 
             match find_best_candidate(name, &match_candidates) {
                 Some(best) => {
-                    // CRN evidence + name confirmation → auto
+                    // CRN evidence + name confirmation -> auto
                     let confidence = match best.result.quality {
                         NameMatchQuality::Full => best.result.confidence,
                         NameMatchQuality::Partial if has_single_crn => 0.9 * best.result.confidence,
@@ -554,16 +554,16 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                     auto_matched += 1;
                 }
                 None => {
-                    // CRN candidates exist but no name match — pending review
+                    // CRN candidates exist but no name match -- pending review
                     insert_link(&mut *tx, name, None, "pending", Some(0.1)).await?;
                     pending_review += 1;
                 }
             }
         } else {
-            // No CRN join — try name-only matching against pre-fetched instructors
+            // No CRN join -- try name-only matching against pre-fetched instructors
             match find_best_candidate(name, &all_match_candidates) {
                 Some(best) if best.result.quality == NameMatchQuality::Full => {
-                    // Exact name match but no CRN confirmation — pending
+                    // Exact name match but no CRN confirmation -- pending
                     insert_link(
                         &mut *tx,
                         name,
@@ -575,7 +575,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                     pending_review += 1;
                 }
                 Some(best) => {
-                    // Partial name match, no CRN — low confidence pending
+                    // Partial name match, no CRN -- low confidence pending
                     insert_link(
                         &mut *tx,
                         name,

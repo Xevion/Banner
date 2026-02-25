@@ -47,7 +47,7 @@ function main() {
 		process.exit(0);
 	}
 
-	console.log('⚠  Formatting issues detected, running auto-format...');
+	console.log('⚠️  Formatting issues detected, running auto-format...');
 
 	// Run auto-format for subsystems that need it
 	for (const [files, sub] of [
@@ -83,7 +83,7 @@ function main() {
 
 	if (toStage.length > 0) {
 		runPiped(['git', 'add', ...toStage]);
-		console.log(`✓ Auto-formatted and re-staged ${toStage.length} file(s)`);
+		console.log(`✅ Auto-formatted and re-staged ${toStage.length} file(s)`);
 	}
 
 	process.exit(0);

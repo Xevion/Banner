@@ -188,7 +188,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
-    // Same CRN, different term codes → should produce two separate rows
+    // Same CRN, different term codes -> should produce two separate rows
     let courses = vec![
         helpers::make_course(
             "40001",
@@ -234,7 +234,7 @@ async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
-    // Insert initial data — should create a baseline metric but no audits
+    // Insert initial data -- should create a baseline metric but no audits
     let initial = vec![helpers::make_course(
         "50001",
         "202510",
@@ -323,7 +323,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
-    // Insert then re-insert identical data — should produce baseline metric but no audits or extra metrics
+    // Insert then re-insert identical data -- should produce baseline metric but no audits or extra metrics
     let course = vec![helpers::make_course(
         "60001",
         "202510",

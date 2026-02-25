@@ -226,7 +226,7 @@ export class ProcessGroup {
 					// Best-effort cleanup
 				}
 			}
-			// Don't process.exit() here — let waitForFirst/waitForAll resolve
+			// Don't process.exit() here -- let waitForFirst/waitForAll resolve
 			// naturally after children exit. Exiting immediately causes children
 			// to keep writing to the terminal after the shell prompt returns.
 		};

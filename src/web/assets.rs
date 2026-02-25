@@ -90,7 +90,7 @@ pub fn get_asset_metadata_cached(path: &str, content: &[u8]) -> AssetMetadata {
 /// safe to cache indefinitely. Other assets get shorter cache durations.
 fn set_cache_control(headers: &mut HeaderMap, path: &str) {
     let cache_control = if path.contains("immutable/") {
-        // SvelteKit fingerprinted assets — cache forever
+        // SvelteKit fingerprinted assets -- cache forever
         "public, max-age=31536000, immutable"
     } else if path == "index.html" || path.ends_with(".html") {
         "public, max-age=300"
@@ -136,7 +136,7 @@ pub fn try_serve_asset_with_encoding(
         .unwrap_or_else(|| "application/octet-stream".to_string());
 
     // Only attempt pre-compressed variants for files above the compression
-    // threshold — the build script skips smaller files too.
+    // threshold -- the build script skips smaller files too.
     let accepted_encodings = if original.data.len() >= COMPRESSION_MIN_SIZE {
         parse_accepted_encodings(request_headers)
     } else {
@@ -176,7 +176,7 @@ pub fn try_serve_asset_with_encoding(
         }
     }
 
-    // No compressed variant found — serve uncompressed original
+    // No compressed variant found -- serve uncompressed original
     let mut response_headers = HeaderMap::new();
     if let Ok(ct) = HeaderValue::from_str(&mime_type) {
         response_headers.insert(header::CONTENT_TYPE, ct);

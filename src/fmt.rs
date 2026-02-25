@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-/// Formats an `Option<T>` by printing the inner value directly (no `Some(…)` wrapper).
+/// Formats an `Option<T>` by printing the inner value directly (no `Some(...)` wrapper).
 ///
 /// Use with `#[debug(with = "crate::fmt::opt")]` on fields that are
 /// already gated by `#[debug(skip_if = Option::is_none)]`.

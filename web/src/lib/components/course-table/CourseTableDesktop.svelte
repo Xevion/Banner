@@ -223,7 +223,7 @@ const table = createSvelteTable({
                   {#if CellComponent}
                     <CellComponent {course} />
                   {:else}
-                    <td class="py-2 px-2 text-muted-foreground">—</td>
+                    <td class="py-2 px-2 text-muted-foreground">&mdash;</td>
                   {/if}
                 {/each}
               </tr>

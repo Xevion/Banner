@@ -9,7 +9,7 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
       return { user };
     }
   } catch {
-    // Network error or backend not ready — treat as unauthenticated
+    // Network error or backend not ready -- treat as unauthenticated
   }
 
   return { user: null as User | null };

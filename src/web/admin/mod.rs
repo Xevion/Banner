@@ -53,7 +53,7 @@ pub struct AdminStatusResponse {
     services: Vec<AdminServiceInfo>,
 }
 
-/// `GET /api/admin/status` — Enhanced system status for admins.
+/// `GET /api/admin/status` -- Enhanced system status for admins.
 #[instrument(skip_all)]
 pub async fn admin_status(
     AdminUser(_user): AdminUser,
@@ -126,7 +126,7 @@ pub async fn admin_status(
     }))
 }
 
-/// `GET /api/admin/users` — List all users.
+/// `GET /api/admin/users` -- List all users.
 #[instrument(skip_all)]
 pub async fn list_users(
     AdminUser(_user): AdminUser,
@@ -152,7 +152,7 @@ pub struct SetAdminBody {
     is_admin: bool,
 }
 
-/// `PUT /api/admin/users/{discord_id}/admin` — Set admin status for a user.
+/// `PUT /api/admin/users/{discord_id}/admin` -- Set admin status for a user.
 #[instrument(skip_all, fields(discord_id))]
 pub async fn set_user_admin(
     AdminUser(_user): AdminUser,
@@ -187,7 +187,7 @@ pub async fn set_user_admin(
     Ok(Json(user))
 }
 
-/// `GET /api/admin/scrape-jobs` — List scrape jobs.
+/// `GET /api/admin/scrape-jobs` -- List scrape jobs.
 #[instrument(skip_all)]
 pub async fn list_scrape_jobs(
     AdminUser(_user): AdminUser,
@@ -226,7 +226,7 @@ fn parse_if_modified_since(headers: &HeaderMap) -> Option<DateTime<Utc>> {
         .map(|dt| dt.with_timezone(&Utc))
 }
 
-/// `GET /api/admin/audit-log` — List recent audit entries.
+/// `GET /api/admin/audit-log` -- List recent audit entries.
 ///
 /// Supports `If-Modified-Since`: returns 304 when the newest entry hasn't changed.
 #[instrument(skip_all)]

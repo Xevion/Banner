@@ -235,9 +235,9 @@ struct MetricEntry {
 /// Compare old vs new for a single field, pushing an `AuditEntry` when they differ.
 ///
 /// Three variants:
-/// - `diff_field!(audits, row, field_name, old_field, new_field)` — `Option<T>` old vs `T` new
-/// - `diff_field!(opt audits, row, field_name, old_field, new_field)` — `Option<T>` old vs `Option<T>` new
-/// - `diff_field!(json audits, row, field_name, old_field, new_field)` — `Option<Value>` old vs `Value` new
+/// - `diff_field!(audits, row, field_name, old_field, new_field)` -- `Option<T>` old vs `T` new
+/// - `diff_field!(opt audits, row, field_name, old_field, new_field)` -- `Option<T>` old vs `Option<T>` new
+/// - `diff_field!(json audits, row, field_name, old_field, new_field)` -- `Option<Value>` old vs `Value` new
 ///
 /// All variants skip when `old_id` is None (fresh insert).
 macro_rules! diff_field {
@@ -472,7 +472,7 @@ pub async fn batch_upsert_courses(
     // Step 1: Upsert courses with CTE, returning diff rows
     let diff_rows = upsert_courses(courses, &mut tx).await?;
 
-    // Step 2: Build (crn, term_code) → course_id map for instructor linking.
+    // Step 2: Build (crn, term_code) -> course_id map for instructor linking.
     // RETURNING order from INSERT ... ON CONFLICT is not guaranteed to match
     // the input array order, so we must key by (crn, term_code) rather than
     // relying on positional correspondence.
@@ -773,9 +773,9 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
 
 /// Lookup maps returned by [`upsert_instructors`] for resolving faculty to instructor IDs.
 struct InstructorLookup {
-    /// Lowercased email → instructor_id (for faculty with email).
+    /// Lowercased email -> instructor_id (for faculty with email).
     by_email: HashMap<String, i32>,
-    /// Display name → instructor_id (for faculty without email).
+    /// Display name -> instructor_id (for faculty without email).
     by_display_name: HashMap<String, i32>,
 }
 
@@ -794,8 +794,8 @@ impl InstructorLookup {
 /// Deduplicate and upsert all instructors from the batch.
 ///
 /// Two-phase upsert:
-///   1. Instructors with email → dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
-///   2. Instructors without email → dedup by display_name (ON CONFLICT (display_name) WHERE email IS NULL)
+///   1. Instructors with email -> dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
+///   2. Instructors without email -> dedup by display_name (ON CONFLICT (display_name) WHERE email IS NULL)
 async fn upsert_instructors(
     courses: &[Course],
     conn: &mut PgConnection,

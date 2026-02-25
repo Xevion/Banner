@@ -92,7 +92,7 @@ const SEARCH_WHERE: &str = r#"
 
 /// Build a safe ORDER BY clause from typed sort parameters.
 ///
-/// All column names are hardcoded string literals — no caller input is interpolated.
+/// All column names are hardcoded string literals -- no caller input is interpolated.
 fn sort_clause(column: Option<SortColumn>, direction: Option<SortDirection>) -> String {
     let dir = match direction.unwrap_or(SortDirection::Asc) {
         SortDirection::Asc => "ASC",
@@ -253,7 +253,7 @@ pub async fn get_course_instructors(
 
 /// Batch-fetch instructors for multiple courses in a single query.
 ///
-/// Returns a map of `course_id → Vec<CourseInstructorDetail>`.
+/// Returns a map of `course_id -> Vec<CourseInstructorDetail>`.
 pub async fn get_instructors_for_courses(
     db_pool: &PgPool,
     course_ids: &[i32],

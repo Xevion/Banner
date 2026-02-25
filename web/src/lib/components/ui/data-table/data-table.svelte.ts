@@ -11,7 +11,7 @@ import { SvelteSet } from "svelte/reactivity";
 /**
  * Creates a reactive TanStack table for Svelte 5 using runes.
  *
- * Adapted from shadcn-svelte's data-table wrapper — uses `$state` and
+ * Adapted from shadcn-svelte's data-table wrapper -- uses `$state` and
  * `$effect.pre` instead of Svelte stores for reactivity.
  */
 export function createSvelteTable<TData extends RowData>(options: TableOptions<TData>) {

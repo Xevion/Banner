@@ -64,7 +64,7 @@ impl From<SyncResult> for TermSyncResponse {
     }
 }
 
-/// `GET /api/admin/terms` — List all terms with their scraping status.
+/// `GET /api/admin/terms` -- List all terms with their scraping status.
 #[instrument(skip_all)]
 pub async fn list_terms(
     _admin: AdminUser,
@@ -88,7 +88,7 @@ pub async fn list_terms(
     Ok(Json(TermsListResponse { terms }))
 }
 
-/// `POST /api/admin/terms/:code/enable` — Enable scraping for a term.
+/// `POST /api/admin/terms/:code/enable` -- Enable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn enable_term(
     _admin: AdminUser,
@@ -128,7 +128,7 @@ pub async fn enable_term(
     }))
 }
 
-/// `POST /api/admin/terms/:code/disable` — Disable scraping for a term.
+/// `POST /api/admin/terms/:code/disable` -- Disable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn disable_term(
     _admin: AdminUser,
@@ -168,7 +168,7 @@ pub async fn disable_term(
     }))
 }
 
-/// `POST /api/admin/terms/sync` — Manually sync terms from the Banner API.
+/// `POST /api/admin/terms/sync` -- Manually sync terms from the Banner API.
 #[instrument(skip_all)]
 pub async fn sync_terms(
     _admin: AdminUser,

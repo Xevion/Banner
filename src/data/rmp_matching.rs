@@ -16,7 +16,7 @@ pub struct ScoreBreakdown {
     pub volume: f32,
 }
 
-/// Result of scoring a single instructor–RMP candidate pair.
+/// Result of scoring a single instructor-RMP candidate pair.
 #[derive(Debug, Clone)]
 pub struct MatchScore {
     pub score: f32,
@@ -183,10 +183,10 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
     false
 }
 
-/// Compute match confidence score (0.0–1.0) for an instructor–RMP pair.
+/// Compute match confidence score (0.0-1.0) for an instructor-RMP pair.
 ///
 /// The name signal is always 1.0 since candidates are only generated for
-/// exact normalized name matches. The effective score range is 0.50–1.0.
+/// exact normalized name matches. The effective score range is 0.50-1.0.
 pub fn compute_match_score(
     instructor_subjects: &[String],
     rmp_department: Option<&str>,
@@ -246,10 +246,10 @@ struct RmpProfForMatching {
 /// 2. Find RMP professors with matching normalized name keys.
 /// 3. Score each candidate.
 /// 4. Store candidates scoring above [`MIN_CANDIDATE_THRESHOLD`].
-/// 5. Auto-accept if the top candidate scores ≥ [`AUTO_ACCEPT_THRESHOLD`]
+/// 5. Auto-accept if the top candidate scores >= [`AUTO_ACCEPT_THRESHOLD`]
 ///    and no existing rejected candidate exists for that pair.
 ///
-/// Already-evaluated instructor–RMP pairs (any status) are skipped.
+/// Already-evaluated instructor-RMP pairs (any status) are skipped.
 pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     // 1. Load unmatched instructors
     let instructors: Vec<(i32, String)> = sqlx::query_as(
@@ -331,7 +331,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         );
     }
 
-    // 4. Load existing candidate pairs — only skip resolved (accepted/rejected) pairs.
+    // 4. Load existing candidate pairs -- only skip resolved (accepted/rejected) pairs.
     //    Pending candidates are rescored so updated mappings take effect.
     let candidate_rows: Vec<(i32, i32, String)> =
         sqlx::query_as("SELECT instructor_id, rmp_legacy_id, status FROM rmp_match_candidates")
@@ -447,7 +447,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         }
     }
 
-    // 6–7. Write candidates, rescore, and auto-accept within a single transaction
+    // 6-7. Write candidates, rescore, and auto-accept within a single transaction
     let candidates_created = new_candidates.len();
     let candidates_rescored = rescored_candidates.len();
     let auto_matched = auto_accept.len();
@@ -597,7 +597,7 @@ mod tests {
             1,  // unique candidate
             50, // decent ratings
         );
-        // name 1.0*0.50 + dept 1.0*0.25 + unique 1.0*0.15 + volume ~0.97*0.10 ≈ 0.997
+        // name 1.0*0.50 + dept 1.0*0.25 + unique 1.0*0.15 + volume ~0.97*0.10 ~ 0.997
         assert!(ms.score >= 0.85, "Expected score >= 0.85, got {}", ms.score);
         assert_eq!(ms.breakdown.name, 1.0);
         assert_eq!(ms.breakdown.uniqueness, 1.0);

@@ -33,12 +33,12 @@ const buildBackend = !flags["frontend-only"];
 const profile = flags.debug ? "debug" : "release";
 
 if (buildFrontend) {
-  console.log(c("1;36", "→ Building frontend..."));
+  console.log(c("1;36", "➡️ Building frontend..."));
   run(["bun", "run", "--cwd", "web", "build"]);
 }
 
 if (buildBackend) {
-  console.log(c("1;36", `→ Building backend (${profile})...`));
+  console.log(c("1;36", `➡️ Building backend (${profile})...`));
   const cmd = ["cargo", "build", "--bin", "banner"];
   if (!flags.debug) cmd.push("--release");
   run(cmd);

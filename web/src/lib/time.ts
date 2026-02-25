@@ -53,10 +53,10 @@ export function formatDuration(ms: number): string {
  * Format a millisecond duration with a dynamic unit, optimised for
  * scrape-style timings that are typically under 60 seconds.
  *
- * - < 1 000 ms  → "423ms"
- * - < 10 000 ms → "4.52s"  (two decimals)
- * - < 60 000 ms → "16.9s"  (one decimal)
- * - ≥ 60 000 ms → delegates to {@link formatDuration} ("1m 5s")
+ * - < 1 000 ms  -> "423ms"
+ * - < 10 000 ms -> "4.52s"  (two decimals)
+ * - < 60 000 ms -> "16.9s"  (one decimal)
+ * - >= 60 000 ms -> delegates to {@link formatDuration} ("1m 5s")
  */
 export function formatDurationMs(ms: number): string {
   const abs = Math.abs(ms);

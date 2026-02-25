@@ -96,7 +96,7 @@ function onKeyDown(e: KeyboardEvent) {
 
 <svelte:window onkeydown={onKeyDown} />
 
-<!-- Desktop: Filter toggle button — slides out when drawer opens -->
+<!-- Desktop: Filter toggle button -- slides out when drawer opens -->
 <div class="hidden md:block">
   <button
     class="absolute right-3 z-50 p-2 rounded-md

@@ -209,7 +209,7 @@ impl BlueBookClient {
             };
             let input_type = input.attr("type").unwrap_or("text").to_lowercase();
 
-            // Skip buttons and image inputs — they're only sent when clicked
+            // Skip buttons and image inputs -- they're only sent when clicked
             if input_type == "submit" || input_type == "image" || input_type == "button" {
                 continue;
             }
@@ -423,7 +423,7 @@ impl BlueBookClient {
         let button_name = format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
 
         let mut params = fields.0.clone();
-        // Clear __EVENTTARGET — image buttons don't use it
+        // Clear __EVENTTARGET -- image buttons don't use it
         if let Some(et) = params.iter_mut().find(|(n, _)| n == "__EVENTTARGET") {
             et.1 = String::new();
         }
@@ -495,7 +495,7 @@ impl BlueBookClient {
                 continue;
             }
 
-            // Course.Section: "CS 1083.001" — extract course_number and section
+            // Course.Section: "CS 1083.001" -- extract course_number and section
             let course_section = cells[2].trim();
             let (course_number, section) = match Self::parse_course_section(course_section, subject)
             {
@@ -575,7 +575,7 @@ impl BlueBookClient {
     /// The `subject` parameter is accepted for call-site clarity but is NOT used
     /// to validate the display prefix. BlueBook's ComboBox subject codes don't
     /// always match the prefix shown in the accordion cell (e.g., ComboBox "MTC"
-    /// → display prefix "MAT"), so prefix matching would silently drop valid rows.
+    /// -> display prefix "MAT"), so prefix matching would silently drop valid rows.
     fn parse_course_section(raw: &str, subject: &str) -> Option<(String, String)> {
         // Normalize all Unicode whitespace (including non-breaking spaces \u{00A0})
         // to regular ASCII spaces. Some BlueBook HTML cells use non-breaking spaces.
@@ -707,7 +707,7 @@ impl BlueBookClient {
         for (i, subject) in eligible_subjects.iter().enumerate() {
             let progress = i + 1;
 
-            // Search for the subject (drop Html before next await — Html is !Send)
+            // Search for the subject (drop Html before next await -- Html is !Send)
             let fields = match self.search_subject(subject, &initial_fields).await {
                 Ok((_html, fields)) => fields,
                 Err(e) => {
@@ -1028,8 +1028,8 @@ mod tests {
     #[test]
     fn test_parse_course_section_display_prefix_differs_from_subject() {
         // The display prefix in the accordion cell may differ from the ComboBox
-        // subject code (e.g., code "IS" → display "ISA", code "MTC" → display "MAT").
-        // We no longer reject on mismatch — the page is subject-scoped by BlueBook
+        // subject code (e.g., code "IS" -> display "ISA", code "MTC" -> display "MAT").
+        // We no longer reject on mismatch -- the page is subject-scoped by BlueBook
         // and we trust its contents. Course number and section are still parsed.
         assert_eq!(
             BlueBookClient::parse_course_section("ISA 1234.001", "IS"),
@@ -1445,7 +1445,7 @@ mod tests {
         let html = Html::parse_document(&html_str);
         let evals = BlueBookClient::parse_evaluations(&html, "CS");
 
-        // Second entry has no ratings → skipped
+        // Second entry has no ratings -> skipped
         assert_eq!(evals.len(), 2);
         assert_eq!(evals[0].crn, "33601");
         assert_eq!(evals[1].crn, "31355");

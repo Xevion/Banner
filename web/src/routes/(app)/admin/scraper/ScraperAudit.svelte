@@ -98,7 +98,7 @@ function analyzeChange(entry: AuditLogEntry): ChangeAnalysis {
 }
 
 function stringify(val: unknown): string {
-  if (val === undefined) return "∅";
+  if (val === undefined) return "(none)";
   if (typeof val === "string") return val;
   return JSON.stringify(val);
 }
@@ -278,7 +278,7 @@ const columnCount = columns.length;
                   {#if entry.termCode}
                     <span class="font-mono text-xs text-muted-foreground">{entry.termCode}</span>
                   {:else}
-                    <span class="text-xs text-muted-foreground/40">—</span>
+                    <span class="text-xs text-muted-foreground/40">&mdash;</span>
                   {/if}
                 </td>
               {:else if colId === "course"}
@@ -303,7 +303,7 @@ const columnCount = columns.length;
                         <span class="text-foreground">{formatNumber(change.delta, { sign: true })}<span class="text-muted-foreground/60">,</span></span>
                       {/if}
                       <span class="text-red-400">{change.oldRaw}</span>
-                      <span class="text-muted-foreground/60">→</span>
+                      <span class="text-muted-foreground/60">&rarr;</span>
                       <span class="text-green-600 dark:text-green-400">{change.newRaw}</span>
                     </span>
                   {:else if change.kind === "json-single"}
@@ -311,7 +311,7 @@ const columnCount = columns.length;
                       {@const d = change.diffs[0]}
                       <span class="font-mono text-xs">
                         <span class="text-muted-foreground">{formatDiffPath(d.path)}:</span> <span class="text-red-400">{stringify(d.oldVal)}</span>
-                        <span class="text-muted-foreground"> → </span>
+                        <span class="text-muted-foreground"> &rarr; </span>
                         <span class="text-green-600 dark:text-green-400">{stringify(d.newVal)}</span>
                       </span>
                     {:else}
@@ -343,7 +343,7 @@ const columnCount = columns.length;
                       {#each change.diffs as d (d.path)}
                         <div class="font-mono text-xs">
                           <span class="text-muted-foreground">{formatDiffPath(d.path)}:</span> <span class="text-red-400">{stringify(d.oldVal)}</span>
-                          <span class="text-muted-foreground"> → </span>
+                          <span class="text-muted-foreground"> &rarr; </span>
                           <span class="text-green-600 dark:text-green-400">{stringify(d.newVal)}</span>
                         </div>
                       {/each}

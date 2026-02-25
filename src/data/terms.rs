@@ -160,7 +160,7 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
 
 /// Parse a 6-digit term code into (display_year, season).
 ///
-/// Returns the **display year** — the year shown in the term description — not the raw
+/// Returns the **display year** -- the year shown in the term description -- not the raw
 /// code prefix. Banner encodes Fall as `(display_year + 1)10`, so "202610" (Fall 2025)
 /// returns `(2025, "Fall")` rather than `(2026, "Fall")`.
 ///
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_parse_term_code_fall() {
-        // "202510": code_year=2025, Fall → display_year = 2025 - 1 = 2024
+        // "202510": code_year=2025, Fall -> display_year = 2025 - 1 = 2024
         let (year, season) = parse_term_code("202510").unwrap();
         assert_eq!(year, 2024);
         assert_eq!(season, "Fall");
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_parse_term_code_fall_earliest() {
-        // Fall 2001: Banner code "200210", code_year=2002 → display_year=2001
+        // Fall 2001: Banner code "200210", code_year=2002 -> display_year=2001
         let (year, season) = parse_term_code("200210").unwrap();
         assert_eq!(year, 2001);
         assert_eq!(season, "Fall");

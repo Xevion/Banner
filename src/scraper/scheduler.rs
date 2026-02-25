@@ -204,7 +204,7 @@ impl Scheduler {
                                 async move {
                                     tokio::select! {
                                         _ = async {
-                                            // Term sync, RMP sync, and reference data are independent —
+                                            // Term sync, RMP sync, and reference data are independent --
                                             // run them concurrently so they don't wait behind each other.
                                             let term_fut = async {
                                                 if should_sync_terms {
@@ -786,7 +786,7 @@ impl Scheduler {
             Err(e) => warn!(error = ?e, "Failed to fetch terms"),
         }
 
-        // Subjects — also cache in term_subjects for scheduler use
+        // Subjects -- also cache in term_subjects for scheduler use
         match banner_api.get_subjects("", &term, 1, 500).await {
             Ok(pairs) => {
                 debug!(count = pairs.len(), "Fetched subjects");

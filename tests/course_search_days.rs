@@ -15,18 +15,18 @@ use sqlx::PgPool;
 ///
 /// | CRN   | Subject | Number | Meeting days              |
 /// |-------|---------|--------|---------------------------|
-/// | 10001 | CS      | 1100   | MWF 09:00–09:50           |
-/// | 10002 | CS      | 2200   | TTh 10:30–11:45           |
-/// | 10003 | MATH    | 1300   | MW 14:00–15:15            |
-/// | 10004 | ART     | 2100   | Mon only 13:30–16:15      |
-/// | 10005 | MUS     | 1050   | Sat only 09:00–12:00      |
+/// | 10001 | CS      | 1100   | MWF 09:00-09:50           |
+/// | 10002 | CS      | 2200   | TTh 10:30-11:45           |
+/// | 10003 | MATH    | 1300   | MW 14:00-15:15            |
+/// | 10004 | ART     | 2100   | Mon only 13:30-16:15      |
+/// | 10005 | MUS     | 1050   | Sat only 09:00-12:00      |
 /// | 10006 | ENG     | 1010   | No meetings (TBA)         |
-/// | 10007 | PHYS    | 1600   | MWF 08:00–08:50 + TTh 10:00–11:15 |
+/// | 10007 | PHYS    | 1600   | MWF 08:00-08:50 + TTh 10:00-11:15 |
 async fn insert_test_courses(pool: &PgPool) {
     let term = "202620";
 
     let courses = vec![
-        // MWF 09:00–09:50
+        // MWF 09:00-09:50
         with_meetings(
             make_course("10001", term, "CS", "1100", "Intro to CS", (20, 30, 0, 10)),
             vec![
@@ -37,7 +37,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // TTh 10:30–11:45
+        // TTh 10:30-11:45
         with_meetings(
             make_course(
                 "10002",
@@ -55,7 +55,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // MW 14:00–15:15
+        // MW 14:00-15:15
         with_meetings(
             make_course("10003", term, "MATH", "1300", "Calculus I", (30, 35, 0, 5)),
             vec![
@@ -66,7 +66,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // Monday only 13:30–16:15
+        // Monday only 13:30-16:15
         with_meetings(
             make_course("10004", term, "ART", "2100", "Studio Art", (15, 20, 0, 5)),
             vec![
@@ -77,7 +77,7 @@ async fn insert_test_courses(pool: &PgPool) {
                     .build(),
             ],
         ),
-        // Saturday only 09:00–12:00
+        // Saturday only 09:00-12:00
         with_meetings(
             make_course(
                 "10005",
@@ -104,7 +104,7 @@ async fn insert_test_courses(pool: &PgPool) {
             "English Composition",
             (25, 30, 0, 10),
         ),
-        // Two separate meetings: MWF 08:00–08:50 and TTh 10:00–11:15
+        // Two separate meetings: MWF 08:00-08:50 and TTh 10:00-11:15
         with_meetings(
             make_course("10007", term, "PHYS", "1600", "Physics I", (28, 35, 0, 5)),
             vec![
@@ -244,7 +244,7 @@ async fn test_filter_multi_day_and_semantics(pool: PgPool) {
     );
     assert!(
         !crns.contains(&"10003".to_owned()),
-        "MW course should NOT match MWF — missing friday"
+        "MW course should NOT match MWF -- missing friday"
     );
     assert!(
         !crns.contains(&"10004".to_owned()),
@@ -299,7 +299,7 @@ async fn test_no_day_filter_returns_all(pool: PgPool) {
 async fn test_filter_day_excludes_tba(pool: PgPool) {
     insert_test_courses(&pool).await;
 
-    // Try every individual day — TBA course (10006) should never appear
+    // Try every individual day -- TBA course (10006) should never appear
     let all_days = [
         "monday",
         "tuesday",

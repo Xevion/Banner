@@ -266,7 +266,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
 
     assert!(existing.contains(&payload_a.to_string()));
     assert!(existing.contains(&payload_b.to_string()));
-    // payload_c is SingleCrn, not Subject — should not match
+    // payload_c is SingleCrn, not Subject -- should not match
     assert!(!existing.contains(&payload_c.to_string()));
 }
 

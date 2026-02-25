@@ -539,7 +539,7 @@ pub async fn reject_all_candidates(
 
     if status == "confirmed" {
         return Err(anyhow!(
-            "cannot reject instructor with confirmed matches — unmatch first"
+            "cannot reject instructor with confirmed matches -- unmatch first"
         ));
     }
 

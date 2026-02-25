@@ -24,34 +24,34 @@ web/ (HTTP handlers)
 
 ```
 src/
-├── banner/       # Banner API client (UTSA course system)
-├── bot/          # Discord bot (Poise framework, slash commands)
-├── config/       # Figment-based configuration
-├── data/         # Domain queries and models
-│   ├── models.rs # Core domain types, DTOs, request/response shapes
-│   ├── courses.rs
-│   ├── terms.rs
-│   ├── users.rs
-│   ├── rmp.rs
-│   ├── scrape_jobs.rs
-│   ├── reference.rs
-│   └── ...
-├── db/           # Pool initialization, migrations, DbContext
-├── error.rs      # AppError, AppResult
-├── events/       # Event buffer and publishing
-├── rmp/          # RateMyProfessors GraphQL client
-├── scraper/      # Scheduler + Worker, job queue processing
-├── services/     # Service orchestration, startup/shutdown
-├── state.rs      # AppState (Arc-wrapped)
-├── utils/        # Shared utilities
-├── web/          # HTTP routes, extractors, auth, WebSocket
-│   ├── routes.rs # Route definitions and handlers
-│   ├── auth.rs   # Discord OAuth
-│   ├── ws.rs     # WebSocket handlers
-│   ├── error.rs  # ApiError, ApiErrorCode
-│   ├── extractors.rs
-│   └── ...
-└── main.rs       # Server startup, router assembly
++-- banner/       # Banner API client (UTSA course system)
++-- bot/          # Discord bot (Poise framework, slash commands)
++-- config/       # Figment-based configuration
++-- data/         # Domain queries and models
+|   +-- models.rs # Core domain types, DTOs, request/response shapes
+|   +-- courses.rs
+|   +-- terms.rs
+|   +-- users.rs
+|   +-- rmp.rs
+|   +-- scrape_jobs.rs
+|   +-- reference.rs
+|   +-- ...
++-- db/           # Pool initialization, migrations, DbContext
++-- error.rs      # AppError, AppResult
++-- events/       # Event buffer and publishing
++-- rmp/          # RateMyProfessors GraphQL client
++-- scraper/      # Scheduler + Worker, job queue processing
++-- services/     # Service orchestration, startup/shutdown
++-- state.rs      # AppState (Arc-wrapped)
++-- utils/        # Shared utilities
++-- web/          # HTTP routes, extractors, auth, WebSocket
+|   +-- routes.rs # Route definitions and handlers
+|   +-- auth.rs   # Discord OAuth
+|   +-- ws.rs     # WebSocket handlers
+|   +-- error.rs  # ApiError, ApiErrorCode
+|   +-- extractors.rs
+|   +-- ...
++-- main.rs       # Server startup, router assembly
 ```
 
 Each route group lives in `web/`. Data modules expose functions that take `&PgPool`. The `DbContext` wrapper adds event emission for operations that need it.
@@ -95,11 +95,11 @@ async fn handler(State(state): State<AppState>) -> AppResult<Json<T>> {
 }
 ```
 
-Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashMap<K, V>>` for concurrent write access (search options cache). Optional services return `Option<&T>` — handlers check availability before use.
+Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashMap<K, V>>` for concurrent write access (search options cache). Optional services return `Option<&T>` -- handlers check availability before use.
 
 ## Database
 
-- **SQLx with compile-time verification** — prefer `sqlx::query_as!` and `sqlx::query!` macros for all queries. These are checked against the schema at build time.
+- **SQLx with compile-time verification** -- prefer `sqlx::query_as!` and `sqlx::query!` macros for all queries. These are checked against the schema at build time.
 - **Runtime `query_as`** (non-macro) is acceptable for dynamically constructed queries but should be the exception, not the default.
 - **Migrations** run automatically on startup via `sqlx::migrate!()`
 - Prefer `query_as!` for SELECT (maps to structs), `query!` for mutations
@@ -148,8 +148,8 @@ pub struct CourseResponse {
 
 - `tokio` runtime. All I/O is async.
 - `tokio::spawn` for background tasks (scraper workers, scheduler, heartbeat).
-- Background tasks log errors and continue — no panics.
-- No explicit locking for DB access — SQLx pool handles concurrency.
+- Background tasks log errors and continue -- no panics.
+- No explicit locking for DB access -- SQLx pool handles concurrency.
 - Use `tokio::select!` for tasks that need cancellation (shutdown signals).
 
 ## Discord Bot
@@ -177,8 +177,8 @@ PostgreSQL-backed job queue with priority scheduling:
 - **Worker**: Fetches and processes jobs atomically using `FOR UPDATE SKIP LOCKED`
 - **Job trait**: Each job type implements `Job` with `process()` returning `UpsertCounts`
 - **Lock expiry**: 10-minute safety net for dead workers
-- **Priority ordering**: `priority DESC, execute_at ASC` — high-priority jobs run first, ties broken by age
-- **Refresh intervals**: Reference data (6h), RMP ratings (24h), terms (8h) — configurable
+- **Priority ordering**: `priority DESC, execute_at ASC` -- high-priority jobs run first, ties broken by age
+- **Refresh intervals**: Reference data (6h), RMP ratings (24h), terms (8h) -- configurable
 
 Rate limiting for the Banner API uses Governor with per-endpoint costs and conditional bursting.
 
@@ -187,7 +187,7 @@ Rate limiting for the Banner API uses Governor with per-endpoint costs and condi
 - Import macros at module top: `use tracing::{debug, error, info, warn};`
 - Use `#[instrument]` on handlers and significant functions. Skip large/sensitive args.
 - Log errors in structured fields: `error!(error = %e, "Failed to process")`
-- Spans propagate context — child logs inherit parent span fields.
+- Spans propagate context -- child logs inherit parent span fields.
 
 ```rust
 #[instrument(skip(state, body), fields(term = %term, crn = %crn))]
@@ -210,7 +210,7 @@ Per-module log levels are configured via `RUST_LOG` env var or the default filte
 ## Optionality
 
 - Use `Option<T>` for genuinely optional data (nullable DB columns, optional config)
-- Prefer requiring values when the domain demands them — don't default to `Option` for convenience
+- Prefer requiring values when the domain demands them -- don't default to `Option` for convenience
 - Use newtypes for critical domain identifiers where type safety matters (e.g., term codes, CRNs)
 
 ## Testing

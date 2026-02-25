@@ -5,7 +5,7 @@
  * 1. Start Rust backend (port from PORT env, default 8000)
  * 2. Health-check Rust via /api/health
  * 3. Start Bun SSR server (port 3001)
- * 4. Monitor both — exit if either dies
+ * 4. Monitor both -- exit if either dies
  */
 
 import { type Subprocess, spawn } from "bun";
@@ -46,7 +46,7 @@ function log(level: LogLevel, message: string, fields?: Record<string, unknown>)
   }
 }
 
-// Shared env for both subprocesses — normalizes logging and origin config
+// Shared env for both subprocesses -- normalizes logging and origin config
 const sharedEnv: Record<string, string | undefined> = {
   ...process.env,
   LOG_JSON,
@@ -126,7 +126,7 @@ process.on("SIGINT", () => shutdown(rust, ssr));
 
 log("info", "All processes started");
 
-// Monitor both processes — exit if either dies
+// Monitor both processes -- exit if either dies
 async function monitor(name: string, proc: Subprocess) {
   const exitCode = await proc.exited;
   log("error", `${name} exited`, { exit_code: exitCode });

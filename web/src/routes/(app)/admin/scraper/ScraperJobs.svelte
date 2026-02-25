@@ -66,7 +66,7 @@ const stream = useStream("scrapeJobs", null, {
 
 // Expose jobs as a derived binding for the template
 const jobs = $derived(stream.state);
-// Shared tooltip state — single tooltip for all timing cells via event delegation
+// Shared tooltip state -- single tooltip for all timing cells via event delegation
 let tooltipText = $state<string | null>(null);
 let tooltipX = $state(0);
 let tooltipY = $state(0);
@@ -388,7 +388,7 @@ function getTimingDisplay(
     };
   }
 
-  // Pending (overdue — execute_at is in the past, waiting to be picked up)
+  // Pending (overdue -- execute_at is in the past, waiting to be picked up)
   const waitingMs = now - queuedTime;
   const tooltipLines = [
     `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
@@ -539,7 +539,7 @@ function getTimingDisplay(
                     {#if getTermCode(job)}
                       <span class="font-mono text-xs text-muted-foreground">{getTermCode(job)}</span>
                     {:else}
-                      <span class="text-xs text-muted-foreground/40">—</span>
+                      <span class="text-xs text-muted-foreground/40">&mdash;</span>
                     {/if}
                   </td>
                 {:else if colId === "priority"}

@@ -62,12 +62,12 @@ impl SessionCache {
                 return Some(entry.user.clone());
             }
 
-            // Stale or expired — drop the ref before removing
+            // Stale or expired -- drop the ref before removing
             drop(entry);
             self.cache.remove(token);
         }
 
-        // Cache miss — query DB
+        // Cache miss -- query DB
         let session = crate::data::sessions::get_session(&self.db_pool, token)
             .await
             .ok()
@@ -107,7 +107,7 @@ impl SessionCache {
     /// Inject a static dev session that never expires.
     ///
     /// Used in debug builds to provide zero-config admin access for local testing.
-    /// Call this on startup with the seed admin user — thereafter, any request with
+    /// Call this on startup with the seed admin user -- thereafter, any request with
     /// `Cookie: session=dev-admin` is authenticated as that user without hitting the DB.
     #[cfg(debug_assertions)]
     pub fn inject_dev_session(&self, token: &str, user: User) {

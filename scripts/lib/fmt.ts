@@ -27,8 +27,8 @@ export const isStderrTTY = process.stderr.isTTY ?? false;
  * @returns Colored text if stdout is TTY, plain text otherwise
  *
  * @example
- * console.log(c("32", "✓ Tests passed"));
- * console.error(c("31", "✗ Build failed"));
+ * console.log(c("32", "(ok) Tests passed"));
+ * console.error(c("31", "(x) Build failed"));
  */
 export function c(code: string, text: string): string {
 	return isTTY ? `\x1b[${code}m${text}\x1b[0m` : text;

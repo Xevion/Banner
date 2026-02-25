@@ -15,7 +15,7 @@ import type Result from "true-myth/result";
 export interface UseQueryOptions<T> {
   /** Async function returning a Result */
   fetcher: () => Promise<Result<T, ApiErrorClass>>;
-  /** Reactive dependencies — re-fetches when these change */
+  /** Reactive dependencies -- re-fetches when these change */
   deps?: () => unknown[];
   /** Debounce interval in ms (default: 0 = no debounce) */
   debounce?: number;
@@ -150,7 +150,7 @@ export function useQuery<T>(options: UseQueryOptions<T>): QueryController<T> {
     // Track dependencies by calling the deps function
     options.deps?.();
 
-    // Skip the initial fetch when initial data was provided — defer to first dep change
+    // Skip the initial fetch when initial data was provided -- defer to first dep change
     if (isFirstRun && hasInitial) {
       isFirstRun = false;
       return;

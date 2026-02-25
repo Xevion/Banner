@@ -79,13 +79,13 @@ describe("formatMeetingDays", () => {
 
 describe("formatTimeRange", () => {
   it("elides AM when both times are AM", () => {
-    expect(formatTimeRange("09:00:00", "09:50:00")).toBe("9:00–9:50 AM");
+    expect(formatTimeRange("09:00:00", "09:50:00")).toBe("9:00-9:50 AM");
   });
   it("elides PM when both times are PM", () => {
-    expect(formatTimeRange("13:15:00", "14:30:00")).toBe("1:15–2:30 PM");
+    expect(formatTimeRange("13:15:00", "14:30:00")).toBe("1:15-2:30 PM");
   });
   it("keeps both markers when crossing noon", () => {
-    expect(formatTimeRange("11:30:00", "12:20:00")).toBe("11:30 AM–12:20 PM");
+    expect(formatTimeRange("11:30:00", "12:20:00")).toBe("11:30 AM-12:20 PM");
   });
   it("returns TBA for null begin", () => {
     expect(formatTimeRange(null, "09:50:00")).toBe("TBA");
@@ -94,8 +94,8 @@ describe("formatTimeRange", () => {
     expect(formatTimeRange("09:00:00", null)).toBe("TBA");
   });
   it("handles midnight and noon", () => {
-    expect(formatTimeRange("00:00:00", "00:50:00")).toBe("12:00–12:50 AM");
-    expect(formatTimeRange("12:00:00", "12:50:00")).toBe("12:00–12:50 PM");
+    expect(formatTimeRange("00:00:00", "00:50:00")).toBe("12:00-12:50 AM");
+    expect(formatTimeRange("12:00:00", "12:50:00")).toBe("12:00-12:50 PM");
   });
 });
 
@@ -193,14 +193,14 @@ describe("formatCreditHours", () => {
       formatCreditHours({
         creditHours: { type: "range", low: 1, high: 3 },
       } as CourseResponse)
-    ).toBe("1–3");
+    ).toBe("1-3");
   });
   it("returns dash when no credit info", () => {
     expect(
       formatCreditHours({
         creditHours: null,
       } as CourseResponse)
-    ).toBe("—");
+    ).toBe("--");
   });
 });
 
@@ -280,15 +280,15 @@ describe("formatMeetingTimeTooltip", () => {
       location: { building: null, buildingDescription: "Main Hall", room: "2.206", campus: null },
     });
     expect(formatMeetingTimeTooltip(mt)).toBe(
-      "Tuesdays & Thursdays, 4:15–5:30 PM\nMain Hall 2.206, Aug 26, 2024 – Dec 12, 2024"
+      "Tuesdays & Thursdays, 4:15-5:30 PM\nMain Hall 2.206, Aug 26, 2024 - Dec 12, 2024"
     );
   });
   it("handles TBA days and times", () => {
-    expect(formatMeetingTimeTooltip(makeMeetingTime())).toBe("TBA\nAug 26, 2024 – Dec 12, 2024");
+    expect(formatMeetingTimeTooltip(makeMeetingTime())).toBe("TBA\nAug 26, 2024 - Dec 12, 2024");
   });
   it("handles days with TBA times", () => {
     expect(formatMeetingTimeTooltip(makeMeetingTime({ days: ["monday"] }))).toBe(
-      "Mondays, TBA\nAug 26, 2024 – Dec 12, 2024"
+      "Mondays, TBA\nAug 26, 2024 - Dec 12, 2024"
     );
   });
 });
@@ -310,8 +310,8 @@ describe("formatMeetingTimesTooltip", () => {
       }),
     ];
     const result = formatMeetingTimesTooltip(mts);
-    expect(result).toContain("Mondays, Wednesdays & Fridays, 9:00–9:50 AM");
-    expect(result).toContain("Thursdays, 1:00–2:00 PM\nLab 101");
+    expect(result).toContain("Mondays, Wednesdays & Fridays, 9:00-9:50 AM");
+    expect(result).toContain("Thursdays, 1:00-2:00 PM\nLab 101");
     expect(result).toContain("\n\n");
   });
 });
@@ -425,7 +425,7 @@ describe("formatMeetingTimeSummary", () => {
         }),
       ],
     });
-    expect(formatMeetingTimeSummary(course)).toBe("MWF 9:00–9:50 AM");
+    expect(formatMeetingTimeSummary(course)).toBe("MWF 9:00-9:50 AM");
   });
 
   it("returns formatted days with TBA time", () => {

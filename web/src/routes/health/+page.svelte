@@ -90,7 +90,7 @@ let statusState = $state<StatusState>(
 let now = $state(new Date());
 let isRefreshing = $state(false);
 
-// Module-level fetch coordination — safe since this is a single-instance page
+// Module-level fetch coordination -- safe since this is a single-instance page
 let _scheduledTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let _requestTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let _isFetching = false;

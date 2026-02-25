@@ -13,7 +13,7 @@ const NANOID_LEN: usize = 3;
 
 /// Convert a display name to a URL-safe slug with a nanoid suffix.
 ///
-/// "Doe, Jane Marie" → "doe-jane-marie-x6k"
+/// "Doe, Jane Marie" -> "doe-jane-marie-x6k"
 pub fn generate_slug(display_name: &str) -> String {
     let base: String = display_name
         .to_lowercase()

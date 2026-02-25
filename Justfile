@@ -75,4 +75,4 @@ install-hooks:
     chmod +x scripts/pre-commit.ts
     echo "bun scripts/pre-commit.ts" > .husky/pre-commit
     chmod +x .husky/pre-commit
-    echo "✓ Pre-commit hook installed"
+    echo "(ok) Pre-commit hook installed"

@@ -51,7 +51,7 @@ describe("maskGradient", () => {
   it("returns full transparent-to-transparent gradient when no scroll", () => {
     const metrics: ScrollMetrics = { scrollLeft: 0, scrollWidth: 500, clientWidth: 500 };
     const result = maskGradient(metrics);
-    // leftOpacity=0, rightOpacity=0 → leftEnd=0%, rightStart=100%
+    // leftOpacity=0, rightOpacity=0 -> leftEnd=0%, rightStart=100%
     expect(result).toBe(
       "linear-gradient(to right, transparent 0%, black 0%, black 100%, transparent 100%)"
     );
@@ -64,7 +64,7 @@ describe("maskGradient", () => {
       clientWidth: 500,
     };
     const result = maskGradient(metrics);
-    // leftOpacity=1 → leftEnd=FADE_PERCENT%, rightOpacity=1 → rightStart=100-FADE_PERCENT%
+    // leftOpacity=1 -> leftEnd=FADE_PERCENT%, rightOpacity=1 -> rightStart=100-FADE_PERCENT%
     expect(result).toContain(`black ${FADE_PERCENT}%`);
     expect(result).toContain(`black ${100 - FADE_PERCENT}%`);
   });

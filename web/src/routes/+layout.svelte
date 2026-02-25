@@ -14,7 +14,7 @@ import type { LayoutData } from "./$types";
 let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
 // Initialize auth from server-provided data so SSR renders correct auth state.
-// Intentionally captures initial value — auth changes are handled client-side
+// Intentionally captures initial value -- auth changes are handled client-side
 // by the store (logout, 401 responses). Root layout server load only re-runs
 // on full page loads, so data.user is stable within a session.
 // svelte-ignore state_referenced_locally

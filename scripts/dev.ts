@@ -92,7 +92,7 @@ process.env.SSR_DOWNSTREAM = `http://localhost:${SSR_PORT}`;
 // Build frontend first when embedding assets
 if (embed && !noBuild) {
   const buildMode = devBuild ? "development" : "production";
-  console.log(c("1;36", `→ Building frontend (${buildMode}, for embedding)...`));
+  console.log(c("1;36", `➡️ Building frontend (${buildMode}, for embedding)...`));
   const buildArgs = ["bun", "run", "--cwd", "web", "build"];
   if (devBuild) buildArgs.push("--", "--mode", "development");
   run(buildArgs);
@@ -112,7 +112,7 @@ if (runBackend) {
 
   if (noWatch) {
     if (!noBuild) {
-      console.log(c("1;36", `→ Building backend (${profile})...`));
+      console.log(c("1;36", `➡️ Building backend (${profile})...`));
       const cargoArgs = ["cargo", "build", "--bin", "banner", ...cargoExtra];
       if (release) cargoArgs.push("--release");
       run(cargoArgs);
@@ -125,11 +125,11 @@ if (runBackend) {
       process.exit(1);
     }
 
-    console.log(c("1;36", `→ Running ${bin} (no watch)`));
+    console.log(c("1;36", `➡️ Running ${bin} (no watch)`));
     group.spawn([bin, ...backendArgs]);
   } else {
     // Seamless watch + reload
-    console.log(c("1;36", "→ Starting backend dev server (watch mode)..."));
+    console.log(c("1;36", "➡️ Starting backend dev server (watch mode)..."));
     const watcher = new BackendWatcher({
       binPath: bin,
       release,

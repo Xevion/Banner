@@ -1,4 +1,4 @@
-//! Database operations for the `reference_data` table (code→description lookups).
+//! Database operations for the `reference_data` table (code->description lookups).
 
 use crate::data::models::ReferenceData;
 use anyhow::Result;

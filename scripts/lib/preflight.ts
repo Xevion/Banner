@@ -40,7 +40,7 @@ export interface PreflightOpts {
 	reason: string;
 	/**
 	 * Called when artifacts are stale. For fatal failures, call
-	 * process.exit() directly — ensureFresh will not continue.
+	 * process.exit() directly -- ensureFresh will not continue.
 	 */
 	regenerate: () => PreflightResult | undefined;
 }
@@ -60,20 +60,20 @@ export function ensureFresh(opts: PreflightOpts): boolean {
 	const stale = artifactMtime === 0 || sourceMtime > artifactMtime;
 
 	if (!stale) {
-		process.stdout.write(c('2', `· ${label} up-to-date, skipped`) + '\n');
+		process.stdout.write(c('2', `* ${label} up-to-date, skipped`) + '\n');
 		return false;
 	}
 
 	const t = Date.now();
-	process.stdout.write(c('1;36', `→ Regenerating ${label} (${reason})...`) + '\n');
+	process.stdout.write(c('1;36', `➡️ Regenerating ${label} (${reason})...`) + '\n');
 
 	const result = regenerate();
 	const detail = result?.detail ? `, ${result.detail}` : '';
 
 	if (result?.warning) {
-		process.stdout.write(c('33', `⚠ ${result.warning}`) + ` (${elapsed(t)}s${detail})\n`);
+		process.stdout.write(c('33', `⚠️ ${result.warning}`) + ` (${elapsed(t)}s${detail})\n`);
 	} else {
-		process.stdout.write(c('32', `✓ ${label}`) + ` (${elapsed(t)}s${detail})\n`);
+		process.stdout.write(c('32', `✅ ${label}`) + ` (${elapsed(t)}s${detail})\n`);
 	}
 
 	return true;

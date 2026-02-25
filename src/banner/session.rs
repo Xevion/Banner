@@ -258,7 +258,7 @@ impl SessionPool {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_err()
             {
-                continue; // Lost the race — loop back and wait.
+                continue; // Lost the race -- loop back and wait.
             }
 
             // Guard resets is_creating on drop (including cancellation).
@@ -531,7 +531,7 @@ mod tests {
 
         // First acquire: cancel once the request reaches the server.
         tokio::select! {
-            _ = pool.acquire(term) => panic!("server hangs — acquire should never complete"),
+            _ = pool.acquire(term) => panic!("server hangs -- acquire should never complete"),
             _ = rx.recv() => {} // Request arrived; dropping the future simulates timeout cancellation.
         }
 
@@ -541,7 +541,7 @@ mod tests {
             result = tokio::time::timeout(Duration::from_secs(5), rx.recv()) => {
                 assert!(
                     result.is_ok(),
-                    "acquire() deadlocked — is_creating was not reset after cancellation"
+                    "acquire() deadlocked -- is_creating was not reset after cancellation"
                 );
             }
         }

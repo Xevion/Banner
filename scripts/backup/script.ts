@@ -1,5 +1,5 @@
 /**
- * Database backup: pg_dump → gzip → R2 upload.
+ * Database backup: pg_dump -> gzip -> R2 upload.
  *
  * Designed for Railway cron: runs once and exits.
  * Reads DATABASE_URL and R2 credentials from environment (or .env locally).

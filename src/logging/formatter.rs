@@ -826,7 +826,7 @@ enum FieldRule {
 
 /// Field-level display customization for the pretty formatter.
 ///
-/// Wraps DefaultFields — fields without matching rules are formatted
+/// Wraps DefaultFields -- fields without matching rules are formatted
 /// identically to the default. Only affects pretty (span) output; the JSON
 /// formatter uses `JsonFields` directly and is unaffected.
 pub struct CompactFields {

@@ -2,11 +2,11 @@
  * Event-delegated singleton tooltip for table cells.
  *
  * Cells opt in via `data-tooltip="text"` attributes. One tooltip element is
- * lazily created and reused for every hover — zero per-cell component overhead.
+ * lazily created and reused for every hover -- zero per-cell component overhead.
  *
  * Optional attributes:
- *  - `data-tooltip-side`  — placement (default "top")
- *  - `data-tooltip-delay` — show delay in ms (default 150)
+ *  - `data-tooltip-side`  -- placement (default "top")
+ *  - `data-tooltip-delay` -- show delay in ms (default 150)
  */
 import { type Placement, computePosition, flip, offset, shift } from "@floating-ui/dom";
 

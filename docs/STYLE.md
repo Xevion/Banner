@@ -4,7 +4,7 @@ Style guides for each subsystem: [Rust (backend)](RUST.md) | [Svelte (frontend)]
 
 ## Formatting
 
-Automated. Rust uses `rustfmt`, frontend uses Biome. Don't think about it — `just format` handles everything.
+Automated. Rust uses `rustfmt`, frontend uses Biome. Don't think about it -- `just format` handles everything.
 
 ## Naming & Domain Vocabulary
 
@@ -14,8 +14,8 @@ Use language-idiomatic casing (snake_case in Rust, camelCase in TypeScript). Use
 |---------|------|-------|
 | An academic semester | `Term` | Identified by a term code (e.g. `"202430"`) |
 | A course offering | `Course` | A specific section of a class in a term |
-| A unique section identifier | `CRN` | Course Reference Number — always a string |
-| An academic department | `Subject` | E.g. `"CS"`, `"MAT"` — the code, not the full name |
+| A unique section identifier | `CRN` | Course Reference Number -- always a string |
+| An academic department | `Subject` | E.g. `"CS"`, `"MAT"` -- the code, not the full name |
 | A class meeting slot | `MeetingTime` | Days + time range + location + date range |
 | A professor or TA | `Instructor` | Not "professor", "teacher", or "faculty" |
 | A background scrape unit | `ScrapeJob` | A queued unit of work for the scraper |
@@ -24,7 +24,7 @@ Use language-idiomatic casing (snake_case in Rust, camelCase in TypeScript). Use
 | A lookup table entry | `ReferenceData` | Campuses, instruction methods, session types, etc. |
 | A RateMyProfessors record | `RmpRating` | Not "review" or "score" |
 
-These names are used in types, API endpoints, database tables, and UI copy. When in doubt, check the Rust backend models — they're the source of truth.
+These names are used in types, API endpoints, database tables, and UI copy. When in doubt, check the Rust backend models -- they're the source of truth.
 
 ## Comments
 
@@ -73,7 +73,7 @@ Use consistent field names across all stacks for values that may be aggregated o
 ### Duration Formatting
 
 Use `crate::utils::fmt_duration` for all duration fields in tracing calls. It produces
-human-readable output like `1.94ms`, `2.34s`, `150.00µs` with automatic unit scaling.
+human-readable output like `1.94ms`, `2.34s`, `150.00uss` with automatic unit scaling.
 
 ```rust
 use crate::utils::fmt_duration;
@@ -106,7 +106,7 @@ Errors are values, not exceptions. Each stack uses its own idiomatic pattern, bu
 
 - **Expected failures** (not found, validation, invalid term) are handled explicitly with typed errors
 - **Unexpected failures** (I/O, serialization, connection loss) are wrapped and propagated
-- **Never swallow errors silently** — log or propagate, never `catch {}` empty
+- **Never swallow errors silently** -- log or propagate, never `catch {}` empty
 - **User-facing error messages** are separate from internal error details
 
 ### API Error Responses
@@ -128,7 +128,7 @@ HTTP status codes map to error categories: 400 (validation/bad request), 401 (un
 ## API Design
 
 - **Casing**: All JSON fields use `camelCase`
-- **Search responses**: `{ courses: [...], totalCount: N, ... }` — search-specific pagination with offset/limit
+- **Search responses**: `{ courses: [...], totalCount: N, ... }` -- search-specific pagination with offset/limit
 - **Single responses**: Return the object directly (no wrapper)
 - **IDs in URLs**: Use the resource's natural identifiers: `/api/courses/:term/:crn`
 - **Verbs via HTTP methods**: GET (read), POST (create), PUT (full update), PATCH (partial update), DELETE (remove)
@@ -142,13 +142,13 @@ HTTP status codes map to error categories: 400 (validation/bad request), 401 (un
 - `i64` fields serialize as strings to avoid JavaScript precision loss
 - `DateTime<Utc>` serializes as ISO 8601 strings (`#[ts(type = "string")]`)
 - Optional DateTime becomes `#[ts(type = "string | null")]`
-- Barrel export from `$lib/bindings/index.ts` — import from there, not individual files
+- Barrel export from `$lib/bindings/index.ts` -- import from there, not individual files
 
 ## WebSocket Conventions
 
 Real-time data uses a subscription-based WebSocket protocol:
 
-- **Client messages**: `subscribe`, `modify`, `unsubscribe` — each targets a named stream with a typed filter
+- **Client messages**: `subscribe`, `modify`, `unsubscribe` -- each targets a named stream with a typed filter
 - **Server messages**: `ready`, `subscribed`, `snapshot`, `delta`, `error`, `pong`, `modified`, `unsubscribed`
 - **Snapshots** deliver full state on subscribe; **deltas** deliver incremental updates
 - Stream names and filter shapes are typed end-to-end via shared types
@@ -158,9 +158,9 @@ Real-time data uses a subscription-based WebSocket protocol:
 
 - **Naming**: Lowercase, single-word when possible (`search`, `terms`), hyphenated for multi-word (`ics-export`)
 - **Descriptions**: Short imperative phrases (`"Search for courses"`, `"List available terms"`)
-- **Long operations**: Always `defer()` before doing async work — users see a loading state instead of a timeout
+- **Long operations**: Always `defer()` before doing async work -- users see a loading state instead of a timeout
 - **Responses**: Ephemeral for user-specific data, public for shareable results
-- **Error messages**: User-friendly, no stack traces — log the full error server-side
+- **Error messages**: User-friendly, no stack traces -- log the full error server-side
 
 ## Testing
 
@@ -169,4 +169,4 @@ Real-time data uses a subscription-based WebSocket protocol:
 - Test behavior, not implementation. Tests should survive refactors.
 - Prefer integration tests that exercise real code paths over unit tests with heavy mocking.
 - Name tests descriptively: `test_searching_courses_with_invalid_term_returns_bad_request`.
-- Each stack has its own test runner and conventions — see the language-specific guides.
+- Each stack has its own test runner and conventions -- see the language-specific guides.

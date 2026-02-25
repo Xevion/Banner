@@ -34,8 +34,8 @@ const subjectMap = $derived(
 );
 
 const sortItems = [
-  { value: "name_asc", label: "Name A–Z" },
-  { value: "name_desc", label: "Name Z–A" },
+  { value: "name_asc", label: "Name A&ndash;Z" },
+  { value: "name_desc", label: "Name Z&ndash;A" },
   { value: "rating_desc", label: "Highest Rated" },
 ];
 const sortLabel = $derived(sortItems.find((s) => s.value === selectedSort)?.label ?? "Sort");

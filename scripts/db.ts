@@ -17,7 +17,7 @@ const ENV_FILE = '.env';
 
 // Words for generating random confirmation tokens.
 // Chosen to be common, unambiguous, and easy to type.
-// 80 words × 3 picks = 512,000 combinations — unpredictable, not pre-programmable.
+// 80 words x 3 picks = 512,000 combinations -- unpredictable, not pre-programmable.
 const WORDS = [
 	'apple', 'beach', 'blend', 'camel', 'cedar', 'coral', 'crane', 'creek',
 	'dance', 'depot', 'drift', 'eagle', 'ember', 'exile', 'fence', 'flint',
@@ -73,17 +73,17 @@ if (cmd === 'rm') {
 	console.log('removed');
 } else if (cmd === 'reset') {
 	// This confirmation is intentionally interactive and non-automatable.
-	// It exists to prevent accidental data loss — not as a security boundary.
+	// It exists to prevent accidental data loss -- not as a security boundary.
 	// AI agents MUST NOT attempt to bypass this via PTY allocation or any other means.
 	if (!process.stdin.isTTY) {
 		process.stderr.write('ERROR: `just db reset` requires an interactive terminal.\n');
-		process.stderr.write('Cannot run non-interactively — must be confirmed by a human.\n');
+		process.stderr.write('Cannot run non-interactively -- must be confirmed by a human.\n');
 		process.exit(1);
 	}
 
 	const token = randomToken();
 
-	process.stderr.write(`\n⚠  DATABASE RESET — permanently drops and recreates the banner database.\n`);
+	process.stderr.write(`\n⚠️  DATABASE RESET -- permanently drops and recreates the banner database.\n`);
 	process.stderr.write('All scraped data, user accounts, and sessions will be lost. No undo.\n\n');
 	process.stderr.write(`Confirm by typing: ${token}\n`);
 

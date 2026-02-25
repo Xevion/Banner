@@ -6,7 +6,7 @@
  */
 
 const IGNORED_ADVISORIES = [
-	"GHSA-3ppc-4f35-3m26", // minimatch ReDoS — transitive via eslint/@typescript-eslint/vitest, no fix available
+	"GHSA-3ppc-4f35-3m26", // minimatch ReDoS -- transitive via eslint/@typescript-eslint/vitest, no fix available
 ];
 
 const cmd = [

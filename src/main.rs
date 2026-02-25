@@ -35,7 +35,7 @@ async fn main() -> ExitCode {
     // Create and initialize the application
     let mut app = App::new().await.expect("Failed to initialize application");
 
-    // Setup logging — must happen before any info!() calls to avoid silently dropped logs
+    // Setup logging -- must happen before any info!() calls to avoid silently dropped logs
     setup_logging(app.config(), args.tracing);
 
     info!(

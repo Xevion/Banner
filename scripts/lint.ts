@@ -34,7 +34,7 @@ Examples:
 const targets = resolveTargets(argv);
 
 if (!isAll(targets)) {
-	process.stdout.write(c('1;36', `→ Linting: ${targetLabel(targets)}`) + '\n');
+	process.stdout.write(c('1;36', `➡️ Linting: ${targetLabel(targets)}`) + '\n');
 }
 
 if (targets.subsystems.has('frontend')) {

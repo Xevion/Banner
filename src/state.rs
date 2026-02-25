@@ -78,12 +78,12 @@ impl ServiceStatusRegistry {
     }
 }
 
-/// In-memory cache for reference data (code→description lookups).
+/// In-memory cache for reference data (code->description lookups).
 ///
 /// Loaded from the `reference_data` table on startup and refreshed periodically.
 /// Uses a two-level HashMap so lookups take `&str` without allocating.
 pub struct ReferenceCache {
-    /// category → (code → description)
+    /// category -> (code -> description)
     data: HashMap<String, HashMap<String, String>>,
 }
 

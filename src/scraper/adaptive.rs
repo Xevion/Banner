@@ -25,13 +25,13 @@ const FAILURE_PAUSE_THRESHOLD: i64 = 5;
 /// Scheduling tier for a term based on its temporal status and archive flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TermCategory {
-    /// Active term — full adaptive scheduling.
+    /// Active term -- full adaptive scheduling.
     Current,
-    /// Upcoming term — full adaptive scheduling (same as current).
+    /// Upcoming term -- full adaptive scheduling (same as current).
     Future,
-    /// Banner "View Only" term — fixed 48-hour interval.
+    /// Banner "View Only" term -- fixed 48-hour interval.
     Archived,
-    /// Past non-archived term — fixed 48-hour interval (same as Archived).
+    /// Past non-archived term -- fixed 48-hour interval (same as Archived).
     Past,
 }
 

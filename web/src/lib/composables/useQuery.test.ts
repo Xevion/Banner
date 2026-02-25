@@ -73,7 +73,7 @@ describe("QueryController", () => {
       await controller.fetch();
       expect(controller.data).toEqual({ count: 42 });
 
-      // Second fetch fails — data preserved
+      // Second fetch fails -- data preserved
       await controller.fetch();
       expect(controller.data).toEqual({ count: 42 });
       expect(controller.error).toEqual(mockApiError("Network error"));
@@ -127,7 +127,7 @@ describe("QueryController", () => {
       // Start first fetch (will hang)
       const fetch1 = controller.fetch();
 
-      // Start second fetch — should mark first as stale
+      // Start second fetch -- should mark first as stale
       const fetch2 = controller.fetch();
       expect(fetcher).toHaveBeenCalledTimes(2);
 
@@ -135,7 +135,7 @@ describe("QueryController", () => {
       await fetch2;
       expect(controller.data).toEqual({ count: 2 });
 
-      // First completes late — should be ignored
+      // First completes late -- should be ignored
       resolveFirst(ok({ count: 1 }));
       await fetch1;
 
@@ -188,7 +188,7 @@ describe("QueryController", () => {
       expect(controller.isLoading).toBe(false);
 
       await vi.advanceTimersByTimeAsync(300);
-      // After debounce fires, fetch starts — but since it's async and resolved,
+      // After debounce fires, fetch starts -- but since it's async and resolved,
       // isLoading may have flipped. Let's just check fetcher was called.
       expect(fetcher).toHaveBeenCalledTimes(1);
     });
@@ -286,7 +286,7 @@ describe("QueryController", () => {
       resolveFetch(ok({ count: 42 }));
       await promise;
 
-      expect(controller.data).toBeNull(); // Not updated — destroyed
+      expect(controller.data).toBeNull(); // Not updated -- destroyed
     });
   });
 });

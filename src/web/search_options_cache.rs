@@ -1,6 +1,6 @@
 //! TTL cache for search-options responses, one snapshot per term.
 //!
-//! Stores typed `Arc<SearchOptionsResponse>` — no JSON round-trip on reads.
+//! Stores typed `Arc<SearchOptionsResponse>` -- no JSON round-trip on reads.
 //! Singleflight per term key prevents thundering-herd on cache miss.
 
 use crate::web::routes::SearchOptionsResponse;
@@ -14,9 +14,9 @@ const TTL: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Clone, Default)]
 pub struct SearchOptionsCache {
-    /// term_code → (cached_at, value)
+    /// term_code -> (cached_at, value)
     entries: Arc<DashMap<String, (Instant, Arc<SearchOptionsResponse>)>>,
-    /// term_code → in-flight flag (singleflight guard)
+    /// term_code -> in-flight flag (singleflight guard)
     inflight: Arc<DashMap<String, Arc<AtomicBool>>>,
 }
 

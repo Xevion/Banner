@@ -399,7 +399,7 @@ impl Worker {
                 }
             }
         } else {
-            // Max retries exceeded — log final failure result
+            // Max retries exceeded -- log final failure result
             let duration_ms_i32 = duration.as_millis() as i32;
             let err_msg = format!("{e:#}");
             if let Err(log_err) = self

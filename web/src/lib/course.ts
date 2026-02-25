@@ -32,8 +32,8 @@ export function formatMeetingDaysLong(mt: DbMeetingTime): string {
 /**
  * Format a time range with smart AM/PM elision.
  *
- * Same period:  "9:00–9:50 AM"
- * Cross-period: "11:30 AM–12:20 PM"
+ * Same period:  "9:00-9:50 AM"
+ * Cross-period: "11:30 AM-12:20 PM"
  * Missing:      "TBA"
  */
 export function formatTimeRange(begin: string | null, end: string | null): string {
@@ -53,9 +53,9 @@ export function formatTimeRange(begin: string | null, end: string | null): strin
 
   const endStr = `${eDisplay}:${eParts[1]} ${ePeriod}`;
   if (bPeriod === ePeriod) {
-    return `${bDisplay}:${bParts[1]}–${endStr}`;
+    return `${bDisplay}:${bParts[1]}-${endStr}`;
   }
-  return `${bDisplay}:${bParts[1]} ${bPeriod}–${endStr}`;
+  return `${bDisplay}:${bParts[1]} ${bPeriod}-${endStr}`;
 }
 
 /**
@@ -79,7 +79,7 @@ export function abbreviateInstructor(name: string, maxLen = 18): string {
   const parts = name.slice(commaIdx + 2).split(" ");
 
   // Level 2: abbreviate trailing given names, keep first given name intact
-  // "Maria Elena" → "Maria E."
+  // "Maria Elena" -> "Maria E."
   if (parts.length > 1) {
     const abbreviated = [parts[0], ...parts.slice(1).map((p) => `${p[0]}.`)].join(" ");
     const result = `${last}, ${abbreviated}`;
@@ -87,7 +87,7 @@ export function abbreviateInstructor(name: string, maxLen = 18): string {
   }
 
   // Level 3: abbreviate all given names
-  // "Maria Elena" → "M. E."
+  // "Maria Elena" -> "M. E."
   if (parts.length > 1) {
     const allInitials = parts.map((p) => `${p[0]}.`).join(" ");
     const result = `${last}, ${allInitials}`;
@@ -95,7 +95,7 @@ export function abbreviateInstructor(name: string, maxLen = 18): string {
   }
 
   // Level 4: first initial only
-  // "Maria Elena" → "M."  or  "John" → "J."
+  // "Maria Elena" -> "M."  or  "John" -> "J."
   return `${last}, ${parts[0][0]}.`;
 }
 
@@ -128,7 +128,7 @@ export function formatMeetingDaysVerbose(mt: DbMeetingTime): string {
 
 /**
  * Full verbose tooltip for a single meeting time:
- * "Tuesdays & Thursdays, 4:15–5:30 PM\nMain Hall 2.206 · Aug 26 – Dec 12, 2024"
+ * "Tuesdays & Thursdays, 4:15-5:30 PM\nMain Hall 2.206 * Aug 26 - Dec 12, 2024"
  */
 export function formatMeetingTimeTooltip(mt: DbMeetingTime): string {
   const days = formatMeetingDaysVerbose(mt);
@@ -147,7 +147,7 @@ export function formatMeetingTimeTooltip(mt: DbMeetingTime): string {
   const parts = [line1];
 
   const loc = formatLocationLong(mt);
-  const dateRange = `${formatDateShort(mt.dateRange.start)} – ${formatDateShort(mt.dateRange.end)}`;
+  const dateRange = `${formatDateShort(mt.dateRange.start)} - ${formatDateShort(mt.dateRange.end)}`;
 
   if (loc && dateRange) {
     parts.push(`${loc}, ${dateRange}`);
@@ -219,7 +219,9 @@ export function formatLocationTooltip(course: CourseResponse): string | null {
 
   // Add campus restriction note
   if (course.campus?.type === "OnlinePrograms") {
-    deliveryNote = deliveryNote ? `${deliveryNote} — Online Programs only` : "Online Programs only";
+    deliveryNote = deliveryNote
+      ? `${deliveryNote} -- Online Programs only`
+      : "Online Programs only";
   }
 
   if (locationLine && deliveryNote) return `${locationLine}\n${deliveryNote}`;
@@ -253,7 +255,7 @@ export function rmpUrl(legacyId: number): string {
  * Smooth OKLCH color + text-shadow for a RateMyProfessors rating.
  *
  * Three-stop gradient interpolated in OKLCH:
- *   1.0 → red, 3.0 → amber, 5.0 → green
+ *   1.0 -> red, 3.0 -> amber, 5.0 -> green
  * with separate light/dark mode tuning.
  */
 export function ratingStyle(rating: number, isDark: boolean): string {
@@ -261,9 +263,9 @@ export function ratingStyle(rating: number, isDark: boolean): string {
 
   // OKLCH stops: [lightness, chroma, hue]
   const stops: { light: [number, number, number]; dark: [number, number, number] }[] = [
-    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] }, // 1.0 – red
-    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] }, // 3.0 – amber
-    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] }, // 5.0 – green
+    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] }, // 1.0 - red
+    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] }, // 3.0 - amber
+    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] }, // 5.0 - green
   ];
 
   let t: number;
@@ -329,11 +331,11 @@ export function scoreBadgeStyle(rating: number, isDark: boolean): string {
 
 /** Format credit hours display */
 export function formatCreditHours(course: CourseResponse): string {
-  if (course.creditHours == null) return "—";
+  if (course.creditHours == null) return "--";
   if (course.creditHours.type === "fixed") {
     return String(course.creditHours.hours);
   }
-  return `${course.creditHours.low}–${course.creditHours.high}`;
+  return `${course.creditHours.low}-${course.creditHours.high}`;
 }
 
 /**
@@ -363,7 +365,7 @@ export function formatInstructorName(
   return `${rest} ${last}`;
 }
 
-/** Compact meeting time summary for mobile cards: "MWF 9:00–9:50 AM", "Async", or "TBA" */
+/** Compact meeting time summary for mobile cards: "MWF 9:00-9:50 AM", "Async", or "TBA" */
 export function formatMeetingTimeSummary(course: CourseResponse): string {
   if (course.isAsyncOnline) return "Async";
   if (course.meetingTimes.length === 0) return "TBA";

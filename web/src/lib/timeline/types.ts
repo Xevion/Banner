@@ -2,7 +2,7 @@
  * Shared types for the timeline feature.
  *
  * Subjects are dynamic strings (actual Banner subject codes like "CS",
- * "MAT", "BIO") rather than a fixed enum — the set of subjects comes
+ * "MAT", "BIO") rather than a fixed enum -- the set of subjects comes
  * from the API response.
  */
 import type { ScaleLinear, ScaleTime } from "d3-scale";

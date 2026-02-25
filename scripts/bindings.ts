@@ -9,7 +9,7 @@ import { run } from "./lib/proc";
 
 const BINDINGS_DIR = "web/src/lib/bindings";
 
-// Build lib test binary first (slow part) — fail before deleting anything
+// Build lib test binary first (slow part) -- fail before deleting anything
 // --lib: only compiles the library's unit tests (where export_bindings live),
 // skipping integration test binaries in tests/ which aren't needed here.
 run(["cargo", "test", "--lib", "--no-run"]);

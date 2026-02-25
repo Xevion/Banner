@@ -1026,7 +1026,7 @@ async fn get_search_options(
     }
 
     if !state.search_options_cache.try_claim(&term_code) {
-        // Another request is building this term's options — fall through and build it too.
+        // Another request is building this term's options -- fall through and build it too.
         // (Acceptable: singleflight is best-effort, not strict.)
     }
 

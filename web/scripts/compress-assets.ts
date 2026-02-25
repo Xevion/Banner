@@ -6,7 +6,7 @@ import { $ } from "bun";
  * Pre-compress static assets with maximum compression levels.
  * Run after `bun run build`.
  *
- * Generates .gz, .br, .zst variants for compressible files ≥ MIN_SIZE bytes.
+ * Generates .gz, .br, .zst variants for compressible files >= MIN_SIZE bytes.
  * These are embedded alongside originals by rust-embed and served via
  * content negotiation in src/web/assets.rs.
  */

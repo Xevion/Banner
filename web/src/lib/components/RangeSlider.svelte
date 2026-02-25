@@ -110,9 +110,9 @@ function handleSingleChange(event: CustomEvent<{ value: number }>) {
     {#if !isDefault}
       <span class="text-xs text-muted-foreground">
         {#if dual}
-          {formatValue(valueLow ?? min)} – {formatValue(valueHigh ?? max)}
+          {formatValue(valueLow ?? min)} &ndash; {formatValue(valueHigh ?? max)}
         {:else}
-          ≤ {formatValue(value ?? max)}
+          &le; {formatValue(value ?? max)}
         {/if}
       </span>
     {/if}

@@ -88,7 +88,7 @@ async function fetchSuggestions() {
     return;
   }
   const result = await client.suggest(selectedTerm, q);
-  // Discard stale responses — a newer request has been issued
+  // Discard stale responses -- a newer request has been issued
   if (currentFetchId !== fetchId) return;
   result.match({
     Ok: (data) => {

@@ -45,7 +45,7 @@ let tabRefs: HTMLAnchorElement[] = $state([]);
 let containerRef: HTMLDivElement | undefined = $state();
 let pillRef: HTMLDivElement | undefined = $state();
 
-// Pill animation state — driven by JS, not CSS transitions
+// Pill animation state -- driven by JS, not CSS transitions
 let targetLeft = 0;
 let targetWidth = 0;
 let currentLeft = 0;
@@ -123,13 +123,13 @@ function updateTarget() {
   targetWidth = measured.width;
 
   if (!mounted) {
-    // First render — snap immediately, no animation
+    // First render -- snap immediately, no animation
     applyPill(targetLeft, targetWidth);
     mounted = true;
     return;
   }
 
-  // Always (re)start animation from current position — handles both fresh
+  // Always (re)start animation from current position -- handles both fresh
   // navigations and rapid route changes that interrupt a running animation
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
@@ -152,13 +152,13 @@ function updateTargetFromResize() {
   targetWidth = newWidth;
 
   if (animationId !== null) {
-    // Animation in progress — retarget it smoothly by starting a new
+    // Animation in progress -- retarget it smoothly by starting a new
     // animation from the current interpolated position to the new target
     cancelAnimationFrame(animationId);
     animationId = null;
     animatePill(currentLeft, currentWidth, targetLeft, targetWidth);
   } else {
-    // No animation running — snap (this handles window resize, etc.)
+    // No animation running -- snap (this handles window resize, etc.)
     applyPill(targetLeft, targetWidth);
   }
 }
@@ -194,7 +194,7 @@ $effect(() => {
       class="relative flex items-center gap-1 rounded-lg bg-muted p-1 pointer-events-auto"
       bind:this={containerRef}
     >
-      <!-- Sliding pill — animated via JS (RAF) to stay smooth even when
+      <!-- Sliding pill -- animated via JS (RAF) to stay smooth even when
            heavy page transitions cause CSS transition skipping -->
       <div
         class="absolute top-1 bottom-1 left-0 rounded-md bg-background shadow-sm will-change-[transform,width]"

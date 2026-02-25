@@ -3,7 +3,7 @@
 //! Accepts multiple time ranges, merges overlaps, aligns to 15-minute
 //! slot boundaries, and returns per-subject enrollment totals for each slot.
 //! Only courses whose meeting times overlap a given slot contribute to that
-//! slot's totals — so the chart reflects the actual class schedule rhythm.
+//! slot's totals -- so the chart reflects the actual class schedule rhythm.
 //!
 //! Course data is served from an ISR-style in-memory cache (see
 //! [`ScheduleCache`]) that refreshes hourly in the background with
@@ -64,7 +64,7 @@ pub struct TimelineSlot {
     /// ISO-8601 UTC timestamp at the start of this 15-minute bucket (e.g., "2024-01-15T10:30:00Z")
     #[ts(type = "string")]
     time: DateTime<Utc>,
-    /// Subject code → total enrollment in this slot.
+    /// Subject code -> total enrollment in this slot.
     #[ts(type = "Record<string, number>")]
     subjects: BTreeMap<String, i64>,
 }
@@ -190,7 +190,7 @@ pub(crate) async fn timeline(
             let slot_start_minutes = time_to_minutes(local_time);
             let slot_end_minutes = slot_start_minutes + SLOT_MINUTES;
 
-            // Use Arc<str> keys internally — Arc::clone is an atomic refcount
+            // Use Arc<str> keys internally -- Arc::clone is an atomic refcount
             // bump vs String::clone which heap-allocates every time.
             let mut subject_totals: BTreeMap<Arc<str>, i64> = BTreeMap::new();
 

@@ -30,7 +30,7 @@ pub async fn search(
     // Defer the response since this might take a while
     ctx.defer().await?;
 
-    // Build the search query — no default credit filter so all courses are visible
+    // Build the search query -- no default credit filter so all courses are visible
     let mut query = SearchQuery::new();
 
     if let Some(subject) = subject {
