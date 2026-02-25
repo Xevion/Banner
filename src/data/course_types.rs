@@ -229,18 +229,6 @@ pub struct InstructorRating {
     pub total_responses: i32,
 }
 
-/// Nested score bundle returned by API endpoints for instructor contexts.
-/// Contains the rating plus raw source data for tooltip display.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-#[allow(dead_code)]
-pub struct InstructorScoreBundle {
-    pub rating: InstructorRating,
-    pub rmp: Option<RmpBrief>,
-    pub bluebook: Option<BlueBookBrief>,
-}
-
 pub fn build_bluebook_brief(
     avg_rating: Option<f32>,
     total_responses: Option<i64>,

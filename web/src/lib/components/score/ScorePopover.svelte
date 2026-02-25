@@ -55,7 +55,7 @@ let confidencePct = $derived((rating.confidence * 100).toFixed(0));
         <div>
           <div class="text-xs font-medium">Rating</div>
           <div class="text-[10px] text-muted-foreground tabular-nums">
-            {rating.score.toFixed(2)} ± {ciHalf} · {confidencePct}% confidence
+            {rating.score.toFixed(2)} &plusmn; {ciHalf} &middot; {confidencePct}% confidence
           </div>
         </div>
       </div>

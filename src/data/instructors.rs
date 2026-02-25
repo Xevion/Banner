@@ -655,12 +655,57 @@ pub async fn resolve_instructor_slugs(
     Ok(rows)
 }
 
-/// Look up an instructor's ID by slug. Returns None if not found.
-pub async fn get_instructor_id_by_slug(pool: &PgPool, slug: &str) -> Result<Option<i32>> {
-    let row: Option<(i32,)> = sqlx::query_as("SELECT id FROM instructors WHERE slug = $1")
-        .bind(slug)
-        .fetch_optional(pool)
-        .await
-        .context("failed to look up instructor by slug")?;
-    Ok(row.map(|(id,)| id))
+pub enum IdentifierKind {
+    Slug,
+    NumericId(i32),
+    EmailPrefix,
+}
+
+pub fn classify_identifier(s: &str) -> IdentifierKind {
+    if let Ok(id) = s.parse::<i32>() {
+        IdentifierKind::NumericId(id)
+    } else if s.contains('.') {
+        IdentifierKind::EmailPrefix
+    } else {
+        IdentifierKind::Slug
+    }
+}
+
+/// Resolve any identifier form to (instructor_id, canonical_slug).
+/// Returns None if not found or if the instructor has no slug yet.
+pub async fn resolve_instructor_identifier(
+    pool: &PgPool,
+    raw: &str,
+) -> Result<Option<(i32, String)>> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id: i32,
+        slug: Option<String>,
+    }
+
+    let row: Option<Row> = match classify_identifier(raw) {
+        IdentifierKind::Slug => {
+            sqlx::query_as("SELECT id, slug FROM instructors WHERE slug = $1")
+                .bind(raw)
+                .fetch_optional(pool)
+                .await?
+        }
+        IdentifierKind::NumericId(id) => {
+            sqlx::query_as("SELECT id, slug FROM instructors WHERE id = $1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?
+        }
+        IdentifierKind::EmailPrefix => {
+            sqlx::query_as(
+                "SELECT id, slug FROM instructors \
+                 WHERE LOWER(SPLIT_PART(email, '@', 1)) = LOWER($1)",
+            )
+            .bind(raw)
+            .fetch_optional(pool)
+            .await?
+        }
+    };
+
+    Ok(row.and_then(|r| r.slug.map(|slug| (r.id, slug))))
 }

@@ -135,7 +135,7 @@ export function intParam(): ParamSerializer<number | null> {
 /** Module-level cache: instructor slug -> display name. Persists across client navigations. */
 const instructorNameCache = new Map<string, string>();
 
-/** Populate the slug->displayName cache. Idempotent — safe to call with overlapping data. */
+/** Populate the slug->displayName cache. Idempotent -- safe to call with overlapping data. */
 export function populateInstructorCache(entries: Record<string, string>): void {
   for (const [slug, name] of Object.entries(entries)) {
     instructorNameCache.set(slug, name);

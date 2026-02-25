@@ -36,7 +36,7 @@ const CI_Z: f64 = 1.2816;
 /// With no observations the posterior equals the prior, so this is the worst
 /// possible rank score an instructor can receive.  Used as the COALESCE sentinel
 /// for the `AsPrior` unrated policy so that unrated instructors sort as if they
-/// had exactly this score (≈ 3.775 − 1.2816 × 1.02225 ≈ 2.465).
+/// had exactly this score (~= 3.775 - 1.2816 x 1.02225 ~= 2.465).
 pub const PRIOR_RANK_SENTINEL: f32 = 2.465;
 
 /// How to handle instructors with no computed score when sorting by rating.

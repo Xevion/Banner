@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::response::Json;
 
 use crate::data;
-use crate::data::instructors::PublicInstructorListParams;
+use crate::data::instructors::{IdentifierKind, PublicInstructorListParams, classify_identifier};
 use crate::state::AppState;
 use crate::web::error::{ApiError, db_error};
 use crate::web::routes::{CourseResponse, build_course_response};
@@ -23,13 +23,26 @@ pub async fn list_instructors(
 /// `GET /api/instructors/{slug}`
 pub async fn get_instructor(
     State(state): State<AppState>,
-    Path(slug): Path<String>,
-) -> Result<Json<data::instructors::PublicInstructorProfileResponse>, ApiError> {
+    Path(raw): Path<String>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::response::{IntoResponse, Redirect};
+
+    let (_, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
+        .await
+        .map_err(|e| db_error("Resolve instructor", e))?
+        .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
+
+    // Non-canonical identifier: redirect to the canonical slug URL
+    if !matches!(classify_identifier(&raw), IdentifierKind::Slug) {
+        return Ok(Redirect::permanent(&format!("/api/instructors/{slug}")).into_response());
+    }
+
     let profile = data::instructors::get_public_instructor_by_slug(&state.db_pool, &slug)
         .await
         .map_err(|e| db_error("Get instructor", e))?
         .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
-    Ok(Json(profile))
+
+    Ok(Json(profile).into_response())
 }
 
 #[derive(serde::Deserialize)]
@@ -40,18 +53,27 @@ pub struct InstructorSectionsParams {
 /// `GET /api/instructors/{slug}/sections?term={code}`
 pub async fn get_instructor_sections(
     State(state): State<AppState>,
-    Path(slug): Path<String>,
+    Path(raw): Path<String>,
     Query(params): Query<InstructorSectionsParams>,
-) -> Result<Json<Vec<CourseResponse>>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
     use crate::banner::models::terms::Term;
+    use axum::response::{IntoResponse, Redirect};
+
+    let (instructor_id, slug) =
+        data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
+            .await
+            .map_err(|e| db_error("Resolve instructor", e))?
+            .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
+
+    // Non-canonical: redirect, preserving the raw ?term= value so the redirect
+    // target can still resolve "fall2025"-style aliases.
+    if !matches!(classify_identifier(&raw), IdentifierKind::Slug) {
+        let uri = format!("/api/instructors/{slug}/sections?term={}", params.term);
+        return Ok(Redirect::permanent(&uri).into_response());
+    }
 
     let term_code =
         Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
-
-    let instructor_id = data::instructors::get_instructor_id_by_slug(&state.db_pool, &slug)
-        .await
-        .map_err(|e| db_error("Instructor lookup", e))?
-        .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
 
     let courses =
         data::instructors::get_instructor_sections(&state.db_pool, instructor_id, &term_code)
@@ -75,5 +97,5 @@ pub async fn get_instructor_sections(
         })
         .collect();
 
-    Ok(Json(responses))
+    Ok(Json(responses).into_response())
 }

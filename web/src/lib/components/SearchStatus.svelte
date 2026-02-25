@@ -32,7 +32,7 @@ let countLabel = $derived(meta ? formatNumber(meta.totalCount) : "");
 let resultNoun = $derived(meta ? (meta.totalCount !== 1 ? "results" : "result") : "");
 let durationLabel = $derived(meta ? `${Math.round(meta.durationMs)}ms` : "");
 
-let tooltipText = $derived(meta ? `${relativeTimeText} &middot; ${formattedTime}` : "");
+let tooltipText = $derived(meta ? `${relativeTimeText} \u00B7 ${formattedTime}` : "");
 
 onMount(() => {
   let nowTimeoutId: ReturnType<typeof setTimeout> | null = null;

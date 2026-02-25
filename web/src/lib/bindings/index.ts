@@ -36,7 +36,6 @@ export type { InstructorDetailResponse } from "./InstructorDetailResponse";
 export type { InstructorListItem } from "./InstructorListItem";
 export type { InstructorRating } from "./InstructorRating";
 export type { InstructorResponse } from "./InstructorResponse";
-export type { InstructorScoreBundle } from "./InstructorScoreBundle";
 export type { InstructorStats } from "./InstructorStats";
 export type { InstructorSuggestion } from "./InstructorSuggestion";
 export type { LinkedRmpProfile } from "./LinkedRmpProfile";

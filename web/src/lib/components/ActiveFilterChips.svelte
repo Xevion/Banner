@@ -19,7 +19,7 @@ function formatDaysChip(d: string[]): string {
 }
 
 function formatTimeChip(start: string | null, end: string | null): string {
-  if (start && end) return `${formatCompactTime(start)} &ndash; ${formatCompactTime(end)}`;
+  if (start && end) return `${formatCompactTime(start)} \u2013 ${formatCompactTime(end)}`;
   if (start) return `After ${formatCompactTime(start)}`;
   if (end) return `Before ${formatCompactTime(end)}`;
   return "";
@@ -178,10 +178,10 @@ $effect(() => {
   {#if filters.creditHourMin !== null || filters.creditHourMax !== null}
     <FilterChip
       label={filters.creditHourMin !== null && filters.creditHourMax !== null
-        ? `${filters.creditHourMin}&ndash;${filters.creditHourMax} credits`
+        ? `${filters.creditHourMin}\u2013${filters.creditHourMax} credits`
         : filters.creditHourMin !== null
-          ? `&ge; ${filters.creditHourMin} credits`
-          : `&le; ${filters.creditHourMax} credits`}
+          ? `\u2265 ${filters.creditHourMin} credits`
+          : `\u2264 ${filters.creditHourMax} credits`}
       onRemove={() => {
         filters.creditHourMin = null;
         filters.creditHourMax = null;
@@ -197,10 +197,10 @@ $effect(() => {
   {#if filters.courseNumberLow !== null || filters.courseNumberHigh !== null}
     <FilterChip
       label={filters.courseNumberLow !== null && filters.courseNumberHigh !== null
-        ? `Course ${filters.courseNumberLow}&ndash;${filters.courseNumberHigh}`
+        ? `Course ${filters.courseNumberLow}\u2013${filters.courseNumberHigh}`
         : filters.courseNumberLow !== null
-          ? `Course &ge; ${filters.courseNumberLow}`
-          : `Course &le; ${filters.courseNumberHigh}`}
+          ? `Course \u2265 ${filters.courseNumberLow}`
+          : `Course \u2264 ${filters.courseNumberHigh}`}
       onRemove={() => {
         filters.courseNumberLow = null;
         filters.courseNumberHigh = null;
