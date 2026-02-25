@@ -104,6 +104,22 @@ async fn insert_accented_test_data(pool: &PgPool) {
     batch_upsert_courses(&courses, pool)
         .await
         .expect("failed to insert accented test courses");
+
+    // Assign slugs so slug-based instructor filtering works in tests.
+    // banner_id lives in course_instructors, so identify instructors by display_name.
+    for (display_name, slug) in [
+        ("García López, José", "garcia-lopez-jose-t001"),
+        ("Müller, François", "muller-francois-t002"),
+        ("O'Brien, Séan", "obrien-sean-t003"),
+        ("Hernández, María", "hernandez-maria-t004"),
+    ] {
+        sqlx::query("UPDATE instructors SET slug = $1 WHERE display_name = $2")
+            .bind(slug)
+            .bind(display_name)
+            .execute(pool)
+            .await
+            .expect("failed to set slug for test instructor");
+    }
 }
 
 #[sqlx::test]
@@ -236,12 +252,13 @@ async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
 async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Filter by instructor "Garcia" (no accent) should find courses taught by "García López, José"
+    // Filter by slug for García López, José -- slug assigned in insert_accented_test_data
+    let slugs = vec!["garcia-lopez-jose-t001".to_string()];
     let (results, total) = search_courses(
         &pool,
         "202620",
         None,
-        None, // no title query
+        None,
         None,
         None,
         false,
@@ -255,7 +272,7 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
         None,
         None,
         None,
-        Some("Garcia"), // instructor filter -- no accent
+        Some(&slugs),
         100,
         0,
         None,
@@ -266,7 +283,7 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
 
     assert!(
         total >= 1,
-        "expected at least 1 result for instructor 'Garcia', got {total}"
+        "expected at least 1 result for instructor slug 'garcia-lopez-jose-t001', got {total}"
     );
     assert!(
         results.iter().any(|c| c.crn == "30001"),
@@ -278,7 +295,8 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
 async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Filter by instructor "Muller" should find courses taught by "Müller, François"
+    // Filter by slug for Müller, François -- slug assigned in insert_accented_test_data
+    let slugs = vec!["muller-francois-t002".to_string()];
     let (results, total) = search_courses(
         &pool,
         "202620",
@@ -297,7 +315,7 @@ async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
         None,
         None,
         None,
-        Some("Muller"),
+        Some(&slugs),
         100,
         0,
         None,
@@ -308,7 +326,7 @@ async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
 
     assert!(
         total >= 1,
-        "expected at least 1 result for instructor 'Muller', got {total}"
+        "expected at least 1 result for instructor slug 'muller-francois-t002', got {total}"
     );
     assert!(
         results.iter().any(|c| c.crn == "30002"),

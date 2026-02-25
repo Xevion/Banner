@@ -9,10 +9,11 @@ import { createContext } from "svelte";
  */
 export function createFilterState(
   params?: URLSearchParams,
-  validSubjects?: Set<string>
+  validSubjects?: Set<string>,
+  resolvedInstructors?: Record<string, string>
 ): FilterState {
   const state: FilterState = $state(
-    params ? parseFilters(params, validSubjects) : defaultFilters()
+    params ? parseFilters(params, validSubjects, resolvedInstructors) : defaultFilters()
   );
   return state;
 }

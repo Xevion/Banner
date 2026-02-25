@@ -24,6 +24,7 @@ import { untrack } from "svelte";
 
 interface PageLoadData {
   searchOptions: SearchOptionsResponse | null;
+  resolvedInstructors: Record<string, string>;
   searchResult: SearchResponse | null;
   searchError: string | null;
   searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null;
@@ -64,7 +65,11 @@ const initial = resolveState(
   untrack(() => data.searchOptions)
 );
 const validSubjects = new Set(untrack(() => data.searchOptions?.subjects.map((s) => s.code) ?? []));
-const filters = createFilterState(initial.params, validSubjects);
+const filters = createFilterState(
+  initial.params,
+  validSubjects,
+  untrack(() => data.resolvedInstructors)
+);
 setFiltersContext(filters);
 
 let selectedTerm = $state(initial.selectedTerm);
@@ -78,7 +83,7 @@ $effect(() => {
     untrack(() => searchOptions)
   );
   const subjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
-  const parsed = parseFilters(resolved.params, subjects);
+  const parsed = parseFilters(resolved.params, subjects, data.resolvedInstructors);
 
   selectedTerm = resolved.selectedTerm;
   // Apply parsed filter state to the reactive object

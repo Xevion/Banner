@@ -57,7 +57,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, collections::HashMap, time::Duration};
 use ts_rs::TS;
 
 use crate::state::AppState;
@@ -89,6 +89,8 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/reference/{category}", get(get_reference))
         .route("/search-options", get(get_search_options))
         .route("/suggest", get(suggest))
+        .route("/instructors/resolve", get(resolve_instructors))
+        .route("/instructors/suggest", get(suggest_instructors))
         .route("/instructors", get(instructors::list_instructors))
         .route("/instructors/{slug}", get(instructors::get_instructor))
         .route(
@@ -466,8 +468,8 @@ pub struct SearchParams {
     pub credit_hour_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "credit_hour_max")]
     pub credit_hour_max: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub instructor: Option<String>,
+    #[serde(default)]
+    pub instructor: Vec<String>,
 }
 
 use crate::data::courses::{CourseSuggestion, InstructorSuggestion, SortColumn, SortDirection};
@@ -577,8 +579,6 @@ pub struct SearchOptionsReference {
 pub struct SearchOptionsParams {
     pub term: Option<String>,
 }
-
-
 
 /// Build a `CourseResponse` from a DB course with pre-fetched instructor details.
 pub fn build_course_response(
@@ -884,7 +884,11 @@ async fn search_courses(
         },
         params.credit_hour_min,
         params.credit_hour_max,
-        params.instructor.as_deref(),
+        if params.instructor.is_empty() {
+            None
+        } else {
+            Some(&params.instructor[..])
+        },
         limit,
         offset,
         params.sort_by,
@@ -1185,4 +1189,69 @@ async fn suggest(
         },
         "private, max-age=60",
     ))
+}
+
+#[derive(Deserialize)]
+pub struct SuggestInstructorsParams {
+    pub q: String,
+    pub term: Option<String>,
+    #[serde(default = "default_suggest_limit")]
+    pub limit: i32,
+}
+
+/// `GET /api/instructors/suggest?q={query}&term={slug}&limit=10`
+async fn suggest_instructors(
+    State(state): State<AppState>,
+    Query(params): Query<SuggestInstructorsParams>,
+) -> Result<Response, ApiError> {
+    use crate::banner::models::terms::Term;
+
+    let limit = params.limit.clamp(1, 25);
+    let q = params.q.trim();
+
+    if q.chars().count() < 2 {
+        return Ok(with_cache_control(
+            Vec::<InstructorSuggestion>::new(),
+            "private, max-age=60",
+        ));
+    }
+
+    let term_code = params
+        .term
+        .as_deref()
+        .map(|t| Term::resolve_to_code(t).ok_or_else(|| ApiError::invalid_term(t)))
+        .transpose()?;
+
+    let instructors =
+        data::courses::suggest_instructors_global(&state.db_pool, term_code.as_deref(), q, limit)
+            .await
+            .map_err(|e| db_error("Suggest instructors", e))?;
+
+    Ok(with_cache_control(instructors, "private, max-age=60"))
+}
+
+#[derive(Deserialize)]
+pub struct ResolveInstructorsParams {
+    #[serde(default)]
+    pub slug: Vec<String>,
+}
+
+/// `GET /api/instructors/resolve?slug=a&slug=b`
+async fn resolve_instructors(
+    State(state): State<AppState>,
+    axum_extra::extract::Query(params): axum_extra::extract::Query<ResolveInstructorsParams>,
+) -> Result<Json<HashMap<String, String>>, ApiError> {
+    if params.slug.is_empty() {
+        return Ok(Json(HashMap::new()));
+    }
+
+    if params.slug.len() > 50 {
+        return Err(ApiError::bad_request("Too many slugs (max 50)"));
+    }
+
+    let rows = data::instructors::resolve_instructor_slugs(&state.db_pool, &params.slug)
+        .await
+        .map_err(|e| db_error("Resolve instructor slugs", e))?;
+
+    Ok(Json(rows.into_iter().collect()))
 }

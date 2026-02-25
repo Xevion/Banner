@@ -666,6 +666,20 @@ pub async fn get_instructor_sections(
     Ok(courses)
 }
 
+/// Resolve a batch of instructor slugs to their display names.
+pub async fn resolve_instructor_slugs(
+    pool: &PgPool,
+    slugs: &[String],
+) -> Result<Vec<(String, String)>> {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT slug, display_name FROM instructors WHERE slug = ANY($1)")
+            .bind(slugs)
+            .fetch_all(pool)
+            .await
+            .context("failed to resolve instructor slugs")?;
+    Ok(rows)
+}
+
 /// Look up an instructor's ID by slug. Returns None if not found.
 pub async fn get_instructor_id_by_slug(pool: &PgPool, slug: &str) -> Result<Option<i32>> {
     let row: Option<(i32,)> = sqlx::query_as("SELECT id FROM instructors WHERE slug = $1")

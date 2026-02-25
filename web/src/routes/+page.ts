@@ -1,5 +1,5 @@
 import { BannerApiClient } from "$lib/api";
-import { parseFilters, toAPIParams } from "$lib/filters";
+import { parseFilters, toAPIParams, uncachedInstructorSlugs } from "$lib/filters";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ url, fetch }) => {
@@ -11,6 +11,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
     console.error("Failed to load search options:", optionsResult.error);
     return {
       searchOptions: null,
+      resolvedInstructors: {} as Record<string, string>,
       searchResult: null,
       searchError: "Failed to load search options",
       searchMeta: null,
@@ -22,7 +23,20 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const defaultTerm = searchOptions.terms[0]?.slug ?? "";
 
   const validSubjects = new Set(searchOptions.subjects.map((s) => s.code));
-  const filters = parseFilters(url.searchParams, validSubjects);
+
+  // Resolve instructor slugs not already in the client-side cache.
+  // On SSR the cache is empty so all slugs are resolved; on client navigations
+  // after autocomplete selection the cache is warm and no request is made.
+  const unresolvedSlugs = uncachedInstructorSlugs(url.searchParams.getAll("instructor"));
+  let resolvedInstructors: Record<string, string> = {};
+  if (unresolvedSlugs.length > 0) {
+    const resolveResult = await client.resolveInstructors(unresolvedSlugs);
+    if (resolveResult.isOk) {
+      resolvedInstructors = resolveResult.value;
+    }
+  }
+
+  const filters = parseFilters(url.searchParams, validSubjects, resolvedInstructors);
 
   const offset = Number(url.searchParams.get("offset")) || 0;
   const sortBy = url.searchParams.get("sort_by");
@@ -43,6 +57,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   if (searchResult.isErr) {
     return {
       searchOptions,
+      resolvedInstructors,
       searchResult: null,
       searchError: searchResult.error.message,
       searchMeta: null,
@@ -52,6 +67,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
 
   return {
     searchOptions,
+    resolvedInstructors,
     searchResult: searchResult.value,
     searchError: null,
     searchMeta: {

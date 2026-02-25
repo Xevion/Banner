@@ -132,6 +132,26 @@ export function intParam(): ParamSerializer<number | null> {
   };
 }
 
+/** Module-level cache: instructor slug -> display name. Persists across client navigations. */
+const instructorNameCache = new Map<string, string>();
+
+/** Populate the slug->displayName cache. Idempotent — safe to call with overlapping data. */
+export function populateInstructorCache(entries: Record<string, string>): void {
+  for (const [slug, name] of Object.entries(entries)) {
+    instructorNameCache.set(slug, name);
+  }
+}
+
+/** Look up display name from cache; falls back to the slug itself. */
+export function instructorDisplayName(v: string): string {
+  return instructorNameCache.get(v) ?? v;
+}
+
+/** Return slugs not yet in the cache. */
+export function uncachedInstructorSlugs(slugs: string[]): string[] {
+  return slugs.filter((s) => !instructorNameCache.has(s));
+}
+
 /** `string[]` -- repeated URL params (`?key=a&key=b`), omitted when empty. */
 export function arrayParam(): ParamSerializer<string[]> {
   return {
@@ -227,7 +247,7 @@ export const FILTER_REGISTRY = {
   attributes: { urlKey: "attributes", serializer: arrayParam() },
   creditHourMin: { urlKey: "credit_hour_min", serializer: intParam(), group: "creditHour" },
   creditHourMax: { urlKey: "credit_hour_max", serializer: intParam(), group: "creditHour" },
-  instructor: { urlKey: "instructor", serializer: stringParam() },
+  instructor: { urlKey: "instructor", serializer: arrayParam() },
   courseNumberLow: { urlKey: "course_number_low", serializer: intParam(), group: "courseNumber" },
   courseNumberHigh: { urlKey: "course_number_high", serializer: intParam(), group: "courseNumber" },
 } as const satisfies Record<string, FilterDef>;
@@ -267,7 +287,14 @@ export function defaultFilters(): FilterState {
 }
 
 /** Parse URL search params into a FilterState. */
-export function parseFilters(params: URLSearchParams, validSubjects?: Set<string>): FilterState {
+export function parseFilters(
+  params: URLSearchParams,
+  validSubjects?: Set<string>,
+  resolvedInstructors?: Record<string, string>
+): FilterState {
+  if (resolvedInstructors) {
+    populateInstructorCache(resolvedInstructors);
+  }
   const state = {} as Record<string, unknown>;
   for (const [key, def] of registryEntries) {
     let value = def.serializer.decode(params, def.urlKey);

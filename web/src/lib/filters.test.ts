@@ -4,9 +4,11 @@ import {
   defaultFilters,
   expandCampusFromParams,
   formatCompactTime,
+  instructorDisplayName,
   isFiltersEmpty,
   parseFilters,
   parseTimeInput,
+  populateInstructorCache,
   searchKey,
   serializeFilters,
   toAPIParams,
@@ -142,7 +144,7 @@ describe("defaultFilters", () => {
     expect(state.attributes).toEqual([]);
     expect(state.creditHourMin).toBeNull();
     expect(state.creditHourMax).toBeNull();
-    expect(state.instructor).toBeNull();
+    expect(state.instructor).toEqual([]);
     expect(state.courseNumberLow).toBeNull();
     expect(state.courseNumberHigh).toBeNull();
   });
@@ -318,6 +320,8 @@ describe("serializeFilters", () => {
 
 describe("parseFilters / serializeFilters roundtrip", () => {
   it("roundtrips all filter types", () => {
+    populateInstructorCache({ "smith-abc": "Smith, John" });
+
     const original = defaultFilters();
     original.subject = ["MATH", "CS"];
     original.query = "calculus";
@@ -332,7 +336,7 @@ describe("parseFilters / serializeFilters roundtrip", () => {
     original.attributes = ["CoreMath"];
     original.creditHourMin = 3;
     original.creditHourMax = 4;
-    original.instructor = "Smith";
+    original.instructor = ["smith-abc"];
     original.courseNumberLow = 1000;
     original.courseNumberHigh = 4000;
 
@@ -340,6 +344,9 @@ describe("parseFilters / serializeFilters roundtrip", () => {
     const restored = parseFilters(params);
 
     expect(restored).toEqual(original);
+
+    // Display name resolves from cache
+    expect(instructorDisplayName("smith-abc")).toBe("Smith, John");
   });
 
   it("roundtrips defaults (empty params)", () => {
@@ -443,7 +450,7 @@ describe("countActive", () => {
     const state = defaultFilters();
     expect(countActive(state)).toBe(0);
 
-    state.instructor = "Smith";
+    state.instructor = ["smith-abc"];
     expect(countActive(state)).toBe(1);
   });
 });

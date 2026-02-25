@@ -4,7 +4,7 @@ import FilterChip from "$lib/components/FilterChip.svelte";
 import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 import { dayCode } from "$lib/days";
 import type { FilterState } from "$lib/filters";
-import { clearFilters, countActive, formatCompactTime } from "$lib/filters";
+import { clearFilters, countActive, formatCompactTime, instructorDisplayName } from "$lib/filters";
 import {
   getAttributeFilterLabel,
   getCampusFilterLabel,
@@ -188,12 +188,12 @@ $effect(() => {
       }}
     />
   {/if}
-  {#if filters.instructor !== null && filters.instructor !== ""}
+  {#each filters.instructor as slug (slug)}
     <FilterChip
-      label="Instructor: {filters.instructor}"
-      onRemove={() => (filters.instructor = null)}
+      label={instructorDisplayName(slug)}
+      onRemove={() => (filters.instructor = filters.instructor.filter((i) => i !== slug))}
     />
-  {/if}
+  {/each}
   {#if filters.courseNumberLow !== null || filters.courseNumberHigh !== null}
     <FilterChip
       label={filters.courseNumberLow !== null && filters.courseNumberHigh !== null

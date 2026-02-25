@@ -2,6 +2,7 @@
 import type { Subject } from "$lib/api";
 import { client } from "$lib/api";
 import type { CourseSuggestion, InstructorSuggestion, SuggestResponse } from "$lib/bindings";
+import { populateInstructorCache } from "$lib/filters";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
 import createFuzzySearch from "@nozbe/microfuzz";
@@ -46,6 +47,8 @@ type ScoredSuggestion =
   | { kind: "course"; course: CourseSuggestion; score: number }
   | { kind: "instructor"; instructor: InstructorSuggestion; score: number };
 
+const selectedInstructorSlugs = $derived(new Set(filters.instructor));
+
 const mergedSuggestions = $derived.by((): ScoredSuggestion[] => {
   const q = searchValue.trim();
   if (q.length < 2) return [];
@@ -63,7 +66,9 @@ const mergedSuggestions = $derived.by((): ScoredSuggestion[] => {
     items.push({ kind: "course", course: c, score: c.score });
   }
   for (const i of serverResults.instructors) {
-    items.push({ kind: "instructor", instructor: i, score: i.score });
+    if (!selectedInstructorSlugs.has(i.slug)) {
+      items.push({ kind: "instructor", instructor: i, score: i.score });
+    }
   }
 
   // Sort all items together by score descending
@@ -145,8 +150,12 @@ function handleSelect(value: string) {
       break;
     }
     case "instructor": {
+      const slug = rest[0];
       const displayName = rest.slice(1).join(":");
-      filters.instructor = displayName;
+      populateInstructorCache({ [slug]: displayName });
+      if (!filters.instructor.includes(slug)) {
+        filters.instructor = [...filters.instructor, slug];
+      }
       break;
     }
   }
@@ -306,9 +315,9 @@ const popoverListId = "search-autocomplete-list";
                       <Command.Item
                         class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
                                data-[selected]:bg-accent data-[selected]:text-accent-foreground cursor-pointer"
-                        value="instructor:{i.id}:{i.displayName}"
+                        value="instructor:{i.slug}:{i.displayName}"
                         keywords={[i.displayName]}
-                        onSelect={() => handleSelect(`instructor:${i.id}:${i.displayName}`)}
+                        onSelect={() => handleSelect(`instructor:${i.slug}:${i.displayName}`)}
                       >
                         <User class="size-3.5 shrink-0 text-muted-foreground" />
                         <span class="flex-1 truncate">{i.displayName}</span>

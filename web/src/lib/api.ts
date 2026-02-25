@@ -12,6 +12,7 @@ import type {
   CodeDescription,
   CourseResponse,
   InstructorDetailResponse,
+  InstructorSuggestion,
   ListBluebookLinksParams,
   ListBluebookLinksResponse,
   ListInstructorsParams as ListInstructorsParamsGenerated,
@@ -567,6 +568,26 @@ export class BannerApiClient {
     const params = new URLSearchParams({ term, q: query });
     if (limit !== undefined) params.set("limit", String(limit));
     return this.request<SuggestResponse>(`/suggest?${params.toString()}`);
+  }
+
+  async suggestInstructors(
+    query: string,
+    term?: string,
+    limit?: number
+  ): Promise<Result<InstructorSuggestion[], ApiErrorClass>> {
+    const params = new URLSearchParams({ q: query });
+    if (term) params.set("term", term);
+    if (limit !== undefined) params.set("limit", String(limit));
+    return this.request<InstructorSuggestion[]>(`/instructors/suggest?${params.toString()}`);
+  }
+
+  async resolveInstructors(
+    slugs: string[]
+  ): Promise<Result<Record<string, string>, ApiErrorClass>> {
+    if (slugs.length === 0) return ok({});
+    const params = new URLSearchParams();
+    for (const s of slugs) params.append("slug", s);
+    return this.request<Record<string, string>>(`/instructors/resolve?${params.toString()}`);
   }
 }
 

@@ -95,6 +95,7 @@ let activeFilterCount = $derived(countActive(filters));
   />
   <MorePopover
     ranges={{ courseNumber: ranges.courseNumber, creditHours: ranges.creditHours }}
+    {selectedTerm}
   />
 </div>
 
@@ -103,4 +104,5 @@ let activeFilterCount = $derived(countActive(filters));
   bind:open={filterSheetOpen}
   {referenceData}
   {ranges}
+  {selectedTerm}
 />

@@ -9,6 +9,7 @@ import AvailabilityFilter from "./AvailabilityFilter.svelte";
 import BottomSheet from "./BottomSheet.svelte";
 import CompoundFilterButton from "./CompoundFilterButton.svelte";
 import DaysOfWeekPicker from "./DaysOfWeekPicker.svelte";
+import InstructorAutocomplete from "./InstructorAutocomplete.svelte";
 import PartOfTermPicker from "./PartOfTermPicker.svelte";
 import RangeSlider from "./RangeSlider.svelte";
 import TimeRangeInput from "./TimeRangeInput.svelte";
@@ -22,6 +23,7 @@ let {
   open = $bindable(false),
   referenceData,
   ranges,
+  selectedTerm,
 }: {
   open: boolean;
   referenceData: AttributeReferenceData;
@@ -30,6 +32,7 @@ let {
     creditHours: { min: number; max: number };
     waitCount: { max: number };
   };
+  selectedTerm: string;
 } = $props();
 
 const filters = getFiltersContext();
@@ -61,7 +64,7 @@ const catalogActive = $derived(filters.campus.length > 0 || filters.attributes.l
 const moreActive = $derived(
   filters.creditHourMin !== null ||
     filters.creditHourMax !== null ||
-    !!filters.instructor ||
+    filters.instructor.length > 0 ||
     filters.courseNumberLow !== null ||
     filters.courseNumberHigh !== null
 );
@@ -280,26 +283,7 @@ const showMoreChevron = $derived(expandedSection === "more" || !moreActive);
 
         <div class="h-px bg-border"></div>
 
-        <div class="flex flex-col gap-1.5">
-          <label
-            for="mobile-instructor-input"
-            class="text-xs font-medium text-muted-foreground select-none"
-          >
-            Instructor
-          </label>
-          <input
-            id="mobile-instructor-input"
-            type="text"
-            placeholder="Search by name..."
-            autocomplete="off"
-            value={filters.instructor ?? ""}
-            oninput={(e) => {
-              filters.instructor = e.currentTarget.value || null;
-            }}
-            class="h-8 border border-border bg-card text-foreground rounded-md px-2 text-sm
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          />
-        </div>
+        <InstructorAutocomplete {selectedTerm} />
 
         <div class="h-px bg-border"></div>
 

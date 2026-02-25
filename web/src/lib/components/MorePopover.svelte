@@ -1,19 +1,22 @@
 <script lang="ts">
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import FilterPopover from "./FilterPopover.svelte";
+import InstructorAutocomplete from "./InstructorAutocomplete.svelte";
 import RangeSlider from "./RangeSlider.svelte";
 
 let {
   ranges,
+  selectedTerm,
 }: {
   ranges: { courseNumber: { min: number; max: number }; creditHours: { min: number; max: number } };
+  selectedTerm: string;
 } = $props();
 
 const filters = getFiltersContext();
 const hasActiveFilters = $derived(
   filters.creditHourMin !== null ||
     filters.creditHourMax !== null ||
-    !!filters.instructor ||
+    filters.instructor.length > 0 ||
     filters.courseNumberLow !== null ||
     filters.courseNumberHigh !== null
 );
@@ -40,23 +43,7 @@ function formatCourseNumberPip(v: number): string {
 
     <div class="h-px bg-border"></div>
 
-    <div class="flex flex-col gap-1.5">
-      <label for="instructor-input" class="text-xs font-medium text-muted-foreground select-none">
-        Instructor
-      </label>
-      <input
-        id="instructor-input"
-        type="text"
-        placeholder="Search by name..."
-        autocomplete="off"
-        value={filters.instructor ?? ""}
-        oninput={(e) => {
-          filters.instructor = e.currentTarget.value || null;
-        }}
-        class="h-8 border border-border bg-card text-foreground rounded-md px-2 text-sm
-               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      />
-    </div>
+    <InstructorAutocomplete {selectedTerm} />
 
     <div class="h-px bg-border"></div>
 

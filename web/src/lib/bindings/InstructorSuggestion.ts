@@ -3,4 +3,4 @@
 /**
  * A suggested instructor result for autocomplete.
  */
-export type InstructorSuggestion = { id: number, displayName: string, sectionCount: number, score: number, };
+export type InstructorSuggestion = { id: number, slug: string, displayName: string, sectionCount: number, score: number, };

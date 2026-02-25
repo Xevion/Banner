@@ -82,11 +82,11 @@ const SEARCH_WHERE: &str = r#"
       ))
       AND ($15::float8 IS NULL OR COALESCE(credit_hours, credit_hour_low, 0) >= $15)
       AND ($16::float8 IS NULL OR COALESCE(credit_hours, credit_hour_high, 0) <= $16)
-      AND ($17::text IS NULL OR EXISTS (
+      AND ($17::text[] IS NULL OR EXISTS (
           SELECT 1 FROM course_instructors ci
           JOIN instructors i ON i.id = ci.instructor_id
           WHERE ci.course_id = courses.id
-            AND immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($17) || '%'
+            AND i.slug = ANY($17)
       ))
 "#;
 
@@ -145,7 +145,7 @@ pub async fn search_courses(
     attributes: Option<&[String]>,
     credit_hour_min: Option<f64>,
     credit_hour_max: Option<f64>,
-    instructor: Option<&str>,
+    instructor: Option<&[String]>,
     limit: i32,
     offset: i32,
     sort_by: Option<SortColumn>,
@@ -440,6 +440,7 @@ pub struct CourseSuggestion {
 #[ts(export)]
 pub struct InstructorSuggestion {
     pub id: i32,
+    pub slug: String,
     pub display_name: String,
     pub section_count: i32,
     pub score: f32,
@@ -493,17 +494,18 @@ pub async fn suggest_instructors(
     query: &str,
     limit: i32,
 ) -> Result<Vec<InstructorSuggestion>> {
-    let rows: Vec<(i32, String, i32, f32)> = sqlx::query_as(
+    let rows: Vec<(i32, String, String, i32, f32)> = sqlx::query_as(
         r#"
-        SELECT i.id, i.display_name,
+        SELECT i.id, i.slug, i.display_name,
                COUNT(DISTINCT c.id)::int as section_count,
                MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as score
         FROM instructors i
         JOIN course_instructors ci ON ci.instructor_id = i.id
         JOIN courses c ON c.id = ci.course_id
         WHERE c.term_code = $1
+          AND i.slug IS NOT NULL
           AND (immutable_unaccent(i.display_name) % immutable_unaccent($2) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($2) || '%')
-        GROUP BY i.id, i.display_name
+        GROUP BY i.id, i.slug, i.display_name
         ORDER BY score DESC
         LIMIT $3
         "#,
@@ -517,8 +519,54 @@ pub async fn suggest_instructors(
     Ok(rows
         .into_iter()
         .map(
-            |(id, display_name, section_count, score)| InstructorSuggestion {
+            |(id, slug, display_name, section_count, score)| InstructorSuggestion {
                 id,
+                slug,
+                display_name,
+                section_count,
+                score,
+            },
+        )
+        .collect())
+}
+
+/// Suggest instructors with an optional term filter.
+/// When a term is provided, section_count is scoped to that term.
+/// When no term is provided, section_count is across all terms.
+pub async fn suggest_instructors_global(
+    db_pool: &PgPool,
+    term_code: Option<&str>,
+    query: &str,
+    limit: i32,
+) -> Result<Vec<InstructorSuggestion>> {
+    let rows: Vec<(i32, String, String, i32, f32)> = sqlx::query_as(
+        r#"
+        SELECT i.id, i.slug, i.display_name,
+               COUNT(DISTINCT c.id)::int as section_count,
+               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as score
+        FROM instructors i
+        JOIN course_instructors ci ON ci.instructor_id = i.id
+        JOIN courses c ON c.id = ci.course_id
+        WHERE ($1::text IS NULL OR c.term_code = $1)
+          AND i.slug IS NOT NULL
+          AND (immutable_unaccent(i.display_name) % immutable_unaccent($2) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($2) || '%')
+        GROUP BY i.id, i.slug, i.display_name
+        ORDER BY score DESC
+        LIMIT $3
+        "#,
+    )
+    .bind(term_code)
+    .bind(query)
+    .bind(limit)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, slug, display_name, section_count, score)| InstructorSuggestion {
+                id,
+                slug,
                 display_name,
                 section_count,
                 score,
