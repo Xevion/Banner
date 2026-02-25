@@ -67,9 +67,9 @@ export const courseWithSeats: CourseResponse = {
         legacyId: 123456,
       },
       bluebook: null,
-      composite: {
-        displayScore: 4.2,
-        sortScore: 3.8,
+      rating: {
+        score: 4.2,
+        rankScore: 3.8,
         ciLower: 3.5,
         ciUpper: 4.9,
         confidence: 0.7,
@@ -107,7 +107,7 @@ export const fullCourse: CourseResponse = {
       isPrimary: true,
       rmp: null,
       bluebook: null,
-      composite: null,
+      rating: null,
     },
   ],
   primaryInstructorId: 1002,
@@ -160,9 +160,9 @@ export const onlineCourse: CourseResponse = {
         legacyId: 234567,
       },
       bluebook: null,
-      composite: {
-        displayScore: 3.8,
-        sortScore: 3.4,
+      rating: {
+        score: 3.8,
+        rankScore: 3.4,
         ciLower: 3.2,
         ciUpper: 4.4,
         confidence: 0.8,

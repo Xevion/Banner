@@ -138,7 +138,7 @@ describe("getPrimaryInstructor", () => {
         isPrimary: false,
         rmp: null,
         bluebook: null,
-        composite: null,
+        rating: null,
         slug: null,
       },
       {
@@ -151,7 +151,7 @@ describe("getPrimaryInstructor", () => {
         isPrimary: true,
         rmp: null,
         bluebook: null,
-        composite: null,
+        rating: null,
         slug: null,
       },
     ];
@@ -169,7 +169,7 @@ describe("getPrimaryInstructor", () => {
         isPrimary: false,
         rmp: null,
         bluebook: null,
-        composite: null,
+        rating: null,
         slug: null,
       },
     ];

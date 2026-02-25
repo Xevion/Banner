@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use sqlx::PgPool;
 use tracing::{info, instrument};
 
-use super::course_types::{CompositeRating, ScoreSource};
+use super::course_types::{InstructorRating, RatingSource};
 
 /// Prior distribution: mean of all RMP professors.
 const PRIOR_MEAN: f64 = 3.775;
@@ -31,6 +31,55 @@ const BB_N_FACTOR: f64 = 1.0;
 /// z-score for 80% credible interval.
 const CI_Z: f64 = 1.2816;
 
+/// CI lower bound of a zero-evidence posterior: `PRIOR_MEAN - CI_Z * sqrt(PRIOR_VAR)`.
+///
+/// With no observations the posterior equals the prior, so this is the worst
+/// possible rank score an instructor can receive.  Used as the COALESCE sentinel
+/// for the `AsPrior` unrated policy so that unrated instructors sort as if they
+/// had exactly this score (≈ 3.775 − 1.2816 × 1.02225 ≈ 2.465).
+pub const PRIOR_RANK_SENTINEL: f32 = 2.465;
+
+/// How to handle instructors with no computed score when sorting by rating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum UnratedPolicy {
+    /// COALESCE with the prior rank sentinel so unrated instructors sort among rated ones.
+    AsPrior,
+    /// Push unrated instructors to the end (Infinity for ASC, -Infinity for DESC).
+    Last,
+    /// Filter out unrated instructors entirely (adds a WHERE clause).
+    Exclude,
+}
+
+/// Build SQL fragments for rating-based sorting.
+///
+/// Returns `(ORDER BY clause, optional WHERE filter)`.
+pub fn rating_sort_sql(ascending: bool, policy: UnratedPolicy) -> (String, Option<String>) {
+    let dir = if ascending { "ASC" } else { "DESC" };
+
+    match policy {
+        UnratedPolicy::AsPrior => (
+            format!("COALESCE(sc.sort_score, {PRIOR_RANK_SENTINEL}) {dir}, i.display_name ASC"),
+            None,
+        ),
+        UnratedPolicy::Last => {
+            let sentinel = if ascending {
+                "'Infinity'"
+            } else {
+                "'-Infinity'"
+            };
+            (
+                format!("COALESCE(sc.sort_score, {sentinel}) {dir}, i.display_name ASC"),
+                None,
+            )
+        }
+        UnratedPolicy::Exclude => (
+            format!("sc.sort_score {dir}, i.display_name ASC"),
+            Some("sc.sort_score IS NOT NULL".to_string()),
+        ),
+    }
+}
+
 /// Raw inputs for scoring a single instructor.
 #[derive(Debug)]
 struct RawInstructorData {
@@ -45,12 +94,12 @@ struct RawInstructorData {
 #[derive(Debug)]
 struct ComputedScore {
     instructor_id: i32,
-    display_score: f32,
-    sort_score: f32,
+    score: f32,
+    rank_score: f32,
     ci_lower: f32,
     ci_upper: f32,
     confidence: f32,
-    source: ScoreSource,
+    source: RatingSource,
     rmp_rating: Option<f32>,
     rmp_count: i32,
     bb_rating: Option<f32>,
@@ -108,22 +157,22 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     let posterior_mean_raw = weighted_sum / precision;
     let posterior_stddev = (1.0 / precision).sqrt();
 
-    let display_score = posterior_mean_raw.clamp(1.0, 5.0) as f32;
+    let score = posterior_mean_raw.clamp(1.0, 5.0) as f32;
     let ci_lower = (posterior_mean_raw - CI_Z * posterior_stddev).max(1.0) as f32;
     let ci_upper = (posterior_mean_raw + CI_Z * posterior_stddev).min(5.0) as f32;
     let confidence = (1.0 - posterior_stddev / PRIOR_VAR.sqrt()).clamp(0.0, 1.0) as f32;
 
     let source = match (has_rmp, has_bb) {
-        (true, true) => ScoreSource::Both,
-        (true, false) => ScoreSource::Rmp,
-        (false, true) => ScoreSource::Bb,
-        (false, false) => ScoreSource::Bb, // unreachable in practice
+        (true, true) => RatingSource::Both,
+        (true, false) => RatingSource::Rmp,
+        (false, true) => RatingSource::BlueBook,
+        (false, false) => RatingSource::BlueBook, // unreachable in practice
     };
 
     ComputedScore {
         instructor_id: data.instructor_id,
-        display_score,
-        sort_score: ci_lower,
+        score,
+        rank_score: ci_lower,
         ci_lower,
         ci_upper,
         confidence,
@@ -203,8 +252,8 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
 
     // Bulk insert using UNNEST
     let instructor_ids: Vec<i32> = scores.iter().map(|s| s.instructor_id).collect();
-    let display_scores: Vec<f32> = scores.iter().map(|s| s.display_score).collect();
-    let sort_scores: Vec<f32> = scores.iter().map(|s| s.sort_score).collect();
+    let display_scores: Vec<f32> = scores.iter().map(|s| s.score).collect();
+    let sort_scores: Vec<f32> = scores.iter().map(|s| s.rank_score).collect();
     let ci_lowers: Vec<f32> = scores.iter().map(|s| s.ci_lower).collect();
     let ci_uppers: Vec<f32> = scores.iter().map(|s| s.ci_upper).collect();
     let confidences: Vec<f32> = scores.iter().map(|s| s.confidence).collect();
@@ -278,15 +327,15 @@ pub struct ScoreRow {
     pub bb_count: i32,
 }
 
-/// Load a composite rating from a pre-joined instructor_scores row.
-pub fn build_composite_from_score_row(row: &ScoreRow) -> CompositeRating {
-    CompositeRating {
-        display_score: row.display_score,
-        sort_score: row.sort_score,
+/// Load an instructor rating from a pre-joined instructor_scores row.
+pub fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
+    InstructorRating {
+        score: row.display_score,
+        rank_score: row.sort_score,
         ci_lower: row.ci_lower,
         ci_upper: row.ci_upper,
         confidence: row.confidence,
-        source: ScoreSource::parse(&row.source).unwrap_or(ScoreSource::Bb),
+        source: RatingSource::parse(&row.source).unwrap_or(RatingSource::BlueBook),
         total_responses: row.rmp_count + row.bb_count,
     }
 }
@@ -305,10 +354,10 @@ mod tests {
             bb_total_responses: 100,
         };
         let score = compute_score(&data);
-        assert_eq!(score.source, ScoreSource::Both);
-        assert!(score.display_score > 1.0 && score.display_score < 5.0);
-        assert!(score.ci_lower <= score.display_score);
-        assert!(score.ci_upper >= score.display_score);
+        assert_eq!(score.source, RatingSource::Both);
+        assert!(score.score > 1.0 && score.score < 5.0);
+        assert!(score.ci_lower <= score.score);
+        assert!(score.ci_upper >= score.score);
         assert!(score.confidence > 0.0);
         assert!(score.calibrated_bb.is_some());
     }
@@ -323,7 +372,7 @@ mod tests {
             bb_total_responses: 0,
         };
         let score = compute_score(&data);
-        assert_eq!(score.source, ScoreSource::Rmp);
+        assert_eq!(score.source, RatingSource::Rmp);
         assert!(score.calibrated_bb.is_none());
     }
 
@@ -337,7 +386,7 @@ mod tests {
             bb_total_responses: 50,
         };
         let score = compute_score(&data);
-        assert_eq!(score.source, ScoreSource::Bb);
+        assert_eq!(score.source, RatingSource::BlueBook);
         assert!(score.rmp_rating.is_none());
     }
 
@@ -359,8 +408,8 @@ mod tests {
             bb_total_responses: 10,
         });
         assert!(
-            high_evidence.sort_score > low_evidence.sort_score,
-            "High-evidence 3.9 should have higher sort_score than low-evidence BB-only 4.5"
+            high_evidence.rank_score > low_evidence.rank_score,
+            "High-evidence 3.9 should have higher rank_score than low-evidence BB-only 4.5"
         );
     }
 
@@ -382,15 +431,31 @@ mod tests {
             bb_total_responses: 50,
         });
         assert!(high_bb.calibrated_bb.unwrap() > low_bb.calibrated_bb.unwrap());
-        assert!(high_bb.display_score > low_bb.display_score);
+        assert!(high_bb.score > low_bb.score);
     }
 
     #[test]
-    fn test_score_source_serialization() {
-        assert_eq!(ScoreSource::Both.as_str(), "both");
-        assert_eq!(ScoreSource::Rmp.as_str(), "rmp");
-        assert_eq!(ScoreSource::Bb.as_str(), "bb");
-        assert_eq!(ScoreSource::parse("both"), Some(ScoreSource::Both));
-        assert_eq!(ScoreSource::parse("invalid"), None);
+    fn test_prior_rank_sentinel_matches_computation() {
+        let computed = (PRIOR_MEAN - CI_Z * PRIOR_VAR.sqrt()) as f32;
+        assert!(
+            (PRIOR_RANK_SENTINEL - computed).abs() < 0.01,
+            "PRIOR_RANK_SENTINEL ({PRIOR_RANK_SENTINEL}) should match computed value ({computed})"
+        );
+    }
+
+    #[test]
+    fn test_rating_source_serialization() {
+        assert_eq!(RatingSource::Both.as_str(), "both");
+        assert_eq!(RatingSource::Rmp.as_str(), "rmp");
+        assert_eq!(RatingSource::BlueBook.as_str(), "bluebook");
+        assert_eq!(RatingSource::parse("both"), Some(RatingSource::Both));
+        assert_eq!(RatingSource::parse("rmp"), Some(RatingSource::Rmp));
+        assert_eq!(
+            RatingSource::parse("bluebook"),
+            Some(RatingSource::BlueBook)
+        );
+        // Legacy "bb" still accepted
+        assert_eq!(RatingSource::parse("bb"), Some(RatingSource::BlueBook));
+        assert_eq!(RatingSource::parse("invalid"), None);
     }
 }

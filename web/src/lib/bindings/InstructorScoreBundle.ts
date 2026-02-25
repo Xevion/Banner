@@ -3,4 +3,8 @@ import type { BlueBookBrief } from "./BlueBookBrief";
 import type { InstructorRating } from "./InstructorRating";
 import type { RmpBrief } from "./RmpBrief";
 
-export type PublicInstructorListItem = { id: number, slug: string, displayName: string, email: string | null, subjects: Array<string>, rmp: RmpBrief | null, bluebook: BlueBookBrief | null, rating: InstructorRating | null, };
+/**
+ * Nested score bundle returned by API endpoints for instructor contexts.
+ * Contains the rating plus raw source data for tooltip display.
+ */
+export type InstructorScoreBundle = { rating: InstructorRating, rmp: RmpBrief | null, bluebook: BlueBookBrief | null, };

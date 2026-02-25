@@ -76,19 +76,6 @@ pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
     Ok(count)
 }
 
-/// Lightweight RMP summary for instructor list cards.
-///
-/// Present whenever an RMP profile link exists. Rating fields are `None` when the
-/// profile has no reviews.
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct RmpListSummary {
-    pub avg_rating: Option<f32>,
-    pub num_ratings: Option<i32>,
-    pub legacy_id: i32,
-}
-
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -98,9 +85,9 @@ pub struct PublicInstructorListItem {
     pub display_name: String,
     pub email: Option<String>,
     pub subjects: Vec<String>,
-    pub rmp: Option<RmpListSummary>,
-    pub bluebook: Option<super::course_types::BlueBookListSummary>,
-    pub composite: Option<super::course_types::CompositeRating>,
+    pub rmp: Option<super::course_types::RmpBrief>,
+    pub bluebook: Option<super::course_types::BlueBookBrief>,
+    pub rating: Option<super::course_types::InstructorRating>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -125,24 +112,9 @@ pub struct PublicInstructorProfile {
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub subjects: Vec<String>,
-    pub rmp: Option<PublicRmpSummary>,
-    pub bluebook: Option<super::course_types::PublicBlueBookSummary>,
-    pub composite: Option<super::course_types::CompositeRating>,
-}
-
-/// Full RMP summary for instructor detail pages.
-///
-/// Present whenever an RMP profile link exists. Rating fields are `None` when the
-/// profile has no reviews.
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct PublicRmpSummary {
-    pub avg_rating: Option<f32>,
-    pub avg_difficulty: Option<f32>,
-    pub would_take_again_pct: Option<f32>,
-    pub num_ratings: Option<i32>,
-    pub legacy_id: i32,
+    pub rmp: Option<super::course_types::RmpFull>,
+    pub bluebook: Option<super::course_types::BlueBookFull>,
+    pub rating: Option<super::course_types::InstructorRating>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -205,14 +177,7 @@ pub async fn list_public_instructors(
     let per_page = params.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let sort_clause = match params.sort.as_str() {
-        "name_desc" => "i.display_name DESC",
-        "rating_asc" => "rmp.avg_rating ASC NULLS LAST, i.display_name ASC",
-        "rating_desc" => "rmp.avg_rating DESC NULLS LAST, i.display_name ASC",
-        "composite_asc" => "sc.sort_score ASC NULLS LAST, i.display_name ASC",
-        "composite_desc" => "sc.sort_score DESC NULLS LAST, i.display_name ASC",
-        _ => "i.display_name ASC",
-    };
+    use super::scoring::{self, UnratedPolicy};
 
     // Build dynamic WHERE
     let mut conditions = vec![
@@ -221,6 +186,20 @@ pub async fn list_public_instructors(
         // Must have a slug
         "i.slug IS NOT NULL".to_string(),
     ];
+
+    let sort_clause = match params.sort.as_str() {
+        "name_desc" => "i.display_name DESC".to_string(),
+        sort_key if sort_key.starts_with("score_") => {
+            let ascending = sort_key.ends_with("_asc");
+            let (order, filter) = scoring::rating_sort_sql(ascending, UnratedPolicy::AsPrior);
+            if let Some(f) = filter {
+                conditions.push(f);
+            }
+            order
+        }
+        _ => "i.display_name ASC".to_string(),
+    };
+
     let mut bind_idx = 0u32;
 
     if params.search.is_some() {
@@ -332,7 +311,7 @@ pub async fn list_public_instructors(
                     r.avg_rating.map(|v| v as f32),
                     r.num_ratings,
                 );
-                RmpListSummary {
+                super::course_types::RmpBrief {
                     avg_rating,
                     num_ratings,
                     legacy_id,
@@ -340,14 +319,14 @@ pub async fn list_public_instructors(
             });
             let bluebook = match (r.bb_avg_instructor_rating, r.bb_total_responses) {
                 (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                    Some(super::course_types::BlueBookListSummary {
+                    Some(super::course_types::BlueBookBrief {
                         avg_instructor_rating: avg,
                         total_responses: n as i32,
                     })
                 }
                 _ => None,
             };
-            let composite = match (
+            let rating = match (
                 r.display_score,
                 r.sort_score,
                 r.ci_lower,
@@ -356,7 +335,7 @@ pub async fn list_public_instructors(
                 r.score_source,
             ) {
                 (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => Some(
-                    super::scoring::build_composite_from_score_row(&super::scoring::ScoreRow {
+                    super::scoring::build_rating_from_score_row(&super::scoring::ScoreRow {
                         display_score: ds,
                         sort_score: ss,
                         ci_lower: cl,
@@ -377,7 +356,7 @@ pub async fn list_public_instructors(
                 subjects: r.subjects,
                 rmp,
                 bluebook,
-                composite,
+                rating,
             }
         })
         .collect();
@@ -456,18 +435,10 @@ pub async fn get_public_instructor_by_slug(
             r.avg_rating.map(|v| v as f32),
             r.num_ratings,
         );
-        Some(PublicRmpSummary {
+        Some(super::course_types::RmpFull {
             avg_rating,
-            avg_difficulty: if avg_rating.is_some() {
-                r.avg_difficulty.map(|v| v as f32)
-            } else {
-                None
-            },
-            would_take_again_pct: if avg_rating.is_some() {
-                r.would_take_again_pct.map(|v| v as f32)
-            } else {
-                None
-            },
+            avg_difficulty: r.avg_difficulty.map(|v| v as f32),
+            would_take_again_pct: r.would_take_again_pct.map(|v| v as f32),
             num_ratings,
             legacy_id,
         })
@@ -525,8 +496,8 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor score")?;
 
-    let composite = score_row.as_ref().map(|s| {
-        super::scoring::build_composite_from_score_row(&super::scoring::ScoreRow {
+    let rating = score_row.as_ref().map(|s| {
+        super::scoring::build_rating_from_score_row(&super::scoring::ScoreRow {
             display_score: s.display_score,
             sort_score: s.sort_score,
             ci_lower: s.ci_lower,
@@ -541,8 +512,12 @@ pub async fn get_public_instructor_by_slug(
     let bluebook_summary = match bb {
         Some(ref r) => match (r.avg_instructor_rating, r.total_responses) {
             (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                Some(super::course_types::PublicBlueBookSummary {
-                    normalized_rating: score_row.as_ref().and_then(|s| s.calibrated_bb),
+                let calibrated_rating = score_row
+                    .as_ref()
+                    .and_then(|s| s.calibrated_bb)
+                    .unwrap_or_else(|| (-2.58 + 1.45 * avg as f64).clamp(1.0, 5.0) as f32);
+                Some(super::course_types::BlueBookFull {
+                    calibrated_rating,
                     avg_instructor_rating: avg,
                     avg_course_rating: r.avg_course_rating,
                     total_responses: n as i32,
@@ -568,7 +543,7 @@ pub async fn get_public_instructor_by_slug(
             subjects: subjects.into_iter().map(|(s,)| s).collect(),
             rmp: rmp_summary,
             bluebook: bluebook_summary,
-            composite,
+            rating,
         },
         teaching_history,
     }))

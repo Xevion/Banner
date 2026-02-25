@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { PublicBlueBookSummary, PublicRmpSummary } from "$lib/bindings";
+import type { BlueBookFull, InstructorRating, RmpFull } from "$lib/bindings";
 import StatItem from "$lib/components/score/StatItem.svelte";
 import { ratingColor, rmpUrl, scoreBadgeStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
@@ -8,14 +8,16 @@ import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { BookOpen, ExternalLink, Star } from "@lucide/svelte";
 
 let {
+  rating,
   source,
   bluebook = undefined,
   rmp = undefined,
   inline = false,
 }: {
+  rating: InstructorRating;
   source: "bluebook" | "rmp";
-  bluebook?: PublicBlueBookSummary;
-  rmp?: PublicRmpSummary;
+  bluebook?: BlueBookFull;
+  rmp?: RmpFull;
   inline?: boolean;
 } = $props();
 </script>
@@ -23,7 +25,6 @@ let {
 <div class={inline ? "" : "rounded-lg border border-border bg-card p-5"}>
   {#if source === "bluebook" && bluebook}
     {@const bb = bluebook}
-    {@const overallRating = bb.normalizedRating ?? bb.avgInstructorRating}
     {#if !inline}
       <div class="flex items-center gap-2 mb-3">
         <BookOpen class="size-4 text-muted-foreground" />
@@ -34,17 +35,17 @@ let {
       <div class="text-center w-14">
         <div
           class="text-lg font-semibold"
-          style={scoreBadgeStyle(overallRating, themeStore.isDark)}
+          style={scoreBadgeStyle(rating.score, themeStore.isDark)}
         >
-          {overallRating.toFixed(1)}
+          {rating.score.toFixed(1)}
         </div>
         <div class="w-full h-1 rounded-full bg-muted mt-1">
           <div
             class="h-full rounded-full"
-            style="width: {(overallRating / 5) * 100}%; background-color: {ratingColor(overallRating, themeStore.isDark)}"
+            style="width: {(rating.score / 5) * 100}%; background-color: {ratingColor(rating.score, themeStore.isDark)}"
           ></div>
         </div>
-        <SimpleTooltip text="Normalized to the RateMyProfessors scale&#10;using regression calibration" side="bottom" contentClass="max-w-48">
+        <SimpleTooltip text="Calibrated to the RateMyProfessors scale&#10;using regression calibration" side="bottom" contentClass="max-w-48">
           <div class="text-xs text-muted-foreground mt-1 underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 cursor-help">Overall</div>
         </SimpleTooltip>
       </div>
@@ -75,18 +76,17 @@ let {
     {/if}
     <div class="flex items-center gap-6 flex-wrap">
       {#if r.avgRating != null}
-        {@const rating = r.avgRating}
         <div class="text-center w-14">
           <div
             class="text-lg font-semibold"
-            style={scoreBadgeStyle(rating, themeStore.isDark)}
+            style={scoreBadgeStyle(rating.score, themeStore.isDark)}
           >
-            {rating.toFixed(1)}
+            {rating.score.toFixed(1)}
           </div>
           <div class="w-full h-1 rounded-full bg-muted mt-1">
             <div
               class="h-full rounded-full"
-              style="width: {(rating / 5) * 100}%; background-color: {ratingColor(rating, themeStore.isDark)}"
+              style="width: {(rating.score / 5) * 100}%; background-color: {ratingColor(rating.score, themeStore.isDark)}"
             ></div>
           </div>
           <div class="text-xs text-muted-foreground mt-1">Overall</div>

@@ -30,7 +30,7 @@ const profile = untrack(() => data.profile);
 const instructor = profile.instructor;
 const rmp = instructor.rmp;
 const bluebook = instructor.bluebook;
-const composite = instructor.composite;
+const rating = instructor.rating;
 
 let selectedTerm = $state(untrack(() => data.initialTerm ?? ""));
 let sections = $state<CourseResponse[]>(untrack(() => data.initialSections ?? []));
@@ -96,12 +96,12 @@ function resolveSubject(code: string): string {
 const displayName = $derived(formatInstructorName(instructor));
 
 interface ScoreBarProps {
-  displayScore: number;
-  sortScore: number;
+  score: number;
+  rankScore: number;
   ciLower: number;
   ciUpper: number;
   confidence: number;
-  source: "both" | "rmp" | "bb";
+  source: "both" | "rmp" | "bluebook";
   rmpRating: number | null;
   rmpCount: number;
   bbRating: number | null;
@@ -109,14 +109,14 @@ interface ScoreBarProps {
 }
 
 const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
-  if (!composite) return null;
+  if (!rating) return null;
   return {
-    displayScore: composite.displayScore,
-    sortScore: composite.sortScore,
-    ciLower: composite.ciLower,
-    ciUpper: composite.ciUpper,
-    confidence: composite.confidence,
-    source: composite.source as "both" | "rmp" | "bb",
+    score: rating.score,
+    rankScore: rating.rankScore,
+    ciLower: rating.ciLower,
+    ciUpper: rating.ciUpper,
+    confidence: rating.confidence,
+    source: rating.source,
     rmpRating: rmp?.avgRating ?? null,
     rmpCount: rmp?.numRatings ?? 0,
     bbRating: bluebook?.avgInstructorRating ?? null,
@@ -179,7 +179,7 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
       {@const hasRmp = rmp?.avgRating != null}
       {@const hasBb = bluebook != null}
       {@const hasBothSources = hasRmp && hasBb}
-      {@const defaultTab = hasRmp ? "rmp" : "bb"}
+      {@const defaultTab = hasRmp ? "rmp" : "bluebook"}
       <div class="rounded-lg border border-border bg-card mb-6">
         <div class="flex flex-col md:flex-row">
           <!-- ScoreBar (left / top on mobile) -->
@@ -214,7 +214,7 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                       </span>
                     </Tabs.Trigger>
                     <Tabs.Trigger
-                      value="bb"
+                      value="bluebook"
                       class="flex-1 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40 active:bg-muted/60 data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-muted-foreground/50 data-[state=active]:-mb-px cursor-pointer"
                     >
                       BlueBook
@@ -222,12 +222,12 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                   </Tabs.List>
                   <Tabs.Content value="rmp" class="p-4">
                     {#if rmp}
-                      <SourceScoreCard source="rmp" {rmp} inline />
+                      <SourceScoreCard rating={rating!} source="rmp" {rmp} inline />
                     {/if}
                   </Tabs.Content>
-                  <Tabs.Content value="bb" class="p-4">
+                  <Tabs.Content value="bluebook" class="p-4">
                     {#if bluebook}
-                      <SourceScoreCard source="bluebook" {bluebook} inline />
+                      <SourceScoreCard rating={rating!} source="bluebook" {bluebook} inline />
                     {/if}
                   </Tabs.Content>
                 </Tabs.Root>
@@ -240,9 +240,9 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                 </div>
                 <div class="p-4">
                   {#if hasRmp && rmp}
-                    <SourceScoreCard source="rmp" {rmp} inline />
+                    <SourceScoreCard rating={rating!} source="rmp" {rmp} inline />
                   {:else if hasBb && bluebook}
-                    <SourceScoreCard source="bluebook" {bluebook} inline />
+                    <SourceScoreCard rating={rating!} source="bluebook" {bluebook} inline />
                   {/if}
                 </div>
               {/if}

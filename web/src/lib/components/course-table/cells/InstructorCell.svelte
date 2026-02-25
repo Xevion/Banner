@@ -53,10 +53,10 @@ let profileUrl = $derived(primary?.slug ? `/instructors/${primary.slug}` : null)
       </span>
     {/if}
   {/if}
-  {#if primary?.composite}
+  {#if primary?.rating}
     <span class="ml-1">
       <ScorePopover
-        composite={primary.composite}
+        rating={primary.rating}
         rmp={primary.rmp}
         bluebook={primary.bluebook}
         size="xs"

@@ -10,7 +10,7 @@ use axum::{
 
 use axum::extract::Request;
 
-use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpRating, SectionLink};
+use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, SectionLink};
 use crate::data::reference_types::{
     Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
 };
@@ -522,9 +522,9 @@ pub struct InstructorResponse {
     email: Option<String>,
     slug: Option<String>,
     is_primary: bool,
-    rmp: Option<RmpRating>,
-    bluebook: Option<crate::data::course_types::BlueBookRating>,
-    composite: Option<crate::data::course_types::CompositeRating>,
+    rmp: Option<RmpBrief>,
+    bluebook: Option<crate::data::course_types::BlueBookBrief>,
+    rating: Option<crate::data::course_types::InstructorRating>,
 }
 
 #[derive(Serialize, TS)]
@@ -593,17 +593,17 @@ pub fn build_course_response(
                     i.avg_rating.map(|v| v as f32),
                     i.num_ratings,
                 );
-                RmpRating {
+                RmpBrief {
                     avg_rating,
                     num_ratings,
                     legacy_id,
                 }
             });
-            let bluebook = crate::data::course_types::build_bluebook_rating(
+            let bluebook = crate::data::course_types::build_bluebook_brief(
                 i.bb_avg_instructor_rating,
                 i.bb_total_responses,
             );
-            let composite = match (
+            let rating = match (
                 i.sc_display_score,
                 i.sc_sort_score,
                 i.sc_ci_lower,
@@ -612,7 +612,7 @@ pub fn build_course_response(
                 i.sc_source,
             ) {
                 (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => {
-                    Some(crate::data::scoring::build_composite_from_score_row(
+                    Some(crate::data::scoring::build_rating_from_score_row(
                         &crate::data::scoring::ScoreRow {
                             display_score: ds,
                             sort_score: ss,
@@ -638,7 +638,7 @@ pub fn build_course_response(
                 is_primary: i.is_primary,
                 rmp,
                 bluebook,
-                composite,
+                rating,
             }
         })
         .collect();

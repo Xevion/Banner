@@ -9,7 +9,7 @@ import SortSelect from "$lib/components/SortSelect.svelte";
 import type { SortOption } from "$lib/components/SortSelect.svelte";
 import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import { formatNumber } from "$lib/utils";
-import { ExternalLink, Mail, Search } from "@lucide/svelte";
+import { Mail, Search } from "@lucide/svelte";
 import { untrack } from "svelte";
 
 interface PageData {
@@ -36,8 +36,7 @@ const subjectMap = $derived(
 
 const sortOptions: SortOption[] = [
   { value: "name", label: "Alphabetical", defaultDirection: "asc" },
-  { value: "composite", label: "Score", defaultDirection: "desc" },
-  { value: "rating", label: "RMP Rating", defaultDirection: "desc" },
+  { value: "score", label: "Score", defaultDirection: "desc" },
 ];
 
 const query = useQuery({
@@ -169,19 +168,14 @@ function resolveSubject(code: string): string {
                   {/if}
                 </div>
 
-                {#if instructor.composite != null}
+                {#if instructor.rating != null}
                   <div class="shrink-0">
                     <ScoreBadge
-                      score={instructor.composite.displayScore}
-                      source={instructor.bluebook != null && instructor.rmp?.avgRating == null ? "bluebook" : "composite"}
-                      confidence={instructor.composite.confidence}
+                      score={instructor.rating.score}
+                      confidence={instructor.rating.confidence}
                       size="sm"
                     />
                   </div>
-                {:else if instructor.rmp != null}
-                  <span class="text-muted-foreground shrink-0" title="View on RateMyProfessors">
-                    <ExternalLink class="size-3.5" />
-                  </span>
                 {/if}
               </div>
 

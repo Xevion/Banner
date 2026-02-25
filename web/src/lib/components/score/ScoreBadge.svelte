@@ -2,16 +2,14 @@
 import { scoreBadgeStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { cn } from "$lib/utils";
-import { BookOpen, Star, Triangle } from "@lucide/svelte";
+import { Star, Triangle } from "@lucide/svelte";
 
 let {
   score,
-  source = "composite",
   confidence = 1,
   size = "xs",
 }: {
   score: number;
-  source?: "composite" | "bluebook" | "rmp";
   confidence?: number;
   size?: "xs" | "sm" | "lg";
 } = $props();
@@ -45,8 +43,6 @@ const iconSizes = {
   {score.toFixed(1)}
   {#if tier === "low"}
     <Triangle class={cn(iconSizes[size], "fill-current")} />
-  {:else if source === "bluebook"}
-    <BookOpen class={cn(iconSizes[size], "fill-current")} />
   {:else}
     <Star class={cn(iconSizes[size], "fill-current")} />
   {/if}

@@ -6,8 +6,8 @@ import { scaleBand, scaleLinear } from "d3-scale";
 import { Axis, Bars, Chart, Points, Rule, Svg } from "layerchart";
 
 let {
-  displayScore,
-  sortScore,
+  score,
+  rankScore,
   ciLower,
   ciUpper,
   confidence,
@@ -18,12 +18,12 @@ let {
   bbCount = 0,
   class: className = "",
 }: {
-  displayScore: number;
-  sortScore: number;
+  score: number;
+  rankScore: number;
   ciLower: number;
   ciUpper: number;
   confidence: number;
-  source: "both" | "rmp" | "bb";
+  source: "both" | "rmp" | "bluebook";
   rmpRating?: number | null;
   rmpCount?: number;
   bbRating?: number | null;
@@ -39,12 +39,12 @@ const SYMBOL_THRESHOLD = 30;
 
 interface DataPoint {
   label: string;
-  displayScore: number;
-  sortScore: number;
+  score: number;
+  rankScore: number;
   ciLower: number;
   ciUpper: number;
   confidence: number;
-  source: "both" | "rmp" | "bb";
+  source: "both" | "rmp" | "bluebook";
   rmpRating: number | null;
   rmpCount: number;
   bbRating: number | null;
@@ -54,8 +54,8 @@ interface DataPoint {
 const chartData: DataPoint[] = $derived([
   {
     label: "",
-    displayScore,
-    sortScore,
+    score,
+    rankScore,
     ciLower,
     ciUpper,
     confidence,
@@ -67,7 +67,7 @@ const chartData: DataPoint[] = $derived([
   },
 ]);
 
-const color = $derived(ratingColor(displayScore, themeStore.isDark));
+const color = $derived(ratingColor(score, themeStore.isDark));
 const ciOpacity = $derived(0.12 + confidence * 0.25);
 const rmpColor = $derived(rmpRating != null ? "#f59e0b" : null); // amber - independent of rating gradient
 const bbColor = $derived(bbRating != null ? "#60a5fa" : null); // blue - independent of rating gradient
@@ -106,16 +106,16 @@ const symbols: SymbolDef[] = $derived.by(() => {
 
   syms.push({
     id: "score",
-    x: xScale(displayScore),
+    x: xScale(score),
     y: bandCenter,
     label: "Rating",
-    value: displayScore.toFixed(2),
+    value: score.toFixed(2),
     color,
     icon: "\u25CF",
     detail: `${(confidence * 100).toFixed(0)}% confidence \u00B7 ${ciLower.toFixed(2)}\u2013${ciUpper.toFixed(2)} range`,
   });
 
-  if (source === "both" && rmpRating != null && rmpColor) {
+  if (rmpRating != null && rmpColor) {
     syms.push({
       id: "rmp",
       x: xScale(rmpRating),
@@ -127,9 +127,9 @@ const symbols: SymbolDef[] = $derived.by(() => {
     });
   }
 
-  if (source === "both" && bbRating != null && bbColor) {
+  if (bbRating != null && bbColor) {
     syms.push({
-      id: "bb",
+      id: "bluebook",
       x: xScale(bbRating),
       y: bandCenter + 4,
       label: "BlueBook",
@@ -186,7 +186,7 @@ const highlightId = $derived(activeSymbol?.id ?? null);
 const bandDimOpacity = $derived(highlightId != null && highlightId !== "score" ? DIM : 1);
 const dotDimOpacity = $derived(highlightId != null && highlightId !== "score" ? DIM : 1);
 const rmpDimOpacity = $derived(highlightId != null && highlightId !== "rmp" ? DIM : 1);
-const bbDimOpacity = $derived(highlightId != null && highlightId !== "bb" ? DIM : 1);
+const bbDimOpacity = $derived(highlightId != null && highlightId !== "bluebook" ? DIM : 1);
 const priorDimOpacity = $derived(highlightId != null && highlightId !== "prior" ? DIM : 1);
 
 function onMouseMove(e: MouseEvent) {
@@ -254,7 +254,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
     <!-- Score number + CI range -->
     <div class="w-10 sm:w-12 shrink-0 text-right">
         <span class="text-xl sm:text-3xl font-bold tabular-nums leading-tight" style="color: {color}">
-            {displayScore.toFixed(1)}
+            {score.toFixed(1)}
         </span>
         <div class="text-[10px] text-muted-foreground tabular-nums leading-tight">
             {ciLower.toFixed(1)}&ndash;{ciUpper.toFixed(1)}
@@ -349,8 +349,8 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                     />
                 </g>
 
-                <!-- Source markers -->
-                {#if source === "both" && rmpRating != null}
+            <!-- Source markers -->
+            {#if rmpRating != null}
                     <!-- Star [star] centered ~4px above band center; R=4.5 outer, r=1.9 inner -->
                     <g opacity={rmpDimOpacity} style="transition: opacity 0.12s ease">
                         <Points x="rmpRating" r={3} let:points>
@@ -365,7 +365,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                     </g>
                 {/if}
 
-                {#if source === "both" && bbRating != null}
+                {#if bbRating != null}
                     <!-- Upward triangle [triangle] below band center -->
                     <g opacity={bbDimOpacity} style="transition: opacity 0.12s ease">
                         <Points x="bbRating" r={3} let:points>
@@ -382,7 +382,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
 
                 <!-- Point estimate dot with glow -->
                 <g filter="url(#{filterId})" opacity={dotDimOpacity} style="transition: opacity 0.12s ease">
-                    <Points x="displayScore" r={5.5} fill={color} />
+                    <Points x="score" r={5.5} fill={color} />
                 </g>
             </Svg>
         </Chart>
@@ -424,7 +424,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                     <div class="flex items-center justify-between gap-4">
                         <span class="font-medium">Rating</span>
                         <span class="font-semibold tabular-nums" style="color: {color}">
-                            {displayScore.toFixed(2)}
+                            {score.toFixed(2)}
                         </span>
                     </div>
 
@@ -455,7 +455,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                     {#if rmpRating != null}
                         <div class="flex items-center justify-between gap-4">
                             <span class="flex items-center gap-1.5">
-                                {#if source === "both"}<span class="text-[11px] leading-none" style="color: {rmpColor}">&#9733;</span>{/if}
+                                <span class="text-[11px] leading-none" style="color: {rmpColor}">&#9733;</span>
                                 <span class="text-muted-foreground">RateMyProfessors</span>
                             </span>
                             <span class="tabular-nums">
@@ -467,7 +467,7 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                     {#if bbRating != null}
                         <div class="flex items-center justify-between gap-4">
                             <span class="flex items-center gap-1.5">
-                                {#if source === "both"}<span class="text-[11px] leading-none" style="color: {bbColor}">&#9650;</span>{/if}
+                                <span class="text-[11px] leading-none" style="color: {bbColor}">&#9650;</span>
                                 <span class="text-muted-foreground">BlueBook</span>
                             </span>
                             <span class="tabular-nums">

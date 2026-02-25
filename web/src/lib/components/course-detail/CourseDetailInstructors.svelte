@@ -40,9 +40,9 @@ let { course }: { course: CourseResponse } = $props();
           </div>
 
           <!-- Rating -->
-          {#if instructor.composite}
+          {#if instructor.rating}
             <ScorePopover
-              composite={instructor.composite}
+              rating={instructor.rating}
               rmp={instructor.rmp}
               bluebook={instructor.bluebook}
               size="xs"

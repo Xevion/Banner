@@ -22,7 +22,12 @@ Use language-idiomatic casing (snake_case in Rust, camelCase in TypeScript). Use
 | A user's course watch | `Subscription` | A monitored course that triggers notifications |
 | A weekly course layout | `Schedule` | The visual timeline representation of a user's courses |
 | A lookup table entry | `ReferenceData` | Campuses, instruction methods, session types, etc. |
-| A RateMyProfessors record | `RmpRating` | Not "review" or "score" |
+| An instructor's Bayesian rating | `InstructorRating` | Posterior mean + CI; the headline number everywhere |
+| Which sources contributed data | `RatingSource` | `Both`, `Rmp`, or `BlueBook` |
+| RMP summary (lists/search) | `RmpBrief` | `avgRating`, `numRatings`, `legacyId` |
+| RMP detail (profile page) | `RmpFull` | Adds `avgDifficulty`, `wouldTakeAgainPct` |
+| BlueBook summary (lists/search) | `BlueBookBrief` | `avgInstructorRating`, `totalResponses` |
+| BlueBook detail (profile page) | `BlueBookFull` | Adds `calibratedRating`, `evalCount` |
 
 These names are used in types, API endpoints, database tables, and UI copy. When in doubt, check the Rust backend models -- they're the source of truth.
 
@@ -73,7 +78,7 @@ Use consistent field names across all stacks for values that may be aggregated o
 ### Duration Formatting
 
 Use `crate::utils::fmt_duration` for all duration fields in tracing calls. It produces
-human-readable output like `1.94ms`, `2.34s`, `150.00uss` with automatic unit scaling.
+human-readable output like `1.94ms`, `2.34s`, `150.00us` with automatic unit scaling.
 
 ```rust
 use crate::utils::fmt_duration;
