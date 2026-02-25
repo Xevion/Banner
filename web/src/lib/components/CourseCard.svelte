@@ -8,8 +8,17 @@ import {
   seatsDotColor,
 } from "$lib/course";
 import { formatNumber } from "$lib/utils";
+import type { TransitionConfig } from "svelte/transition";
 import { slide } from "svelte/transition";
 import CourseDetail from "./CourseDetail.svelte";
+
+/** Slide transition that gracefully skips when the element is hidden (display: none). */
+function safeSlide(node: Element, params: Parameters<typeof slide>[1] = {}): TransitionConfig {
+  if ((node as HTMLElement).offsetParent === null) {
+    return { duration: 0 };
+  }
+  return slide(node, params);
+}
 
 let {
   course,
@@ -63,7 +72,7 @@ let {
   </button>
 
   {#if expanded}
-    <div transition:slide={{ duration: 200 }}>
+    <div transition:safeSlide={{ duration: 200 }}>
       <CourseDetail {course} />
     </div>
   {/if}
