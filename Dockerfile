@@ -2,7 +2,7 @@
 ARG RUST_VERSION=1.89.0
 ARG RAILWAY_GIT_COMMIT_SHA
 
-# --- Frontend Build Stage ---
+# Frontend Build Stage
 FROM oven/bun:1 AS frontend-builder
 
 WORKDIR /app
@@ -23,11 +23,11 @@ COPY ./web ./
 # Build SSR output, then pre-compress static client assets (gzip, brotli, zstd)
 RUN bun run build && bun run scripts/compress-assets.ts
 
-# --- Chef Base Stage ---
+# Chef Base Stage
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION} AS chef
 WORKDIR /app
 
-# --- Planner Stage ---
+# Planner Stage
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
@@ -35,7 +35,7 @@ COPY src ./src
 # Migrations & .sqlx specifically left out to avoid invalidating cache
 RUN cargo chef prepare --recipe-path recipe.json --bin banner
 
-# --- Rust Build Stage ---
+# Rust Build Stage
 FROM chef AS builder
 
 # Set build-time environment variable for Railway Git commit SHA
@@ -71,7 +71,6 @@ RUN cargo build --release --bin banner
 # Strip the binary to reduce size
 RUN strip target/release/banner
 
-# --- Runtime Stage ---
 # Bun runtime needed for SSR server
 FROM oven/bun:1-slim
 

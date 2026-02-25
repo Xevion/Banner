@@ -223,7 +223,7 @@ pub async fn list_public_instructors(
     if params.search.is_some() {
         bind_idx += 1;
         conditions.push(format!(
-            "(i.display_name % ${bind_idx} OR i.display_name ILIKE '%' || ${bind_idx} || '%')"
+            "(immutable_unaccent(i.display_name) % immutable_unaccent(${bind_idx}) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(${bind_idx}) || '%')"
         ));
     }
     if params.subject.is_some() {

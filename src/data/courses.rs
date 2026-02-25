@@ -53,7 +53,7 @@ pub struct FilterRanges {
 const SEARCH_WHERE: &str = r#"
     WHERE term_code = $1
       AND ($2::text[] IS NULL OR subject = ANY($2))
-      AND ($3::text IS NULL OR title_search @@ plainto_tsquery('simple', $3) OR title ILIKE '%' || $3 || '%')
+      AND ($3::text IS NULL OR title_search @@ plainto_tsquery('simple_unaccent', $3) OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent($3) || '%')
       AND ($4::int IS NULL OR (substring(course_number from '^\d+'))::int >= $4)
       AND ($5::int IS NULL OR (substring(course_number from '^\d+'))::int <= $5)
       AND ($6::bool = false OR max_enrollment > enrollment)
@@ -86,7 +86,7 @@ const SEARCH_WHERE: &str = r#"
           SELECT 1 FROM course_instructors ci
           JOIN instructors i ON i.id = ci.instructor_id
           WHERE ci.course_id = courses.id
-            AND i.display_name ILIKE '%' || $17 || '%'
+            AND immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($17) || '%'
       ))
 "#;
 
@@ -446,10 +446,10 @@ pub async fn suggest_courses(
     let rows: Vec<(String, String, String, i32, f32)> = sqlx::query_as(
         r#"
         SELECT subject, course_number, title, COUNT(*)::int as section_count,
-               MAX(GREATEST(similarity(title, $2), similarity(subject || ' ' || course_number, $2))) as score
+               MAX(GREATEST(similarity(immutable_unaccent(title), immutable_unaccent($2)), similarity(subject || ' ' || course_number, $2))) as score
         FROM courses
         WHERE term_code = $1
-          AND (title % $2 OR title ILIKE '%' || $2 || '%'
+          AND (immutable_unaccent(title) % immutable_unaccent($2) OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent($2) || '%'
                OR (subject || ' ' || course_number) % $2
                OR (subject || ' ' || course_number) ILIKE '%' || $2 || '%')
         GROUP BY subject, course_number, title
@@ -488,12 +488,12 @@ pub async fn suggest_instructors(
         r#"
         SELECT i.id, i.display_name,
                COUNT(DISTINCT c.id)::int as section_count,
-               MAX(similarity(i.display_name, $2)) as score
+               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as score
         FROM instructors i
         JOIN course_instructors ci ON ci.instructor_id = i.id
         JOIN courses c ON c.id = ci.course_id
         WHERE c.term_code = $1
-          AND (i.display_name % $2 OR i.display_name ILIKE '%' || $2 || '%')
+          AND (immutable_unaccent(i.display_name) % immutable_unaccent($2) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($2) || '%')
         GROUP BY i.id, i.display_name
         ORDER BY score DESC
         LIMIT $3
