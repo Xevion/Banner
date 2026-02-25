@@ -228,19 +228,12 @@ pub async fn get_course_instructors(
         r#"
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
-               rmp.avg_rating, rmp.num_ratings, rmp.rmp_legacy_id,
+               rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
                i.slug,
                ci.course_id
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
-        LEFT JOIN LATERAL (
-            SELECT rp.avg_rating, rp.num_ratings, rp.legacy_id as rmp_legacy_id
-            FROM instructor_rmp_links irl
-            JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
-            WHERE irl.instructor_id = i.id
-            ORDER BY rp.num_ratings DESC NULLS LAST, rp.legacy_id ASC
-            LIMIT 1
-        ) rmp ON true
+        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
         WHERE ci.course_id = $1
         ORDER BY ci.is_primary DESC, i.display_name
         "#,
@@ -266,20 +259,13 @@ pub async fn get_instructors_for_courses(
         r#"
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
-               rmp.avg_rating, rmp.num_ratings, rmp.rmp_legacy_id,
+               rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
                bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
                ci.course_id
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
-        LEFT JOIN LATERAL (
-            SELECT rp.avg_rating, rp.num_ratings, rp.legacy_id as rmp_legacy_id
-            FROM instructor_rmp_links irl
-            JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
-            WHERE irl.instructor_id = i.id
-            ORDER BY rp.num_ratings DESC NULLS LAST, rp.legacy_id ASC
-            LIMIT 1
-        ) rmp ON true
+        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
         LEFT JOIN LATERAL (
             SELECT
                 AVG(be.instructor_rating)::real as bb_avg_instructor_rating,

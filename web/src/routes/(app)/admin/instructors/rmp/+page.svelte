@@ -5,6 +5,7 @@ import type {
   InstructorDetailResponse,
   InstructorListItem,
   InstructorStats,
+  RmpMatchStatus,
 } from "$lib/bindings";
 import FilterCards from "$lib/components/FilterCards.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
@@ -217,7 +218,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function updateLocalStatus(instructorId: number, newStatus: string) {
+function updateLocalStatus(instructorId: number, newStatus: RmpMatchStatus) {
   instructors = instructors.map((i) =>
     i.id === instructorId ? { ...i, rmpMatchStatus: newStatus } : i
   );

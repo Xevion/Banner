@@ -1,11 +1,12 @@
 <script lang="ts">
+import type { ScoreBreakdown as ScoreBreakdownType } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 
 let {
   breakdown = null,
   score = 0,
 }: {
-  breakdown?: Partial<Record<string, number>> | null;
+  breakdown?: ScoreBreakdownType | null;
   score?: number;
 } = $props();
 
@@ -36,7 +37,7 @@ function fmt(v: number): string {
 }
 
 /** Only include the four composite signals (skip raw department/review_courses). */
-const compositeKeys = ["name", "subject", "uniqueness", "volume"];
+const compositeKeys: (keyof ScoreBreakdownType)[] = ["name", "subject", "uniqueness", "volume"];
 
 const segments = $derived(
   compositeKeys
@@ -46,18 +47,17 @@ const segments = $derived(
       label: labels[key] ?? key,
       color: colors[key] ?? "bg-primary",
       weight: weights[key] ?? 0,
-      raw: (breakdown as Record<string, number>)[key],
-      pct: (breakdown as Record<string, number>)[key] * (weights[key] ?? 0) * 100,
+      raw: breakdown![key],
+      pct: breakdown![key] * (weights[key] ?? 0) * 100,
     }))
 );
 
 const tooltipText = $derived.by(() => {
-  const b = breakdown as Record<string, number> | null;
   const lines = segments.map((s) => `${s.label}: ${fmt(s.raw)}% \u00d7 ${fmt(s.weight)}%`);
 
   // Show department and review_courses as sub-detail under Subject
-  const dept = b?.department;
-  const reviews = b?.reviewCourses;
+  const dept = breakdown?.department;
+  const reviews = breakdown?.reviewCourses;
   if (dept != null || reviews != null) {
     const parts: string[] = [];
     if (dept != null) parts.push(`dept ${fmt(dept)}%`);

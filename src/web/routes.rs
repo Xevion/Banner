@@ -590,7 +590,7 @@ pub fn build_course_response(
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
                 let (avg_rating, num_ratings) =
-                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating, i.num_ratings);
+                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating.map(|v| v as f32), i.num_ratings);
                 let is_confident = num_ratings.is_some_and(|n| n >= RMP_CONFIDENCE_THRESHOLD);
                 RmpRating {
                     avg_rating,
@@ -879,7 +879,10 @@ async fn search_courses(
     let mut instructor_map =
         data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                error!(error = %e, "Failed to fetch instructors for course search");
+                Default::default()
+            });
 
     let course_responses: Vec<CourseResponse> = courses
         .iter()
@@ -909,7 +912,10 @@ async fn get_course(
 
     let instructors = data::courses::get_course_instructors(&state.db_pool, course.id)
         .await
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            error!(error = %e, course_id = course.id, "Failed to fetch instructors for course");
+            Vec::new()
+        });
     Ok(Json(build_course_response(&course, instructors)))
 }
 
@@ -931,7 +937,10 @@ async fn get_related_sections(
     let mut instructor_map =
         data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                error!(error = %e, "Failed to fetch instructors for related sections");
+                Default::default()
+            });
 
     let responses: Vec<CourseResponse> = courses
         .iter()

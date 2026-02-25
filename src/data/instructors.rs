@@ -207,6 +207,7 @@ pub async fn list_public_instructors(
 
     let sort_clause = match params.sort.as_str() {
         "name_desc" => "i.display_name DESC",
+        "rating_asc" => "rmp.avg_rating ASC NULLS LAST, i.display_name ASC",
         "rating_desc" => "rmp.avg_rating DESC NULLS LAST, i.display_name ASC",
         _ => "i.display_name ASC",
     };
@@ -245,17 +246,10 @@ pub async fn list_public_instructors(
                  WHERE ci.instructor_id = i.id),
                 ARRAY[]::text[]
             ) as subjects,
-            rmp.avg_rating, rmp.num_ratings, rmp.legacy_id as rmp_legacy_id,
+            rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
             bb.bb_avg_instructor_rating, bb.bb_total_responses
         FROM instructors i
-        LEFT JOIN LATERAL (
-            SELECT rp.avg_rating, rp.num_ratings, rp.legacy_id
-            FROM instructor_rmp_links irl
-            JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
-            WHERE irl.instructor_id = i.id
-            ORDER BY rp.num_ratings DESC NULLS LAST
-            LIMIT 1
-        ) rmp ON true
+        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
         LEFT JOIN (
             SELECT ibl.instructor_id,
                 AVG(be.instructor_rating)::real as bb_avg_instructor_rating,
@@ -281,7 +275,7 @@ pub async fn list_public_instructors(
         display_name: String,
         email: Option<String>,
         subjects: Vec<String>,
-        avg_rating: Option<f32>,
+        avg_rating: Option<f64>,
         num_ratings: Option<i32>,
         rmp_legacy_id: Option<i32>,
         bb_avg_instructor_rating: Option<f32>,
@@ -321,7 +315,7 @@ pub async fn list_public_instructors(
         .map(|r| {
             let rmp = r.rmp_legacy_id.map(|legacy_id| {
                 let (avg_rating, num_ratings) =
-                    super::course_types::sanitize_rmp_ratings(r.avg_rating, r.num_ratings);
+                    super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
                 RmpListSummary {
                     avg_rating,
                     num_ratings,
@@ -401,24 +395,22 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor subjects")?;
 
-    // Best RMP profile
+    // Best RMP profile (from materialized view)
     #[derive(sqlx::FromRow)]
     struct RmpRow {
-        avg_rating: f32,
-        avg_difficulty: Option<f32>,
-        would_take_again_pct: Option<f32>,
-        num_ratings: i32,
-        legacy_id: i32,
+        avg_rating: Option<f64>,
+        avg_difficulty: Option<f64>,
+        would_take_again_pct: Option<f64>,
+        num_ratings: Option<i32>,
+        legacy_id: Option<i32>,
     }
 
     let rmp = sqlx::query_as::<_, RmpRow>(
         r#"
-        SELECT rp.avg_rating, rp.avg_difficulty, rp.would_take_again_pct, rp.num_ratings, rp.legacy_id
-        FROM instructor_rmp_links irl
-        JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
-        WHERE irl.instructor_id = $1
-        ORDER BY rp.num_ratings DESC NULLS LAST
-        LIMIT 1
+        SELECT rmp.avg_rating, rmp.avg_difficulty, rmp.would_take_again_pct,
+               rmp.num_ratings, rmp.primary_legacy_id as legacy_id
+        FROM instructor_rmp_summary rmp
+        WHERE rmp.instructor_id = $1
         "#,
     )
     .bind(inst.id)
@@ -426,24 +418,25 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor rmp")?;
 
-    let rmp_summary = rmp.map(|r| {
+    let rmp_summary = rmp.and_then(|r| {
+        let legacy_id = r.legacy_id?;
         let (avg_rating, num_ratings) =
-            super::course_types::sanitize_rmp_ratings(Some(r.avg_rating), Some(r.num_ratings));
-        PublicRmpSummary {
+            super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
+        Some(PublicRmpSummary {
             avg_rating,
             avg_difficulty: if avg_rating.is_some() {
-                r.avg_difficulty
+                r.avg_difficulty.map(|v| v as f32)
             } else {
                 None
             },
             would_take_again_pct: if avg_rating.is_some() {
-                r.would_take_again_pct
+                r.would_take_again_pct.map(|v| v as f32)
             } else {
                 None
             },
             num_ratings,
-            legacy_id: r.legacy_id,
-        }
+            legacy_id,
+        })
     });
 
     // BlueBook evaluations

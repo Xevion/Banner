@@ -91,32 +91,6 @@ pub async fn batch_upsert_rmp_professors(
     Ok(())
 }
 
-/// Retrieve RMP rating data for an instructor by instructor id.
-///
-/// Returns `(avg_rating, num_ratings)` for the best linked RMP profile
-/// (most ratings). Returns `None` if no link exists.
-#[allow(dead_code)]
-pub async fn get_instructor_rmp_data(
-    db_pool: &PgPool,
-    instructor_id: i32,
-) -> Result<Option<(f32, i32)>> {
-    let row: Option<(f32, i32)> = sqlx::query_as(
-        r#"
-        SELECT rp.avg_rating, rp.num_ratings
-        FROM instructor_rmp_links irl
-        JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
-        WHERE irl.instructor_id = $1
-          AND rp.avg_rating IS NOT NULL
-        ORDER BY rp.num_ratings DESC NULLS LAST
-        LIMIT 1
-        "#,
-    )
-    .bind(instructor_id)
-    .fetch_optional(db_pool)
-    .await?;
-    Ok(row)
-}
-
 /// Unmatch an instructor from an RMP profile.
 ///
 /// Removes the link from `instructor_rmp_links` and updates the instructor's
@@ -188,6 +162,7 @@ pub async fn unmatch_instructor(
     }
 
     tx.commit().await?;
+    refresh_rmp_summary(db_pool).await?;
     Ok(())
 }
 
@@ -327,5 +302,17 @@ pub async fn mark_professor_reviews_scraped(
     .execute(db_pool)
     .await?;
 
+    Ok(())
+}
+
+/// Refresh the `instructor_rmp_summary` materialized view.
+///
+/// Call after any operation that changes `instructor_rmp_links`
+/// or updates `rmp_professors` rating data. Uses `CONCURRENTLY`
+/// to avoid blocking reads during refresh.
+pub async fn refresh_rmp_summary(db_pool: &PgPool) -> Result<()> {
+    sqlx::query("REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary")
+        .execute(db_pool)
+        .await?;
     Ok(())
 }

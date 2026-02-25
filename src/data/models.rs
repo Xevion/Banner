@@ -1,6 +1,8 @@
 //! `sqlx` models for the database schema.
 
 use std::collections::BTreeSet;
+use std::fmt;
+use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -313,6 +315,54 @@ pub struct Instructor {
     pub last_name: Option<String>,
 }
 
+/// Match status for RMP instructor matching.
+///
+/// Stored as VARCHAR in the database — this enum is for Rust API types
+/// and TypeScript bindings only (no sqlx::Type derive).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum RmpMatchStatus {
+    Unmatched,
+    Pending,
+    Auto,
+    Confirmed,
+    Rejected,
+}
+
+impl RmpMatchStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unmatched => "unmatched",
+            Self::Pending => "pending",
+            Self::Auto => "auto",
+            Self::Confirmed => "confirmed",
+            Self::Rejected => "rejected",
+        }
+    }
+}
+
+impl fmt::Display for RmpMatchStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for RmpMatchStatus {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "unmatched" => Ok(Self::Unmatched),
+            "pending" => Ok(Self::Pending),
+            "auto" => Ok(Self::Auto),
+            "confirmed" => Ok(Self::Confirmed),
+            "rejected" => Ok(Self::Rejected),
+            other => Err(anyhow::anyhow!("unknown RmpMatchStatus: {other:?}")),
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct CourseInstructor {
@@ -332,7 +382,7 @@ pub struct CourseInstructorDetail {
     pub last_name: Option<String>,
     pub email: Option<String>,
     pub is_primary: bool,
-    pub avg_rating: Option<f32>,
+    pub avg_rating: Option<f64>,
     pub num_ratings: Option<i32>,
     pub rmp_legacy_id: Option<i32>,
     pub bb_avg_instructor_rating: Option<f32>,

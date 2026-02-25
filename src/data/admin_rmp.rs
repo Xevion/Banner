@@ -8,6 +8,9 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
+use crate::data::models::RmpMatchStatus;
+use crate::data::rmp_matching::ScoreBreakdown;
+
 /// A top-candidate summary shown in the instructor list view.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -15,8 +18,7 @@ use ts_rs::TS;
 pub struct TopCandidateResponse {
     pub rmp_legacy_id: i32,
     pub score: Option<f32>,
-    #[ts(as = "Option<std::collections::HashMap<String, f32>>")]
-    pub score_breakdown: Option<serde_json::Value>,
+    pub score_breakdown: Option<ScoreBreakdown>,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub department: Option<String>,
@@ -32,7 +34,7 @@ pub struct InstructorListItem {
     pub id: i32,
     pub display_name: String,
     pub email: Option<String>,
-    pub rmp_match_status: String,
+    pub rmp_match_status: RmpMatchStatus,
     #[ts(as = "i32")]
     pub rmp_link_count: i64,
     #[ts(as = "i32")]
@@ -74,7 +76,7 @@ pub struct InstructorDetail {
     pub id: i32,
     pub display_name: String,
     pub email: Option<String>,
-    pub rmp_match_status: String,
+    pub rmp_match_status: RmpMatchStatus,
     pub subjects_taught: Vec<String>,
     #[ts(as = "i32")]
     pub course_count: i64,
@@ -117,8 +119,8 @@ pub struct CandidateResponse {
     pub num_ratings: Option<i32>,
     pub would_take_again_pct: Option<f32>,
     pub score: Option<f32>,
-    #[ts(as = "Option<std::collections::HashMap<String, f32>>")]
-    pub score_breakdown: Option<serde_json::Value>,
+    #[ts(as = "Option<ScoreBreakdown>")]
+    pub score_breakdown: Option<sqlx::types::Json<ScoreBreakdown>>,
     pub status: String,
     /// Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
     pub review_subjects: Vec<String>,
@@ -336,13 +338,16 @@ pub async fn list_instructors(
         }
     }
 
-    let instructors = rows
+    let instructors: Vec<InstructorListItem> = rows
         .iter()
         .map(|r| {
             let top_candidate = r.top_candidate_rmp_id.map(|rmp_id| TopCandidateResponse {
                 rmp_legacy_id: rmp_id,
                 score: r.top_candidate_score,
-                score_breakdown: r.top_candidate_breakdown.clone(),
+                score_breakdown: r
+                    .top_candidate_breakdown
+                    .as_ref()
+                    .and_then(|v| serde_json::from_value(v.clone()).ok()),
                 first_name: r.tc_first_name.clone(),
                 last_name: r.tc_last_name.clone(),
                 department: r.tc_department.clone(),
@@ -350,19 +355,22 @@ pub async fn list_instructors(
                 num_ratings: r.tc_num_ratings,
             });
 
-            InstructorListItem {
+            Ok(InstructorListItem {
                 id: r.id,
                 display_name: r.display_name.clone(),
                 email: r.email.clone(),
-                rmp_match_status: r.rmp_match_status.clone(),
+                rmp_match_status: r
+                    .rmp_match_status
+                    .parse()
+                    .context("invalid rmp_match_status")?,
                 rmp_link_count: r.rmp_link_count.unwrap_or(0),
                 candidate_count: r.candidate_count.unwrap_or(0),
                 course_subject_count: r.course_subject_count.unwrap_or(0),
                 top_candidate,
                 teaching_years: r.teaching_years.clone().unwrap_or_default(),
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(ListInstructorsResponse {
         instructors,
@@ -472,7 +480,9 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
             id: inst_id,
             display_name,
             email,
-            rmp_match_status,
+            rmp_match_status: rmp_match_status
+                .parse()
+                .context("invalid rmp_match_status")?,
             subjects_taught: subjects.into_iter().map(|(s,)| s).collect(),
             course_count,
             teaching_years,
@@ -553,6 +563,9 @@ pub async fn accept_candidate(
     .context("failed to accept candidate")?;
 
     tx.commit().await.context("failed to commit transaction")?;
+    crate::data::rmp::refresh_rmp_summary(pool)
+        .await
+        .context("failed to refresh rmp summary")?;
 
     Ok(())
 }

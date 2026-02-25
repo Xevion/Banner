@@ -6,9 +6,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info};
+use ts_rs::TS;
 
 /// Breakdown of individual scoring signals.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct ScoreBreakdown {
     pub name: f32,
     /// Department string similarity (from RMP profile).
@@ -793,7 +796,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     }
 
     // Step 8: Auto-accept high-confidence candidates.
-    let auto_matched = auto_accept.len();
+    // Track which instructors actually got linked (INSERT may no-op on conflict).
+    let mut linked_ids: Vec<i32> = Vec::new();
 
     if !auto_accept.is_empty() {
         let aa_instructor_ids: Vec<i32> = auto_accept.iter().map(|(iid, _)| *iid).collect();
@@ -813,35 +817,42 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .execute(&mut *tx)
         .await?;
 
-        sqlx::query(
+        let actually_linked: Vec<(i32,)> = sqlx::query_as(
             r#"
             INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source)
             SELECT v.instructor_id, v.rmp_legacy_id, 'auto'
             FROM UNNEST($1::int4[], $2::int4[]) AS v(instructor_id, rmp_legacy_id)
             ON CONFLICT (rmp_legacy_id) DO NOTHING
+            RETURNING instructor_id
             "#,
         )
         .bind(&aa_instructor_ids)
         .bind(&aa_legacy_ids)
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await?;
 
-        sqlx::query(
-            r#"
-            UPDATE instructors i
-            SET rmp_match_status = 'auto'
-            FROM UNNEST($1::int4[]) AS v(instructor_id)
-            WHERE i.id = v.instructor_id
-            "#,
-        )
-        .bind(&aa_instructor_ids)
-        .execute(&mut *tx)
-        .await?;
+        linked_ids = actually_linked.into_iter().map(|(id,)| id).collect();
+
+        if !linked_ids.is_empty() {
+            sqlx::query(
+                r#"
+                UPDATE instructors i
+                SET rmp_match_status = 'auto'
+                FROM UNNEST($1::int4[]) AS v(instructor_id)
+                WHERE i.id = v.instructor_id
+                "#,
+            )
+            .bind(&linked_ids)
+            .execute(&mut *tx)
+            .await?;
+        }
     }
+
+    let auto_matched = linked_ids.len();
 
     // Step 9: Mark instructors that have candidates but no auto-link as 'pending'
     // so they appear in the review queue with a distinct status.
-    let auto_instructor_ids: HashSet<i32> = auto_accept.iter().map(|(iid, _)| *iid).collect();
+    let auto_instructor_ids: HashSet<i32> = linked_ids.iter().copied().collect();
     let pending_instructor_ids: Vec<i32> = instructors_with_candidates
         .iter()
         .filter(|id| !auto_instructor_ids.contains(id))
@@ -865,6 +876,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     }
 
     tx.commit().await?;
+    crate::data::rmp::refresh_rmp_summary(db_pool).await?;
 
     let stats = MatchingStats {
         total_processed,

@@ -62,7 +62,10 @@ pub async fn get_instructor_sections(
     let mut instructor_map =
         data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to fetch instructors for instructor sections");
+                Default::default()
+            });
 
     let responses: Vec<CourseResponse> = courses
         .iter()

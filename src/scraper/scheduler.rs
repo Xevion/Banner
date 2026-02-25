@@ -649,6 +649,7 @@ impl Scheduler {
             );
         }
         info!(total, "RMP professors upserted");
+        crate::data::rmp::refresh_rmp_summary(db_pool).await?;
 
         let start = Instant::now();
         let stats = crate::data::rmp_matching::generate_candidates(db_pool).await?;
@@ -738,6 +739,10 @@ impl Scheduler {
                     warn!(legacy_id, error = ?e, "Failed to fetch professor reviews from RMP");
                 }
             }
+        }
+
+        if success_count > 0 {
+            crate::data::rmp::refresh_rmp_summary(db_pool).await?;
         }
 
         info!(

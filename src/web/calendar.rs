@@ -30,7 +30,10 @@ async fn load_calendar_course(
 
     let instructors = crate::data::courses::get_course_instructors(&state.db_pool, course.id)
         .await
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            error!(course_id = course.id, error = %e, "Failed to fetch instructors for calendar export");
+            Vec::new()
+        });
 
     let primary_instructor = instructors
         .iter()
