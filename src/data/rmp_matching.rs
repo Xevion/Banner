@@ -1,6 +1,6 @@
 //! Confidence scoring and candidate generation for RMP instructor matching.
 
-use crate::data::names::{matching_keys, parse_banner_name, parse_rmp_name};
+use crate::data::names::{KeyOrigin, matching_keys, parse_banner_name, parse_rmp_name};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -14,6 +14,9 @@ pub struct ScoreBreakdown {
     pub department: f32,
     pub uniqueness: f32,
     pub volume: f32,
+    /// Score from RMP review course codes overlapping with instructor subjects.
+    /// Only available for professors with scraped review data.
+    pub review_courses: f32,
 }
 
 /// Result of scoring a single instructor-RMP candidate pair.
@@ -29,10 +32,14 @@ const MIN_CANDIDATE_THRESHOLD: f32 = 0.40;
 /// Score at or above which a candidate is auto-accepted.
 const AUTO_ACCEPT_THRESHOLD: f32 = 0.85;
 
-const WEIGHT_NAME: f32 = 0.50;
-const WEIGHT_DEPARTMENT: f32 = 0.25;
-const WEIGHT_UNIQUENESS: f32 = 0.15;
+const WEIGHT_NAME: f32 = 0.45;
+const WEIGHT_DEPARTMENT: f32 = 0.20;
+const WEIGHT_UNIQUENESS: f32 = 0.10;
 const WEIGHT_VOLUME: f32 = 0.10;
+/// Weight for review course code overlap with instructor subjects.
+/// Provides stronger evidence than department matching since it uses
+/// actual course codes from student reviews.
+const WEIGHT_REVIEW_COURSES: f32 = 0.15;
 
 /// Check if an instructor's subjects overlap with an RMP department.
 ///
@@ -64,39 +71,110 @@ fn department_similarity(subjects: &[String], rmp_department: Option<&str>) -> f
 /// Expand common subject abbreviations used at UTSA and check for overlap.
 fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
     const MAPPINGS: &[(&str, &[&str])] = &[
-        // Core subjects (original mappings, corrected)
+        // Computer Science & Engineering
         ("cs", &["computer science"]),
         ("ece", &["early childhood education", "early childhood"]),
         ("ee", &["electrical engineering", "electrical"]),
         ("me", &["mechanical engineering", "mechanical"]),
         ("ce", &["civil engineering", "civil"]),
-        ("bio", &["biology", "biological"]),
-        ("chem", &["chemistry"]),
-        ("phys", &["physics"]),
+        ("egr", &["engineering"]),
+        ("bme", &["biomedical engineering", "engineering"]),
+        ("cme", &["chemical engineering", "engineering"]),
+        ("cpe", &["computer engineering", "engineering"]),
+        ("ise", &["industrial", "systems engineering", "engineering"]),
+        ("mate", &["materials engineering", "engineering"]),
+        // Sciences (include generic "science" for RMP catch-all departments)
+        ("bio", &["biology", "biological", "science"]),
+        ("chem", &["chemistry", "science"]),
+        ("che", &["chemistry", "science"]),
+        ("bch", &["biochemistry", "chemistry", "science"]),
+        ("phys", &["physics", "science"]),
+        ("phy", &["physics", "science"]),
         ("math", &["mathematics"]),
         ("sta", &["statistics"]),
-        ("eng", &["english"]),
+        ("geo", &["geology", "science"]),
+        ("ast", &["astronomy", "science"]),
+        ("es", &["environmental science", "science"]),
+        // English & Humanities
+        ("eng", &["english", "literature"]),
         ("his", &["history"]),
-        ("pol", &["political science"]),
-        ("psy", &["psychology"]),
-        ("soc", &["sociology"]),
-        ("mus", &["music"]),
-        ("art", &["art"]),
         ("phi", &["philosophy"]),
+        ("cla", &["classics"]),
+        ("hum", &["humanities"]),
+        ("wgss", &["women's studies"]),
+        // Social Sciences (include generic "social science")
+        ("pol", &["political science", "social science"]),
+        ("psy", &["psychology", "social science"]),
+        ("soc", &["sociology", "social science"]),
+        ("ant", &["anthropology", "social science"]),
         ("eco", &["economics"]),
-        ("acc", &["accounting"]),
-        ("fin", &["finance"]),
-        ("mgt", &["management"]),
-        ("mkt", &["marketing"]),
-        ("is", &["information systems"]),
-        ("ms", &["management science"]),
-        ("kin", &["kinesiology"]),
-        ("com", &["communication"]),
+        ("crj", &["criminal justice"]),
+        ("swk", &["social work"]),
+        ("pad", &["public administration"]),
+        ("grg", &["geography"]),
+        ("ges", &["geography"]),
+        // Business (include generic "business" and "managerial" for RMP catch-alls)
+        (
+            "acc",
+            &["accounting", "business", "managerial science", "managerial"],
+        ),
+        (
+            "fin",
+            &["finance", "business", "managerial science", "managerial"],
+        ),
+        (
+            "mgt",
+            &["management", "business", "managerial science", "managerial"],
+        ),
+        (
+            "mkt",
+            &["marketing", "business", "managerial science", "managerial"],
+        ),
+        (
+            "ms",
+            &["management science", "managerial science", "managerial"],
+        ),
+        ("is", &["information systems", "information science"]),
+        (
+            "gba",
+            &[
+                "general business",
+                "business",
+                "managerial science",
+                "managerial",
+            ],
+        ),
+        (
+            "ent",
+            &[
+                "entrepreneurship",
+                "business",
+                "managerial science",
+                "managerial",
+            ],
+        ),
+        ("blw", &["business law", "law", "business"]),
+        ("rfd", &["real estate"]),
+        (
+            "mot",
+            &[
+                "management of technology",
+                "management",
+                "business",
+                "managerial science",
+                "managerial",
+            ],
+        ),
+        // Arts & Fine Arts (include generic "fine arts")
+        ("art", &["art", "fine arts"]),
+        ("mus", &["music", "fine arts"]),
+        ("dan", &["dance", "fine arts"]),
+        ("thr", &["theater", "fine arts"]),
+        ("ahc", &["art history", "fine arts"]),
         // Architecture & Design
         ("arc", &["architecture"]),
         ("ide", &["interior design", "design"]),
         // Anthropology & Ethnic Studies
-        ("ant", &["anthropology"]),
         ("aas", &["african american studies", "ethnic studies"]),
         ("mas", &["mexican american studies", "ethnic studies"]),
         ("regs", &["ethnic studies", "gender"]),
@@ -124,47 +202,16 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
         ("edp", &["educational psychology", "education"]),
         ("bbl", &["bilingual education"]),
         ("spe", &["special education", "education"]),
-        // Business
-        ("ent", &["entrepreneurship"]),
-        ("gba", &["general business", "business"]),
-        ("blw", &["business law", "law"]),
-        ("rfd", &["real estate"]),
-        ("mot", &["management of technology", "management"]),
-        // Engineering
-        ("egr", &["engineering"]),
-        ("bme", &["biomedical engineering", "engineering"]),
-        ("cme", &["chemical engineering", "engineering"]),
-        ("cpe", &["computer engineering", "engineering"]),
-        ("ise", &["industrial", "systems engineering", "engineering"]),
-        ("mate", &["materials engineering", "engineering"]),
-        // Sciences
-        ("che", &["chemistry"]),
-        ("bch", &["biochemistry", "chemistry"]),
-        ("geo", &["geology"]),
-        ("phy", &["physics"]),
-        ("ast", &["astronomy"]),
-        ("es", &["environmental science"]),
-        // Social Sciences
-        ("crj", &["criminal justice"]),
-        ("swk", &["social work"]),
-        ("pad", &["public administration"]),
-        ("grg", &["geography"]),
-        ("ges", &["geography"]),
-        // Humanities
-        ("cla", &["classics"]),
-        ("hum", &["humanities"]),
-        ("wgss", &["women's studies"]),
-        // Health
+        // Health & Kinesiology
         ("hth", &["health"]),
         ("hcp", &["health science", "health"]),
         ("ntr", &["nutrition"]),
+        ("kin", &["kinesiology", "physical ed", "physical education"]),
+        // Communication & Film
+        ("com", &["communication", "film"]),
         // Military
         ("msc", &["military science"]),
         ("asc", &["aerospace"]),
-        // Arts
-        ("dan", &["dance"]),
-        ("thr", &["theater"]),
-        ("ahc", &["art history"]),
         // Other
         ("cou", &["counseling"]),
         ("hon", &["honors"]),
@@ -185,15 +232,22 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
 
 /// Compute match confidence score (0.0-1.0) for an instructor-RMP pair.
 ///
-/// The name signal is always 1.0 since candidates are only generated for
-/// exact normalized name matches. The effective score range is 0.50-1.0.
+/// When `nickname_match` is true, the name score is reduced to 0.7 to reflect
+/// the lower confidence of matching via common nickname expansion (e.g.,
+/// "Christopher" ↔ "Chris"). Primary name matches score 1.0.
+///
+/// `rmp_review_subjects` contains subject prefixes extracted from the RMP
+/// professor's review course codes (e.g., `["WRC", "HIS"]`). When available,
+/// overlap with `instructor_subjects` provides strong matching evidence.
 pub fn compute_match_score(
     instructor_subjects: &[String],
     rmp_department: Option<&str>,
     candidate_count: usize,
     rmp_num_ratings: i32,
+    nickname_match: bool,
+    rmp_review_subjects: &[String],
 ) -> MatchScore {
-    let name_score = 1.0;
+    let name_score = if nickname_match { 0.7 } else { 1.0 };
 
     let dept_score = department_similarity(instructor_subjects, rmp_department);
 
@@ -205,10 +259,30 @@ pub fn compute_match_score(
 
     let volume_score = ((rmp_num_ratings as f32).ln_1p() / 5.0_f32.ln_1p()).clamp(0.0, 1.0);
 
+    // Review course overlap: if the RMP professor's reviews mention courses
+    // in the same subject(s) the instructor teaches, that's strong evidence.
+    let review_courses_score = if rmp_review_subjects.is_empty() {
+        // No review data — neutral (don't penalize professors without reviews).
+        0.5
+    } else if instructor_subjects.is_empty() {
+        // Instructor has no courses — neutral.
+        0.5
+    } else {
+        let instructor_lower: HashSet<String> = instructor_subjects
+            .iter()
+            .map(|s| s.to_lowercase())
+            .collect();
+        let overlap = rmp_review_subjects
+            .iter()
+            .any(|rs| instructor_lower.contains(&rs.to_lowercase()));
+        if overlap { 1.0 } else { 0.2 }
+    };
+
     let composite = name_score * WEIGHT_NAME
         + dept_score * WEIGHT_DEPARTMENT
         + uniqueness_score * WEIGHT_UNIQUENESS
-        + volume_score * WEIGHT_VOLUME;
+        + volume_score * WEIGHT_VOLUME
+        + review_courses_score * WEIGHT_REVIEW_COURSES;
 
     MatchScore {
         score: composite,
@@ -217,6 +291,7 @@ pub fn compute_match_score(
             department: dept_score,
             uniqueness: uniqueness_score,
             volume: volume_score,
+            review_courses: review_courses_score,
         },
     }
 }
@@ -224,12 +299,33 @@ pub fn compute_match_score(
 /// Statistics returned from candidate generation.
 #[derive(Debug)]
 pub struct MatchingStats {
-    pub total_unmatched: usize,
+    /// Total instructors processed (excludes confirmed/rejected).
+    pub total_processed: usize,
+    /// Pending candidate rows deleted before regeneration.
+    pub deleted_pending_candidates: usize,
+    /// Auto-generated links deleted before regeneration.
+    pub deleted_auto_links: usize,
+    /// Candidates inserted in this run.
     pub candidates_created: usize,
-    pub candidates_rescored: usize,
+    /// Instructors that were auto-linked (score >= AUTO_ACCEPT_THRESHOLD).
     pub auto_matched: usize,
+    /// Instructors with candidates below auto-accept threshold (status set to 'pending').
+    pub pending_review: usize,
+    /// Instructors skipped because their display_name couldn't be parsed.
     pub skipped_unparseable: usize,
+    /// Instructors skipped because no RMP name keys matched.
     pub skipped_no_candidates: usize,
+}
+
+/// Raw row fetched from `rmp_professors` for the matching pipeline.
+#[derive(sqlx::FromRow)]
+struct RmpProfRow {
+    legacy_id: i32,
+    first_name: String,
+    last_name: String,
+    department: Option<String>,
+    num_ratings: i32,
+    course_codes: Option<serde_json::Value>,
 }
 
 /// Lightweight row for building the in-memory RMP name index.
@@ -237,43 +333,106 @@ struct RmpProfForMatching {
     legacy_id: i32,
     department: Option<String>,
     num_ratings: i32,
+    /// Subject prefixes extracted from RMP review course codes.
+    review_subjects: Vec<String>,
+    /// The origin of the key that placed this professor in the index bucket.
+    key_origin: KeyOrigin,
 }
 
-/// Generate match candidates for all unmatched instructors.
+/// Extract unique subject prefixes from RMP `course_codes` JSONB.
 ///
-/// For each unmatched instructor:
-/// 1. Parse `display_name` into [`NameParts`] and generate matching keys.
-/// 2. Find RMP professors with matching normalized name keys.
-/// 3. Score each candidate.
-/// 4. Store candidates scoring above [`MIN_CANDIDATE_THRESHOLD`].
-/// 5. Auto-accept if the top candidate scores >= [`AUTO_ACCEPT_THRESHOLD`]
-///    and no existing rejected candidate exists for that pair.
+/// Course codes are formatted as `"SPN1014"`, `"WRC1013"`, etc.
+/// Extracts the alphabetic prefix (e.g., `"SPN"`, `"WRC"`).
+fn extract_review_subjects(course_codes: Option<&serde_json::Value>) -> Vec<String> {
+    let Some(arr) = course_codes.and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+
+    let mut subjects: HashSet<String> = HashSet::new();
+    for entry in arr {
+        if let Some(name) = entry.get("courseName").and_then(|v| v.as_str()) {
+            // Extract alphabetic prefix: "WRC1013" -> "WRC"
+            let prefix: String = name.chars().take_while(|c| c.is_alphabetic()).collect();
+            if !prefix.is_empty() {
+                subjects.insert(prefix.to_uppercase());
+            }
+        }
+    }
+
+    subjects.into_iter().collect()
+}
+
+/// Generate match candidates for all unmatched and pending instructors.
 ///
-/// Already-evaluated instructor-RMP pairs (any status) are skipped.
+/// Runs entirely inside a transaction to prevent data loss if the process
+/// crashes mid-way. The steps are:
+///
+/// 1. Delete all `pending` candidate rows (algorithm-generated, not yet resolved).
+/// 2. Delete all `auto` links from `instructor_rmp_links`.
+/// 3. Reset `instructors.rmp_match_status` from `'auto'` back to `'unmatched'`.
+/// 4. Load all instructors where status ∉ `{confirmed, rejected}` — this now
+///    includes the freshly-reset instructors from step 3.
+/// 5. Build a name index from all RMP professors.
+/// 6. Score every instructor-RMP pair and collect candidates above
+///    [`MIN_CANDIDATE_THRESHOLD`]. Skip pairs with existing `accepted`/`rejected`
+///    decisions (manual decisions are preserved).
+/// 7. Batch-insert new candidate rows.
+/// 8. Auto-link every candidate scoring >= [`AUTO_ACCEPT_THRESHOLD`]; set
+///    instructor status to `'auto'`.
+/// 9. Set remaining instructors that received at least one candidate (but no
+///    auto-link) to `'pending'`.
 pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
-    // 1. Load unmatched instructors
-    let instructors: Vec<(i32, String)> = sqlx::query_as(
-        "SELECT id, display_name FROM instructors WHERE rmp_match_status = 'unmatched'",
+    let mut tx = db_pool.begin().await?;
+
+    // Step 1: Delete pending candidates (algorithm-generated, not manually resolved).
+    let deleted_candidates =
+        sqlx::query("DELETE FROM rmp_match_candidates WHERE status = 'pending'")
+            .execute(&mut *tx)
+            .await?
+            .rows_affected() as usize;
+
+    // Step 2: Delete auto-generated links.
+    let deleted_links = sqlx::query("DELETE FROM instructor_rmp_links WHERE source = 'auto'")
+        .execute(&mut *tx)
+        .await?
+        .rows_affected() as usize;
+
+    // Step 3: Reset auto-matched instructors back to unmatched so they are
+    // included in this run.
+    sqlx::query(
+        "UPDATE instructors SET rmp_match_status = 'unmatched' WHERE rmp_match_status = 'auto'",
     )
-    .fetch_all(db_pool)
+    .execute(&mut *tx)
+    .await?;
+
+    // Step 4: Load all instructors eligible for matching.
+    // 'confirmed' and 'rejected' are manual decisions — never touch them.
+    let instructors: Vec<(i32, String)> = sqlx::query_as(
+        "SELECT id, display_name FROM instructors \
+         WHERE rmp_match_status NOT IN ('confirmed', 'rejected')",
+    )
+    .fetch_all(&mut *tx)
     .await?;
 
     if instructors.is_empty() {
-        info!("No unmatched instructors to generate candidates for");
+        tx.commit().await?;
+        info!("No eligible instructors to generate candidates for");
         return Ok(MatchingStats {
-            total_unmatched: 0,
+            total_processed: 0,
+            deleted_pending_candidates: deleted_candidates,
+            deleted_auto_links: deleted_links,
             candidates_created: 0,
-            candidates_rescored: 0,
             auto_matched: 0,
+            pending_review: 0,
             skipped_unparseable: 0,
             skipped_no_candidates: 0,
         });
     }
 
     let instructor_ids: Vec<i32> = instructors.iter().map(|(id, _)| *id).collect();
-    let total_unmatched = instructors.len();
+    let total_processed = instructors.len();
 
-    // 2. Load instructor subjects
+    // Step 5a: Load instructor subjects (for department scoring).
     let subject_rows: Vec<(i32, String)> = sqlx::query_as(
         r#"
         SELECT DISTINCT ci.instructor_id, c.subject
@@ -283,7 +442,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         "#,
     )
     .bind(&instructor_ids)
-    .fetch_all(db_pool)
+    .fetch_all(&mut *tx)
     .await?;
 
     let mut subject_map: HashMap<i32, Vec<String>> = HashMap::new();
@@ -291,34 +450,44 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         subject_map.entry(iid).or_default().push(subject);
     }
 
-    // 3. Load all RMP professors and build multi-key name index
-    let prof_rows: Vec<(i32, String, String, Option<String>, i32)> = sqlx::query_as(
-        "SELECT legacy_id, first_name, last_name, department, num_ratings FROM rmp_professors",
+    // Step 5b: Load all RMP professors and build multi-key name index.
+    // Each professor may appear under multiple keys (nicknames, token variants).
+    // The key_origin on each entry tracks whether that index slot came from a
+    // Primary name or a Nickname expansion on the RMP side.
+    let prof_rows: Vec<RmpProfRow> = sqlx::query_as(
+        "SELECT legacy_id, first_name, last_name, department, num_ratings, course_codes \
+         FROM rmp_professors",
     )
-    .fetch_all(db_pool)
+    .fetch_all(&mut *tx)
     .await?;
 
-    // Build name index: (normalized_last, normalized_first) -> Vec<RmpProfForMatching>
-    // Each professor may appear under multiple keys (nicknames, token variants).
     let mut name_index: HashMap<(String, String), Vec<RmpProfForMatching>> = HashMap::new();
     let mut rmp_parse_failures = 0usize;
-    for (legacy_id, first_name, last_name, department, num_ratings) in &prof_rows {
-        match parse_rmp_name(first_name, last_name) {
+    for row in &prof_rows {
+        match parse_rmp_name(&row.first_name, &row.last_name) {
             Some(parts) => {
+                let review_subjects = extract_review_subjects(row.course_codes.as_ref());
                 let keys = matching_keys(&parts);
                 for key in keys {
-                    name_index.entry(key).or_default().push(RmpProfForMatching {
-                        legacy_id: *legacy_id,
-                        department: department.clone(),
-                        num_ratings: *num_ratings,
-                    });
+                    name_index
+                        .entry((key.last, key.first))
+                        .or_default()
+                        .push(RmpProfForMatching {
+                            legacy_id: row.legacy_id,
+                            department: row.department.clone(),
+                            num_ratings: row.num_ratings,
+                            review_subjects: review_subjects.clone(),
+                            key_origin: key.origin,
+                        });
                 }
             }
             None => {
                 rmp_parse_failures += 1;
                 debug!(
-                    legacy_id,
-                    first_name, last_name, "Unparseable RMP professor name, skipping"
+                    legacy_id = row.legacy_id,
+                    first_name = row.first_name,
+                    last_name = row.last_name,
+                    "Unparseable RMP professor name, skipping"
                 );
             }
         }
@@ -331,35 +500,31 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         );
     }
 
-    // 4. Load existing candidate pairs -- only skip resolved (accepted/rejected) pairs.
-    //    Pending candidates are rescored so updated mappings take effect.
-    let candidate_rows: Vec<(i32, i32, String)> =
-        sqlx::query_as("SELECT instructor_id, rmp_legacy_id, status FROM rmp_match_candidates")
-            .fetch_all(db_pool)
-            .await?;
+    // Step 5c: Load only resolved (accepted/rejected) pairs so we don't
+    // overwrite manual decisions. Pending rows were deleted in step 1.
+    let resolved_rows: Vec<(i32, i32, String)> = sqlx::query_as(
+        "SELECT instructor_id, rmp_legacy_id, status \
+         FROM rmp_match_candidates \
+         WHERE status IN ('accepted', 'rejected')",
+    )
+    .fetch_all(&mut *tx)
+    .await?;
 
     let mut resolved_pairs: HashSet<(i32, i32)> = HashSet::new();
-    let mut pending_pairs: HashSet<(i32, i32)> = HashSet::new();
     let mut rejected_pairs: HashSet<(i32, i32)> = HashSet::new();
-    for (iid, lid, status) in candidate_rows {
-        match status.as_str() {
-            "accepted" | "rejected" => {
-                resolved_pairs.insert((iid, lid));
-                if status == "rejected" {
-                    rejected_pairs.insert((iid, lid));
-                }
-            }
-            _ => {
-                pending_pairs.insert((iid, lid));
-            }
+    for (iid, lid, status) in resolved_rows {
+        resolved_pairs.insert((iid, lid));
+        if status == "rejected" {
+            rejected_pairs.insert((iid, lid));
         }
     }
 
-    // 5. Score and collect candidates (new + rescored pending)
+    // Step 6: Score and collect candidates.
     let empty_subjects: Vec<String> = Vec::new();
     let mut new_candidates: Vec<(i32, i32, f32, serde_json::Value)> = Vec::new();
-    let mut rescored_candidates: Vec<(i32, i32, f32, serde_json::Value)> = Vec::new();
-    let mut auto_accept: Vec<(i32, i32)> = Vec::new(); // (instructor_id, legacy_id)
+    // Track which instructors get any above-threshold candidate (for 'pending' status).
+    let mut instructors_with_candidates: HashSet<i32> = HashSet::new();
+    let mut auto_accept: Vec<(i32, i32)> = Vec::new();
     let mut skipped_unparseable = 0usize;
     let mut skipped_no_candidates = 0usize;
 
@@ -375,41 +540,59 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
         let subjects = subject_map.get(instructor_id).unwrap_or(&empty_subjects);
 
-        // Generate all matching keys for this instructor and collect candidate
-        // RMP professors across all key variants (deduplicated by legacy_id).
+        // Collect candidate RMP professors across all key variants (deduplicated
+        // by legacy_id). Track the best key origin per professor: Primary if any
+        // key pair is fully Primary on both sides, Nickname otherwise.
         let instructor_keys = matching_keys(&instructor_parts);
-        let mut seen_profs: HashSet<i32> = HashSet::new();
-        let mut matched_profs: Vec<&RmpProfForMatching> = Vec::new();
+        let mut prof_best_origin: HashMap<i32, KeyOrigin> = HashMap::new();
+        let mut matched_profs_map: HashMap<i32, &RmpProfForMatching> = HashMap::new();
 
-        for key in &instructor_keys {
-            if let Some(profs) = name_index.get(key) {
+        for ikey in &instructor_keys {
+            let lookup = (ikey.last.clone(), ikey.first.clone());
+            if let Some(profs) = name_index.get(&lookup) {
                 for prof in profs {
-                    if seen_profs.insert(prof.legacy_id) {
-                        matched_profs.push(prof);
+                    let pair_origin = if ikey.origin == KeyOrigin::Primary
+                        && prof.key_origin == KeyOrigin::Primary
+                    {
+                        KeyOrigin::Primary
+                    } else {
+                        KeyOrigin::Nickname
+                    };
+
+                    let entry = prof_best_origin
+                        .entry(prof.legacy_id)
+                        .or_insert(pair_origin);
+                    if pair_origin == KeyOrigin::Primary {
+                        *entry = KeyOrigin::Primary;
                     }
+
+                    matched_profs_map.entry(prof.legacy_id).or_insert(prof);
                 }
             }
         }
 
-        if matched_profs.is_empty() {
+        if matched_profs_map.is_empty() {
             skipped_no_candidates += 1;
             continue;
         }
 
-        let candidate_count = matched_profs.len();
-        let mut best: Option<(f32, i32)> = None;
+        let candidate_count = matched_profs_map.len();
 
-        for prof in &matched_profs {
-            let pair = (*instructor_id, prof.legacy_id);
+        for (&legacy_id, &prof) in &matched_profs_map {
+            let pair = (*instructor_id, legacy_id);
             if resolved_pairs.contains(&pair) {
                 continue;
             }
+
+            let nickname_match = prof_best_origin.get(&legacy_id) == Some(&KeyOrigin::Nickname);
 
             let ms = compute_match_score(
                 subjects,
                 prof.department.as_deref(),
                 candidate_count,
                 prof.num_ratings,
+                nickname_match,
+                &prof.review_subjects,
             );
 
             if ms.score < MIN_CANDIDATE_THRESHOLD {
@@ -419,42 +602,20 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
             let breakdown_json =
                 serde_json::to_value(&ms.breakdown).unwrap_or_else(|_| serde_json::json!({}));
 
-            if pending_pairs.contains(&pair) {
-                rescored_candidates.push((
-                    *instructor_id,
-                    prof.legacy_id,
-                    ms.score,
-                    breakdown_json,
-                ));
-            } else {
-                new_candidates.push((*instructor_id, prof.legacy_id, ms.score, breakdown_json));
-            }
+            new_candidates.push((*instructor_id, prof.legacy_id, ms.score, breakdown_json));
+            instructors_with_candidates.insert(*instructor_id);
 
-            match best {
-                Some((s, _)) if ms.score > s => best = Some((ms.score, prof.legacy_id)),
-                None => best = Some((ms.score, prof.legacy_id)),
-                _ => {}
+            if ms.score >= AUTO_ACCEPT_THRESHOLD
+                && !rejected_pairs.contains(&(*instructor_id, prof.legacy_id))
+            {
+                auto_accept.push((*instructor_id, prof.legacy_id));
             }
-        }
-
-        // Auto-accept the top candidate if it meets the threshold and is not
-        // previously rejected.
-        if let Some((score, legacy_id)) = best
-            && score >= AUTO_ACCEPT_THRESHOLD
-            && !rejected_pairs.contains(&(*instructor_id, legacy_id))
-        {
-            auto_accept.push((*instructor_id, legacy_id));
         }
     }
 
-    // 6-7. Write candidates, rescore, and auto-accept within a single transaction
+    // Step 7: Batch-insert all new candidates.
     let candidates_created = new_candidates.len();
-    let candidates_rescored = rescored_candidates.len();
-    let auto_matched = auto_accept.len();
 
-    let mut tx = db_pool.begin().await?;
-
-    // 6a. Batch-insert new candidates
     if !new_candidates.is_empty() {
         let c_instructor_ids: Vec<i32> = new_candidates.iter().map(|(iid, _, _, _)| *iid).collect();
         let c_legacy_ids: Vec<i32> = new_candidates.iter().map(|(_, lid, _, _)| *lid).collect();
@@ -479,46 +640,13 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .await?;
     }
 
-    // 6b. Batch-update rescored pending candidates
-    if !rescored_candidates.is_empty() {
-        let r_instructor_ids: Vec<i32> = rescored_candidates
-            .iter()
-            .map(|(iid, _, _, _)| *iid)
-            .collect();
-        let r_legacy_ids: Vec<i32> = rescored_candidates
-            .iter()
-            .map(|(_, lid, _, _)| *lid)
-            .collect();
-        let r_scores: Vec<f32> = rescored_candidates.iter().map(|(_, _, s, _)| *s).collect();
-        let r_breakdowns: Vec<serde_json::Value> = rescored_candidates
-            .into_iter()
-            .map(|(_, _, _, b)| b)
-            .collect();
+    // Step 8: Auto-accept high-confidence candidates.
+    let auto_matched = auto_accept.len();
 
-        sqlx::query(
-            r#"
-            UPDATE rmp_match_candidates mc
-            SET score = v.score, score_breakdown = v.score_breakdown
-            FROM UNNEST($1::int4[], $2::int4[], $3::real[], $4::jsonb[])
-                AS v(instructor_id, rmp_legacy_id, score, score_breakdown)
-            WHERE mc.instructor_id = v.instructor_id
-              AND mc.rmp_legacy_id = v.rmp_legacy_id
-            "#,
-        )
-        .bind(&r_instructor_ids)
-        .bind(&r_legacy_ids)
-        .bind(&r_scores)
-        .bind(&r_breakdowns)
-        .execute(&mut *tx)
-        .await?;
-    }
-
-    // 7. Auto-accept top candidates
     if !auto_accept.is_empty() {
         let aa_instructor_ids: Vec<i32> = auto_accept.iter().map(|(iid, _)| *iid).collect();
         let aa_legacy_ids: Vec<i32> = auto_accept.iter().map(|(_, lid)| *lid).collect();
 
-        // Mark the candidate row as accepted
         sqlx::query(
             r#"
             UPDATE rmp_match_candidates mc
@@ -533,7 +661,6 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .execute(&mut *tx)
         .await?;
 
-        // Insert links into instructor_rmp_links
         sqlx::query(
             r#"
             INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source)
@@ -547,7 +674,6 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .execute(&mut *tx)
         .await?;
 
-        // Update instructor match status
         sqlx::query(
             r#"
             UPDATE instructors i
@@ -561,25 +687,54 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .await?;
     }
 
+    // Step 9: Mark instructors that have candidates but no auto-link as 'pending'
+    // so they appear in the review queue with a distinct status.
+    let auto_instructor_ids: HashSet<i32> = auto_accept.iter().map(|(iid, _)| *iid).collect();
+    let pending_instructor_ids: Vec<i32> = instructors_with_candidates
+        .iter()
+        .filter(|id| !auto_instructor_ids.contains(id))
+        .copied()
+        .collect();
+    let pending_review = pending_instructor_ids.len();
+
+    if !pending_instructor_ids.is_empty() {
+        sqlx::query(
+            r#"
+            UPDATE instructors i
+            SET rmp_match_status = 'pending'
+            FROM UNNEST($1::int4[]) AS v(instructor_id)
+            WHERE i.id = v.instructor_id
+              AND i.rmp_match_status = 'unmatched'
+            "#,
+        )
+        .bind(&pending_instructor_ids)
+        .execute(&mut *tx)
+        .await?;
+    }
+
     tx.commit().await?;
 
     let stats = MatchingStats {
-        total_unmatched,
+        total_processed,
+        deleted_pending_candidates: deleted_candidates,
+        deleted_auto_links: deleted_links,
         candidates_created,
-        candidates_rescored,
         auto_matched,
+        pending_review,
         skipped_unparseable,
         skipped_no_candidates,
     };
 
     info!(
-        total_unmatched = stats.total_unmatched,
+        total_processed = stats.total_processed,
+        deleted_pending_candidates = stats.deleted_pending_candidates,
+        deleted_auto_links = stats.deleted_auto_links,
         candidates_created = stats.candidates_created,
-        candidates_rescored = stats.candidates_rescored,
         auto_matched = stats.auto_matched,
+        pending_review = stats.pending_review,
         skipped_unparseable = stats.skipped_unparseable,
         skipped_no_candidates = stats.skipped_no_candidates,
-        "Candidate generation complete"
+        "RMP candidate generation complete"
     );
 
     Ok(stats)
@@ -594,10 +749,11 @@ mod tests {
         let ms = compute_match_score(
             &["CS".to_string()],
             Some("Computer Science"),
-            1,  // unique candidate
-            50, // decent ratings
+            1,     // unique candidate
+            50,    // decent ratings
+            false, // primary name match
+            &[],   // no review data
         );
-        // name 1.0*0.50 + dept 1.0*0.25 + unique 1.0*0.15 + volume ~0.97*0.10 ~ 0.997
         assert!(ms.score >= 0.85, "Expected score >= 0.85, got {}", ms.score);
         assert_eq!(ms.breakdown.name, 1.0);
         assert_eq!(ms.breakdown.uniqueness, 1.0);
@@ -606,8 +762,8 @@ mod tests {
 
     #[test]
     fn test_ambiguous_candidates_lower_score() {
-        let unique = compute_match_score(&[], None, 1, 10);
-        let ambiguous = compute_match_score(&[], None, 3, 10);
+        let unique = compute_match_score(&[], None, 1, 10, false, &[]);
+        let ambiguous = compute_match_score(&[], None, 3, 10, false, &[]);
         assert!(
             unique.score > ambiguous.score,
             "Unique ({}) should outscore ambiguous ({})",
@@ -620,26 +776,41 @@ mod tests {
 
     #[test]
     fn test_no_department_neutral() {
-        let ms = compute_match_score(&["CS".to_string()], None, 1, 10);
+        let ms = compute_match_score(&["CS".to_string()], None, 1, 10, false, &[]);
         assert_eq!(ms.breakdown.department, 0.5);
     }
 
     #[test]
     fn test_department_match() {
-        let ms = compute_match_score(&["CS".to_string()], Some("Computer Science"), 1, 10);
+        let ms = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            10,
+            false,
+            &[],
+        );
         assert_eq!(ms.breakdown.department, 1.0);
     }
 
     #[test]
     fn test_department_mismatch() {
-        let ms = compute_match_score(&["CS".to_string()], Some("History"), 1, 10);
+        let ms = compute_match_score(&["CS".to_string()], Some("History"), 1, 10, false, &[]);
         assert_eq!(ms.breakdown.department, 0.2);
     }
 
     #[test]
     fn test_department_match_outscores_mismatch() {
-        let matched = compute_match_score(&["CS".to_string()], Some("Computer Science"), 1, 10);
-        let mismatched = compute_match_score(&["CS".to_string()], Some("History"), 1, 10);
+        let matched = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            10,
+            false,
+            &[],
+        );
+        let mismatched =
+            compute_match_score(&["CS".to_string()], Some("History"), 1, 10, false, &[]);
         assert!(
             matched.score > mismatched.score,
             "Department match ({}) should outscore mismatch ({})",
@@ -650,8 +821,8 @@ mod tests {
 
     #[test]
     fn test_volume_scaling() {
-        let zero = compute_match_score(&[], None, 1, 0);
-        let many = compute_match_score(&[], None, 1, 100);
+        let zero = compute_match_score(&[], None, 1, 0, false, &[]);
+        let many = compute_match_score(&[], None, 1, 100, false, &[]);
         assert!(
             many.breakdown.volume > zero.breakdown.volume,
             "100 ratings ({}) should outscore 0 ratings ({})",
@@ -663,5 +834,101 @@ mod tests {
             many.breakdown.volume > 0.9,
             "100 ratings should be near max"
         );
+    }
+
+    #[test]
+    fn test_nickname_match_lowers_name_score() {
+        let primary = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            50,
+            false, // primary
+            &[],
+        );
+        let nickname = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            50,
+            true, // nickname
+            &[],
+        );
+        assert_eq!(primary.breakdown.name, 1.0);
+        assert_eq!(nickname.breakdown.name, 0.7);
+        assert!(
+            primary.score > nickname.score,
+            "Primary ({}) should outscore nickname ({})",
+            primary.score,
+            nickname.score
+        );
+        assert!(
+            nickname.score >= MIN_CANDIDATE_THRESHOLD,
+            "Nickname match should still be above minimum threshold"
+        );
+    }
+
+    #[test]
+    fn test_review_courses_overlap_boosts_score() {
+        let no_reviews = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            50,
+            false,
+            &[], // no review data
+        );
+        let with_matching_reviews = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            50,
+            false,
+            &["CS".to_string()], // matching review subject
+        );
+        let with_mismatched_reviews = compute_match_score(
+            &["CS".to_string()],
+            Some("Computer Science"),
+            1,
+            50,
+            false,
+            &["HIS".to_string()], // non-matching review subject
+        );
+
+        assert_eq!(no_reviews.breakdown.review_courses, 0.5);
+        assert_eq!(with_matching_reviews.breakdown.review_courses, 1.0);
+        assert_eq!(with_mismatched_reviews.breakdown.review_courses, 0.2);
+
+        assert!(
+            with_matching_reviews.score > no_reviews.score,
+            "Matching reviews ({}) should outscore no reviews ({})",
+            with_matching_reviews.score,
+            no_reviews.score
+        );
+        assert!(
+            no_reviews.score > with_mismatched_reviews.score,
+            "No reviews ({}) should outscore mismatched reviews ({})",
+            no_reviews.score,
+            with_mismatched_reviews.score
+        );
+    }
+
+    #[test]
+    fn test_extract_review_subjects() {
+        let json = serde_json::json!([
+            {"courseName": "WRC1013", "courseCount": 230},
+            {"courseName": "WRC2013", "courseCount": 50},
+            {"courseName": "HIS1053", "courseCount": 10}
+        ]);
+        let subjects = extract_review_subjects(Some(&json));
+        assert!(subjects.contains(&"WRC".to_string()));
+        assert!(subjects.contains(&"HIS".to_string()));
+        assert_eq!(subjects.len(), 2); // deduplicated WRC
+    }
+
+    #[test]
+    fn test_extract_review_subjects_empty() {
+        assert!(extract_review_subjects(None).is_empty());
+        assert!(extract_review_subjects(Some(&serde_json::json!([]))).is_empty());
     }
 }

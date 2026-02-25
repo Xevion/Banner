@@ -13,6 +13,78 @@ use unicode_normalization::UnicodeNormalization;
 /// Known name suffixes to extract from the last-name portion.
 const SUFFIXES: &[&str] = &["iv", "iii", "ii", "jr", "sr"];
 
+/// Common English nickname ↔ formal name pairs.
+///
+/// Each group is a set of equivalent names. When a first name matches any
+/// entry in a group, all other entries become nickname-derived matching keys.
+/// Ordered roughly by frequency at UTSA.
+const NICKNAME_GROUPS: &[&[&str]] = &[
+    &["christopher", "chris"],
+    &["kimberly", "kim"],
+    &["matthew", "matt"],
+    &["michael", "mike"],
+    &["william", "will", "bill", "billy"],
+    &["robert", "rob", "bob", "bobby"],
+    &["richard", "rick", "dick"],
+    &["james", "jim", "jimmy"],
+    &["thomas", "tom", "tommy"],
+    &["joseph", "joe", "joey"],
+    &["charles", "charlie", "chuck"],
+    &["daniel", "dan", "danny"],
+    &["edward", "ed", "eddie", "ted"],
+    &["elizabeth", "liz", "beth", "betty"],
+    &["jennifer", "jen", "jenny"],
+    &["katherine", "kate", "kathy", "katie", "cathy"],
+    &["patricia", "pat", "patty"],
+    &["margaret", "maggie", "peggy"],
+    &["stephanie", "steph"],
+    &["nicholas", "nick"],
+    &["timothy", "tim"],
+    &["benjamin", "ben"],
+    &["jonathan", "jon"],
+    &["alexander", "alex"],
+    &["samuel", "sam"],
+    &["gregory", "greg"],
+    &["steven", "steve"],
+    &["stephen", "steve"],
+    &["andrew", "drew", "andy"],
+    &["anthony", "tony"],
+    &["kenneth", "ken", "kenny"],
+    &["raymond", "ray"],
+    &["lawrence", "larry"],
+    &["jeffrey", "jeff"],
+    &["gerald", "gerry", "jerry"],
+    &["theodore", "theo", "ted"],
+    &["frederick", "fred", "freddy"],
+    &["douglas", "doug"],
+    &["randolph", "randy"],
+    &["nathaniel", "nate", "nathan"],
+    &["patrick", "pat"],
+    &["phillip", "phil"],
+    &["susanne", "sue", "susan", "susie"],
+    &["catherine", "cathy", "cat"],
+    &["christina", "chris", "tina"],
+    &["deborah", "debbie", "deb"],
+    &["pamela", "pam"],
+    &["cynthia", "cindy"],
+    &["judith", "judy"],
+    &["virginia", "ginny"],
+    &["dorothy", "dot", "dorothy"],
+    &["victoria", "vicki", "vicky"],
+    &["rebecca", "becky"],
+    &["valerie", "val"],
+    &["terrence", "terry"],
+    &["terence", "terry"],
+    &["leonard", "leo", "len"],
+    &["donald", "don"],
+    &["ronald", "ron"],
+    &["harold", "harry", "hal"],
+    &["eugene", "gene"],
+    &["raymond", "ray"],
+    &["clifford", "cliff"],
+    &["ricardo", "ricky"],
+];
+
 /// Parsed, cleaned name components.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameParts {
@@ -254,17 +326,54 @@ pub fn normalize_for_matching(s: &str) -> String {
         .collect()
 }
 
+/// Whether a matching key was derived from the primary name or a nickname.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyOrigin {
+    /// Derived from the actual name (full first, individual token, or explicit nickname field).
+    Primary,
+    /// Derived from the common-nickname expansion table.
+    Nickname,
+}
+
+/// A matching key annotated with its origin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchingKey {
+    pub last: String,
+    pub first: String,
+    pub origin: KeyOrigin,
+}
+
+/// Look up common nickname expansions for a normalized first-name token.
+///
+/// Returns all other names in the same nickname group (not the input itself).
+fn nickname_expansions(normalized_first: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    for group in NICKNAME_GROUPS {
+        if group.contains(&normalized_first) {
+            for &name in *group {
+                if name != normalized_first {
+                    results.push(name.to_string());
+                }
+            }
+        }
+    }
+    results
+}
+
 /// Generate all matching index keys for a parsed name.
 ///
 /// For a name like "H. Paul" / "LeBlanc" with no nicknames, generates:
-/// - `("leblanc", "h paul")` -- full normalized first
-/// - `("leblanc", "paul")` -- individual token (if multi-token)
-/// - `("leblanc", "h")` -- individual token (if multi-token)
+/// - `("leblanc", "h paul")` -- full normalized first (Primary)
+/// - `("leblanc", "paul")` -- individual token (Primary)
+/// - `("leblanc", "h")` -- individual token (Primary)
 ///
 /// For a name like "William" / "Burchenal" with nickname "Ken":
 /// - `("burchenal", "william")` -- primary
-/// - `("burchenal", "ken")` -- nickname variant
-pub fn matching_keys(parts: &NameParts) -> Vec<(String, String)> {
+/// - `("burchenal", "ken")` -- nickname variant from RMP (Primary)
+/// - `("burchenal", "will")` -- common nickname expansion (Nickname)
+/// - `("burchenal", "bill")` -- common nickname expansion (Nickname)
+/// - `("burchenal", "billy")` -- common nickname expansion (Nickname)
+pub fn matching_keys(parts: &NameParts) -> Vec<MatchingKey> {
     let norm_last = normalize_for_matching(&parts.last);
     if norm_last.is_empty() {
         return Vec::new();
@@ -276,26 +385,67 @@ pub fn matching_keys(parts: &NameParts) -> Vec<(String, String)> {
     // Primary key: full first name (all spaces stripped)
     let norm_first_full = normalize_for_matching(&parts.first);
     if !norm_first_full.is_empty() && seen.insert(norm_first_full.clone()) {
-        keys.push((norm_last.clone(), norm_first_full));
+        keys.push(MatchingKey {
+            last: norm_last.clone(),
+            first: norm_first_full.clone(),
+            origin: KeyOrigin::Primary,
+        });
     }
 
     // Individual tokens from the display-form first name
-    // (split before full normalization so we can generate per-token keys)
     let first_tokens: Vec<&str> = parts.first.split_whitespace().collect();
     if first_tokens.len() > 1 {
         for token in &first_tokens {
             let norm_token = normalize_for_matching(token);
             if !norm_token.is_empty() && seen.insert(norm_token.clone()) {
-                keys.push((norm_last.clone(), norm_token));
+                keys.push(MatchingKey {
+                    last: norm_last.clone(),
+                    first: norm_token,
+                    origin: KeyOrigin::Primary,
+                });
             }
         }
     }
 
-    // Nickname variants
+    // Explicit nickname variants (from RMP parenthesized/quoted nicknames)
     for nick in &parts.nicknames {
         let norm_nick = normalize_for_matching(nick);
         if !norm_nick.is_empty() && seen.insert(norm_nick.clone()) {
-            keys.push((norm_last.clone(), norm_nick));
+            keys.push(MatchingKey {
+                last: norm_last.clone(),
+                first: norm_nick,
+                origin: KeyOrigin::Primary,
+            });
+        }
+    }
+
+    // Common nickname expansions from the first-name tokens.
+    // These get Nickname origin so scoring can discount them.
+    let tokens_to_expand: Vec<String> = {
+        let mut tokens = vec![norm_first_full];
+        if first_tokens.len() > 1 {
+            for token in &first_tokens {
+                tokens.push(normalize_for_matching(token));
+            }
+        }
+        for nick in &parts.nicknames {
+            tokens.push(normalize_for_matching(nick));
+        }
+        tokens
+    };
+
+    for token in &tokens_to_expand {
+        if token.is_empty() {
+            continue;
+        }
+        for expansion in nickname_expansions(token) {
+            if seen.insert(expansion.clone()) {
+                keys.push(MatchingKey {
+                    last: norm_last.clone(),
+                    first: expansion,
+                    origin: KeyOrigin::Nickname,
+                });
+            }
         }
     }
 
@@ -329,6 +479,10 @@ pub struct NameCompareResult {
 /// and checks for key overlap. Returns match quality and a confidence score
 /// reflecting how closely the names align.
 ///
+/// Only considers [`KeyOrigin::Primary`] keys — nickname expansions are not
+/// used for BlueBook instructor-to-instructor comparison (they're for
+/// cross-source RMP matching where name formats differ significantly).
+///
 /// This is a pure function with no database dependency, suitable for unit
 /// testing with arbitrary name pairs.
 pub fn compare_instructor_names(name_a: &str, name_b: &str) -> NameCompareResult {
@@ -342,8 +496,17 @@ pub fn compare_instructor_names(name_a: &str, name_b: &str) -> NameCompareResult
         return no_match;
     };
 
-    let keys_a: HashSet<(String, String)> = matching_keys(&parts_a).into_iter().collect();
-    let keys_b: HashSet<(String, String)> = matching_keys(&parts_b).into_iter().collect();
+    // Only use Primary keys for same-source comparison.
+    let keys_a: HashSet<(String, String)> = matching_keys(&parts_a)
+        .into_iter()
+        .filter(|k| k.origin == KeyOrigin::Primary)
+        .map(|k| (k.last, k.first))
+        .collect();
+    let keys_b: HashSet<(String, String)> = matching_keys(&parts_b)
+        .into_iter()
+        .filter(|k| k.origin == KeyOrigin::Primary)
+        .map(|k| (k.last, k.first))
+        .collect();
 
     if keys_a.is_empty() || keys_b.is_empty() {
         return no_match;
@@ -747,6 +910,18 @@ mod tests {
         assert_eq!(p.last, "Saldaña");
     }
 
+    /// Helper to check if a key set contains a primary key with the given (last, first).
+    fn has_primary_key(keys: &[MatchingKey], last: &str, first: &str) -> bool {
+        keys.iter()
+            .any(|k| k.last == last && k.first == first && k.origin == KeyOrigin::Primary)
+    }
+
+    /// Helper to check if a key set contains a nickname-origin key.
+    fn has_nickname_key(keys: &[MatchingKey], last: &str, first: &str) -> bool {
+        keys.iter()
+            .any(|k| k.last == last && k.first == first && k.origin == KeyOrigin::Nickname)
+    }
+
     #[test]
     fn keys_simple_name() {
         let parts = NameParts {
@@ -757,7 +932,7 @@ mod tests {
             nicknames: vec![],
         };
         let keys = matching_keys(&parts);
-        assert_eq!(keys, vec![("smith".into(), "john".into())]);
+        assert!(has_primary_key(&keys, "smith", "john"));
     }
 
     #[test]
@@ -770,10 +945,9 @@ mod tests {
             nicknames: vec![],
         };
         let keys = matching_keys(&parts);
-        assert!(keys.contains(&("leblanc".into(), "hpaul".into())));
-        assert!(keys.contains(&("leblanc".into(), "paul".into())));
-        assert!(keys.contains(&("leblanc".into(), "h".into())));
-        assert_eq!(keys.len(), 3);
+        assert!(has_primary_key(&keys, "leblanc", "hpaul"));
+        assert!(has_primary_key(&keys, "leblanc", "paul"));
+        assert!(has_primary_key(&keys, "leblanc", "h"));
     }
 
     #[test]
@@ -786,24 +960,62 @@ mod tests {
             nicknames: vec!["Ken".into()],
         };
         let keys = matching_keys(&parts);
-        assert!(keys.contains(&("burchenal".into(), "william".into())));
-        assert!(keys.contains(&("burchenal".into(), "ken".into())));
-        assert_eq!(keys.len(), 2);
+        assert!(has_primary_key(&keys, "burchenal", "william"));
+        assert!(has_primary_key(&keys, "burchenal", "ken"));
+        // Common nickname expansions should also be generated
+        assert!(has_nickname_key(&keys, "burchenal", "will"));
+        assert!(has_nickname_key(&keys, "burchenal", "bill"));
+        assert!(has_nickname_key(&keys, "burchenal", "billy"));
+    }
+
+    #[test]
+    fn keys_nickname_expansion_from_formal_name() {
+        // Banner instructor "Christopher" should generate "chris" as a nickname key
+        let parts = parse_banner_name("Packham, Christopher").unwrap();
+        let keys = matching_keys(&parts);
+        assert!(has_primary_key(&keys, "packham", "christopher"));
+        assert!(has_nickname_key(&keys, "packham", "chris"));
+    }
+
+    #[test]
+    fn keys_nickname_expansion_from_short_name() {
+        // RMP professor "Chris" should generate "christopher" as a nickname key
+        let parts = parse_rmp_name("Chris", "Packham").unwrap();
+        let keys = matching_keys(&parts);
+        assert!(has_primary_key(&keys, "packham", "chris"));
+        assert!(has_nickname_key(&keys, "packham", "christopher"));
+    }
+
+    #[test]
+    fn keys_nickname_cross_source_match() {
+        // Banner: "Packham, Christopher" should match RMP: "Chris Packham"
+        let banner = parse_banner_name("Packham, Christopher").unwrap();
+        let banner_keys = matching_keys(&banner);
+
+        let rmp = parse_rmp_name("Chris", "Packham").unwrap();
+        let rmp_keys = matching_keys(&rmp);
+
+        // Both should have ("packham", "chris") — Banner via nickname, RMP via primary
+        assert!(has_nickname_key(&banner_keys, "packham", "chris"));
+        assert!(has_primary_key(&rmp_keys, "packham", "chris"));
+
+        // And both should have ("packham", "christopher") — Banner via primary, RMP via nickname
+        assert!(has_primary_key(&banner_keys, "packham", "christopher"));
+        assert!(has_nickname_key(&rmp_keys, "packham", "christopher"));
     }
 
     #[test]
     fn keys_hyphenated_last() {
         let parts = parse_banner_name("Aguirre-Mesa, Andres").unwrap();
         let keys = matching_keys(&parts);
-        // Hyphen removed: "aguirremesa"
-        assert!(keys.contains(&("aguirremesa".into(), "andres".into())));
+        assert!(has_primary_key(&keys, "aguirremesa", "andres"));
     }
 
     #[test]
     fn keys_accented_name() {
         let parts = parse_rmp_name("Liliana", "Saldaña").unwrap();
         let keys = matching_keys(&parts);
-        assert!(keys.contains(&("saldana".into(), "liliana".into())));
+        assert!(has_primary_key(&keys, "saldana", "liliana"));
     }
 
     #[test]
@@ -816,22 +1028,27 @@ mod tests {
         let rmp = parse_rmp_name("Andres", "Aguirre-Mesa").unwrap();
         let rmp_keys = matching_keys(&rmp);
 
-        // Both should normalize to ("aguirremesa", "andres")
-        assert!(banner_keys.iter().any(|k| rmp_keys.contains(k)));
+        // Both should normalize to ("aguirremesa", "andres") as primary
+        assert!(banner_keys.iter().any(|bk| {
+            rmp_keys
+                .iter()
+                .any(|rk| bk.last == rk.last && bk.first == rk.first)
+        }));
     }
 
     #[test]
     fn keys_accent_cross_match() {
-        // Banner: "García, José" (if Banner ever has accents)
         let banner = parse_banner_name("Garcia, Jose").unwrap();
         let banner_keys = matching_keys(&banner);
 
-        // RMP: "José" / "García"
         let rmp = parse_rmp_name("José", "García").unwrap();
         let rmp_keys = matching_keys(&rmp);
 
-        // Both normalize to ("garcia", "jose")
-        assert!(banner_keys.iter().any(|k| rmp_keys.contains(k)));
+        assert!(banner_keys.iter().any(|bk| {
+            rmp_keys
+                .iter()
+                .any(|rk| bk.last == rk.last && bk.first == rk.first)
+        }));
     }
 
     #[test]

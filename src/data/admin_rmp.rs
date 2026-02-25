@@ -51,6 +51,9 @@ pub struct InstructorStats {
     pub total: i64,
     #[ts(as = "i32")]
     pub unmatched: i64,
+    /// Instructors with algorithm-generated candidates below auto-accept threshold.
+    #[ts(as = "i32")]
+    pub pending: i64,
     #[ts(as = "i32")]
     pub auto: i64,
     #[ts(as = "i32")]
@@ -139,10 +142,18 @@ pub struct ListInstructorsResponse {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RescoreResponse {
-    pub total_unmatched: usize,
+    /// Total instructors processed (excludes confirmed/rejected).
+    pub total_processed: usize,
+    /// Pending candidate rows deleted before regeneration.
+    pub deleted_pending_candidates: usize,
+    /// Auto-generated links deleted before regeneration.
+    pub deleted_auto_links: usize,
+    /// Candidates inserted in this run.
     pub candidates_created: usize,
-    pub candidates_rescored: usize,
+    /// Instructors auto-linked (score >= threshold).
     pub auto_matched: usize,
+    /// Instructors with candidates below auto-accept threshold (status = 'pending').
+    pub pending_review: usize,
     pub skipped_unparseable: usize,
     pub skipped_no_candidates: usize,
 }
@@ -293,6 +304,7 @@ pub async fn list_instructors(
     let mut stats = InstructorStats {
         total: 0,
         unmatched: 0,
+        pending: 0,
         auto: 0,
         confirmed: 0,
         rejected: 0,
@@ -302,6 +314,7 @@ pub async fn list_instructors(
         stats.total += row.count;
         match row.rmp_match_status.as_str() {
             "unmatched" => stats.unmatched = row.count,
+            "pending" => stats.pending = row.count,
             "auto" => stats.auto = row.count,
             "confirmed" => stats.confirmed = row.count,
             "rejected" => stats.rejected = row.count,
@@ -581,10 +594,12 @@ pub async fn rescore(pool: &PgPool) -> Result<RescoreResponse> {
         .context("candidate generation failed")?;
 
     Ok(RescoreResponse {
-        total_unmatched: stats.total_unmatched,
+        total_processed: stats.total_processed,
+        deleted_pending_candidates: stats.deleted_pending_candidates,
+        deleted_auto_links: stats.deleted_auto_links,
         candidates_created: stats.candidates_created,
-        candidates_rescored: stats.candidates_rescored,
         auto_matched: stats.auto_matched,
+        pending_review: stats.pending_review,
         skipped_unparseable: stats.skipped_unparseable,
         skipped_no_candidates: stats.skipped_no_candidates,
     })

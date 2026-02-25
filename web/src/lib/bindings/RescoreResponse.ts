@@ -3,4 +3,28 @@
 /**
  * Response for the rescore operation.
  */
-export type RescoreResponse = { totalUnmatched: number, candidatesCreated: number, candidatesRescored: number, autoMatched: number, skippedUnparseable: number, skippedNoCandidates: number, };
+export type RescoreResponse = { 
+/**
+ * Total instructors processed (excludes confirmed/rejected).
+ */
+totalProcessed: number, 
+/**
+ * Pending candidate rows deleted before regeneration.
+ */
+deletedPendingCandidates: number, 
+/**
+ * Auto-generated links deleted before regeneration.
+ */
+deletedAutoLinks: number, 
+/**
+ * Candidates inserted in this run.
+ */
+candidatesCreated: number, 
+/**
+ * Instructors auto-linked (score >= threshold).
+ */
+autoMatched: number, 
+/**
+ * Instructors with candidates below auto-accept threshold (status = 'pending').
+ */
+pendingReview: number, skippedUnparseable: number, skippedNoCandidates: number, };

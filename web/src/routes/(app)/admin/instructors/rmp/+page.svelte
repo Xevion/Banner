@@ -44,6 +44,7 @@ let stats = $state<InstructorStats>(
       data.instructors?.stats ?? {
         total: 0,
         unmatched: 0,
+        pending: 0,
         auto: 0,
         confirmed: 0,
         rejected: 0,
@@ -87,18 +88,18 @@ const search = useDebounceSearch((q) => {
 
 const filterCards: FilterCard<InstructorStats>[] = [
   {
-    label: "Total",
-    value: undefined,
-    stat: "total",
-    textColor: "text-muted-foreground",
-    ringColor: "ring-primary",
-  },
-  {
-    label: "Unmatched",
+    label: "No Candidates",
     value: "unmatched",
     stat: "unmatched",
-    textColor: "text-amber-600 dark:text-amber-400",
-    ringColor: "ring-amber-500",
+    textColor: "text-slate-500 dark:text-slate-400",
+    ringColor: "ring-slate-400",
+  },
+  {
+    label: "Pending",
+    value: "pending",
+    stat: "pending",
+    textColor: "text-orange-600 dark:text-orange-400",
+    ringColor: "ring-orange-500",
   },
   {
     label: "Auto",
@@ -126,7 +127,8 @@ const filterCards: FilterCard<InstructorStats>[] = [
 const progressSegments: ProgressSegment<InstructorStats>[] = [
   { stat: "auto", color: "bg-blue-500", label: "Auto" },
   { stat: "confirmed", color: "bg-green-500", label: "Confirmed" },
-  { stat: "unmatched", color: "bg-amber-500", label: "Unmatched" },
+  { stat: "pending", color: "bg-orange-500", label: "Pending" },
+  { stat: "unmatched", color: "bg-slate-400", label: "No Candidates" },
   { stat: "rejected", color: "bg-red-500", label: "Rejected" },
 ];
 
@@ -295,7 +297,7 @@ async function handleRescore() {
   } else {
     const res = result.value;
     rescoreResult = {
-      message: `Rescored: ${res.totalUnmatched} unmatched, ${res.candidatesCreated} candidates created, ${res.autoMatched} auto-matched`,
+      message: `Rescored: ${res.totalProcessed} processed, ${res.candidatesCreated} candidates, ${res.autoMatched} auto-matched, ${res.pendingReview} pending review`,
       isError: false,
     };
     await fetchInstructors();
@@ -305,8 +307,12 @@ async function handleRescore() {
 
 const BADGES: Record<string, StatusBadge> = {
   unmatched: {
-    label: "Unmatched",
-    classes: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    label: "No Candidates",
+    classes: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  },
+  pending: {
+    label: "Pending",
+    classes: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   },
   auto: { label: "Auto", classes: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
   confirmed: {
@@ -514,7 +520,7 @@ function formatScore(score: number): string {
                 </td>
                 <td class="px-4 py-2.5 text-right">
                   <div class="inline-flex items-center gap-1">
-                    {#if instructor.topCandidate && instructor.rmpMatchStatus === "unmatched"}
+                    {#if instructor.topCandidate && (instructor.rmpMatchStatus === "unmatched" || instructor.rmpMatchStatus === "pending")}
                       <button
                         onclick={(e) => {
                           e.stopPropagation();

@@ -17,7 +17,7 @@ let {
 <div class="mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
   {#each cards as card (card.value)}
     <button
-      onclick={() => onSelect(card.value)}
+      onclick={() => onSelect(activeFilter === card.value ? undefined : card.value)}
       class="bg-card border-border rounded-lg border p-3 text-left transition-all duration-200
              cursor-pointer hover:shadow-sm hover:border-border/80
              {activeFilter === card.value ? `ring-2 ${card.ringColor} shadow-sm` : ''}"

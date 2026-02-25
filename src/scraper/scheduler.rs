@@ -661,10 +661,12 @@ impl Scheduler {
         }
         info!(
             total,
-            stats.total_unmatched,
+            stats.total_processed,
+            stats.deleted_pending_candidates,
+            stats.deleted_auto_links,
             stats.candidates_created,
-            stats.candidates_rescored,
             stats.auto_matched,
+            stats.pending_review,
             stats.skipped_unparseable,
             stats.skipped_no_candidates,
             "RMP sync complete"

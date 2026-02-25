@@ -238,9 +238,12 @@ pub async fn rescore(
         .map_err(|e| db_error("rescore", e))?;
 
     info!(
-        total_unmatched = stats.total_unmatched,
+        total_processed = stats.total_processed,
+        deleted_pending_candidates = stats.deleted_pending_candidates,
+        deleted_auto_links = stats.deleted_auto_links,
         candidates_created = stats.candidates_created,
         auto_matched = stats.auto_matched,
+        pending_review = stats.pending_review,
         "RMP candidates rescored"
     );
 

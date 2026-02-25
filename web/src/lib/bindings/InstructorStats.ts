@@ -3,4 +3,8 @@
 /**
  * Aggregate status counts for the instructor list.
  */
-export type InstructorStats = { total: number, unmatched: number, auto: number, confirmed: number, rejected: number, withCandidates: number, };
+export type InstructorStats = { total: number, unmatched: number, 
+/**
+ * Instructors with algorithm-generated candidates below auto-accept threshold.
+ */
+pending: number, auto: number, confirmed: number, rejected: number, withCandidates: number, };
