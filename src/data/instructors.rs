@@ -209,6 +209,8 @@ pub async fn list_public_instructors(
         "name_desc" => "i.display_name DESC",
         "rating_asc" => "rmp.avg_rating ASC NULLS LAST, i.display_name ASC",
         "rating_desc" => "rmp.avg_rating DESC NULLS LAST, i.display_name ASC",
+        "composite_asc" => "sc.sort_score ASC NULLS LAST, i.display_name ASC",
+        "composite_desc" => "sc.sort_score DESC NULLS LAST, i.display_name ASC",
         _ => "i.display_name ASC",
     };
 
@@ -247,7 +249,10 @@ pub async fn list_public_instructors(
                 ARRAY[]::text[]
             ) as subjects,
             rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
-            bb.bb_avg_instructor_rating, bb.bb_total_responses
+            bb.bb_avg_instructor_rating, bb.bb_total_responses,
+            sc.display_score, sc.sort_score, sc.ci_lower, sc.ci_upper,
+            sc.confidence, sc.source as score_source,
+            sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
         FROM instructors i
         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
         LEFT JOIN (
@@ -262,6 +267,7 @@ pub async fn list_public_instructors(
                 AND be.instructor_response_count > 0
             GROUP BY ibl.instructor_id
         ) bb ON bb.instructor_id = i.id
+        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id
         {where_clause}
         ORDER BY {sort_clause}
         LIMIT {per_page} OFFSET {offset}
@@ -280,6 +286,14 @@ pub async fn list_public_instructors(
         rmp_legacy_id: Option<i32>,
         bb_avg_instructor_rating: Option<f32>,
         bb_total_responses: Option<i64>,
+        display_score: Option<f32>,
+        sort_score: Option<f32>,
+        ci_lower: Option<f32>,
+        ci_upper: Option<f32>,
+        confidence: Option<f32>,
+        score_source: Option<String>,
+        sc_rmp_count: Option<i32>,
+        sc_bb_count: Option<i32>,
     }
 
     let mut query = sqlx::query_as::<_, Row>(&query_str);
@@ -333,12 +347,28 @@ pub async fn list_public_instructors(
                 }
                 _ => None,
             };
-            let composite = super::course_types::compute_composite(
-                rmp.as_ref().and_then(|r| r.avg_rating),
-                rmp.as_ref().and_then(|r| r.num_ratings),
-                r.bb_avg_instructor_rating,
-                r.bb_total_responses.unwrap_or(0) as i32,
-            );
+            let composite = match (
+                r.display_score,
+                r.sort_score,
+                r.ci_lower,
+                r.ci_upper,
+                r.confidence,
+                r.score_source,
+            ) {
+                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => Some(
+                    super::scoring::build_composite_from_score_row(&super::scoring::ScoreRow {
+                        display_score: ds,
+                        sort_score: ss,
+                        ci_lower: cl,
+                        ci_upper: cu,
+                        confidence: conf,
+                        source: src,
+                        rmp_count: r.sc_rmp_count.unwrap_or(0),
+                        bb_count: r.sc_bb_count.unwrap_or(0),
+                    }),
+                ),
+                _ => None,
+            };
             PublicInstructorListItem {
                 id: r.id,
                 slug: r.slug.unwrap_or_default(),
@@ -473,34 +503,56 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor bluebook")?;
 
-    let (bluebook_summary, bb_avg, bb_count) = match bb {
-        Some(ref r) => {
-            let summary = match (r.avg_instructor_rating, r.total_responses) {
-                (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                    Some(super::course_types::PublicBlueBookSummary {
-                        avg_instructor_rating: avg,
-                        avg_course_rating: r.avg_course_rating,
-                        total_responses: n as i32,
-                        eval_count: r.eval_count.unwrap_or(0) as i32,
-                    })
-                }
-                _ => None,
-            };
-            (
-                summary,
-                r.avg_instructor_rating,
-                r.total_responses.unwrap_or(0) as i32,
-            )
-        }
-        None => (None, None, 0),
-    };
+    // Precomputed composite score (fetched before BB summary so calibrated_bb is available)
+    #[derive(sqlx::FromRow)]
+    struct DbScoreRow {
+        display_score: f32,
+        sort_score: f32,
+        ci_lower: f32,
+        ci_upper: f32,
+        confidence: f32,
+        source: String,
+        rmp_count: i32,
+        bb_count: i32,
+        calibrated_bb: Option<f32>,
+    }
 
-    let composite = super::course_types::compute_composite(
-        rmp_summary.as_ref().and_then(|r| r.avg_rating),
-        rmp_summary.as_ref().and_then(|r| r.num_ratings),
-        bb_avg,
-        bb_count,
-    );
+    let score_row = sqlx::query_as::<_, DbScoreRow>(
+        "SELECT display_score, sort_score, ci_lower, ci_upper, confidence, source, rmp_count, bb_count, calibrated_bb FROM instructor_scores WHERE instructor_id = $1",
+    )
+    .bind(inst.id)
+    .fetch_optional(pool)
+    .await
+    .context("failed to fetch instructor score")?;
+
+    let composite = score_row.as_ref().map(|s| {
+        super::scoring::build_composite_from_score_row(&super::scoring::ScoreRow {
+            display_score: s.display_score,
+            sort_score: s.sort_score,
+            ci_lower: s.ci_lower,
+            ci_upper: s.ci_upper,
+            confidence: s.confidence,
+            source: s.source.clone(),
+            rmp_count: s.rmp_count,
+            bb_count: s.bb_count,
+        })
+    });
+
+    let bluebook_summary = match bb {
+        Some(ref r) => match (r.avg_instructor_rating, r.total_responses) {
+            (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
+                Some(super::course_types::PublicBlueBookSummary {
+                    normalized_rating: score_row.as_ref().and_then(|s| s.calibrated_bb),
+                    avg_instructor_rating: avg,
+                    avg_course_rating: r.avg_course_rating,
+                    total_responses: n as i32,
+                    eval_count: r.eval_count.unwrap_or(0) as i32,
+                })
+            }
+            _ => None,
+        },
+        None => None,
+    };
 
     // Teaching history
     let teaching_history = get_teaching_history(pool, inst.id).await?;

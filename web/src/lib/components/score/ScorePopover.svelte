@@ -37,14 +37,14 @@ let source = $derived<"composite" | "bluebook" | "rmp">(bbOnly ? "bluebook" : "c
   {#if children}
     {@render children()}
   {:else}
-    <ScoreBadge score={composite.score} {source} {confident} {size} />
+    <ScoreBadge score={composite.displayScore} {source} {confident} {size} />
   {/if}
   {#snippet content()}
     <div class="p-3 flex flex-col gap-2.5">
       <!-- Composite headline (only if both sources contribute) -->
       {#if hasBothSources}
         <div class="flex items-center gap-2.5">
-          <ScoreBadge score={composite.score} source="composite" {confident} size="sm" />
+          <ScoreBadge score={composite.displayScore} source="composite" {confident} size="sm" />
           <div>
             <div class="text-xs font-medium">Combined Rating</div>
             <div class="text-[10px] text-muted-foreground">

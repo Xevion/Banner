@@ -286,7 +286,7 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
 ///
 /// Department and review-course signals both measure subject alignment through
 /// different lenses. They are merged via `max()` into a single subject evidence
-    /// score so that whichever signal is stronger dominates - review data overrides
+/// score so that whichever signal is stronger dominates - review data overrides
 /// a noisy department string, and department helps when reviews are absent.
 pub fn compute_match_score(
     instructor_subjects: &[String],

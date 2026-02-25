@@ -605,12 +605,30 @@ pub fn build_course_response(
                 i.bb_avg_instructor_rating,
                 i.bb_total_responses,
             );
-            let composite = crate::data::course_types::compute_composite(
-                rmp.as_ref().and_then(|r| r.avg_rating),
-                rmp.as_ref().and_then(|r| r.num_ratings),
-                i.bb_avg_instructor_rating,
-                i.bb_total_responses.unwrap_or(0) as i32,
-            );
+            let composite = match (
+                i.sc_display_score,
+                i.sc_sort_score,
+                i.sc_ci_lower,
+                i.sc_ci_upper,
+                i.sc_confidence,
+                i.sc_source,
+            ) {
+                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => {
+                    Some(crate::data::scoring::build_composite_from_score_row(
+                        &crate::data::scoring::ScoreRow {
+                            display_score: ds,
+                            sort_score: ss,
+                            ci_lower: cl,
+                            ci_upper: cu,
+                            confidence: conf,
+                            source: src,
+                            rmp_count: i.sc_rmp_count.unwrap_or(0),
+                            bb_count: i.sc_bb_count.unwrap_or(0),
+                        },
+                    ))
+                }
+                _ => None,
+            };
             InstructorResponse {
                 instructor_id: i.instructor_id,
                 banner_id: i.banner_id,

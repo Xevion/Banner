@@ -127,6 +127,16 @@ impl App {
             Err(e) => warn!(error = ?e, "Failed to backfill instructor slugs (non-fatal)"),
         }
 
+        // Compute instructor scores from RMP + BlueBook data
+        match crate::data::scoring::recompute_all_scores(&db_pool).await {
+            Ok(0) => info!("Computed instructor scores (none found - no RMP or BlueBook data)"),
+            Ok(n) => info!(count = n, "Computed instructor scores"),
+            Err(e) => {
+                error!(error = ?e, "Failed to compute instructor scores");
+                return Err(e.context("Failed to compute instructor scores on startup"));
+            }
+        }
+
         // Create shared BlueBook sync notify and force flag for manual trigger from admin endpoints
         let bluebook_sync_notify = Arc::new(tokio::sync::Notify::new());
         let bluebook_force_flag = Arc::new(AtomicBool::new(false));
@@ -258,11 +268,6 @@ impl App {
     pub async fn run(self) -> ExitCode {
         use crate::services::signals::handle_shutdown_signals;
         handle_shutdown_signals(self.service_manager, self.config.shutdown_timeout).await
-    }
-
-    /// Get a reference to the configuration
-    pub fn config(&self) -> &Config {
-        &self.config
     }
 
     /// Sync terms from Banner API on startup.

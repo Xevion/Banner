@@ -372,7 +372,7 @@ pub struct CourseInstructor {
     pub is_primary: bool,
 }
 
-/// Joined instructor data for a course (from course_instructors + instructors + rmp_professors).
+/// Joined instructor data for a course (from course_instructors + instructors + rmp_professors + instructor_scores).
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct CourseInstructorDetail {
     pub instructor_id: i32,
@@ -390,6 +390,15 @@ pub struct CourseInstructorDetail {
     pub slug: Option<String>,
     /// Present when fetched via batch query; `None` for single-course queries.
     pub course_id: Option<i32>,
+    // Precomputed Bayesian score fields (from instructor_scores)
+    pub sc_display_score: Option<f32>,
+    pub sc_sort_score: Option<f32>,
+    pub sc_ci_lower: Option<f32>,
+    pub sc_ci_upper: Option<f32>,
+    pub sc_confidence: Option<f32>,
+    pub sc_source: Option<String>,
+    pub sc_rmp_count: Option<i32>,
+    pub sc_bb_count: Option<i32>,
 }
 
 #[allow(dead_code)]

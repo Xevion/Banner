@@ -4,79 +4,85 @@ import StatItem from "$lib/components/score/StatItem.svelte";
 import { ratingColor, rmpUrl, scoreBadgeStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { formatNumber } from "$lib/utils";
+import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { BookOpen, ExternalLink, Star } from "@lucide/svelte";
 
 let {
   source,
   bluebook = undefined,
   rmp = undefined,
+  inline = false,
 }: {
   source: "bluebook" | "rmp";
   bluebook?: PublicBlueBookSummary;
   rmp?: PublicRmpSummary;
+  inline?: boolean;
 } = $props();
 </script>
 
-<div class="rounded-lg border border-border bg-card p-5">
+<div class={inline ? "" : "rounded-lg border border-border bg-card p-5"}>
   {#if source === "bluebook" && bluebook}
     {@const bb = bluebook}
-    <!-- BlueBook Card -->
-    <div class="flex items-center gap-2 mb-3">
-      <BookOpen class="size-4 text-muted-foreground" />
-      <h3 class="text-sm font-semibold">BlueBook</h3>
-    </div>
+    {@const overallRating = bb.normalizedRating ?? bb.avgInstructorRating}
+    {#if !inline}
+      <div class="flex items-center gap-2 mb-3">
+        <BookOpen class="size-4 text-muted-foreground" />
+        <h3 class="text-sm font-semibold">BlueBook</h3>
+      </div>
+    {/if}
     <div class="flex items-center gap-6 flex-wrap">
-      <div class="text-center">
+      <div class="text-center w-14">
         <div
-          class="text-2xl font-bold"
-          style={scoreBadgeStyle(bb.avgInstructorRating, themeStore.isDark)}
+          class="text-lg font-semibold"
+          style={scoreBadgeStyle(overallRating, themeStore.isDark)}
         >
-          {bb.avgInstructorRating.toFixed(1)}
+          {overallRating.toFixed(1)}
         </div>
-        <!-- Proportional bar -->
         <div class="w-full h-1 rounded-full bg-muted mt-1">
           <div
             class="h-full rounded-full"
-            style="width: {(bb.avgInstructorRating / 5) * 100}%; background-color: {ratingColor(bb.avgInstructorRating, themeStore.isDark)}"
+            style="width: {(overallRating / 5) * 100}%; background-color: {ratingColor(overallRating, themeStore.isDark)}"
           ></div>
         </div>
-        <div class="text-xs text-muted-foreground mt-1">Instructor</div>
+        <SimpleTooltip text="Normalized to the RateMyProfessors scale&#10;using regression calibration" side="bottom" contentClass="max-w-48">
+          <div class="text-xs text-muted-foreground mt-1 underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 cursor-help">Overall</div>
+        </SimpleTooltip>
       </div>
+      <StatItem value={bb.avgInstructorRating.toFixed(1)} label="Instructor" />
       {#if bb.avgCourseRating != null}
         <StatItem value={bb.avgCourseRating.toFixed(1)} label="Course" />
       {/if}
       <StatItem value={formatNumber(bb.totalResponses)} label="Responses" />
-      <StatItem value={String(bb.evalCount)} label="Evaluations" />
     </div>
   {:else if source === "rmp" && rmp}
     {@const r = rmp}
-    <!-- RMP Card -->
-    <div class="flex items-center justify-between mb-3">
-      <div class="flex items-center gap-2">
-        <Star class="size-4 text-muted-foreground" />
-        <h3 class="text-sm font-semibold">RateMyProfessors</h3>
+    {#if !inline}
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <Star class="size-4 text-muted-foreground" />
+          <h3 class="text-sm font-semibold">RateMyProfessors</h3>
+        </div>
+        <a
+          href={rmpUrl(r.legacyId)}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          View
+          <ExternalLink class="size-3" />
+        </a>
       </div>
-      <a
-        href={rmpUrl(r.legacyId)}
-        target="_blank"
-        rel="noopener"
-        class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        View
-        <ExternalLink class="size-3" />
-      </a>
-    </div>
+    {/if}
     <div class="flex items-center gap-6 flex-wrap">
       {#if r.avgRating != null}
         {@const rating = r.avgRating}
-        <div class="text-center">
+        <div class="text-center w-14">
           <div
-            class="text-2xl font-bold"
+            class="text-lg font-semibold"
             style={scoreBadgeStyle(rating, themeStore.isDark)}
           >
             {rating.toFixed(1)}
           </div>
-          <!-- Proportional bar -->
           <div class="w-full h-1 rounded-full bg-muted mt-1">
             <div
               class="h-full rounded-full"
@@ -98,5 +104,6 @@ let {
         <span class="text-sm text-muted-foreground">No ratings yet</span>
       {/if}
     </div>
+
   {/if}
 </div>

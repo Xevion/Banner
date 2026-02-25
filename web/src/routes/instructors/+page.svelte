@@ -36,7 +36,8 @@ const subjectMap = $derived(
 
 const sortOptions: SortOption[] = [
   { value: "name", label: "Alphabetical", defaultDirection: "asc" },
-  { value: "rating", label: "Rating", defaultDirection: "desc" },
+  { value: "composite", label: "Score", defaultDirection: "desc" },
+  { value: "rating", label: "RMP Rating", defaultDirection: "desc" },
 ];
 
 const query = useQuery({
@@ -171,7 +172,7 @@ function resolveSubject(code: string): string {
                 {#if instructor.composite != null}
                   <div class="shrink-0">
                     <ScoreBadge
-                      score={instructor.composite.score}
+                      score={instructor.composite.displayScore}
                       source={instructor.bluebook != null && instructor.rmp?.avgRating == null ? "bluebook" : "composite"}
                       size="sm"
                     />

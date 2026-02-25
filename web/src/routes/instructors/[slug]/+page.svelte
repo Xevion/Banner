@@ -2,9 +2,7 @@
 import { client } from "$lib/api";
 import type {
   CourseResponse,
-  PublicBlueBookSummary,
   PublicInstructorProfileResponse,
-  PublicRmpSummary,
   SearchOptionsResponse,
 } from "$lib/bindings";
 import ScoreBar from "$lib/components/ScoreBar.svelte";
@@ -13,9 +11,9 @@ import TermCombobox from "$lib/components/TermCombobox.svelte";
 import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
-import { formatInstructorName } from "$lib/course";
-import { formatNumber } from "$lib/utils";
-import { Copy, Mail } from "@lucide/svelte";
+import { formatInstructorName, rmpUrl } from "$lib/course";
+import { Copy, ExternalLink, Mail } from "@lucide/svelte";
+import { Tabs } from "bits-ui";
 import { untrack } from "svelte";
 
 interface PageData {
@@ -110,45 +108,21 @@ interface ScoreBarProps {
   bbCount: number;
 }
 
-// Derives ScoreBar props from existing rating data as a placeholder until the
-// backend Bayesian pipeline is implemented. CI width scales inversely with
-// response count to give a visually meaningful confidence interval.
-function deriveScoreBarProps(
-  rmpData: PublicRmpSummary | null,
-  bbData: PublicBlueBookSummary | null
-): ScoreBarProps | null {
-  const rmpRating = rmpData?.avgRating ?? null;
-  const rmpCount = rmpData?.numRatings ?? 0;
-  const bbRating = bbData?.avgInstructorRating ?? null;
-  const bbCount = bbData?.totalResponses ?? 0;
-
-  const displayScore = composite?.score ?? rmpRating ?? bbRating ?? null;
-  if (displayScore == null) return null;
-
-  const source: "both" | "rmp" | "bb" =
-    rmpRating != null && bbRating != null ? "both" : rmpRating != null ? "rmp" : "bb";
-
-  const totalResponses = (rmpCount ?? 0) + bbCount;
-  const confidence = Math.min(0.97, Math.max(0.1, totalResponses / 1500 + 0.15));
-  const ciWidth = Math.max(0.1, (1 - confidence) * 3.0);
-  const ciLower = Math.max(1, displayScore - ciWidth / 2);
-  const ciUpper = Math.min(5, displayScore + ciWidth / 2);
-
+const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
+  if (!composite) return null;
   return {
-    displayScore,
-    sortScore: ciLower,
-    ciLower,
-    ciUpper,
-    confidence,
-    source,
-    rmpRating,
-    rmpCount: rmpCount ?? 0,
-    bbRating,
-    bbCount,
+    displayScore: composite.displayScore,
+    sortScore: composite.sortScore,
+    ciLower: composite.ciLower,
+    ciUpper: composite.ciUpper,
+    confidence: composite.confidence,
+    source: composite.source as "both" | "rmp" | "bb",
+    rmpRating: rmp?.avgRating ?? null,
+    rmpCount: rmp?.numRatings ?? 0,
+    bbRating: bluebook?.avgInstructorRating ?? null,
+    bbCount: bluebook?.totalResponses ?? 0,
   };
-}
-
-const scoreBarProps = $derived(deriveScoreBarProps(rmp, bluebook));
+});
 </script>
 
 <svelte:head>
@@ -200,30 +174,81 @@ const scoreBarProps = $derived(deriveScoreBarProps(rmp, bluebook));
       {/if}
     </div>
 
-    <!-- Composite Score Bar -->
+    <!-- Rating -->
     {#if scoreBarProps}
-      <div class="rounded-lg border border-border bg-card px-5 pt-4 pb-2 mb-4">
-        <div class="flex items-center justify-between mb-1">
-          <div class="text-sm font-medium">Composite Score</div>
-          {#if composite}
-            <div class="text-xs text-muted-foreground">
-              {formatNumber(composite.totalResponses)} total responses
+      {@const hasRmp = rmp?.avgRating != null}
+      {@const hasBb = bluebook != null}
+      {@const hasBothSources = hasRmp && hasBb}
+      {@const defaultTab = hasRmp ? "rmp" : "bb"}
+      <div class="rounded-lg border border-border bg-card mb-6">
+        <div class="flex flex-col md:flex-row">
+          <!-- ScoreBar (left / top on mobile) -->
+          <div class="flex-1 px-3 pt-3 pb-2 sm:px-5 sm:pt-4 {hasBb || hasRmp ? 'md:border-r md:border-border' : ''}">
+            <div class="text-sm font-medium mb-1">Rating</div>
+            <ScoreBar {...scoreBarProps} />
+          </div>
+
+          <!-- Source detail tabs (right / bottom on mobile) -->
+          {#if hasRmp || hasBb}
+            <div class="md:w-[35%] shrink-0 border-t md:border-t-0 border-border">
+              {#if hasBothSources}
+                <Tabs.Root value={defaultTab}>
+                  <Tabs.List class="flex border-b border-border bg-muted/20">
+                    <Tabs.Trigger
+                      value="rmp"
+                      class="flex-1 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40 active:bg-muted/60 data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-muted-foreground/50 data-[state=active]:-mb-px cursor-pointer"
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        RateMyProfessors
+                        {#if rmp?.legacyId != null}
+                          <a
+                            href={rmpUrl(rmp.legacyId)}
+                            target="_blank"
+                            rel="noopener"
+                            class="text-muted-foreground hover:text-foreground"
+                            onclick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink class="size-3" />
+                          </a>
+                        {/if}
+                      </span>
+                    </Tabs.Trigger>
+                    <Tabs.Trigger
+                      value="bb"
+                      class="flex-1 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40 active:bg-muted/60 data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-muted-foreground/50 data-[state=active]:-mb-px cursor-pointer"
+                    >
+                      BlueBook
+                    </Tabs.Trigger>
+                  </Tabs.List>
+                  <Tabs.Content value="rmp" class="p-4">
+                    {#if rmp}
+                      <SourceScoreCard source="rmp" {rmp} inline />
+                    {/if}
+                  </Tabs.Content>
+                  <Tabs.Content value="bb" class="p-4">
+                    {#if bluebook}
+                      <SourceScoreCard source="bluebook" {bluebook} inline />
+                    {/if}
+                  </Tabs.Content>
+                </Tabs.Root>
+              {:else}
+                <!-- Single source: no tabs, just a label + card -->
+                <div class="px-4 py-2 border-b border-border bg-muted/20">
+                  <span class="text-xs font-medium text-muted-foreground">
+                    {hasRmp ? "RateMyProfessors" : "BlueBook"}
+                  </span>
+                </div>
+                <div class="p-4">
+                  {#if hasRmp && rmp}
+                    <SourceScoreCard source="rmp" {rmp} inline />
+                  {:else if hasBb && bluebook}
+                    <SourceScoreCard source="bluebook" {bluebook} inline />
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/if}
         </div>
-        <ScoreBar {...scoreBarProps} />
-      </div>
-    {/if}
-
-    <!-- Rating Source Cards -->
-    {#if rmp ?? bluebook}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {#if bluebook}
-          <SourceScoreCard source="bluebook" {bluebook} />
-        {/if}
-        {#if rmp}
-          <SourceScoreCard source="rmp" {rmp} />
-        {/if}
       </div>
     {/if}
 

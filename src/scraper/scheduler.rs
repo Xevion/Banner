@@ -273,6 +273,14 @@ impl Scheduler {
 
                                             tokio::join!(term_fut, rmp_fut, ref_fut, bb_fut, rmp_review_fut);
 
+                                            // Recompute instructor scores when rating data may have changed
+                                            if should_sync_rmp || should_sync_bluebook || should_scrape_rmp_reviews {
+                                                match crate::data::scoring::recompute_all_scores(db.pool()).await {
+                                                    Ok(n) => info!(count = n, "Recomputed instructor scores after sync"),
+                                                    Err(e) => error!(error = ?e, "Failed to recompute instructor scores after sync"),
+                                                }
+                                            }
+
                                             if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
                                                 error!(error = ?e, "Failed to schedule jobs");
                                             }

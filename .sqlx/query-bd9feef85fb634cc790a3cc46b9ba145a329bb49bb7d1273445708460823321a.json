@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH bluebook_agg AS (\n            SELECT\n                ibl.instructor_id,\n                AVG(be.instructor_rating)::REAL AS bb_avg,\n                SUM(be.instructor_response_count)::INTEGER AS bb_responses\n            FROM instructor_bluebook_links ibl\n            JOIN bluebook_evaluations be ON be.instructor_name = ibl.instructor_name\n            WHERE ibl.status IN ('approved', 'auto')\n              AND ibl.instructor_id IS NOT NULL\n              AND be.instructor_rating IS NOT NULL\n            GROUP BY ibl.instructor_id\n        ),\n        rmp_data AS (\n            SELECT DISTINCT ON (irl.instructor_id)\n                irl.instructor_id,\n                rp.avg_rating::REAL AS rmp_rating,\n                rp.num_ratings AS rmp_num_ratings\n            FROM instructor_rmp_links irl\n            JOIN rmp_professors rp ON irl.rmp_legacy_id = rp.legacy_id\n            WHERE rp.avg_rating IS NOT NULL\n              AND rp.num_ratings > 0\n            ORDER BY irl.instructor_id, rp.num_ratings DESC\n        )\n        SELECT\n            i.id AS instructor_id,\n            rd.rmp_rating AS \"rmp_rating: f32\",\n            COALESCE(rd.rmp_num_ratings, 0) AS \"rmp_num_ratings!: i32\",\n            bb.bb_avg AS \"bb_avg: f32\",\n            COALESCE(bb.bb_responses, 0) AS \"bb_responses!: i32\"\n        FROM instructors i\n        LEFT JOIN rmp_data rd ON i.id = rd.instructor_id\n        LEFT JOIN bluebook_agg bb ON i.id = bb.instructor_id\n        WHERE rd.rmp_rating IS NOT NULL OR bb.bb_avg IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "instructor_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "rmp_rating: f32",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 2,
+        "name": "rmp_num_ratings!: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "bb_avg: f32",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 4,
+        "name": "bb_responses!: i32",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "bd9feef85fb634cc790a3cc46b9ba145a329bb49bb7d1273445708460823321a"
+}

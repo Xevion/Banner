@@ -229,11 +229,29 @@ pub async fn get_course_instructors(
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
                rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
+               bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
-               ci.course_id
+               ci.course_id,
+               sc.display_score as sc_display_score, sc.sort_score as sc_sort_score,
+               sc.ci_lower as sc_ci_lower, sc.ci_upper as sc_ci_upper,
+               sc.confidence as sc_confidence, sc.source as sc_source,
+               sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
+        LEFT JOIN LATERAL (
+            SELECT
+                AVG(be.instructor_rating)::real as bb_avg_instructor_rating,
+                SUM(be.instructor_response_count)::bigint as bb_total_responses
+            FROM bluebook_evaluations be
+            JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name
+                AND (ibl.subject IS NULL OR ibl.subject = be.subject)
+            WHERE ibl.instructor_id = i.id
+                AND ibl.status IN ('approved', 'auto')
+                AND be.instructor_rating IS NOT NULL
+                AND be.instructor_response_count > 0
+        ) bb ON true
+        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id
         WHERE ci.course_id = $1
         ORDER BY ci.is_primary DESC, i.display_name
         "#,
@@ -262,7 +280,11 @@ pub async fn get_instructors_for_courses(
                rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
                bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
-               ci.course_id
+               ci.course_id,
+               sc.display_score as sc_display_score, sc.sort_score as sc_sort_score,
+               sc.ci_lower as sc_ci_lower, sc.ci_upper as sc_ci_upper,
+               sc.confidence as sc_confidence, sc.source as sc_source,
+               sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
@@ -278,6 +300,7 @@ pub async fn get_instructors_for_courses(
                 AND be.instructor_rating IS NOT NULL
                 AND be.instructor_response_count > 0
         ) bb ON true
+        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id
         WHERE ci.course_id = ANY($1)
         ORDER BY ci.course_id, ci.is_primary DESC, i.display_name
         "#,

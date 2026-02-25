@@ -3,4 +3,8 @@
 /**
  * Full BlueBook summary for instructor detail pages.
  */
-export type PublicBlueBookSummary = { avgInstructorRating: number, avgCourseRating: number | null, totalResponses: number, evalCount: number, };
+export type PublicBlueBookSummary = { 
+/**
+ * Calibrated BlueBook score on the RMP scale (1-5), from `instructor_scores.calibrated_bb`.
+ */
+normalizedRating: number | null, avgInstructorRating: number, avgCourseRating: number | null, totalResponses: number, evalCount: number, };

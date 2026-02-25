@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "TRUNCATE instructor_scores",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "49a18072df06070c255b8fb336f8e59ff38d22ac367bbb3866396d3d2d4727f4"
+}

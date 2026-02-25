@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO instructor_scores (\n            instructor_id, display_score, sort_score, ci_lower, ci_upper,\n            confidence, source, rmp_rating, rmp_count, bb_rating, calibrated_bb, bb_count\n        )\n        SELECT * FROM UNNEST(\n            $1::int[], $2::real[], $3::real[], $4::real[], $5::real[],\n            $6::real[], $7::text[], $8::real[], $9::int[], $10::real[], $11::real[], $12::int[]\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Float4Array",
+        "Float4Array",
+        "Float4Array",
+        "Float4Array",
+        "Float4Array",
+        "TextArray",
+        "Float4Array",
+        "Int4Array",
+        "Float4Array",
+        "Float4Array",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c67784acfb1b4b6aef05148654ee9827683c0703ab83a27edc638d0669dafc7b"
+}

@@ -176,19 +176,70 @@ pub struct BlueBookListSummary {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct PublicBlueBookSummary {
+    /// Calibrated BlueBook score on the RMP scale (1-5), from `instructor_scores.calibrated_bb`.
+    pub normalized_rating: Option<f32>,
     pub avg_instructor_rating: f32,
     pub avg_course_rating: Option<f32>,
     pub total_responses: i32,
     pub eval_count: i32,
 }
 
-/// Composite rating combining BlueBook and RMP via response-count-weighted average.
+/// Data source for a composite score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum ScoreSource {
+    Both,
+    Rmp,
+    Bb,
+}
+
+impl ScoreSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Both => "both",
+            Self::Rmp => "rmp",
+            Self::Bb => "bb",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "both" => Some(Self::Both),
+            "rmp" => Some(Self::Rmp),
+            "bb" => Some(Self::Bb),
+            _ => None,
+        }
+    }
+}
+
+/// Bayesian composite rating combining RMP and BlueBook via regression calibration.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct CompositeRating {
-    pub score: f32,
+    /// Posterior mean -- the headline number displayed to users.
+    pub display_score: f32,
+    /// CI lower bound -- used for ranking (penalizes low confidence).
+    pub sort_score: f32,
+    pub ci_lower: f32,
+    pub ci_upper: f32,
+    /// 0.0-1.0 scalar indicating how much data narrowed the posterior.
+    pub confidence: f32,
+    pub source: ScoreSource,
     pub total_responses: i32,
+}
+
+/// Nested score object returned by API endpoints for instructor contexts.
+/// Contains the composite score plus raw source ratings for tooltip display.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct InstructorScore {
+    pub composite: CompositeRating,
+    pub rmp: Option<RmpRating>,
+    pub bluebook: Option<BlueBookRating>,
 }
 
 pub fn build_bluebook_rating(
@@ -205,39 +256,5 @@ pub fn build_bluebook_rating(
             })
         }
         _ => None,
-    }
-}
-
-/// Compute response-count-weighted average of available rating sources.
-pub fn compute_composite(
-    rmp_avg: Option<f32>,
-    rmp_count: Option<i32>,
-    bb_avg: Option<f32>,
-    bb_count: i32,
-) -> Option<CompositeRating> {
-    let rmp = rmp_avg.zip(rmp_count).filter(|&(r, n)| r > 0.0 && n > 0);
-    let bb = if bb_avg.is_some_and(|r| r > 0.0) && bb_count > 0 {
-        Some((bb_avg.unwrap(), bb_count))
-    } else {
-        None
-    };
-
-    match (rmp, bb) {
-        (Some((r_avg, r_n)), Some((b_avg, b_n))) => {
-            let total = r_n + b_n;
-            Some(CompositeRating {
-                score: (r_avg * r_n as f32 + b_avg * b_n as f32) / total as f32,
-                total_responses: total,
-            })
-        }
-        (Some((r_avg, r_n)), None) => Some(CompositeRating {
-            score: r_avg,
-            total_responses: r_n,
-        }),
-        (None, Some((b_avg, b_n))) => Some(CompositeRating {
-            score: b_avg,
-            total_responses: b_n,
-        }),
-        (None, None) => None,
     }
 }
