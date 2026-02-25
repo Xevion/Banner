@@ -314,8 +314,10 @@ pub async fn list_public_instructors(
         .into_iter()
         .map(|r| {
             let rmp = r.rmp_legacy_id.map(|legacy_id| {
-                let (avg_rating, num_ratings) =
-                    super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
+                let (avg_rating, num_ratings) = super::course_types::sanitize_rmp_ratings(
+                    r.avg_rating.map(|v| v as f32),
+                    r.num_ratings,
+                );
                 RmpListSummary {
                     avg_rating,
                     num_ratings,
@@ -420,8 +422,10 @@ pub async fn get_public_instructor_by_slug(
 
     let rmp_summary = rmp.and_then(|r| {
         let legacy_id = r.legacy_id?;
-        let (avg_rating, num_ratings) =
-            super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
+        let (avg_rating, num_ratings) = super::course_types::sanitize_rmp_ratings(
+            r.avg_rating.map(|v| v as f32),
+            r.num_ratings,
+        );
         Some(PublicRmpSummary {
             avg_rating,
             avg_difficulty: if avg_rating.is_some() {

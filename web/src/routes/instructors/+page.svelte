@@ -5,10 +5,11 @@ import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/b
 import { useQuery } from "$lib/composables";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
+import SortSelect from "$lib/components/SortSelect.svelte";
+import type { SortOption } from "$lib/components/SortSelect.svelte";
 import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import { formatNumber } from "$lib/utils";
 import { ExternalLink, Mail, Search } from "@lucide/svelte";
-import { Select } from "bits-ui";
 import { untrack } from "svelte";
 
 interface PageData {
@@ -33,12 +34,10 @@ const subjectMap = $derived(
   new Map(subjects.map((s: { code: string; description: string }) => [s.code, s.description]))
 );
 
-const sortItems = [
-  { value: "name_asc", label: "Name A–Z" },
-  { value: "name_desc", label: "Name Z–A" },
-  { value: "rating_desc", label: "Highest Rated" },
+const sortOptions: SortOption[] = [
+  { value: "name", label: "Alphabetical", defaultDirection: "asc" },
+  { value: "rating", label: "Rating", defaultDirection: "desc" },
 ];
-const sortLabel = $derived(sortItems.find((s) => s.value === selectedSort)?.label ?? "Sort");
 
 const query = useQuery({
   fetcher: () =>
@@ -57,12 +56,21 @@ const totalPages = $derived(
   query.data ? Math.ceil(Number(query.data.total) / query.data.perPage) : 0
 );
 
-// Reset to page 1 when subject changes
+// Reset to page 1 when subject or sort changes
 let _prevSubject = $state(untrack(() => selectedSubjects[0]));
 $effect(() => {
   const s = selectedSubjects[0]; // tracked
   if (s !== _prevSubject) {
     _prevSubject = s;
+    page = 1;
+  }
+});
+
+let _prevSort = $state(untrack(() => selectedSort));
+$effect(() => {
+  const s = selectedSort; // tracked
+  if (s !== _prevSort) {
+    _prevSort = s;
     page = 1;
   }
 });
@@ -107,48 +115,7 @@ function resolveSubject(code: string): string {
 
       <SubjectCombobox {subjects} bind:value={selectedSubjects} />
 
-      <Select.Root
-        type="single"
-        value={selectedSort}
-        onValueChange={(v: string) => { if (v) { selectedSort = v; page = 1; } }}
-        items={sortItems}
-      >
-        <Select.Trigger
-          class="inline-flex items-center justify-between gap-1.5 h-9 px-3
-                 rounded-md border border-border bg-card text-sm text-muted-foreground
-                 hover:bg-muted/50 transition-colors cursor-pointer select-none outline-none
-                 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                 w-36"
-        >
-          {sortLabel}
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Content
-            class="border border-border bg-card shadow-md outline-hidden z-50
-                   min-w-36 select-none rounded-md p-1
-                   data-[state=open]:animate-in data-[state=closed]:animate-out
-                   data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
-                   data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95
-                   data-[side=bottom]:slide-in-from-top-2"
-            sideOffset={4}
-          >
-            <Select.Viewport class="p-0.5">
-              {#each sortItems as item (item.value)}
-                <Select.Item
-                  class="rounded-sm outline-hidden flex h-8 w-full select-none items-center
-                         px-2.5 text-sm cursor-pointer
-                         data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground
-                         data-[selected]:font-medium"
-                  value={item.value}
-                  label={item.label}
-                >
-                  {item.label}
-                </Select.Item>
-              {/each}
-            </Select.Viewport>
-          </Select.Content>
-        </Select.Portal>
-      </Select.Root>
+      <SortSelect options={sortOptions} bind:value={selectedSort} />
     </div>
 
     <!-- Results count -->

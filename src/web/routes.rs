@@ -589,8 +589,10 @@ pub fn build_course_response(
         .into_iter()
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
-                let (avg_rating, num_ratings) =
-                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating.map(|v| v as f32), i.num_ratings);
+                let (avg_rating, num_ratings) = crate::data::course_types::sanitize_rmp_ratings(
+                    i.avg_rating.map(|v| v as f32),
+                    i.num_ratings,
+                );
                 let is_confident = num_ratings.is_some_and(|n| n >= RMP_CONFIDENCE_THRESHOLD);
                 RmpRating {
                     avg_rating,
