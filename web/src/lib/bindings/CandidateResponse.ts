@@ -3,4 +3,12 @@
 /**
  * A match candidate in the detail view.
  */
-export type CandidateResponse = { id: number, rmpLegacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, score: number | null, scoreBreakdown: { [key in string]?: number } | null, status: string, };
+export type CandidateResponse = { id: number, rmpLegacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, score: number | null, scoreBreakdown: { [key in string]?: number } | null, status: string, 
+/**
+ * Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
+ */
+reviewSubjects: Array<string>, 
+/**
+ * Distinct years in which this professor received reviews.
+ */
+reviewYears: Array<number>, };

@@ -479,7 +479,7 @@ pub struct NameCompareResult {
 /// and checks for key overlap. Returns match quality and a confidence score
 /// reflecting how closely the names align.
 ///
-/// Only considers [`KeyOrigin::Primary`] keys — nickname expansions are not
+/// Only considers [`KeyOrigin::Primary`] keys -- nickname expansions are not
 /// used for BlueBook instructor-to-instructor comparison (they're for
 /// cross-source RMP matching where name formats differ significantly).
 ///
@@ -995,11 +995,11 @@ mod tests {
         let rmp = parse_rmp_name("Chris", "Packham").unwrap();
         let rmp_keys = matching_keys(&rmp);
 
-        // Both should have ("packham", "chris") — Banner via nickname, RMP via primary
+        // Both should have ("packham", "chris") -- Banner via nickname, RMP via primary
         assert!(has_nickname_key(&banner_keys, "packham", "chris"));
         assert!(has_primary_key(&rmp_keys, "packham", "chris"));
 
-        // And both should have ("packham", "christopher") — Banner via primary, RMP via nickname
+        // And both should have ("packham", "christopher") -- Banner via primary, RMP via nickname
         assert!(has_primary_key(&banner_keys, "packham", "christopher"));
         assert!(has_nickname_key(&rmp_keys, "packham", "christopher"));
     }

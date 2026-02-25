@@ -3,4 +3,12 @@
 /**
  * A linked RMP profile in the detail view.
  */
-export type LinkedRmpProfile = { linkId: number, legacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, };
+export type LinkedRmpProfile = { linkId: number, legacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, 
+/**
+ * Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
+ */
+reviewSubjects: Array<string>, 
+/**
+ * Distinct years in which this professor received reviews.
+ */
+reviewYears: Array<number>, };

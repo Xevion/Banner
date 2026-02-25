@@ -115,7 +115,7 @@ async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
         &pool,
         "202620",
         None,                 // subject
-        Some("Introduccion"), // title_query — no accent
+        Some("Introduccion"), // title_query -- no accent
         None,
         None,
         false,
@@ -255,7 +255,7 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
         None,
         None,
         None,
-        Some("Garcia"), // instructor filter — no accent
+        Some("Garcia"), // instructor filter -- no accent
         100,
         0,
         None,

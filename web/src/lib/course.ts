@@ -373,3 +373,25 @@ export function formatMeetingTimeSummary(course: CourseResponse): string {
   if (mt.days.length === 0 && mt.timeRange === null) return "TBA";
   return `${formatMeetingDays(mt)} ${formatTimeRange(mt.timeRange?.start ?? null, mt.timeRange?.end ?? null)}`;
 }
+
+/** Format a sorted list of years into a compact range string (e.g. "2019-2022, 2025"). */
+export function formatYearRange(years: number[]): string {
+  if (years.length === 0) return "";
+  if (years.length === 1) return String(years[0]);
+
+  const ranges: string[] = [];
+  let start = years[0];
+  let end = years[0];
+
+  for (let i = 1; i < years.length; i++) {
+    if (years[i] === end + 1) {
+      end = years[i];
+    } else {
+      ranges.push(start === end ? String(start) : `${start}\u2013${end}`);
+      start = years[i];
+      end = years[i];
+    }
+  }
+  ranges.push(start === end ? String(start) : `${start}\u2013${end}`);
+  return ranges.join(", ");
+}

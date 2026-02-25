@@ -12,7 +12,7 @@ import ProgressBar from "$lib/components/ProgressBar.svelte";
 import SearchInput from "$lib/components/SearchInput.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { useDebounceSearch, useRowHighlight } from "$lib/composables";
-import { formatInstructorName, ratingStyle } from "$lib/course";
+import { formatInstructorName, formatYearRange, ratingStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import type { FilterCard, ProgressSegment, StatusBadge } from "$lib/ui";
 import { getBadge } from "$lib/ui";
@@ -622,6 +622,13 @@ function formatScore(score: number): string {
                                       >
                                     {/if}
                                   {/each}
+                                </dd>
+                              {/if}
+
+                              {#if detail.instructor.teachingYears.length > 0}
+                                <dt class="text-muted-foreground">Active</dt>
+                                <dd class="text-foreground text-xs tabular-nums">
+                                  {formatYearRange(detail.instructor.teachingYears)}
                                 </dd>
                               {/if}
                             </dl>

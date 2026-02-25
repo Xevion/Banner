@@ -40,6 +40,8 @@ pub struct InstructorListItem {
     #[ts(as = "i32")]
     pub course_subject_count: i64,
     pub top_candidate: Option<TopCandidateResponse>,
+    /// Sorted distinct academic years in which this instructor taught courses.
+    pub teaching_years: Vec<i16>,
 }
 
 /// Aggregate status counts for the instructor list.
@@ -76,6 +78,8 @@ pub struct InstructorDetail {
     pub subjects_taught: Vec<String>,
     #[ts(as = "i32")]
     pub course_count: i64,
+    /// Sorted distinct academic years in which this instructor taught courses.
+    pub teaching_years: Vec<i16>,
 }
 
 /// A linked RMP profile in the detail view.
@@ -92,6 +96,10 @@ pub struct LinkedRmpProfile {
     pub avg_difficulty: Option<f32>,
     pub num_ratings: Option<i32>,
     pub would_take_again_pct: Option<f32>,
+    /// Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
+    pub review_subjects: Vec<String>,
+    /// Distinct years in which this professor received reviews.
+    pub review_years: Vec<i16>,
 }
 
 /// A match candidate in the detail view.
@@ -112,6 +120,10 @@ pub struct CandidateResponse {
     #[ts(as = "Option<std::collections::HashMap<String, f32>>")]
     pub score_breakdown: Option<serde_json::Value>,
     pub status: String,
+    /// Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
+    pub review_subjects: Vec<String>,
+    /// Distinct years in which this professor received reviews.
+    pub review_years: Vec<i16>,
 }
 
 /// Full instructor detail with candidates and linked profiles.
@@ -175,6 +187,7 @@ struct InstructorRow {
     tc_num_ratings: Option<i32>,
     candidate_count: Option<i64>,
     course_subject_count: Option<i64>,
+    teaching_years: Option<Vec<i16>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -243,7 +256,8 @@ pub async fn list_instructors(
             rp.avg_rating as tc_avg_rating,
             rp.num_ratings as tc_num_ratings,
             (SELECT COUNT(*) FROM rmp_match_candidates mc WHERE mc.instructor_id = i.id AND mc.status = 'pending') as candidate_count,
-            (SELECT COUNT(DISTINCT c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as course_subject_count
+            (SELECT COUNT(DISTINCT c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as course_subject_count,
+            (SELECT ARRAY_AGG(DISTINCT t.year ORDER BY t.year) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id JOIN terms t ON t.code = c.term_code WHERE ci.instructor_id = i.id) as teaching_years
         FROM instructors i
         LEFT JOIN LATERAL (
             SELECT mc.rmp_legacy_id, mc.score, mc.score_breakdown
@@ -345,6 +359,7 @@ pub async fn list_instructors(
                 candidate_count: r.candidate_count.unwrap_or(0),
                 course_subject_count: r.course_subject_count.unwrap_or(0),
                 top_candidate,
+                teaching_years: r.teaching_years.clone().unwrap_or_default(),
             }
         })
         .collect();
@@ -388,11 +403,29 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     .await
     .context("failed to count courses")?;
 
+    let teaching_year_rows: Vec<(i16,)> = sqlx::query_as(
+        r#"
+        SELECT DISTINCT t.year
+        FROM course_instructors ci
+        JOIN courses c ON c.id = ci.course_id
+        JOIN terms t ON t.code = c.term_code
+        WHERE ci.instructor_id = $1
+        ORDER BY t.year
+        "#,
+    )
+    .bind(inst_id)
+    .fetch_all(pool)
+    .await
+    .context("failed to fetch teaching years")?;
+
+    let teaching_years: Vec<i16> = teaching_year_rows.into_iter().map(|(y,)| y).collect();
+
     let candidates = sqlx::query_as::<_, CandidateResponse>(
         r#"
         SELECT mc.id, mc.rmp_legacy_id, mc.score, mc.score_breakdown, mc.status,
                rp.first_name, rp.last_name, rp.department,
-               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct
+               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,
+               mc.review_subjects, mc.review_years
         FROM rmp_match_candidates mc
         JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id
         WHERE mc.instructor_id = $1
@@ -408,7 +441,21 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
         r#"
         SELECT irl.id as link_id,
                rp.legacy_id, rp.first_name, rp.last_name, rp.department,
-               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct
+               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,
+               COALESCE((
+                   SELECT ARRAY_AGG(DISTINCT subj ORDER BY subj)
+                   FROM (
+                       SELECT UPPER(regexp_replace(r.class, '[^A-Za-z].*$', '')) as subj
+                       FROM rmp_reviews r
+                       WHERE r.rmp_legacy_id = rp.legacy_id AND r.class IS NOT NULL
+                   ) sub
+                   WHERE subj != ''
+               ), '{}') as review_subjects,
+               COALESCE((
+                   SELECT ARRAY_AGG(DISTINCT EXTRACT(YEAR FROM r.posted_at)::SMALLINT ORDER BY EXTRACT(YEAR FROM r.posted_at)::SMALLINT)
+                   FROM rmp_reviews r
+                   WHERE r.rmp_legacy_id = rp.legacy_id AND r.posted_at IS NOT NULL
+               ), '{}') as review_years
         FROM instructor_rmp_links irl
         JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
         WHERE irl.instructor_id = $1
@@ -428,6 +475,7 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
             rmp_match_status,
             subjects_taught: subjects.into_iter().map(|(s,)| s).collect(),
             course_count,
+            teaching_years,
         },
         current_matches,
         candidates,

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { CandidateResponse } from "$lib/bindings";
-import { ratingStyle, rmpUrl } from "$lib/course";
+import { formatYearRange, ratingStyle, rmpUrl } from "$lib/course";
 import { Check, ExternalLink, LoaderCircle, X, XCircle } from "@lucide/svelte";
 import ScoreBreakdown from "./ScoreBreakdown.svelte";
 
@@ -152,6 +152,22 @@ const isUnmatchLoading = $derived(actionLoading === `unmatch-${candidate.rmpLega
       >
     {/if}
   </div>
+
+  <!-- Review metadata (subjects + years) -->
+  {#if candidate.reviewSubjects.length > 0 || candidate.reviewYears.length > 0}
+    <div class="mt-2 flex items-center gap-3 text-xs flex-wrap">
+      {#if candidate.reviewSubjects.length > 0}
+        <span class="text-muted-foreground">
+          Subjects: <span class="text-foreground font-medium">{candidate.reviewSubjects.join(", ")}</span>
+        </span>
+      {/if}
+      {#if candidate.reviewYears.length > 0}
+        <span class="text-muted-foreground">
+          Reviews: <span class="text-foreground tabular-nums font-medium">{formatYearRange(candidate.reviewYears)}</span>
+        </span>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Score breakdown -->
   <div class="mt-2">

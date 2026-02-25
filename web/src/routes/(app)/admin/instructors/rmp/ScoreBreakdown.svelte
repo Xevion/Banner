@@ -9,23 +9,24 @@ let {
   score?: number;
 } = $props();
 
+/** Signals used in the composite score with their actual weights. */
 const weights: Record<string, number> = {
   name: 0.5,
-  department: 0.25,
+  subject: 0.3,
   uniqueness: 0.15,
-  volume: 0.1,
+  volume: 0.05,
 };
 
 const colors: Record<string, string> = {
   name: "bg-blue-500",
-  department: "bg-purple-500",
+  subject: "bg-purple-500",
   uniqueness: "bg-amber-500",
   volume: "bg-emerald-500",
 };
 
 const labels: Record<string, string> = {
   name: "Name",
-  department: "Dept",
+  subject: "Subject",
   uniqueness: "Unique",
   volume: "Volume",
 };
@@ -34,23 +35,39 @@ function fmt(v: number): string {
   return (v * 100).toFixed(0);
 }
 
+/** Only include the four composite signals (skip raw department/review_courses). */
+const compositeKeys = ["name", "subject", "uniqueness", "volume"];
+
 const segments = $derived(
-  Object.entries(breakdown ?? {})
-    .filter(([, value]) => value != null)
-    .map(([key, value]) => ({
+  compositeKeys
+    .filter((key) => breakdown?.[key] != null)
+    .map((key) => ({
       key,
       label: labels[key] ?? key,
       color: colors[key] ?? "bg-primary",
       weight: weights[key] ?? 0,
-      raw: value!,
-      pct: value! * (weights[key] ?? 0) * 100,
+      raw: (breakdown as Record<string, number>)[key],
+      pct: (breakdown as Record<string, number>)[key] * (weights[key] ?? 0) * 100,
     }))
 );
 
-const tooltipText = $derived(
-  segments.map((s) => `${s.label}: ${fmt(s.raw)}% \u00d7 ${fmt(s.weight)}%`).join("\n") +
-    `\nTotal: ${fmt(score)}%`
-);
+const tooltipText = $derived.by(() => {
+  const b = breakdown as Record<string, number> | null;
+  const lines = segments.map((s) => `${s.label}: ${fmt(s.raw)}% \u00d7 ${fmt(s.weight)}%`);
+
+  // Show department and review_courses as sub-detail under Subject
+  const dept = b?.department;
+  const reviews = b?.reviewCourses;
+  if (dept != null || reviews != null) {
+    const parts: string[] = [];
+    if (dept != null) parts.push(`dept ${fmt(dept)}%`);
+    if (reviews != null) parts.push(`reviews ${fmt(reviews)}%`);
+    lines.push(`  \u2514 ${parts.join(", ")}`);
+  }
+
+  lines.push(`Total: ${fmt(score)}%`);
+  return lines.join("\n");
+});
 </script>
 
 <div class="flex items-center gap-2 text-xs">

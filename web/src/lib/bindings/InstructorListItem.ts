@@ -4,4 +4,8 @@ import type { TopCandidateResponse } from "./TopCandidateResponse";
 /**
  * An instructor row in the paginated list.
  */
-export type InstructorListItem = { id: number, displayName: string, email: string | null, rmpMatchStatus: string, rmpLinkCount: number, candidateCount: number, courseSubjectCount: number, topCandidate: TopCandidateResponse | null, };
+export type InstructorListItem = { id: number, displayName: string, email: string | null, rmpMatchStatus: string, rmpLinkCount: number, candidateCount: number, courseSubjectCount: number, topCandidate: TopCandidateResponse | null, 
+/**
+ * Sorted distinct academic years in which this instructor taught courses.
+ */
+teachingYears: Array<number>, };

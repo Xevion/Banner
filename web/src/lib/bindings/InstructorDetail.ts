@@ -3,4 +3,8 @@
 /**
  * Instructor summary in the detail view.
  */
-export type InstructorDetail = { id: number, displayName: string, email: string | null, rmpMatchStatus: string, subjectsTaught: Array<string>, courseCount: number, };
+export type InstructorDetail = { id: number, displayName: string, email: string | null, rmpMatchStatus: string, subjectsTaught: Array<string>, courseCount: number, 
+/**
+ * Sorted distinct academic years in which this instructor taught courses.
+ */
+teachingYears: Array<number>, };
