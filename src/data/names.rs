@@ -834,9 +834,6 @@ mod tests {
         assert!(banner_keys.iter().any(|k| rmp_keys.contains(k)));
     }
 
-    // ---- compare_instructor_names tests ----
-    // All patterns discovered from real BlueBook ↔ Banner data.
-
     #[test]
     fn compare_exact_match() {
         // "Zhao, Peng" vs "Zhao, Peng"
@@ -1019,8 +1016,6 @@ mod tests {
         assert_eq!(r.quality, NameMatchQuality::Full);
         assert_eq!(r.confidence, 1.0);
     }
-
-    // ---- find_best_candidate tests ----
 
     #[test]
     fn best_candidate_single_exact() {
