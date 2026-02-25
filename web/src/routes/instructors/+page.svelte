@@ -5,10 +5,9 @@ import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/b
 import { useQuery } from "$lib/composables";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
-import { ratingStyle } from "$lib/course";
-import { themeStore } from "$lib/stores/theme.svelte";
+import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import { formatNumber } from "$lib/utils";
-import { BookOpen, ExternalLink, Mail, Search, Star } from "@lucide/svelte";
+import { ExternalLink, Mail, Search } from "@lucide/svelte";
 import { Select } from "bits-ui";
 import { untrack } from "svelte";
 
@@ -203,21 +202,12 @@ function resolveSubject(code: string): string {
                 </div>
 
                 {#if instructor.composite != null}
-                  <div class="flex items-center gap-1 shrink-0">
-                    <span
-                      class="text-sm font-semibold inline-flex items-center gap-0.5"
-                      style={ratingStyle(instructor.composite.score, themeStore.isDark)}
-                    >
-                      {instructor.composite.score.toFixed(1)}
-                      {#if instructor.bluebook != null && instructor.rmp?.avgRating == null}
-                        <BookOpen class="size-3 fill-current" />
-                      {:else}
-                        <Star class="size-3 fill-current" />
-                      {/if}
-                    </span>
-                    <span class="text-[10px] text-muted-foreground">
-                      ({formatNumber(instructor.composite.totalResponses)})
-                    </span>
+                  <div class="shrink-0">
+                    <ScoreBadge
+                      score={instructor.composite.score}
+                      source={instructor.bluebook != null && instructor.rmp?.avgRating == null ? "bluebook" : "composite"}
+                      size="sm"
+                    />
                   </div>
                 {:else if instructor.rmp != null}
                   <span class="text-muted-foreground shrink-0" title="View on RateMyProfessors">

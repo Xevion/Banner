@@ -286,6 +286,47 @@ export function ratingStyle(rating: number, isDark: boolean): string {
   return `color: oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)}); text-shadow: 0 0 4px oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)} / 0.3);`;
 }
 
+/**
+ * Returns the interpolated OKLCH color string for a rating value.
+ * Use this when you need the raw color for multiple CSS properties.
+ */
+export function ratingColor(rating: number, isDark: boolean): string {
+  const clamped = Math.max(1, Math.min(5, rating));
+
+  const stops: { light: [number, number, number]; dark: [number, number, number] }[] = [
+    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] },
+    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] },
+    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] },
+  ];
+
+  let t: number;
+  let fromIdx: number;
+  if (clamped <= 3) {
+    t = (clamped - 1) / 2;
+    fromIdx = 0;
+  } else {
+    t = (clamped - 3) / 2;
+    fromIdx = 1;
+  }
+
+  const from = isDark ? stops[fromIdx].dark : stops[fromIdx].light;
+  const to = isDark ? stops[fromIdx + 1].dark : stops[fromIdx + 1].light;
+
+  const l = from[0] + (to[0] - from[0]) * t;
+  const c = from[1] + (to[1] - from[1]) * t;
+  const h = from[2] + (to[2] - from[2]) * t;
+
+  return `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)})`;
+}
+
+/**
+ * Returns inline style string for a score badge: text color, background tint, and text shadow.
+ */
+export function scoreBadgeStyle(rating: number, isDark: boolean): string {
+  const color = ratingColor(rating, isDark);
+  return `color: ${color}; background-color: ${color.replace(")", " / 0.1)")}; text-shadow: 0 0 4px ${color.replace(")", " / 0.3)")};`;
+}
+
 /** Format credit hours display */
 export function formatCreditHours(course: CourseResponse): string {
   if (course.creditHours == null) return "—";

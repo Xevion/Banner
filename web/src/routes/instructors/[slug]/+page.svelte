@@ -9,10 +9,11 @@ import Footer from "$lib/components/Footer.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
 import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
-import { formatInstructorName, ratingStyle, rmpUrl } from "$lib/course";
-import { themeStore } from "$lib/stores/theme.svelte";
+import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
+import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
+import { formatInstructorName } from "$lib/course";
 import { formatNumber } from "$lib/utils";
-import { BookOpen, Copy, ExternalLink, Mail, Star } from "@lucide/svelte";
+import { Copy, Mail } from "@lucide/svelte";
 import { untrack } from "svelte";
 
 interface PageData {
@@ -148,17 +149,11 @@ const displayName = $derived(formatInstructorName(instructor));
     {#if composite}
       <div class="rounded-lg border border-border bg-card p-5 mb-4">
         <div class="flex items-center gap-4">
-          <div
-            class="text-3xl font-bold inline-flex items-center gap-1"
-            style={ratingStyle(composite.score, themeStore.isDark)}
-          >
-            {composite.score.toFixed(1)}
-            {#if bluebook && !rmp?.avgRating}
-              <BookOpen class="size-5 fill-current" />
-            {:else}
-              <Star class="size-5 fill-current" />
-            {/if}
-          </div>
+          <ScoreBadge
+            score={composite.score}
+            source={bluebook && !rmp?.avgRating ? "bluebook" : "composite"}
+            size="lg"
+          />
           <div>
             <div class="text-sm font-medium">Combined Rating</div>
             <div class="text-xs text-muted-foreground">
@@ -173,90 +168,10 @@ const displayName = $derived(formatInstructorName(instructor));
     {#if rmp ?? bluebook}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {#if bluebook}
-          <div class="rounded-lg border border-border bg-card p-5">
-            <div class="flex items-center gap-2 mb-3">
-              <BookOpen class="size-4 text-muted-foreground" />
-              <h3 class="text-sm font-semibold">BlueBook</h3>
-            </div>
-            <div class="flex items-center gap-6 flex-wrap">
-              <div class="text-center">
-                <div
-                  class="text-2xl font-bold"
-                  style={ratingStyle(bluebook.avgInstructorRating, themeStore.isDark)}
-                >
-                  {bluebook.avgInstructorRating.toFixed(1)}
-                </div>
-                <div class="text-xs text-muted-foreground mt-0.5">Instructor</div>
-              </div>
-              {#if bluebook.avgCourseRating != null}
-                <div class="text-center">
-                  <div class="text-xl font-semibold">{bluebook.avgCourseRating.toFixed(1)}</div>
-                  <div class="text-xs text-muted-foreground mt-0.5">Course</div>
-                </div>
-              {/if}
-              <div class="text-center">
-                <div class="text-xl font-semibold">{formatNumber(bluebook.totalResponses)}</div>
-                <div class="text-xs text-muted-foreground mt-0.5">Responses</div>
-              </div>
-              <div class="text-center">
-                <div class="text-xl font-semibold">{bluebook.evalCount}</div>
-                <div class="text-xs text-muted-foreground mt-0.5">Evaluations</div>
-              </div>
-            </div>
-          </div>
+          <SourceScoreCard source="bluebook" {bluebook} />
         {/if}
-
         {#if rmp}
-          <div class="rounded-lg border border-border bg-card p-5">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <Star class="size-4 text-muted-foreground" />
-                <h3 class="text-sm font-semibold">RateMyProfessors</h3>
-              </div>
-              <a
-                href={rmpUrl(rmp.legacyId)}
-                target="_blank"
-                rel="noopener"
-                class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                View
-                <ExternalLink class="size-3" />
-              </a>
-            </div>
-            <div class="flex items-center gap-6 flex-wrap">
-              {#if rmp.avgRating != null}
-                <div class="text-center">
-                  <div
-                    class="text-2xl font-bold"
-                    style={ratingStyle(rmp.avgRating, themeStore.isDark)}
-                  >
-                    {rmp.avgRating.toFixed(1)}
-                  </div>
-                  <div class="text-xs text-muted-foreground mt-0.5">Overall</div>
-                </div>
-                {#if rmp.avgDifficulty != null}
-                  <div class="text-center">
-                    <div class="text-xl font-semibold">{rmp.avgDifficulty.toFixed(1)}</div>
-                    <div class="text-xs text-muted-foreground mt-0.5">Difficulty</div>
-                  </div>
-                {/if}
-                {#if rmp.wouldTakeAgainPct != null}
-                  <div class="text-center">
-                    <div class="text-xl font-semibold">{Math.round(rmp.wouldTakeAgainPct)}%</div>
-                    <div class="text-xs text-muted-foreground mt-0.5">Would Take Again</div>
-                  </div>
-                {/if}
-                {#if rmp.numRatings != null}
-                  <div class="text-center">
-                    <div class="text-xl font-semibold">{formatNumber(rmp.numRatings)}</div>
-                    <div class="text-xs text-muted-foreground mt-0.5">Ratings</div>
-                  </div>
-                {/if}
-              {:else}
-                <span class="text-sm text-muted-foreground">No ratings yet</span>
-              {/if}
-            </div>
-          </div>
+          <SourceScoreCard source="rmp" {rmp} />
         {/if}
       </div>
     {/if}

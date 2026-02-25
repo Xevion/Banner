@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
+import ScorePopover from "$lib/components/score/ScorePopover.svelte";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
-import { formatInstructorName, ratingStyle, rmpUrl } from "$lib/course";
-import { themeStore } from "$lib/stores/theme.svelte";
-import { BookOpen, Check, Copy, ExternalLink, Star, Triangle } from "@lucide/svelte";
+import { formatInstructorName, rmpUrl } from "$lib/course";
+import { Check, Copy, ExternalLink } from "@lucide/svelte";
 
 let { course }: { course: CourseResponse } = $props();
 
@@ -17,11 +17,6 @@ const clipboard = useClipboard();
   {#if course.instructors.length > 0}
     <div class="flex flex-col gap-1.5">
       {#each course.instructors as instructor (instructor.instructorId)}
-        {@const hasRmp = instructor.rmp?.avgRating != null && instructor.rmp?.numRatings != null}
-        {@const hasBb = instructor.bluebook != null}
-        {@const rating = instructor.composite?.score}
-        {@const bbOnly = hasBb && !hasRmp}
-        {@const lowConfidence = hasRmp ? !instructor.rmp!.isConfident : hasBb ? !instructor.bluebook!.isConfident : false}
         <div
           class="flex items-center flex-wrap gap-x-3 gap-y-1 border border-border rounded-md px-3 py-1.5 bg-card"
         >
@@ -40,20 +35,13 @@ const clipboard = useClipboard();
           </div>
 
           <!-- Rating -->
-          {#if rating != null}
-            <span
-              class="text-xs font-semibold inline-flex items-center gap-0.5 shrink-0"
-              style={ratingStyle(rating, themeStore.isDark)}
-            >
-              {rating.toFixed(1)}
-              {#if lowConfidence}
-                <Triangle class="size-2.5 fill-current" />
-              {:else if bbOnly}
-                <BookOpen class="size-2.5 fill-current" />
-              {:else}
-                <Star class="size-2.5 fill-current" />
-              {/if}
-            </span>
+          {#if instructor.composite}
+            <ScorePopover
+              composite={instructor.composite}
+              rmp={instructor.rmp}
+              bluebook={instructor.bluebook}
+              size="xs"
+            />
           {/if}
 
           <!-- Email + RMP link -->
