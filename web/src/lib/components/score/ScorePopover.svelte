@@ -79,7 +79,7 @@ let source = $derived<"composite" | "bluebook" | "rmp">(bbOnly ? "bluebook" : "c
             class="flex-1 rounded border border-border bg-muted/30 px-2.5 py-2 flex flex-col gap-1"
           >
             <div class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-              RMP
+              RateMyProfessors
             </div>
             <ScoreBadge
               score={rmp!.avgRating!}

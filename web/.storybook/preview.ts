@@ -1,7 +1,66 @@
 import type { Preview } from "@storybook/sveltekit";
 import "../src/routes/layout.css";
+import "overlayscrollbars/overlayscrollbars.css";
+import TooltipDecorator from "./TooltipDecorator.svelte";
+import ThemeDecorator from "./ThemeDecorator.svelte";
+import AuthDecorator from "./AuthDecorator.svelte";
 
 const preview: Preview = {
+  globalTypes: {
+    theme: {
+      description: "Color scheme",
+      toolbar: {
+        title: "Theme",
+        icon: "circlehollow",
+        items: [
+          { value: "light", title: "Light", icon: "sun" },
+          { value: "dark", title: "Dark", icon: "moon" },
+        ],
+        dynamicTitle: true,
+      },
+    },
+    authMode: {
+      description: "Auth state",
+      toolbar: {
+        title: "Auth",
+        icon: "user",
+        items: [
+          { value: "unauthenticated", title: "Unauthenticated" },
+          { value: "authenticated", title: "Authenticated" },
+          { value: "admin", title: "Admin" },
+          { value: "loading", title: "Loading" },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+
+  initialGlobals: {
+    theme: "light",
+    authMode: "unauthenticated",
+  },
+
+  decorators: [
+    (storyFn) => {
+      storyFn();
+      return { Component: TooltipDecorator };
+    },
+    (storyFn, context) => {
+      storyFn();
+      return {
+        Component: ThemeDecorator,
+        props: { theme: context.globals.theme ?? "light" },
+      };
+    },
+    (storyFn, context) => {
+      storyFn();
+      return {
+        Component: AuthDecorator,
+        props: { authMode: context.globals.authMode ?? "unauthenticated" },
+      };
+    },
+  ],
+
   parameters: {
     controls: {
       matchers: {

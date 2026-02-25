@@ -2,14 +2,16 @@
 import { client } from "$lib/api";
 import type {
   CourseResponse,
+  PublicBlueBookSummary,
   PublicInstructorProfileResponse,
+  PublicRmpSummary,
   SearchOptionsResponse,
 } from "$lib/bindings";
+import ScoreBar from "$lib/components/ScoreBar.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
 import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
-import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
 import { formatInstructorName } from "$lib/course";
 import { formatNumber } from "$lib/utils";
@@ -94,6 +96,59 @@ function resolveSubject(code: string): string {
 }
 
 const displayName = $derived(formatInstructorName(instructor));
+
+interface ScoreBarProps {
+  displayScore: number;
+  sortScore: number;
+  ciLower: number;
+  ciUpper: number;
+  confidence: number;
+  source: "both" | "rmp" | "bb";
+  rmpRating: number | null;
+  rmpCount: number;
+  bbRating: number | null;
+  bbCount: number;
+}
+
+// Derives ScoreBar props from existing rating data as a placeholder until the
+// backend Bayesian pipeline is implemented. CI width scales inversely with
+// response count to give a visually meaningful confidence interval.
+function deriveScoreBarProps(
+  rmpData: PublicRmpSummary | null,
+  bbData: PublicBlueBookSummary | null
+): ScoreBarProps | null {
+  const rmpRating = rmpData?.avgRating ?? null;
+  const rmpCount = rmpData?.numRatings ?? 0;
+  const bbRating = bbData?.avgInstructorRating ?? null;
+  const bbCount = bbData?.totalResponses ?? 0;
+
+  const displayScore = composite?.score ?? rmpRating ?? bbRating ?? null;
+  if (displayScore == null) return null;
+
+  const source: "both" | "rmp" | "bb" =
+    rmpRating != null && bbRating != null ? "both" : rmpRating != null ? "rmp" : "bb";
+
+  const totalResponses = (rmpCount ?? 0) + bbCount;
+  const confidence = Math.min(0.97, Math.max(0.1, totalResponses / 1500 + 0.15));
+  const ciWidth = Math.max(0.1, (1 - confidence) * 3.0);
+  const ciLower = Math.max(1, displayScore - ciWidth / 2);
+  const ciUpper = Math.min(5, displayScore + ciWidth / 2);
+
+  return {
+    displayScore,
+    sortScore: ciLower,
+    ciLower,
+    ciUpper,
+    confidence,
+    source,
+    rmpRating,
+    rmpCount: rmpCount ?? 0,
+    bbRating,
+    bbCount,
+  };
+}
+
+const scoreBarProps = $derived(deriveScoreBarProps(rmp, bluebook));
 </script>
 
 <svelte:head>
@@ -145,22 +200,18 @@ const displayName = $derived(formatInstructorName(instructor));
       {/if}
     </div>
 
-    <!-- Combined Rating -->
-    {#if composite}
-      <div class="rounded-lg border border-border bg-card p-5 mb-4">
-        <div class="flex items-center gap-4">
-          <ScoreBadge
-            score={composite.score}
-            source={bluebook && !rmp?.avgRating ? "bluebook" : "composite"}
-            size="lg"
-          />
-          <div>
-            <div class="text-sm font-medium">Combined Rating</div>
+    <!-- Composite Score Bar -->
+    {#if scoreBarProps}
+      <div class="rounded-lg border border-border bg-card px-5 pt-4 pb-2 mb-4">
+        <div class="flex items-center justify-between mb-1">
+          <div class="text-sm font-medium">Composite Score</div>
+          {#if composite}
             <div class="text-xs text-muted-foreground">
               {formatNumber(composite.totalResponses)} total responses
             </div>
-          </div>
+          {/if}
         </div>
+        <ScoreBar {...scoreBarProps} />
       </div>
     {/if}
 
