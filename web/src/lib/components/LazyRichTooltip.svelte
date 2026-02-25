@@ -25,41 +25,28 @@ let {
   content: Snippet;
 } = $props();
 
-let hovered = $state(false);
-let focused = $state(false);
-let active = $derived(hovered || focused);
+let open = $state(false);
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<span
-  class={triggerClass}
-  onmouseenter={() => (hovered = true)}
-  onmouseleave={() => (hovered = false)}
-  onfocusin={() => (focused = true)}
-  onfocusout={() => (focused = false)}
->
-  {#if active}
-    <Tooltip.Root delayDuration={delay} disableHoverableContent={false}>
-      <Tooltip.Trigger>
-        {#snippet child({ props })}
-          <span {...props}>
-            {@render children()}
-          </span>
-        {/snippet}
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content
-          {side}
-          {sideOffset}
-          {avoidCollisions}
-          {collisionPadding}
-          class={cn(tooltipContentClass, contentClass)}
-        >
-          {@render content()}
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip.Root>
-  {:else}
-    {@render children()}
-  {/if}
-</span>
+<Tooltip.Root delayDuration={delay} disableHoverableContent={false} bind:open>
+  <Tooltip.Trigger>
+    {#snippet child({ props })}
+      <span class={triggerClass} {...props}>
+        {@render children()}
+      </span>
+    {/snippet}
+  </Tooltip.Trigger>
+  <Tooltip.Portal>
+    <Tooltip.Content
+      {side}
+      {sideOffset}
+      {avoidCollisions}
+      {collisionPadding}
+      class={cn(tooltipContentClass, contentClass)}
+    >
+      {#if open}
+        {@render content()}
+      {/if}
+    </Tooltip.Content>
+  </Tooltip.Portal>
+</Tooltip.Root>

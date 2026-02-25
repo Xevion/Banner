@@ -33,7 +33,7 @@ let confident = $derived.by(() => {
 let source = $derived<"composite" | "bluebook" | "rmp">(bbOnly ? "bluebook" : "composite");
 </script>
 
-<LazyRichTooltip side="bottom" sideOffset={6} contentClass="p-0 min-w-52">
+<LazyRichTooltip side="top" sideOffset={6} contentClass="p-0 min-w-52">
   {#if children}
     {@render children()}
   {:else}
