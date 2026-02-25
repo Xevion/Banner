@@ -4,8 +4,7 @@ import { onMount } from "svelte";
 /**
  * Set up OverlayScrollbars on an element.
  *
- * Theme colors are handled purely via CSS custom properties on `:root` / `.dark`
- * (see layout.css), so no JS theme-switching is needed.
+ * Theme colors are handled purely via CSS custom properties on `:root` / `.dark` (see layout.css).
  *
  * Must be called during component initialization (uses `onMount` internally).
  */
@@ -16,7 +15,7 @@ export function useOverlayScrollbars(getElement: () => HTMLElement, options: Par
       ...options,
       scrollbars: {
         ...options.scrollbars,
-        theme: "os-theme-light",
+        theme: "os-theme-banner",
       },
     });
 

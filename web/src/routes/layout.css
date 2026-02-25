@@ -26,9 +26,6 @@
 
   --scrollbar-thumb: rgba(0, 0, 0, 0.25);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
-  --os-handle-bg: rgba(0, 0, 0, 0.25);
-  --os-handle-bg-hover: rgba(0, 0, 0, 0.35);
-  --os-handle-bg-active: rgba(0, 0, 0, 0.45);
 }
 
 .dark {
@@ -53,9 +50,6 @@
 
   --scrollbar-thumb: rgba(255, 255, 255, 0.3);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
-  --os-handle-bg: rgba(255, 255, 255, 0.35);
-  --os-handle-bg-hover: rgba(255, 255, 255, 0.45);
-  --os-handle-bg-active: rgba(255, 255, 255, 0.55);
 }
 
 @theme inline {
@@ -155,9 +149,23 @@ input[type="checkbox"]:checked::before {
 
 /* View Transitions API -- base root rules (overridden by directional rules below) */
 
-/* OverlayScrollbars -- handle colors via inherited custom properties (set in :root / .dark) */
-.os-scrollbar-handle {
-  border-radius: 4px;
+/* OverlayScrollbars -- custom theme with theme-aware handle colors */
+.os-theme-banner {
+  --os-size: 10px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 2px;
+  --os-handle-border-radius: 4px;
+  --os-handle-interactive-area-offset: 4px;
+  --os-handle-bg: rgba(0, 0, 0, 0.25);
+  --os-handle-bg-hover: rgba(0, 0, 0, 0.35);
+  --os-handle-bg-active: rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.dark .os-theme-banner {
+  --os-handle-bg: rgba(255, 255, 255, 0.35);
+  --os-handle-bg-hover: rgba(255, 255, 255, 0.45);
+  --os-handle-bg-active: rgba(255, 255, 255, 0.55);
 }
 
 /* Hide native scrollbars on body -- OverlayScrollbars takes over */
