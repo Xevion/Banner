@@ -137,6 +137,8 @@ describe("getPrimaryInstructor", () => {
         email: "a@utsa.edu",
         isPrimary: false,
         rmp: null,
+        bluebook: null,
+        composite: null,
         slug: null,
       },
       {
@@ -148,6 +150,8 @@ describe("getPrimaryInstructor", () => {
         email: "b@utsa.edu",
         isPrimary: true,
         rmp: null,
+        bluebook: null,
+        composite: null,
         slug: null,
       },
     ];
@@ -164,6 +168,8 @@ describe("getPrimaryInstructor", () => {
         email: "a@utsa.edu",
         isPrimary: false,
         rmp: null,
+        bluebook: null,
+        composite: null,
         slug: null,
       },
     ];

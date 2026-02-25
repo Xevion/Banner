@@ -267,6 +267,7 @@ pub async fn get_instructors_for_courses(
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
                rmp.avg_rating, rmp.num_ratings, rmp.rmp_legacy_id,
+               bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
                ci.course_id
         FROM course_instructors ci
@@ -279,6 +280,18 @@ pub async fn get_instructors_for_courses(
             ORDER BY rp.num_ratings DESC NULLS LAST, rp.legacy_id ASC
             LIMIT 1
         ) rmp ON true
+        LEFT JOIN LATERAL (
+            SELECT
+                AVG(be.instructor_rating)::real as bb_avg_instructor_rating,
+                SUM(be.instructor_response_count)::bigint as bb_total_responses
+            FROM bluebook_evaluations be
+            JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name
+                AND (ibl.subject IS NULL OR ibl.subject = be.subject)
+            WHERE ibl.instructor_id = i.id
+                AND ibl.status IN ('approved', 'auto')
+                AND be.instructor_rating IS NOT NULL
+                AND be.instructor_response_count > 0
+        ) bb ON true
         WHERE ci.course_id = ANY($1)
         ORDER BY ci.course_id, ci.is_primary DESC, i.display_name
         "#,

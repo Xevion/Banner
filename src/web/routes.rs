@@ -52,7 +52,6 @@ use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
-#[cfg(feature = "embed-assets")]
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
@@ -204,6 +203,12 @@ async fn ssr_fallback(State(state): State<AppState>, request: Request) -> axum::
     let path = uri.path();
     let query = uri.query();
     let headers = request.headers().clone();
+
+    // API routes that didn't match a defined handler are a hard 404 — never proxy them.
+    // Proxying unknown /api/** paths to the SSR server causes silent hangs.
+    if path.starts_with("/api/") {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    }
 
     // Try serving embedded static assets (production only)
     #[cfg(feature = "embed-assets")]
@@ -521,6 +526,8 @@ pub struct InstructorResponse {
     slug: Option<String>,
     is_primary: bool,
     rmp: Option<RmpRating>,
+    bluebook: Option<crate::data::course_types::BlueBookRating>,
+    composite: Option<crate::data::course_types::CompositeRating>,
 }
 
 #[derive(Serialize, TS)]
@@ -597,6 +604,16 @@ pub fn build_course_response(
                     is_confident,
                 }
             });
+            let bluebook = crate::data::course_types::build_bluebook_rating(
+                i.bb_avg_instructor_rating,
+                i.bb_total_responses,
+            );
+            let composite = crate::data::course_types::compute_composite(
+                rmp.as_ref().and_then(|r| r.avg_rating),
+                rmp.as_ref().and_then(|r| r.num_ratings),
+                i.bb_avg_instructor_rating,
+                i.bb_total_responses.unwrap_or(0) as i32,
+            );
             InstructorResponse {
                 instructor_id: i.instructor_id,
                 banner_id: i.banner_id,
@@ -607,6 +624,8 @@ pub fn build_course_response(
                 slug: i.slug,
                 is_primary: i.is_primary,
                 rmp,
+                bluebook,
+                composite,
             }
         })
         .collect();

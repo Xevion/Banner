@@ -8,7 +8,7 @@ import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import { ratingStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
 import { formatNumber } from "$lib/utils";
-import { ExternalLink, Mail, Search, Star } from "@lucide/svelte";
+import { BookOpen, ExternalLink, Mail, Search, Star } from "@lucide/svelte";
 import { Select } from "bits-ui";
 import { untrack } from "svelte";
 
@@ -202,25 +202,27 @@ function resolveSubject(code: string): string {
                   {/if}
                 </div>
 
-                {#if instructor.rmp != null}
-                  {#if instructor.rmp.avgRating != null && instructor.rmp.numRatings != null}
-                    <div class="flex items-center gap-1 shrink-0">
-                      <span
-                        class="text-sm font-semibold inline-flex items-center gap-0.5"
-                        style={ratingStyle(instructor.rmp.avgRating, themeStore.isDark)}
-                      >
-                        {instructor.rmp.avgRating.toFixed(1)}
+                {#if instructor.composite != null}
+                  <div class="flex items-center gap-1 shrink-0">
+                    <span
+                      class="text-sm font-semibold inline-flex items-center gap-0.5"
+                      style={ratingStyle(instructor.composite.score, themeStore.isDark)}
+                    >
+                      {instructor.composite.score.toFixed(1)}
+                      {#if instructor.bluebook != null && instructor.rmp?.avgRating == null}
+                        <BookOpen class="size-3 fill-current" />
+                      {:else}
                         <Star class="size-3 fill-current" />
-                      </span>
-                      <span class="text-[10px] text-muted-foreground">
-                        ({formatNumber(instructor.rmp.numRatings)})
-                      </span>
-                    </div>
-                  {:else}
-                    <span class="text-muted-foreground shrink-0" title="View on RateMyProfessors">
-                      <ExternalLink class="size-3.5" />
+                      {/if}
                     </span>
-                  {/if}
+                    <span class="text-[10px] text-muted-foreground">
+                      ({formatNumber(instructor.composite.totalResponses)})
+                    </span>
+                  </div>
+                {:else if instructor.rmp != null}
+                  <span class="text-muted-foreground shrink-0" title="View on RateMyProfessors">
+                    <ExternalLink class="size-3.5" />
+                  </span>
                 {/if}
               </div>
 

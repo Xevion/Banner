@@ -149,3 +149,95 @@ pub struct RmpRating {
     pub legacy_id: i32,
     pub is_confident: bool,
 }
+
+pub const BLUEBOOK_CONFIDENCE_THRESHOLD: i32 = 10;
+
+/// BlueBook evaluation summary for course search results.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BlueBookRating {
+    pub avg_instructor_rating: f32,
+    pub total_responses: i32,
+    pub is_confident: bool,
+}
+
+/// BlueBook summary for instructor list cards.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BlueBookListSummary {
+    pub avg_instructor_rating: f32,
+    pub total_responses: i32,
+}
+
+/// Full BlueBook summary for instructor detail pages.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PublicBlueBookSummary {
+    pub avg_instructor_rating: f32,
+    pub avg_course_rating: Option<f32>,
+    pub total_responses: i32,
+    pub eval_count: i32,
+}
+
+/// Composite rating combining BlueBook and RMP via response-count-weighted average.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CompositeRating {
+    pub score: f32,
+    pub total_responses: i32,
+}
+
+pub fn build_bluebook_rating(
+    avg_rating: Option<f32>,
+    total_responses: Option<i64>,
+) -> Option<BlueBookRating> {
+    match (avg_rating, total_responses) {
+        (Some(r), Some(n)) if r > 0.0 && n > 0 => {
+            let n = n as i32;
+            Some(BlueBookRating {
+                avg_instructor_rating: r,
+                total_responses: n,
+                is_confident: n >= BLUEBOOK_CONFIDENCE_THRESHOLD,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Compute response-count-weighted average of available rating sources.
+pub fn compute_composite(
+    rmp_avg: Option<f32>,
+    rmp_count: Option<i32>,
+    bb_avg: Option<f32>,
+    bb_count: i32,
+) -> Option<CompositeRating> {
+    let rmp = rmp_avg.zip(rmp_count).filter(|&(r, n)| r > 0.0 && n > 0);
+    let bb = if bb_avg.is_some_and(|r| r > 0.0) && bb_count > 0 {
+        Some((bb_avg.unwrap(), bb_count))
+    } else {
+        None
+    };
+
+    match (rmp, bb) {
+        (Some((r_avg, r_n)), Some((b_avg, b_n))) => {
+            let total = r_n + b_n;
+            Some(CompositeRating {
+                score: (r_avg * r_n as f32 + b_avg * b_n as f32) / total as f32,
+                total_responses: total,
+            })
+        }
+        (Some((r_avg, r_n)), None) => Some(CompositeRating {
+            score: r_avg,
+            total_responses: r_n,
+        }),
+        (None, Some((b_avg, b_n))) => Some(CompositeRating {
+            score: b_avg,
+            total_responses: b_n,
+        }),
+        (None, None) => None,
+    }
+}

@@ -99,6 +99,8 @@ pub struct PublicInstructorListItem {
     pub email: Option<String>,
     pub subjects: Vec<String>,
     pub rmp: Option<RmpListSummary>,
+    pub bluebook: Option<super::course_types::BlueBookListSummary>,
+    pub composite: Option<super::course_types::CompositeRating>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -124,6 +126,8 @@ pub struct PublicInstructorProfile {
     pub last_name: Option<String>,
     pub subjects: Vec<String>,
     pub rmp: Option<PublicRmpSummary>,
+    pub bluebook: Option<super::course_types::PublicBlueBookSummary>,
+    pub composite: Option<super::course_types::CompositeRating>,
 }
 
 /// Full RMP summary for instructor detail pages.
@@ -241,7 +245,8 @@ pub async fn list_public_instructors(
                  WHERE ci.instructor_id = i.id),
                 ARRAY[]::text[]
             ) as subjects,
-            rmp.avg_rating, rmp.num_ratings, rmp.legacy_id as rmp_legacy_id
+            rmp.avg_rating, rmp.num_ratings, rmp.legacy_id as rmp_legacy_id,
+            bb.bb_avg_instructor_rating, bb.bb_total_responses
         FROM instructors i
         LEFT JOIN LATERAL (
             SELECT rp.avg_rating, rp.num_ratings, rp.legacy_id
@@ -251,6 +256,18 @@ pub async fn list_public_instructors(
             ORDER BY rp.num_ratings DESC NULLS LAST
             LIMIT 1
         ) rmp ON true
+        LEFT JOIN (
+            SELECT ibl.instructor_id,
+                AVG(be.instructor_rating)::real as bb_avg_instructor_rating,
+                SUM(be.instructor_response_count)::bigint as bb_total_responses
+            FROM instructor_bluebook_links ibl
+            JOIN bluebook_evaluations be ON ibl.instructor_name = be.instructor_name
+                AND (ibl.subject IS NULL OR ibl.subject = be.subject)
+            WHERE ibl.status IN ('approved', 'auto')
+                AND be.instructor_rating IS NOT NULL
+                AND be.instructor_response_count > 0
+            GROUP BY ibl.instructor_id
+        ) bb ON bb.instructor_id = i.id
         {where_clause}
         ORDER BY {sort_clause}
         LIMIT {per_page} OFFSET {offset}
@@ -267,6 +284,8 @@ pub async fn list_public_instructors(
         avg_rating: Option<f32>,
         num_ratings: Option<i32>,
         rmp_legacy_id: Option<i32>,
+        bb_avg_instructor_rating: Option<f32>,
+        bb_total_responses: Option<i64>,
     }
 
     let mut query = sqlx::query_as::<_, Row>(&query_str);
@@ -309,6 +328,21 @@ pub async fn list_public_instructors(
                     legacy_id,
                 }
             });
+            let bluebook = match (r.bb_avg_instructor_rating, r.bb_total_responses) {
+                (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
+                    Some(super::course_types::BlueBookListSummary {
+                        avg_instructor_rating: avg,
+                        total_responses: n as i32,
+                    })
+                }
+                _ => None,
+            };
+            let composite = super::course_types::compute_composite(
+                rmp.as_ref().and_then(|r| r.avg_rating),
+                rmp.as_ref().and_then(|r| r.num_ratings),
+                r.bb_avg_instructor_rating,
+                r.bb_total_responses.unwrap_or(0) as i32,
+            );
             PublicInstructorListItem {
                 id: r.id,
                 slug: r.slug.unwrap_or_default(),
@@ -316,6 +350,8 @@ pub async fn list_public_instructors(
                 email: r.email,
                 subjects: r.subjects,
                 rmp,
+                bluebook,
+                composite,
             }
         })
         .collect();
@@ -410,6 +446,65 @@ pub async fn get_public_instructor_by_slug(
         }
     });
 
+    // BlueBook evaluations
+    #[derive(sqlx::FromRow)]
+    struct BlueBookRow {
+        avg_instructor_rating: Option<f32>,
+        avg_course_rating: Option<f32>,
+        total_responses: Option<i64>,
+        eval_count: Option<i64>,
+    }
+
+    let bb = sqlx::query_as::<_, BlueBookRow>(
+        r#"
+        SELECT
+            AVG(be.instructor_rating)::real as avg_instructor_rating,
+            AVG(be.course_rating)::real as avg_course_rating,
+            SUM(be.instructor_response_count)::bigint as total_responses,
+            COUNT(*)::bigint as eval_count
+        FROM bluebook_evaluations be
+        JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name
+            AND (ibl.subject IS NULL OR ibl.subject = be.subject)
+        WHERE ibl.instructor_id = $1
+            AND ibl.status IN ('approved', 'auto')
+            AND be.instructor_rating IS NOT NULL
+            AND be.instructor_response_count > 0
+        "#,
+    )
+    .bind(inst.id)
+    .fetch_optional(pool)
+    .await
+    .context("failed to fetch instructor bluebook")?;
+
+    let (bluebook_summary, bb_avg, bb_count) = match bb {
+        Some(ref r) => {
+            let summary = match (r.avg_instructor_rating, r.total_responses) {
+                (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
+                    Some(super::course_types::PublicBlueBookSummary {
+                        avg_instructor_rating: avg,
+                        avg_course_rating: r.avg_course_rating,
+                        total_responses: n as i32,
+                        eval_count: r.eval_count.unwrap_or(0) as i32,
+                    })
+                }
+                _ => None,
+            };
+            (
+                summary,
+                r.avg_instructor_rating,
+                r.total_responses.unwrap_or(0) as i32,
+            )
+        }
+        None => (None, None, 0),
+    };
+
+    let composite = super::course_types::compute_composite(
+        rmp_summary.as_ref().and_then(|r| r.avg_rating),
+        rmp_summary.as_ref().and_then(|r| r.num_ratings),
+        bb_avg,
+        bb_count,
+    );
+
     // Teaching history
     let teaching_history = get_teaching_history(pool, inst.id).await?;
 
@@ -423,6 +518,8 @@ pub async fn get_public_instructor_by_slug(
             last_name: inst.last_name,
             subjects: subjects.into_iter().map(|(s,)| s).collect(),
             rmp: rmp_summary,
+            bluebook: bluebook_summary,
+            composite,
         },
         teaching_history,
     }))
