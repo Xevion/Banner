@@ -80,6 +80,15 @@ pub struct BluebookLinkDetail {
     pub instructor_display_name: Option<String>,
     pub eval_count: i32,
     pub courses: Vec<BluebookLinkCourse>,
+    /// Email of the proposed/matched instructor (if any).
+    pub instructor_email: Option<String>,
+    /// Sorted distinct subject codes taught by the proposed/matched instructor.
+    pub instructor_subjects: Vec<String>,
+    /// Sorted distinct academic years in which the proposed/matched instructor taught.
+    pub instructor_teaching_years: Vec<i16>,
+    /// Total course count for the proposed/matched instructor.
+    #[ts(as = "Option<i32>")]
+    pub instructor_course_count: Option<i64>,
 }
 
 /// A course associated with a BlueBook link (via evaluations).
@@ -324,6 +333,58 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
     .await
     .context("failed to fetch bluebook link courses")?;
 
+    // Fetch instructor detail fields when a proposed match exists.
+    let (instructor_email, instructor_subjects, instructor_teaching_years, instructor_course_count) =
+        if let Some(inst_id) = r.instructor_id {
+            let email: Option<(Option<String>,)> =
+                sqlx::query_as("SELECT email FROM instructors WHERE id = $1")
+                    .bind(inst_id)
+                    .fetch_optional(pool)
+                    .await
+                    .context("failed to fetch instructor email")?;
+            let email = email.and_then(|(e,)| e);
+
+            let subjects: Vec<(String,)> = sqlx::query_as(
+                "SELECT DISTINCT c.subject FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = $1 ORDER BY c.subject",
+            )
+            .bind(inst_id)
+            .fetch_all(pool)
+            .await
+            .context("failed to fetch instructor subjects")?;
+
+            let teaching_years: Vec<(i16,)> = sqlx::query_as(
+                r#"
+                SELECT DISTINCT t.year
+                FROM course_instructors ci
+                JOIN courses c ON c.id = ci.course_id
+                JOIN terms t ON t.code = c.term_code
+                WHERE ci.instructor_id = $1
+                ORDER BY t.year
+                "#,
+            )
+            .bind(inst_id)
+            .fetch_all(pool)
+            .await
+            .context("failed to fetch instructor teaching years")?;
+
+            let (course_count,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(DISTINCT ci.course_id) FROM course_instructors ci WHERE ci.instructor_id = $1",
+            )
+            .bind(inst_id)
+            .fetch_one(pool)
+            .await
+            .context("failed to count instructor courses")?;
+
+            (
+                email,
+                subjects.into_iter().map(|(s,)| s).collect(),
+                teaching_years.into_iter().map(|(y,)| y).collect(),
+                Some(course_count),
+            )
+        } else {
+            (None, vec![], vec![], None)
+        };
+
     Ok(BluebookLinkDetail {
         id: r.id,
         instructor_name: r.instructor_name,
@@ -334,6 +395,10 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
         instructor_display_name: r.instructor_display_name,
         eval_count: r.eval_count.unwrap_or(0) as i32,
         courses,
+        instructor_email,
+        instructor_subjects,
+        instructor_teaching_years,
+        instructor_course_count,
     })
 }
 

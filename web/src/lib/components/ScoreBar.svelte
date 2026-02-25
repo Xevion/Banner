@@ -87,7 +87,7 @@ const sourceLabel = $derived.by(() => {
             {displayScore.toFixed(1)}
         </span>
         <div class="text-[10px] text-muted-foreground tabular-nums leading-tight">
-            {ciLower.toFixed(1)}–{ciUpper.toFixed(1)}
+            {ciLower.toFixed(1)}&ndash;{ciUpper.toFixed(1)}
         </div>
     </div>
 
@@ -219,7 +219,7 @@ const sourceLabel = $derived.by(() => {
                     <div class="flex items-center justify-between gap-4">
                         <span class="text-muted-foreground">Range</span>
                         <span class="tabular-nums">
-                            {d.ciLower.toFixed(2)} – {d.ciUpper.toFixed(2)}
+                            {d.ciLower.toFixed(2)} &ndash; {d.ciUpper.toFixed(2)}
                         </span>
                     </div>
 
@@ -234,7 +234,7 @@ const sourceLabel = $derived.by(() => {
                     {#if d.rmpRating != null}
                         <div class="flex items-center justify-between gap-4">
                             <span class="flex items-center gap-1.5">
-                                {#if d.source === "both"}<span class="text-[8px] leading-none">▲</span>{/if}
+                                {#if d.source === "both"}<span class="text-[8px] leading-none">&#9650;</span>{/if}
                                 <span class="text-muted-foreground">RateMyProfessors</span>
                             </span>
                             <span class="tabular-nums">
@@ -247,7 +247,7 @@ const sourceLabel = $derived.by(() => {
                     {#if d.bbRating != null}
                         <div class="flex items-center justify-between gap-4">
                             <span class="flex items-center gap-1.5">
-                                {#if d.source === "both"}<span class="text-[8px] leading-none">▼</span>{/if}
+                                {#if d.source === "both"}<span class="text-[8px] leading-none">&#9660;</span>{/if}
                                 <span class="text-muted-foreground">BlueBook</span>
                             </span>
                             <span class="tabular-nums">

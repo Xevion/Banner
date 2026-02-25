@@ -19,7 +19,7 @@ pub struct ScoreBreakdown {
     /// Review course code overlap (from RMP reviews).
     pub review_courses: f32,
     /// Merged subject evidence: `max(department, review_courses)`.
-    /// This is the value actually used in the composite score — the stronger
+    /// This is the value actually used in the composite score - the stronger
     /// of the two subject-alignment signals.
     pub subject: f32,
     pub uniqueness: f32,
@@ -286,7 +286,7 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
 ///
 /// Department and review-course signals both measure subject alignment through
 /// different lenses. They are merged via `max()` into a single subject evidence
-/// score so that whichever signal is stronger dominates — review data overrides
+    /// score so that whichever signal is stronger dominates - review data overrides
 /// a noisy department string, and department helps when reviews are absent.
 pub fn compute_match_score(
     instructor_subjects: &[String],
@@ -311,10 +311,10 @@ pub fn compute_match_score(
     // Review course overlap: if the RMP professor's reviews mention courses
     // in the same subject(s) the instructor teaches, that's strong evidence.
     let review_courses_score = if rmp_review_subjects.is_empty() {
-        // No review data — neutral (don't penalize professors without reviews).
+        // No review data - neutral (don't penalize professors without reviews).
         0.5
     } else if instructor_subjects.is_empty() {
-        // Instructor has no courses — neutral.
+        // Instructor has no courses - neutral.
         0.5
     } else {
         let instructor_lower: HashSet<String> = instructor_subjects
@@ -593,7 +593,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         );
     }
 
-    // Step 5c: Load rejected pairs — the only candidates preserved from step 1.
+    // Step 5c: Load rejected pairs - the only candidates preserved from step 1.
     // These represent explicit human decisions to NOT link a pair.
     let rejected_rows: Vec<(i32, i32)> = sqlx::query_as(
         "SELECT instructor_id, rmp_legacy_id \
@@ -918,7 +918,7 @@ mod tests {
             false, // primary name match
             &[],   // no review data
         );
-        // name=1.0*0.50 + subject=max(1.0,0.5)*0.30 + unique=1.0*0.15 + vol~1.0*0.05 ≈ 1.0
+        // name=1.0*0.50 + subject=max(1.0,0.5)*0.30 + unique=1.0*0.15 + vol~1.0*0.05 ~= 1.0
         assert!(ms.score >= 0.85, "Expected score >= 0.85, got {}", ms.score);
         assert_eq!(ms.breakdown.name, 1.0);
         assert_eq!(ms.breakdown.uniqueness, 1.0);
@@ -1083,11 +1083,11 @@ mod tests {
         // With dept match, subject=max(1.0, x) is always 1.0 regardless of reviews.
         let no_reviews = compute_match_score(
             &["EDU".to_string()],
-            Some("First Year Experience"), // dept mismatch → 0.2
+            Some("First Year Experience"), // dept mismatch -> 0.2
             1,
             50,
             false,
-            &[], // no review data → 0.5; subject = max(0.2, 0.5) = 0.5
+            &[], // no review data -> 0.5; subject = max(0.2, 0.5) = 0.5
         );
         let with_matching_reviews = compute_match_score(
             &["EDU".to_string()],
@@ -1095,7 +1095,7 @@ mod tests {
             1,
             50,
             false,
-            &["EDU".to_string()], // matching → 1.0; subject = max(0.2, 1.0) = 1.0
+            &["EDU".to_string()], // matching -> 1.0; subject = max(0.2, 1.0) = 1.0
         );
         let with_mismatched_reviews = compute_match_score(
             &["EDU".to_string()],
@@ -1103,7 +1103,7 @@ mod tests {
             1,
             50,
             false,
-            &["HIS".to_string()], // mismatched → 0.2; subject = max(0.2, 0.2) = 0.2
+            &["HIS".to_string()], // mismatched -> 0.2; subject = max(0.2, 0.2) = 0.2
         );
 
         assert_eq!(no_reviews.breakdown.review_courses, 0.5);

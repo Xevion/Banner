@@ -44,6 +44,8 @@ pub struct InstructorListItem {
     pub top_candidate: Option<TopCandidateResponse>,
     /// Sorted distinct academic years in which this instructor taught courses.
     pub teaching_years: Vec<i16>,
+    /// Sorted distinct subject codes this instructor has taught.
+    pub subjects_taught: Vec<String>,
 }
 
 /// Aggregate status counts for the instructor list.
@@ -190,6 +192,7 @@ struct InstructorRow {
     candidate_count: Option<i64>,
     course_subject_count: Option<i64>,
     teaching_years: Option<Vec<i16>>,
+    subjects_taught: Option<Vec<String>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -259,7 +262,8 @@ pub async fn list_instructors(
             rp.num_ratings as tc_num_ratings,
             (SELECT COUNT(*) FROM rmp_match_candidates mc WHERE mc.instructor_id = i.id AND mc.status = 'pending') as candidate_count,
             (SELECT COUNT(DISTINCT c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as course_subject_count,
-            (SELECT ARRAY_AGG(DISTINCT t.year ORDER BY t.year) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id JOIN terms t ON t.code = c.term_code WHERE ci.instructor_id = i.id) as teaching_years
+            (SELECT ARRAY_AGG(DISTINCT t.year ORDER BY t.year) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id JOIN terms t ON t.code = c.term_code WHERE ci.instructor_id = i.id) as teaching_years,
+            (SELECT ARRAY_AGG(DISTINCT c.subject ORDER BY c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as subjects_taught
         FROM instructors i
         LEFT JOIN LATERAL (
             SELECT mc.rmp_legacy_id, mc.score, mc.score_breakdown
@@ -368,6 +372,7 @@ pub async fn list_instructors(
                 course_subject_count: r.course_subject_count.unwrap_or(0),
                 top_candidate,
                 teaching_years: r.teaching_years.clone().unwrap_or_default(),
+                subjects_taught: r.subjects_taught.clone().unwrap_or_default(),
             })
         })
         .collect::<Result<Vec<_>>>()?;

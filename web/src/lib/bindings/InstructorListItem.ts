@@ -9,4 +9,8 @@ export type InstructorListItem = { id: number, displayName: string, email: strin
 /**
  * Sorted distinct academic years in which this instructor taught courses.
  */
-teachingYears: Array<number>, };
+teachingYears: Array<number>, 
+/**
+ * Sorted distinct subject codes this instructor has taught.
+ */
+subjectsTaught: Array<string>, };

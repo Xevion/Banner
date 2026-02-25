@@ -14,7 +14,7 @@ department: number,
 reviewCourses: number, 
 /**
  * Merged subject evidence: `max(department, review_courses)`.
- * This is the value actually used in the composite score — the stronger
+ * This is the value actually used in the composite score - the stronger
  * of the two subject-alignment signals.
  */
 subject: number, uniqueness: number, volume: number, };

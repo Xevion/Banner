@@ -4,4 +4,20 @@ import type { BluebookLinkCourse } from "./BluebookLinkCourse";
 /**
  * Detail view for a single BlueBook link.
  */
-export type BluebookLinkDetail = { id: number, instructorName: string, subject: string | null, status: string, confidence: number | null, instructorId: number | null, instructorDisplayName: string | null, evalCount: number, courses: Array<BluebookLinkCourse>, };
+export type BluebookLinkDetail = { id: number, instructorName: string, subject: string | null, status: string, confidence: number | null, instructorId: number | null, instructorDisplayName: string | null, evalCount: number, courses: Array<BluebookLinkCourse>, 
+/**
+ * Email of the proposed/matched instructor (if any).
+ */
+instructorEmail: string | null, 
+/**
+ * Sorted distinct subject codes taught by the proposed/matched instructor.
+ */
+instructorSubjects: Array<string>, 
+/**
+ * Sorted distinct academic years in which the proposed/matched instructor taught.
+ */
+instructorTeachingYears: Array<number>, 
+/**
+ * Total course count for the proposed/matched instructor.
+ */
+instructorCourseCount: number | null, };

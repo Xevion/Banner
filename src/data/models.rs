@@ -317,7 +317,7 @@ pub struct Instructor {
 
 /// Match status for RMP instructor matching.
 ///
-/// Stored as VARCHAR in the database — this enum is for Rust API types
+/// Stored as VARCHAR in the database - this enum is for Rust API types
 /// and TypeScript bindings only (no sqlx::Type derive).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]

@@ -121,7 +121,7 @@ const { Story } = defineMeta({
   {/snippet}
 </Story>
 
-<!-- Very low data, wide CI (e.g. Shu, John — 1 RMP rating) -->
+<!-- Very low data, wide CI (e.g. Shu, John - 1 RMP rating) -->
 <Story
   name="Very Low Confidence"
   args={{

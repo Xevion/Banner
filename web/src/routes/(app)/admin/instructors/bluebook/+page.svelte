@@ -11,8 +11,9 @@ import FilterCards from "$lib/components/FilterCards.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
 import ProgressBar from "$lib/components/ProgressBar.svelte";
 import SearchInput from "$lib/components/SearchInput.svelte";
+import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { useDebounceSearch, useRowHighlight } from "$lib/composables";
-import { formatInstructorName } from "$lib/course";
+import { formatInstructorName, formatYearRange } from "$lib/course";
 import type { FilterCard, ProgressSegment, StatusBadge } from "$lib/ui";
 import { getBadge } from "$lib/ui";
 import { Check, ChevronRight, LoaderCircle, RefreshCw, Search, X } from "@lucide/svelte";
@@ -52,6 +53,8 @@ let instructorSearchQuery = $state("");
 let instructorSearchResults = $state<InstructorListItem[]>([]);
 let instructorSearchLoading = $state(false);
 let instructorSearchTimeout: ReturnType<typeof setTimeout> | undefined;
+// Pending assign confirmation state
+let pendingAssignInstructor = $state<InstructorListItem | null>(null);
 
 // Debounced search
 let searchQuery = $state("");
@@ -135,6 +138,7 @@ async function fetchDetail(id: number) {
   detail = null;
   instructorSearchQuery = "";
   instructorSearchResults = [];
+  pendingAssignInstructor = null;
   const result = await client.getAdminBluebookLink(id);
   if (result.isErr) {
     detailError = result.error.message;
@@ -231,10 +235,20 @@ async function handleAssign(linkId: number, instructorId: number) {
   } else {
     instructorSearchQuery = "";
     instructorSearchResults = [];
+    pendingAssignInstructor = null;
     await fetchDetail(linkId);
     await fetchLinks();
   }
   actionLoading = null;
+}
+
+function requestAssign(instructor: InstructorListItem) {
+  pendingAssignInstructor = instructor;
+  instructorSearchResults = [];
+}
+
+function cancelAssign() {
+  pendingAssignInstructor = null;
 }
 
 async function handleAutoMatch() {
@@ -269,6 +283,7 @@ async function doInstructorSearch() {
 }
 
 function handleInstructorSearch() {
+  pendingAssignInstructor = null;
   clearTimeout(instructorSearchTimeout);
   instructorSearchTimeout = setTimeout(() => {
     void doInstructorSearch();
@@ -455,7 +470,15 @@ function formatConfidence(confidence: number | null): string {
                       >{link.subject}</span
                     >
                   {:else}
-                    <span class="text-muted-foreground text-xs">All</span>
+                    <SimpleTooltip
+                      text="No subject filter &mdash; this link matches the instructor name across all subjects"
+                      delay={200}
+                    >
+                      <span
+                        class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
+                        >All subjects</span
+                      >
+                    </SimpleTooltip>
                   {/if}
                 </td>
                 <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
@@ -571,7 +594,23 @@ function formatConfidence(confidence: number | null): string {
                               <dd class="text-foreground">{detail.instructorName}</dd>
 
                               <dt class="text-muted-foreground">Subject</dt>
-                              <dd class="text-foreground">{detail.subject ?? "All"}</dd>
+                              <dd>
+                                {#if detail.subject}
+                                  <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
+                                    >{detail.subject}</span
+                                  >
+                                {:else}
+                                  <SimpleTooltip
+                                    text="No subject filter &mdash; this link matches the instructor name across all subjects"
+                                    delay={200}
+                                  >
+                                    <span
+                                      class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
+                                      >All subjects</span
+                                    >
+                                  </SimpleTooltip>
+                                {/if}
+                              </dd>
 
                               <dt class="text-muted-foreground">Confidence</dt>
                               <dd class="text-foreground tabular-nums">
@@ -591,94 +630,217 @@ function formatConfidence(confidence: number | null): string {
                               </dd>
                             </dl>
 
-                            <!-- Approve/Reject for auto/pending with proposed match -->
+                            <!-- Proposed match card for auto/pending with a match -->
                             {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId !== null}
-                              <div class="mt-2 flex flex-col gap-y-2">
-                                <div class="text-sm text-muted-foreground">
-                                  Proposed match: <span class="text-foreground font-medium"
-                                    >{detail.instructorDisplayName
-                                      ? formatInstructorName(detail.instructorDisplayName)
-                                      : "Unknown"}</span
-                                  >
+                              <div class="mt-1 flex flex-col gap-y-2">
+                                <div class="text-xs font-medium text-muted-foreground">
+                                  Proposed Match
                                 </div>
-                                <div class="flex gap-2">
-                                  <button
-                                    onclick={(e) => {
-                                      e.stopPropagation();
-                                      void handleApprove(detail!.id);
-                                    }}
-                                    disabled={actionLoading !== null}
-                                    class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1
-                                           text-xs font-medium text-green-700 hover:bg-green-200
-                                           dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50
-                                           transition-colors disabled:opacity-50 cursor-pointer"
-                                  >
-                                    <Check size={12} /> Approve
-                                  </button>
-                                  <button
-                                    onclick={(e) => {
-                                      e.stopPropagation();
-                                      void handleReject(detail!.id);
-                                    }}
-                                    disabled={actionLoading !== null}
-                                    class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1
-                                           text-xs font-medium text-red-700 hover:bg-red-200
-                                           dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50
-                                           transition-colors disabled:opacity-50 cursor-pointer"
-                                  >
-                                    <X size={12} /> Reject
-                                  </button>
+                                <div
+                                  class="rounded-md border border-l-4 border-l-amber-400 border-border bg-card p-3 flex flex-col gap-y-1.5"
+                                >
+                                  <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                      <div class="font-medium text-foreground text-sm">
+                                        {detail.instructorDisplayName
+                                          ? formatInstructorName(detail.instructorDisplayName)
+                                          : "Unknown"}
+                                      </div>
+                                      {#if detail.instructorEmail}
+                                        <div class="text-xs text-muted-foreground mt-0.5 break-all">
+                                          {detail.instructorEmail}
+                                        </div>
+                                      {/if}
+                                    </div>
+                                    <div class="flex gap-1.5 shrink-0">
+                                      <button
+                                        onclick={(e) => {
+                                          e.stopPropagation();
+                                          void handleApprove(detail!.id);
+                                        }}
+                                        disabled={actionLoading !== null}
+                                        class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1
+                                               text-xs font-medium text-green-700 hover:bg-green-200
+                                               dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50
+                                               transition-colors disabled:opacity-50 cursor-pointer"
+                                      >
+                                        {#if actionLoading === `approve-${detail.id}`}
+                                          <LoaderCircle size={11} class="animate-spin" />
+                                        {:else}
+                                          <Check size={11} />
+                                        {/if}
+                                        Approve
+                                      </button>
+                                      <button
+                                        onclick={(e) => {
+                                          e.stopPropagation();
+                                          void handleReject(detail!.id);
+                                        }}
+                                        disabled={actionLoading !== null}
+                                        class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1
+                                               text-xs font-medium text-red-700 hover:bg-red-200
+                                               dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50
+                                               transition-colors disabled:opacity-50 cursor-pointer"
+                                      >
+                                        {#if actionLoading === `reject-${detail.id}`}
+                                          <LoaderCircle size={11} class="animate-spin" />
+                                        {:else}
+                                          <X size={11} />
+                                        {/if}
+                                        Reject
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <!-- Subjects + years + course count -->
+                                  <div class="flex items-center gap-3 text-xs flex-wrap mt-0.5">
+                                    {#if detail.instructorSubjects.length > 0}
+                                      <div class="flex flex-wrap gap-1">
+                                        {#each detail.instructorSubjects.slice(0, 5) as subj (subj)}
+                                          <span
+                                            class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
+                                            >{subj}</span
+                                          >
+                                        {/each}
+                                        {#if detail.instructorSubjects.length > 5}
+                                          <span class="text-muted-foreground"
+                                            >+{detail.instructorSubjects.length - 5}</span
+                                          >
+                                        {/if}
+                                      </div>
+                                    {/if}
+                                    {#if detail.instructorTeachingYears.length > 0}
+                                      <span class="text-muted-foreground tabular-nums">
+                                        {formatYearRange(detail.instructorTeachingYears)}
+                                      </span>
+                                    {/if}
+                                    {#if detail.instructorCourseCount != null}
+                                      <span class="text-muted-foreground tabular-nums">
+                                        {detail.instructorCourseCount} courses
+                                      </span>
+                                    {/if}
+                                  </div>
                                 </div>
                               </div>
                             {/if}
 
                             <!-- Manual instructor search for unmatched auto/pending links -->
                             {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId === null}
-                              <div class="mt-2 flex flex-col gap-y-2">
+                              <div class="mt-1 flex flex-col gap-y-2">
                                 <div class="text-xs text-muted-foreground font-medium">
                                   Assign Instructor
                                 </div>
-                                <div class="relative">
-                                  <Search
-                                    size={12}
-                                    class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="Search instructors..."
-                                    bind:value={instructorSearchQuery}
-                                    oninput={handleInstructorSearch}
-                                    onclick={(e) => e.stopPropagation()}
-                                    class="bg-background border-border rounded-md border pl-7 pr-3 py-1.5 text-xs text-foreground
-                                           placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-full transition-shadow"
-                                  />
-                                  {#if instructorSearchLoading}
-                                    <LoaderCircle
+
+                                {#if pendingAssignInstructor}
+                                  <!-- Confirmation step -->
+                                  <div
+                                    class="flex items-center gap-2 text-xs"
+                                    in:fade={{ duration: 100 }}
+                                  >
+                                    <span class="text-muted-foreground min-w-0 truncate">
+                                      Assign to <span class="text-foreground font-medium"
+                                        >{formatInstructorName(
+                                          pendingAssignInstructor.displayName
+                                        )}</span
+                                      >?
+                                    </span>
+                                    <button
+                                      onclick={(e) => {
+                                        e.stopPropagation();
+                                        void handleAssign(
+                                          detail!.id,
+                                          pendingAssignInstructor!.id
+                                        );
+                                      }}
+                                      disabled={actionLoading !== null}
+                                      class="font-medium text-green-600 hover:text-green-700
+                                             dark:text-green-400 dark:hover:text-green-300
+                                             cursor-pointer disabled:opacity-50 shrink-0"
+                                    >
+                                      {#if actionLoading === `assign-${detail.id}`}
+                                        <LoaderCircle size={12} class="animate-spin inline" />
+                                      {:else}
+                                        Confirm
+                                      {/if}
+                                    </button>
+                                    <button
+                                      onclick={(e) => {
+                                        e.stopPropagation();
+                                        cancelAssign();
+                                      }}
+                                      class="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                {:else}
+                                  <!-- Search input -->
+                                  <div class="relative">
+                                    <Search
                                       size={12}
-                                      class="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground"
+                                      class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
                                     />
-                                  {/if}
-                                </div>
+                                    <input
+                                      type="text"
+                                      placeholder="Search instructors..."
+                                      bind:value={instructorSearchQuery}
+                                      oninput={handleInstructorSearch}
+                                      onclick={(e) => e.stopPropagation()}
+                                      class="bg-background border-border rounded-md border pl-7 pr-3 py-1.5 text-xs text-foreground
+                                             placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-full transition-shadow"
+                                    />
+                                    {#if instructorSearchLoading}
+                                      <LoaderCircle
+                                        size={12}
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground"
+                                      />
+                                    {/if}
+                                  </div>
+                                {/if}
+
                                 {#if instructorSearchResults.length > 0}
                                   <div
-                                    class="bg-card border-border rounded-md border max-h-40 overflow-y-auto"
+                                    class="bg-card border-border rounded-md border max-h-52 overflow-y-auto"
                                   >
                                     {#each instructorSearchResults as instructor (instructor.id)}
                                       <button
                                         onclick={(e) => {
                                           e.stopPropagation();
-                                          void handleAssign(detail!.id, instructor.id);
+                                          requestAssign(instructor);
                                         }}
                                         disabled={actionLoading !== null}
-                                        class="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors
+                                        class="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors
                                                disabled:opacity-50 cursor-pointer border-b border-border last:border-b-0"
                                       >
                                         <div class="font-medium text-foreground">
                                           {formatInstructorName(instructor.displayName)}
                                         </div>
-                                        {#if instructor.email}
-                                          <div class="text-muted-foreground">{instructor.email}</div>
-                                        {/if}
+                                        <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                                          {#if instructor.email}
+                                            <span class="text-muted-foreground"
+                                              >{instructor.email}</span
+                                            >
+                                          {/if}
+                                          {#if instructor.subjectsTaught.length > 0}
+                                            <div class="flex gap-1 flex-wrap">
+                                              {#each instructor.subjectsTaught.slice(0, 4) as subj (subj)}
+                                                <span
+                                                  class="rounded bg-muted px-1 py-0 text-[10px] font-medium leading-4"
+                                                  >{subj}</span
+                                                >
+                                              {/each}
+                                              {#if instructor.subjectsTaught.length > 4}
+                                                <span class="text-muted-foreground text-[10px]"
+                                                  >+{instructor.subjectsTaught.length - 4}</span
+                                                >
+                                              {/if}
+                                            </div>
+                                          {/if}
+                                          {#if instructor.teachingYears.length > 0}
+                                            <span class="text-muted-foreground tabular-nums">
+                                              {formatYearRange(instructor.teachingYears)}
+                                            </span>
+                                          {/if}
+                                        </div>
                                       </button>
                                     {/each}
                                   </div>

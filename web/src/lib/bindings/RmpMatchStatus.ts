@@ -3,7 +3,7 @@
 /**
  * Match status for RMP instructor matching.
  *
- * Stored as VARCHAR in the database — this enum is for Rust API types
+ * Stored as VARCHAR in the database - this enum is for Rust API types
  * and TypeScript bindings only (no sqlx::Type derive).
  */
 export type RmpMatchStatus = "unmatched" | "pending" | "auto" | "confirmed" | "rejected";
