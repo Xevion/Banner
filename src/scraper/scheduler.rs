@@ -38,6 +38,12 @@ const TERM_SYNC_INTERVAL: Duration = Duration::from_secs(8 * 60 * 60);
 /// and `HISTORICAL_SUBJECT_INTERVAL` (90 days) in `src/bluebook.rs`.
 const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 3600);
 
+/// How often to check for professors eligible for review scraping (15 minutes).
+const RMP_REVIEW_SCRAPE_INTERVAL: Duration = Duration::from_secs(15 * 60);
+
+/// Max professors to scrape reviews for per cycle.
+const RMP_REVIEW_SCRAPE_BATCH_SIZE: i64 = 50;
+
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
 
 // app_kv keys for persisting scheduler timestamps across restarts.
@@ -45,6 +51,7 @@ pub const KV_REF_SCRAPE: &str = "scheduler.ref_scrape";
 pub const KV_RMP_SYNC: &str = "scheduler.rmp_sync";
 pub const KV_TERM_SYNC: &str = "scheduler.term_sync";
 pub const KV_BLUEBOOK_SYNC: &str = "scheduler.bluebook_sync";
+pub const KV_RMP_REVIEW_SCRAPE: &str = "scheduler.rmp_review_scrape";
 
 /// Convert a persisted UTC timestamp to an `Instant`, preserving remaining cooldown.
 ///
@@ -121,17 +128,22 @@ impl Scheduler {
         let persisted_bb = kv::get_timestamp(pool, KV_BLUEBOOK_SYNC)
             .await
             .unwrap_or(None);
+        let persisted_rmp_reviews = kv::get_timestamp(pool, KV_RMP_REVIEW_SCRAPE)
+            .await
+            .unwrap_or(None);
 
         if persisted_ref.is_some()
             || persisted_rmp.is_some()
             || persisted_term.is_some()
             || persisted_bb.is_some()
+            || persisted_rmp_reviews.is_some()
         {
             info!(
                 last_ref_scrape = ?persisted_ref,
                 last_rmp_sync = ?persisted_rmp,
                 last_term_sync = ?persisted_term,
                 last_bluebook_sync = ?persisted_bb,
+                last_rmp_review_scrape = ?persisted_rmp_reviews,
                 "Loaded persisted scheduler timestamps"
             );
         }
@@ -140,6 +152,8 @@ impl Scheduler {
         let mut last_rmp_sync = persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL);
         let mut last_term_sync = persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL);
         let mut last_bluebook_sync = persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL);
+        let mut last_rmp_review_scrape =
+            persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL);
         let mut bluebook_notified = false;
 
         loop {
@@ -168,6 +182,8 @@ impl Scheduler {
                     let should_sync_terms = last_term_sync.elapsed() >= TERM_SYNC_INTERVAL;
                     let should_sync_bluebook = bluebook_notified
                         || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL;
+                    let should_scrape_rmp_reviews =
+                        last_rmp_review_scrape.elapsed() >= RMP_REVIEW_SCRAPE_INTERVAL;
                     bluebook_notified = false;
 
                     // Read and clear the force flag before spawning so the flag
@@ -242,7 +258,20 @@ impl Scheduler {
                                                 }
                                             };
 
-                                            tokio::join!(term_fut, rmp_fut, ref_fut, bb_fut);
+                                            let rmp_review_fut = async {
+                                                if should_scrape_rmp_reviews {
+                                                    match Self::sync_rmp_reviews(db.pool()).await {
+                                                        Ok(()) => {
+                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_REVIEW_SCRAPE, Utc::now()).await {
+                                                                warn!(error = ?e, "Failed to persist RMP review scrape timestamp");
+                                                            }
+                                                        }
+                                                        Err(e) => error!(error = ?e, "Failed to sync RMP reviews"),
+                                                    }
+                                                }
+                                            };
+
+                                            tokio::join!(term_fut, rmp_fut, ref_fut, bb_fut, rmp_review_fut);
 
                                             if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
                                                 error!(error = ?e, "Failed to schedule jobs");
@@ -269,6 +298,9 @@ impl Scheduler {
                     }
                     if should_sync_bluebook {
                         last_bluebook_sync = Instant::now();
+                    }
+                    if should_scrape_rmp_reviews {
+                        last_rmp_review_scrape = Instant::now();
                     }
 
                     current_work = Some((work_handle, cancel_token));
@@ -638,6 +670,80 @@ impl Scheduler {
             "RMP sync complete"
         );
 
+        Ok(())
+    }
+
+    /// Scrape individual reviews for eligible professors.
+    ///
+    /// Fetches extended profile data and all reviews for each professor,
+    /// stores them, and updates the scrape schedule based on review count.
+    #[tracing::instrument(skip_all)]
+    async fn sync_rmp_reviews(db_pool: &PgPool) -> Result<()> {
+        let eligible = crate::data::rmp::get_professors_eligible_for_review_scrape(
+            db_pool,
+            RMP_REVIEW_SCRAPE_BATCH_SIZE,
+        )
+        .await?;
+
+        if eligible.is_empty() {
+            trace!("No professors eligible for RMP review scraping");
+            return Ok(());
+        }
+
+        info!(
+            count = eligible.len(),
+            "Scraping RMP reviews for professors"
+        );
+
+        let client = RmpClient::new();
+        let mut success_count = 0;
+
+        for (legacy_id, graphql_id) in &eligible {
+            match client.fetch_professor_with_reviews(graphql_id).await {
+                Ok((detail, reviews)) => {
+                    let num_reviews = reviews.len() as i32;
+
+                    if let Err(e) =
+                        crate::data::rmp::upsert_professor_detail(&detail, db_pool).await
+                    {
+                        warn!(legacy_id, error = ?e, "Failed to upsert professor detail");
+                        continue;
+                    }
+
+                    if let Err(e) =
+                        crate::data::rmp::replace_professor_reviews(*legacy_id, &reviews, db_pool)
+                            .await
+                    {
+                        warn!(legacy_id, error = ?e, "Failed to replace professor reviews");
+                        continue;
+                    }
+
+                    if let Err(e) = crate::data::rmp::mark_professor_reviews_scraped(
+                        *legacy_id,
+                        num_reviews,
+                        db_pool,
+                    )
+                    .await
+                    {
+                        warn!(legacy_id, error = ?e, "Failed to mark professor reviews scraped");
+                        continue;
+                    }
+
+                    debug!(legacy_id, num_reviews, "Scraped professor reviews");
+                    success_count += 1;
+                }
+                Err(e) => {
+                    warn!(legacy_id, error = ?e, "Failed to fetch professor reviews from RMP");
+                }
+            }
+        }
+
+        info!(
+            total = eligible.len(),
+            success = success_count,
+            failed = eligible.len() - success_count,
+            "RMP review scrape cycle complete"
+        );
         Ok(())
     }
 

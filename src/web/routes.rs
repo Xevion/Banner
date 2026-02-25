@@ -52,6 +52,7 @@ use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
+#[cfg(feature = "embed-assets")]
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
@@ -203,12 +204,6 @@ async fn ssr_fallback(State(state): State<AppState>, request: Request) -> axum::
     let path = uri.path();
     let query = uri.query();
     let headers = request.headers().clone();
-
-    // API routes that didn't match a defined handler are a hard 404 — never proxy them.
-    // Proxying unknown /api/** paths to the SSR server causes silent hangs.
-    if path.starts_with("/api/") {
-        return (StatusCode::NOT_FOUND, "Not found").into_response();
-    }
 
     // Try serving embedded static assets (production only)
     #[cfg(feature = "embed-assets")]

@@ -1,6 +1,6 @@
 //! Database operations for RateMyProfessors data.
 
-use crate::rmp::RmpProfessor;
+use crate::rmp::{RmpProfessor, RmpProfessorDetail, RmpReview};
 use anyhow::Result;
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -188,5 +188,144 @@ pub async fn unmatch_instructor(
     }
 
     tx.commit().await?;
+    Ok(())
+}
+
+/// Get professors eligible for review scraping.
+///
+/// Returns `(legacy_id, graphql_id)` pairs for professors whose
+/// `reviews_last_scraped_at` is NULL or past their individual interval.
+pub async fn get_professors_eligible_for_review_scrape(
+    db_pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<(i32, String)>> {
+    let rows: Vec<(i32, String)> = sqlx::query_as(
+        r#"
+        SELECT legacy_id, graphql_id FROM rmp_professors
+        WHERE reviews_last_scraped_at IS NULL
+           OR (reviews_last_scraped_at + review_scrape_interval) <= NOW()
+        ORDER BY reviews_last_scraped_at ASC NULLS FIRST
+        LIMIT $1
+        "#,
+    )
+    .bind(limit)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Update extended profile columns on `rmp_professors` for one professor.
+pub async fn upsert_professor_detail(detail: &RmpProfessorDetail, db_pool: &PgPool) -> Result<()> {
+    let course_codes_json = serde_json::to_value(&detail.course_codes)?;
+
+    sqlx::query(
+        r#"
+        UPDATE rmp_professors SET
+            ratings_r1 = $1,
+            ratings_r2 = $2,
+            ratings_r3 = $3,
+            ratings_r4 = $4,
+            ratings_r5 = $5,
+            course_codes = $6
+        WHERE legacy_id = $7
+        "#,
+    )
+    .bind(detail.ratings_r1)
+    .bind(detail.ratings_r2)
+    .bind(detail.ratings_r3)
+    .bind(detail.ratings_r4)
+    .bind(detail.ratings_r5)
+    .bind(&course_codes_json)
+    .bind(detail.legacy_id)
+    .execute(db_pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Delete all reviews for a professor and bulk insert new ones.
+///
+/// Uses a transaction to ensure atomicity. Delete-and-reinsert is simpler
+/// than composite-key upsert since RMP reviews lack stable IDs.
+pub async fn replace_professor_reviews(
+    legacy_id: i32,
+    reviews: &[RmpReview],
+    db_pool: &PgPool,
+) -> Result<()> {
+    let mut tx = db_pool.begin().await?;
+
+    sqlx::query("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1")
+        .bind(legacy_id)
+        .execute(&mut *tx)
+        .await?;
+
+    for review in reviews {
+        sqlx::query(
+            r#"
+            INSERT INTO rmp_reviews (
+                rmp_legacy_id, comment, class, grade, rating_tags,
+                helpful_rating, clarity_rating, difficulty_rating,
+                would_take_again, is_for_credit, is_for_online_class,
+                attendance_mandatory, flag_status, textbook_use,
+                thumbs_up_total, thumbs_down_total, posted_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            "#,
+        )
+        .bind(legacy_id)
+        .bind(&review.comment)
+        .bind(&review.class)
+        .bind(&review.grade)
+        .bind(&review.rating_tags)
+        .bind(review.helpful_rating)
+        .bind(review.clarity_rating)
+        .bind(review.difficulty_rating)
+        .bind(review.would_take_again)
+        .bind(review.is_for_credit)
+        .bind(review.is_for_online_class)
+        .bind(&review.attendance_mandatory)
+        .bind(&review.flag_status)
+        .bind(review.textbook_use)
+        .bind(review.thumbs_up_total)
+        .bind(review.thumbs_down_total)
+        .bind(review.posted_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Mark a professor's reviews as scraped and compute the next scrape interval.
+///
+/// Only called after `replace_professor_reviews` succeeds to prevent
+/// failed inserts from pushing the next scrape forward.
+pub async fn mark_professor_reviews_scraped(
+    legacy_id: i32,
+    num_ratings: i32,
+    db_pool: &PgPool,
+) -> Result<()> {
+    let interval_days = match num_ratings {
+        0 => 14,
+        1..=5 => 7,
+        6..=20 => 3,
+        _ => 1,
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE rmp_professors SET
+            reviews_last_scraped_at = NOW(),
+            review_scrape_interval = make_interval(days => $1)
+        WHERE legacy_id = $2
+        "#,
+    )
+    .bind(interval_days)
+    .bind(legacy_id)
+    .execute(db_pool)
+    .await?;
+
     Ok(())
 }
