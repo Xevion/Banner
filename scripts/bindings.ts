@@ -9,14 +9,16 @@ import { run } from "./lib/proc";
 
 const BINDINGS_DIR = "web/src/lib/bindings";
 
-// Build test binary first (slow part) — fail before deleting anything
-run(["cargo", "test", "--no-run"]);
+// Build lib test binary first (slow part) — fail before deleting anything
+// --lib: only compiles the library's unit tests (where export_bindings live),
+// skipping integration test binaries in tests/ which aren't needed here.
+run(["cargo", "test", "--lib", "--no-run"]);
 
 // Clean slate
 rmSync(BINDINGS_DIR, { recursive: true, force: true });
 
 // Run the export (fast, already compiled)
-run(["cargo", "test", "export_bindings"]);
+run(["cargo", "test", "--lib", "export_bindings"]);
 
 // Auto-generate index.ts from emitted .ts files
 const types = readdirSync(BINDINGS_DIR)

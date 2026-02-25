@@ -89,9 +89,9 @@ if (has('frontend')) {
 			const tmpDir = mkdtempSync(join(tmpdir(), 'banner-bindings-'));
 			try {
 				for (const { cmd, opts } of [
-					{ cmd: ['cargo', 'test', '--no-run', '--quiet'], opts: {} },
+					{ cmd: ['cargo', 'test', '--lib', '--no-run', '--quiet'], opts: {} },
 					{
-						cmd: ['cargo', 'test', 'export_bindings', '--quiet'],
+						cmd: ['cargo', 'test', '--lib', 'export_bindings', '--quiet'],
 						opts: { env: { TS_RS_EXPORT_DIR: tmpDir } },
 					},
 				]) {
