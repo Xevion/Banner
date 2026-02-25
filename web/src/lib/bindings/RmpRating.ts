@@ -6,4 +6,4 @@
  * Present whenever an RMP profile link exists. Rating fields are `None` when the
  * profile has no reviews (0 ratings / 0.0 average).
  */
-export type RmpRating = { avgRating: number | null, numRatings: number | null, legacyId: number, isConfident: boolean, };
+export type RmpRating = { avgRating: number | null, numRatings: number | null, legacyId: number, };

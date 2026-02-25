@@ -578,7 +578,7 @@ pub struct SearchOptionsParams {
     pub term: Option<String>,
 }
 
-const RMP_CONFIDENCE_THRESHOLD: i32 = 7;
+
 
 /// Build a `CourseResponse` from a DB course with pre-fetched instructor details.
 pub fn build_course_response(
@@ -593,12 +593,10 @@ pub fn build_course_response(
                     i.avg_rating.map(|v| v as f32),
                     i.num_ratings,
                 );
-                let is_confident = num_ratings.is_some_and(|n| n >= RMP_CONFIDENCE_THRESHOLD);
                 RmpRating {
                     avg_rating,
                     num_ratings,
                     legacy_id,
-                    is_confident,
                 }
             });
             let bluebook = crate::data::course_types::build_bluebook_rating(

@@ -65,7 +65,6 @@ export const courseWithSeats: CourseResponse = {
         avgRating: 4.2,
         numRatings: 45,
         legacyId: 123456,
-        isConfident: true,
       },
       bluebook: null,
       composite: {
@@ -159,7 +158,6 @@ export const onlineCourse: CourseResponse = {
         avgRating: 3.8,
         numRatings: 120,
         legacyId: 234567,
-        isConfident: true,
       },
       bluebook: null,
       composite: {

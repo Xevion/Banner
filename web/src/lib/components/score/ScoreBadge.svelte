@@ -7,14 +7,19 @@ import { BookOpen, Star, Triangle } from "@lucide/svelte";
 let {
   score,
   source = "composite",
-  confident = true,
+  confidence = 1,
   size = "xs",
 }: {
   score: number;
   source?: "composite" | "bluebook" | "rmp";
-  confident?: boolean;
+  confidence?: number;
   size?: "xs" | "sm" | "lg";
 } = $props();
+
+// >= 0.5: well-sampled (7+ RMP or 10+ BB responses) — solid border, source icon
+// [0.3, 0.5): sparse data — dashed border, source icon
+// < 0.3: very sparse (e.g. 1 BB response) — dashed border, Triangle overrides source
+const tier = $derived(confidence >= 0.5 ? "high" : confidence >= 0.3 ? "medium" : "low");
 
 const sizeClasses = {
   xs: "text-xs px-1.5 py-0.5 gap-0.5",
@@ -33,12 +38,12 @@ const iconSizes = {
   class={cn(
     "inline-flex items-center font-semibold rounded-md select-none",
     sizeClasses[size],
-    !confident && "border border-dashed border-current/30",
+    tier !== "high" && "border border-dashed border-current/30",
   )}
   style={scoreBadgeStyle(score, themeStore.isDark)}
 >
   {score.toFixed(1)}
-  {#if !confident}
+  {#if tier === "low"}
     <Triangle class={cn(iconSizes[size], "fill-current")} />
   {:else if source === "bluebook"}
     <BookOpen class={cn(iconSizes[size], "fill-current")} />

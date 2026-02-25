@@ -147,10 +147,7 @@ pub struct RmpRating {
     pub avg_rating: Option<f32>,
     pub num_ratings: Option<i32>,
     pub legacy_id: i32,
-    pub is_confident: bool,
 }
-
-pub const BLUEBOOK_CONFIDENCE_THRESHOLD: i32 = 10;
 
 /// BlueBook evaluation summary for course search results.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -159,7 +156,6 @@ pub const BLUEBOOK_CONFIDENCE_THRESHOLD: i32 = 10;
 pub struct BlueBookRating {
     pub avg_instructor_rating: f32,
     pub total_responses: i32,
-    pub is_confident: bool,
 }
 
 /// BlueBook summary for instructor list cards.
@@ -247,14 +243,10 @@ pub fn build_bluebook_rating(
     total_responses: Option<i64>,
 ) -> Option<BlueBookRating> {
     match (avg_rating, total_responses) {
-        (Some(r), Some(n)) if r > 0.0 && n > 0 => {
-            let n = n as i32;
-            Some(BlueBookRating {
-                avg_instructor_rating: r,
-                total_responses: n,
-                is_confident: n >= BLUEBOOK_CONFIDENCE_THRESHOLD,
-            })
-        }
+        (Some(r), Some(n)) if r > 0.0 && n > 0 => Some(BlueBookRating {
+            avg_instructor_rating: r,
+            total_responses: n as i32,
+        }),
         _ => None,
     }
 }

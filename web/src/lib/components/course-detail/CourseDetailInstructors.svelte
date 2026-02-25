@@ -1,13 +1,9 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import ScorePopover from "$lib/components/score/ScorePopover.svelte";
-import { useClipboard } from "$lib/composables/useClipboard.svelte";
-import { formatInstructorName, rmpUrl } from "$lib/course";
-import { Check, Copy, ExternalLink } from "@lucide/svelte";
+import { formatInstructorName } from "$lib/course";
 
 let { course }: { course: CourseResponse } = $props();
-
-const clipboard = useClipboard();
 </script>
 
 <div>
@@ -22,9 +18,18 @@ const clipboard = useClipboard();
         >
           <!-- Name + primary badge -->
           <div class="flex items-center gap-2 min-w-0">
-            <span class="font-medium text-sm text-foreground truncate">
-              {formatInstructorName(instructor)}
-            </span>
+            {#if instructor.slug != null}
+              <a
+                href="/instructors/{instructor.slug}"
+                class="font-medium text-sm text-foreground truncate hover:underline"
+              >
+                {formatInstructorName(instructor)}
+              </a>
+            {:else}
+              <span class="font-medium text-sm text-foreground truncate">
+                {formatInstructorName(instructor)}
+              </span>
+            {/if}
             {#if instructor.isPrimary && course.instructors.length > 1}
               <span
                 class="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0"
@@ -44,34 +49,6 @@ const clipboard = useClipboard();
             />
           {/if}
 
-          <!-- Email + RMP link -->
-          <div class="flex items-center gap-3 text-xs text-muted-foreground">
-            {#if instructor.email}
-              <button
-                onclick={(e) => clipboard.copy(instructor.email!, e)}
-                class="inline-flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
-              >
-                {#if clipboard.copiedValue === instructor.email}
-                  <Check class="size-3" />
-                  <span>Copied!</span>
-                {:else}
-                  <Copy class="size-3" />
-                  <span>{instructor.email}</span>
-                {/if}
-              </button>
-            {/if}
-            {#if instructor.rmp?.legacyId != null}
-              <a
-                href={rmpUrl(instructor.rmp.legacyId)}
-                target="_blank"
-                rel="noopener"
-                class="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-              >
-                <ExternalLink class="size-3" />
-                <span>RMP</span>
-              </a>
-            {/if}
-          </div>
         </div>
       {/each}
     </div>

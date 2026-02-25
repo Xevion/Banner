@@ -3,4 +3,4 @@
 /**
  * BlueBook evaluation summary for course search results.
  */
-export type BlueBookRating = { avgInstructorRating: number, totalResponses: number, isConfident: boolean, };
+export type BlueBookRating = { avgInstructorRating: number, totalResponses: number, };

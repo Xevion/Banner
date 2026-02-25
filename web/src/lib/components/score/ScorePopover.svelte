@@ -2,9 +2,10 @@
 import type { BlueBookRating, CompositeRating, RmpRating } from "$lib/bindings";
 import LazyRichTooltip from "$lib/components/LazyRichTooltip.svelte";
 import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
-import { rmpUrl } from "$lib/course";
+import { ratingColor, rmpUrl } from "$lib/course";
+import { themeStore } from "$lib/stores/theme.svelte";
 import { formatNumber } from "$lib/utils";
-import { ExternalLink } from "@lucide/svelte";
+import { BookOpen, ExternalLink, Star } from "@lucide/svelte";
 import type { Snippet } from "svelte";
 
 let {
@@ -23,76 +24,101 @@ let {
 
 let hasRmp = $derived(rmp?.avgRating != null && rmp?.numRatings != null);
 let hasBb = $derived(bluebook != null);
-let bbOnly = $derived(hasBb && !hasRmp);
 let hasBothSources = $derived(hasBb && hasRmp);
-let confident = $derived.by(() => {
-  if (hasRmp) return rmp!.isConfident;
-  if (hasBb) return bluebook!.isConfident;
-  return true;
-});
-let source = $derived<"composite" | "bluebook" | "rmp">(bbOnly ? "bluebook" : "composite");
+
+let ciHalf = $derived(((composite.ciUpper - composite.ciLower) / 2).toFixed(1));
+let ciBarLeft = $derived(((composite.ciLower - 1) / 4) * 100);
+let ciBarWidth = $derived(((composite.ciUpper - composite.ciLower) / 4) * 100);
+let ciDotLeft = $derived(((composite.displayScore - 1) / 4) * 100);
+let color = $derived(ratingColor(composite.displayScore, themeStore.isDark));
+let confidencePct = $derived((composite.confidence * 100).toFixed(0));
+
+let pillSource = $derived<"composite" | "bluebook" | "rmp">(
+  hasBothSources ? "composite" : hasBb ? "bluebook" : "rmp"
+);
+let headerLabel = $derived(
+  hasBothSources ? "Combined Rating" : hasBb ? "BlueBook" : "RateMyProfessors"
+);
 </script>
 
 <LazyRichTooltip side="top" sideOffset={6} contentClass="p-0 min-w-52">
   {#if children}
     {@render children()}
   {:else}
-    <ScoreBadge score={composite.displayScore} {source} {confident} {size} />
+    <ScoreBadge
+      score={composite.displayScore}
+      source={pillSource}
+      confidence={composite.confidence}
+      {size}
+    />
   {/if}
   {#snippet content()}
     <div class="p-3 flex flex-col gap-2.5">
-      <!-- Composite headline (only if both sources contribute) -->
-      {#if hasBothSources}
-        <div class="flex items-center gap-2.5">
-          <ScoreBadge score={composite.displayScore} source="composite" {confident} size="sm" />
-          <div>
-            <div class="text-xs font-medium">Combined Rating</div>
-            <div class="text-[10px] text-muted-foreground">
-              {formatNumber(composite.totalResponses)} total responses
-            </div>
+      <!-- Composite header -->
+      <div class="flex items-center gap-2.5">
+        <ScoreBadge
+          score={composite.displayScore}
+          source={pillSource}
+          confidence={composite.confidence}
+          size="sm"
+        />
+        <div>
+          <div class="text-xs font-medium">{headerLabel}</div>
+          <div class="text-[10px] text-muted-foreground tabular-nums">
+            {composite.displayScore.toFixed(2)} ± {ciHalf} · {confidencePct}% confidence
           </div>
         </div>
-      {/if}
-
-      <!-- Source breakdown -->
-      <div class="flex gap-2">
-        {#if hasBb}
-          <div
-            class="flex-1 rounded border border-border bg-muted/30 px-2.5 py-2 flex flex-col gap-1"
-          >
-            <div class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-              BlueBook
-            </div>
-            <ScoreBadge
-              score={bluebook!.avgInstructorRating}
-              source="bluebook"
-              confident={bluebook!.isConfident}
-              size="xs"
-            />
-            <div class="text-[10px] text-muted-foreground">
-              {formatNumber(bluebook!.totalResponses)} responses
-            </div>
-          </div>
-        {/if}
-        {#if hasRmp}
-          <div
-            class="flex-1 rounded border border-border bg-muted/30 px-2.5 py-2 flex flex-col gap-1"
-          >
-            <div class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-              RateMyProfessors
-            </div>
-            <ScoreBadge
-              score={rmp!.avgRating!}
-              source="rmp"
-              confident={rmp!.isConfident}
-              size="xs"
-            />
-            <div class="text-[10px] text-muted-foreground">
-              {formatNumber(rmp!.numRatings!)} ratings
-            </div>
-          </div>
-        {/if}
       </div>
+
+      <!-- Mini CI bar -->
+      <div class="relative h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+        <div
+          class="absolute inset-y-0 rounded-full opacity-40"
+          style="left: {ciBarLeft}%; width: {ciBarWidth}%; background: {color}"
+        ></div>
+        <div
+          class="absolute top-1/2 -translate-y-1/2 size-2 rounded-full"
+          style="left: calc({ciDotLeft}% - 0.25rem); background: {color}"
+        ></div>
+      </div>
+
+      <!-- Total responses -->
+      <div class="text-[10px] text-muted-foreground">
+        {formatNumber(composite.totalResponses)} total responses
+      </div>
+
+      <!-- Stacked source rows -->
+      {#if hasBothSources}
+        <hr class="border-dashed border-border" />
+        <!-- BlueBook row -->
+        <div class="flex items-center gap-1.5">
+          <BookOpen class="size-3 text-muted-foreground shrink-0" />
+          <span class="flex-1 text-[10px]">BlueBook</span>
+          <span
+            class="text-[10px] tabular-nums font-medium"
+            style="color: {ratingColor(bluebook!.avgInstructorRating, themeStore.isDark)}"
+          >
+            {bluebook!.avgInstructorRating.toFixed(1)}
+          </span>
+          <span class="text-[10px] text-muted-foreground">
+            {formatNumber(bluebook!.totalResponses)}
+          </span>
+        </div>
+        <!-- RMP row -->
+        <div class="flex items-center gap-1.5">
+          <Star class="size-3 text-muted-foreground shrink-0" />
+          <span class="flex-1 text-[10px]">RateMyProfessors</span>
+          <span
+            class="text-[10px] tabular-nums font-medium"
+            style="color: {ratingColor(rmp!.avgRating!, themeStore.isDark)}"
+          >
+            {rmp!.avgRating!.toFixed(1)}
+          </span>
+          <span class="text-[10px] text-muted-foreground">
+            {formatNumber(rmp!.numRatings!)}
+          </span>
+        </div>
+      {/if}
 
       <!-- RMP external link -->
       {#if rmp?.legacyId != null}

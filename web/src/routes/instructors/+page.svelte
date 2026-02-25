@@ -174,6 +174,7 @@ function resolveSubject(code: string): string {
                     <ScoreBadge
                       score={instructor.composite.displayScore}
                       source={instructor.bluebook != null && instructor.rmp?.avgRating == null ? "bluebook" : "composite"}
+                      confidence={instructor.composite.confidence}
                       size="sm"
                     />
                   </div>
