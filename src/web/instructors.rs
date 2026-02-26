@@ -6,8 +6,8 @@ use axum::response::Json;
 use crate::data;
 use crate::data::instructors::{IdentifierKind, PublicInstructorListParams, classify_identifier};
 use crate::state::AppState;
+use crate::web::courses::{CourseResponse, build_course_response};
 use crate::web::error::{ApiError, OptionNotFoundExt, db_error};
-use crate::web::routes::{CourseResponse, build_course_response};
 
 /// `GET /api/instructors`
 pub async fn list_instructors(

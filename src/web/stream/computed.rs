@@ -13,11 +13,9 @@ use tokio::time::Instant;
 use tracing::warn;
 
 use crate::data::events::{DomainEvent, EventBuffer};
+use crate::data::scraper_stats;
 use crate::state::ReferenceCache;
-use crate::web::admin::scraper::{
-    ScraperStatsResponse, SubjectSummary, TimeseriesPoint, compute_stats, compute_subjects,
-    compute_timeseries,
-};
+use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
 use crate::web::stream::protocol::StreamDelta;
 use crate::web::ws::ScrapeJobEvent;
 
@@ -244,8 +242,27 @@ async fn recompute_stale(
 
         match &key {
             ComputedCacheKey::Stats { period, term } => {
-                match compute_stats(pool, period, term.as_deref()).await {
-                    Ok(new_stats) => {
+                match scraper_stats::compute_stats(pool, period, term.as_deref()).await {
+                    Ok(raw) => {
+                        let success_rate = if raw.total_scrapes > 0 {
+                            Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                        } else {
+                            None
+                        };
+                        let new_stats = ScraperStatsResponse {
+                            period: period.clone(),
+                            term: term.clone(),
+                            total_scrapes: raw.total_scrapes,
+                            successful_scrapes: raw.successful_scrapes,
+                            failed_scrapes: raw.failed_scrapes,
+                            success_rate,
+                            avg_duration_ms: raw.avg_duration_ms,
+                            total_courses_changed: raw.total_courses_changed,
+                            total_courses_fetched: raw.total_courses_fetched,
+                            total_audits_generated: raw.total_audits_generated,
+                            pending_jobs: raw.pending_jobs,
+                            locked_jobs: raw.locked_jobs,
+                        };
                         let delta = if entry.stats.as_ref() != Some(&new_stats) {
                             Some(StreamDelta::ScraperStats {
                                 stats: new_stats.clone(),
@@ -253,7 +270,7 @@ async fn recompute_stale(
                         } else {
                             None
                         };
-                        entry.stats = Some(new_stats.clone());
+                        entry.stats = Some(new_stats);
                         if delta.is_some() {
                             let _ = update_tx.send(ComputedUpdate {
                                 key: key.clone(),
@@ -269,12 +286,29 @@ async fn recompute_stale(
                 bucket,
                 term,
             } => {
-                match compute_timeseries(pool, period, Some(bucket.as_str()), term.as_deref()).await
+                match scraper_stats::compute_timeseries(
+                    pool,
+                    period,
+                    Some(bucket.as_str()),
+                    term.as_deref(),
+                )
+                .await
                 {
-                    Ok((new_points, _returned_period, _returned_bucket)) => {
+                    Ok((raw_points, _returned_period, _returned_bucket)) => {
+                        let new_points: Vec<TimeseriesPoint> = raw_points
+                            .into_iter()
+                            .map(|p| TimeseriesPoint {
+                                timestamp: p.timestamp,
+                                scrape_count: p.scrape_count,
+                                success_count: p.success_count,
+                                error_count: p.error_count,
+                                courses_changed: p.courses_changed,
+                                avg_duration_ms: p.avg_duration_ms,
+                            })
+                            .collect();
                         let delta = compute_timeseries_delta(&entry.timeseries, &new_points);
                         let is_first = entry.timeseries.is_none();
-                        entry.timeseries = Some(new_points.clone());
+                        entry.timeseries = Some(new_points);
                         if delta.is_some() || is_first {
                             let _ = update_tx.send(ComputedUpdate {
                                 key: key.clone(),
@@ -287,11 +321,29 @@ async fn recompute_stale(
             }
             ComputedCacheKey::Subjects => {
                 let ref_cache = reference_cache.read().await;
-                match compute_subjects(pool, events, &ref_cache).await {
-                    Ok(new_subjects) => {
+                match scraper_stats::compute_subjects(pool, events, &ref_cache).await {
+                    Ok(data) => {
+                        let new_subjects: Vec<SubjectSummary> = data
+                            .into_iter()
+                            .map(|d| SubjectSummary {
+                                subject: d.subject,
+                                subject_description: d.subject_description,
+                                tracked_course_count: d.tracked_course_count,
+                                schedule_state: d.schedule_state,
+                                current_interval_secs: d.current_interval_secs,
+                                time_multiplier: d.time_multiplier,
+                                last_scraped: d.last_scraped,
+                                next_eligible_at: d.next_eligible_at,
+                                cooldown_remaining_secs: d.cooldown_remaining_secs,
+                                avg_change_ratio: d.avg_change_ratio,
+                                consecutive_zero_changes: d.consecutive_zero_changes,
+                                recent_runs: d.recent_runs,
+                                recent_failures: d.recent_failures,
+                            })
+                            .collect();
                         let delta = compute_subjects_delta(&entry.subjects, &new_subjects);
                         let is_first = entry.subjects.is_none();
-                        entry.subjects = Some(new_subjects.clone());
+                        entry.subjects = Some(new_subjects);
                         if delta.is_some() || is_first {
                             let _ = update_tx.send(ComputedUpdate {
                                 key: key.clone(),

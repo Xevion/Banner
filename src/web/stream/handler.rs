@@ -12,10 +12,9 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, trace};
 
 use crate::data::events::{AuditLogEvent, DomainEvent};
+use crate::data::scraper_stats::{compute_subjects, compute_timeseries, default_bucket_for_period};
 use crate::state::AppState;
-use crate::web::admin::scraper::{
-    compute_stats, compute_subjects, compute_timeseries, default_bucket_for_period,
-};
+use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
 use crate::web::auth::extractors::AdminUser;
 use crate::web::stream::computed::{ComputedCacheKey, ComputedUpdate};
 use crate::web::stream::protocol::{
@@ -387,8 +386,33 @@ async fn send_snapshot(
             .await
         }
         Subscription::ScraperStats { filter } => {
-            match compute_stats(&state.db_pool, &filter.period, filter.term.as_deref()).await {
-                Ok(stats) => {
+            match crate::data::scraper_stats::compute_stats(
+                &state.db_pool,
+                &filter.period,
+                filter.term.as_deref(),
+            )
+            .await
+            {
+                Ok(raw) => {
+                    let success_rate = if raw.total_scrapes > 0 {
+                        Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                    } else {
+                        None
+                    };
+                    let stats = ScraperStatsResponse {
+                        period: filter.period.clone(),
+                        term: filter.term.clone(),
+                        total_scrapes: raw.total_scrapes,
+                        successful_scrapes: raw.successful_scrapes,
+                        failed_scrapes: raw.failed_scrapes,
+                        success_rate,
+                        avg_duration_ms: raw.avg_duration_ms,
+                        total_courses_changed: raw.total_courses_changed,
+                        total_courses_fetched: raw.total_courses_fetched,
+                        total_audits_generated: raw.total_audits_generated,
+                        pending_jobs: raw.pending_jobs,
+                        locked_jobs: raw.locked_jobs,
+                    };
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -422,7 +446,18 @@ async fn send_snapshot(
             )
             .await
             {
-                Ok((points, period, bucket)) => {
+                Ok((raw_points, period, bucket)) => {
+                    let points: Vec<TimeseriesPoint> = raw_points
+                        .into_iter()
+                        .map(|p| TimeseriesPoint {
+                            timestamp: p.timestamp,
+                            scrape_count: p.scrape_count,
+                            success_count: p.success_count,
+                            error_count: p.error_count,
+                            courses_changed: p.courses_changed,
+                            avg_duration_ms: p.avg_duration_ms,
+                        })
+                        .collect();
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -450,7 +485,25 @@ async fn send_snapshot(
         Subscription::ScraperSubjects => {
             let ref_cache = state.reference_cache.read().await;
             match compute_subjects(&state.db_pool, &state.events, &ref_cache).await {
-                Ok(subjects) => {
+                Ok(data) => {
+                    let subjects: Vec<SubjectSummary> = data
+                        .into_iter()
+                        .map(|d| SubjectSummary {
+                            subject: d.subject,
+                            subject_description: d.subject_description,
+                            tracked_course_count: d.tracked_course_count,
+                            schedule_state: d.schedule_state,
+                            current_interval_secs: d.current_interval_secs,
+                            time_multiplier: d.time_multiplier,
+                            last_scraped: d.last_scraped,
+                            next_eligible_at: d.next_eligible_at,
+                            cooldown_remaining_secs: d.cooldown_remaining_secs,
+                            avg_change_ratio: d.avg_change_ratio,
+                            consecutive_zero_changes: d.consecutive_zero_changes,
+                            recent_runs: d.recent_runs,
+                            recent_failures: d.recent_failures,
+                        })
+                        .collect();
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -636,8 +689,33 @@ async fn send_computed_snapshot(
 ) -> bool {
     match subscription {
         Subscription::ScraperStats { filter } => {
-            match compute_stats(&state.db_pool, &filter.period, filter.term.as_deref()).await {
-                Ok(stats) => {
+            match crate::data::scraper_stats::compute_stats(
+                &state.db_pool,
+                &filter.period,
+                filter.term.as_deref(),
+            )
+            .await
+            {
+                Ok(raw) => {
+                    let success_rate = if raw.total_scrapes > 0 {
+                        Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                    } else {
+                        None
+                    };
+                    let stats = ScraperStatsResponse {
+                        period: filter.period.clone(),
+                        term: filter.term.clone(),
+                        total_scrapes: raw.total_scrapes,
+                        successful_scrapes: raw.successful_scrapes,
+                        failed_scrapes: raw.failed_scrapes,
+                        success_rate,
+                        avg_duration_ms: raw.avg_duration_ms,
+                        total_courses_changed: raw.total_courses_changed,
+                        total_courses_fetched: raw.total_courses_fetched,
+                        total_audits_generated: raw.total_audits_generated,
+                        pending_jobs: raw.pending_jobs,
+                        locked_jobs: raw.locked_jobs,
+                    };
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -671,7 +749,18 @@ async fn send_computed_snapshot(
             )
             .await
             {
-                Ok((points, period, bucket)) => {
+                Ok((raw_points, period, bucket)) => {
+                    let points: Vec<TimeseriesPoint> = raw_points
+                        .into_iter()
+                        .map(|p| TimeseriesPoint {
+                            timestamp: p.timestamp,
+                            scrape_count: p.scrape_count,
+                            success_count: p.success_count,
+                            error_count: p.error_count,
+                            courses_changed: p.courses_changed,
+                            avg_duration_ms: p.avg_duration_ms,
+                        })
+                        .collect();
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -699,7 +788,25 @@ async fn send_computed_snapshot(
         Subscription::ScraperSubjects => {
             let ref_cache = state.reference_cache.read().await;
             match compute_subjects(&state.db_pool, &state.events, &ref_cache).await {
-                Ok(subjects) => {
+                Ok(data) => {
+                    let subjects: Vec<SubjectSummary> = data
+                        .into_iter()
+                        .map(|d| SubjectSummary {
+                            subject: d.subject,
+                            subject_description: d.subject_description,
+                            tracked_course_count: d.tracked_course_count,
+                            schedule_state: d.schedule_state,
+                            current_interval_secs: d.current_interval_secs,
+                            time_multiplier: d.time_multiplier,
+                            last_scraped: d.last_scraped,
+                            next_eligible_at: d.next_eligible_at,
+                            cooldown_remaining_secs: d.cooldown_remaining_secs,
+                            avg_change_ratio: d.avg_change_ratio,
+                            consecutive_zero_changes: d.consecutive_zero_changes,
+                            recent_runs: d.recent_runs,
+                            recent_failures: d.recent_failures,
+                        })
+                        .collect();
                     send_message(
                         sink,
                         &StreamServerMessage::Snapshot {
@@ -742,7 +849,7 @@ async fn resync_computed(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::web::admin::scraper::validate_bucket;
+    use crate::data::scraper_stats::validate_bucket;
     use crate::web::stream::filters::ScraperTimeseriesFilter;
     use crate::web::stream::subscriptions::Subscription;
 

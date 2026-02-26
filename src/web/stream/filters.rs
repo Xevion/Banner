@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::data::models::{ScrapeJobStatus, ScrapePriority, TargetType};
-use crate::web::admin::scraper::{validate_bucket, validate_period};
+use crate::data::scraper_stats::{validate_bucket, validate_period};
 use crate::web::stream::protocol::{StreamError, StreamFilter};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

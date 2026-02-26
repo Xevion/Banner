@@ -253,7 +253,6 @@ impl BotService {
             }
         })
     }
-
 }
 
 #[async_trait::async_trait]

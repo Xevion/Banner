@@ -12,8 +12,8 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use tracing::{error, info, instrument, trace};
+
+use tracing::{info, instrument, trace};
 use ts_rs::TS;
 
 use crate::data::models::User;
@@ -106,16 +106,10 @@ pub async fn admin_status(
 pub async fn list_users(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
-) -> Result<Json<Vec<User>>, (StatusCode, Json<Value>)> {
+) -> Result<Json<Vec<User>>, ApiError> {
     let users = crate::data::users::list_users(&state.db_pool)
         .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to list users");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "failed to list users"})),
-            )
-        })?;
+        .map_err(|e| db_error("list users", e))?;
 
     trace!(count = users.len(), "Listed users");
 
@@ -134,22 +128,11 @@ pub async fn set_user_admin(
     State(state): State<AppState>,
     Path(discord_id): Path<i64>,
     Json(body): Json<SetAdminBody>,
-) -> Result<Json<User>, (StatusCode, Json<Value>)> {
+) -> Result<Json<User>, ApiError> {
     let user = crate::data::users::set_admin(&state.db_pool, discord_id, body.is_admin)
         .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to set admin status");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "failed to set admin status"})),
-            )
-        })?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "user not found"})),
-            )
-        })?;
+        .map_err(|e| db_error("set admin status", e))?
+        .ok_or_else(|| ApiError::not_found("User not found"))?;
 
     state.session_cache.evict_user(discord_id);
 

@@ -3,7 +3,7 @@
 //! Stores typed `Arc<SearchOptionsResponse>` -- no JSON round-trip on reads.
 //! Singleflight per term key prevents thundering-herd on cache miss.
 
-use crate::web::routes::SearchOptionsResponse;
+use crate::web::search_options::SearchOptionsResponse;
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

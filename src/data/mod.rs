@@ -22,6 +22,7 @@ pub mod rmp;
 pub mod rmp_matching;
 pub mod scoring;
 pub mod scrape_jobs;
+pub mod scraper_stats;
 pub mod sessions;
 pub mod term_subjects;
 pub mod terms;
