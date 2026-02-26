@@ -49,7 +49,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&mut self, mut req: Request) -> Self::Future {
         // Prefer Railway's edge request ID; fall back to a locally generated ULID.
         let req_id = req
             .headers()
@@ -57,6 +57,12 @@ where
             .and_then(|v| v.to_str().ok())
             .map(String::from)
             .unwrap_or_else(|| ulid::Ulid::new().to_string());
+
+        // Inject the resolved ID into the request so downstream handlers
+        // (including the SSR proxy) can read and propagate it.
+        if let Ok(value) = HeaderValue::from_str(&req_id) {
+            req.headers_mut().insert("x-request-id", value);
+        }
 
         let method = req.method().clone();
         let path = req.uri().path().to_string();
