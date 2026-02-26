@@ -655,6 +655,71 @@ pub async fn resolve_instructor_slugs(
     Ok(rows)
 }
 
+/// An instructor slug with its most recent modification timestamp for sitemap generation.
+pub struct InstructorSitemapEntry {
+    pub slug: String,
+    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// List all instructor slugs with per-instructor lastmod timestamps.
+///
+/// The lastmod is the most recent of: score computation, BlueBook link update,
+/// RMP profile sync, and course scrape time.
+pub async fn list_all_instructor_sitemap_entries(
+    pool: &PgPool,
+) -> Result<Vec<InstructorSitemapEntry>> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        slug: String,
+        last_modified: Option<chrono::DateTime<chrono::Utc>>,
+    }
+
+    let rows = sqlx::query_as::<_, Row>(
+        r#"
+        SELECT
+            i.slug,
+            GREATEST(
+                sc.computed_at,
+                bb.max_updated_at,
+                rmp.max_synced_at,
+                cr.max_scraped_at
+            ) AS last_modified
+        FROM instructors i
+        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id
+        LEFT JOIN (
+            SELECT instructor_id, MAX(updated_at) AS max_updated_at
+            FROM instructor_bluebook_links
+            GROUP BY instructor_id
+        ) bb ON bb.instructor_id = i.id
+        LEFT JOIN (
+            SELECT irl.instructor_id, MAX(rp.last_synced_at) AS max_synced_at
+            FROM instructor_rmp_links irl
+            JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
+            GROUP BY irl.instructor_id
+        ) rmp ON rmp.instructor_id = i.id
+        LEFT JOIN (
+            SELECT ci.instructor_id, MAX(c.last_scraped_at) AS max_scraped_at
+            FROM course_instructors ci
+            JOIN courses c ON c.id = ci.course_id
+            GROUP BY ci.instructor_id
+        ) cr ON cr.instructor_id = i.id
+        WHERE i.slug IS NOT NULL
+        ORDER BY i.slug
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to list instructor sitemap entries")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| InstructorSitemapEntry {
+            slug: r.slug,
+            last_modified: r.last_modified,
+        })
+        .collect())
+}
+
 pub enum IdentifierKind {
     Slug,
     NumericId(i32),

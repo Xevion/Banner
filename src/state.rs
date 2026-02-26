@@ -7,6 +7,7 @@ use crate::data::models::ReferenceData;
 use crate::web::auth::session::{OAuthStateStore, SessionCache};
 use crate::web::schedule_cache::ScheduleCache;
 use crate::web::search_options_cache::SearchOptionsCache;
+use crate::web::sitemap_cache::SitemapCache;
 use crate::web::stream::computed::ComputedStreamManager;
 use anyhow::Result;
 use dashmap::DashMap;
@@ -154,6 +155,10 @@ pub struct AppState {
     pub bluebook_sync_notify: Arc<Notify>,
     /// When set to true before notifying, the next BlueBook sync will skip interval checks.
     pub bluebook_force_flag: Arc<AtomicBool>,
+    /// Public origin for absolute URLs in sitemaps (e.g. "https://banner.xevion.dev").
+    pub public_origin: Option<String>,
+    /// In-memory cache for pre-rendered sitemap XML.
+    pub sitemap_cache: SitemapCache,
 }
 
 impl AppState {
@@ -163,6 +168,7 @@ impl AppState {
         ssr_downstream: String,
         bluebook_sync_notify: Arc<Notify>,
         bluebook_force_flag: Arc<AtomicBool>,
+        public_origin: Option<String>,
     ) -> Self {
         let events = Arc::new(EventBuffer::new(1024));
         let schedule_cache = ScheduleCache::new(db_pool.clone());
@@ -188,6 +194,8 @@ impl AppState {
             ssr_downstream,
             bluebook_sync_notify,
             bluebook_force_flag,
+            public_origin,
+            sitemap_cache: SitemapCache::new(),
         }
     }
 

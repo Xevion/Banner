@@ -181,7 +181,13 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .with_state(app_state.clone());
 
+    use crate::web::sitemap;
+
     let router = Router::new()
+        .route("/sitemap.xml", get(sitemap::sitemap_index))
+        .route("/sitemap-static.xml", get(sitemap::sitemap_static))
+        .route("/sitemap-instructors.xml", get(sitemap::sitemap_instructors))
+        .route("/sitemap-courses-{rest}", get(sitemap::sitemap_courses))
         .nest("/api", api_router)
         .nest("/api", auth_router)
         .nest("/api", admin_router)

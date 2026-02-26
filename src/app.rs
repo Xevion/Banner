@@ -148,6 +148,7 @@ impl App {
             config.ssr_downstream.clone(),
             bluebook_sync_notify,
             bluebook_force_flag.clone(),
+            config.public_origin.clone(),
         );
 
         // Load reference data cache from DB (may be empty on first run)

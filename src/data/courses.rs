@@ -371,6 +371,16 @@ pub async fn get_available_terms(db_pool: &PgPool) -> Result<Vec<String>> {
     Ok(rows.into_iter().map(|(tc,)| tc).collect())
 }
 
+/// List all CRNs for a given term, for sitemap generation.
+pub async fn list_crns_for_term(db_pool: &PgPool, term_code: &str) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT crn FROM courses WHERE term_code = $1 ORDER BY crn")
+            .bind(term_code)
+            .fetch_all(db_pool)
+            .await?;
+    Ok(rows.into_iter().map(|(crn,)| crn).collect())
+}
+
 type RangeRow = (
     Option<i32>,
     Option<i32>,

@@ -65,6 +65,11 @@ pub struct Config {
     /// Default: http://localhost:3001
     #[serde(default = "default_ssr_downstream")]
     pub ssr_downstream: String,
+
+    /// Public origin for absolute URLs in sitemaps (e.g. "https://banner.xevion.dev").
+    /// When unset, sitemap endpoints return 404.
+    #[serde(default)]
+    pub public_origin: Option<String>,
 }
 
 fn default_ssr_downstream() -> String {
