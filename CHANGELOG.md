@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1](https://github.com/Xevion/Banner/compare/v0.7.0...v0.7.1) (2026-02-26)
+
+
+### Features
+
+* Add Cache-Control headers, ETags, and dynamic robots.txt ([3a39e70](https://github.com/Xevion/Banner/commit/3a39e7062a5cdc05c895a7f19c8068dccb4aff91))
+* Add course/subject detail pages, breadcrumb nav, and cross-linking ([6b20697](https://github.com/Xevion/Banner/commit/6b20697abc30618bef4fc466a5f772d292c245d4))
+* Add PostHog telemetry with type-safe event tracking ([a46ade5](https://github.com/Xevion/Banner/commit/a46ade510e762786bf7256e11e7be19cd2747ee5))
+* Add security headers, CSP reporting, and client IP extraction ([229e0b2](https://github.com/Xevion/Banner/commit/229e0b2d939e9bf15c4c163fb6e74f076401ac6c))
+* Add Server header with package version ([bbed357](https://github.com/Xevion/Banner/commit/bbed357249bebf6fb0d1dbfe71c327069175a356))
+* Add unsigned newtypes (Count, DurationMs) for non-negative DB fields ([fa5bfcf](https://github.com/Xevion/Banner/commit/fa5bfcfc7d1a50e8d95f88db3bab0d8a709101e9))
+* Add XML sitemap endpoints with in-memory caching ([dde5f8b](https://github.com/Xevion/Banner/commit/dde5f8b1c7c7f6e85a5e1f94d7d1cfd344953a15))
+
+
+### Bug Fixes
+
+* **calendar:** Resolve term slug to code before DB lookup ([91f701e](https://github.com/Xevion/Banner/commit/91f701e72d6822df82da894d133e6799e5026350))
+* **csp:** Allow data: URIs in font-src for inline woff2 fonts ([136075c](https://github.com/Xevion/Banner/commit/136075ca98007fb6e9364fd6456a0761c2a4b684))
+* **env:** Propagate proper posthog host keys through Dockerfile for CSP ([db7b481](https://github.com/Xevion/Banner/commit/db7b481214a8ba2abd515933e4c00c47f6b376c6))
+* Inject x-request-id into request for SSR propagation ([2839b75](https://github.com/Xevion/Banner/commit/2839b7563c93d312027daadc3f7463b4698f528f))
+* Propagate x-forwarded-for through SSR proxy, fix PostHog distinctId misuse ([d901a2d](https://github.com/Xevion/Banner/commit/d901a2d59ff54d00c0fe51e9003d7b64b576413e))
+* **search:** Disable part-of-term filter for summer terms, prefer section for course breadcrumb ([2537a9c](https://github.com/Xevion/Banner/commit/2537a9ca292d1dafdc49630790584ec7742732ad))
+
 ## [0.7.0](https://github.com/Xevion/Banner/compare/v0.6.3...v0.7.0) (2026-02-25)
 
 
