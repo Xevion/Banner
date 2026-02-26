@@ -1,12 +1,14 @@
 <script lang="ts">
 import "overlayscrollbars/overlayscrollbars.css";
 import "./layout.css";
+import { env } from "$env/dynamic/public";
 import { authStore } from "$lib/auth.svelte";
 import ErrorBoundaryFallback from "$lib/components/ErrorBoundaryFallback.svelte";
 import NavBar from "$lib/components/NavBar.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
 import { initNavigation } from "$lib/stores/navigation.svelte";
 import { themeStore } from "$lib/stores/theme.svelte";
+import { telemetry } from "$lib/telemetry";
 import { Tooltip } from "bits-ui";
 import { type Snippet, onMount } from "svelte";
 import type { LayoutData } from "./$types";
@@ -31,6 +33,11 @@ useOverlayScrollbars(() => document.body, {
 
 onMount(() => {
   themeStore.init();
+  telemetry.init({
+    key: env.PUBLIC_POSTHOG_KEY ?? "",
+    host: env.PUBLIC_POSTHOG_HOST ?? "",
+  });
+  telemetry.trackPageViews();
 });
 </script>
 

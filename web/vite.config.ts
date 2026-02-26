@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import posthogPlugin from "@posthog/rollup-plugin";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import devtoolsJson from "vite-plugin-devtools-json";
-import { defineConfig } from "vitest/config";
+import { type Plugin, defineConfig } from "vitest/config";
 
 const dirname =
   typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
@@ -33,8 +34,26 @@ function getVersion() {
 
 const version = getVersion();
 
+function posthogSourceMaps(): Plugin | null {
+  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+  const projectId = process.env.POSTHOG_PROJECT_ID;
+  if (!apiKey || !projectId) return null;
+  // posthogPlugin returns rollup's Plugin type; cast to Vite's Plugin since
+  // Vite bundles its own rollup internally with slightly different typings.
+  return posthogPlugin({
+    personalApiKey: apiKey,
+    projectId,
+    host: "https://us.i.posthog.com",
+    sourcemaps: {
+      enabled: true,
+      releaseName: "banner-frontend",
+      deleteAfterUpload: true,
+    },
+  }) as unknown as Plugin;
+}
+
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+  plugins: [tailwindcss(), sveltekit(), devtoolsJson(), posthogSourceMaps()],
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   test: {
     projects: [

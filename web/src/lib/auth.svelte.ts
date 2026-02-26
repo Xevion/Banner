@@ -1,5 +1,6 @@
 import { goto } from "$app/navigation";
 import type { User } from "$lib/bindings";
+import { telemetry } from "$lib/telemetry";
 
 type AuthState =
   | { mode: "loading" }
@@ -32,6 +33,10 @@ class AuthStore {
   setFromServer(user: User | null) {
     if (user) {
       this.state = { mode: "authenticated", user };
+      telemetry.identify(user.discordId, {
+        username: user.discordUsername,
+        isAdmin: user.isAdmin,
+      });
     } else {
       this.state = { mode: "unauthenticated" };
     }
@@ -51,8 +56,10 @@ class AuthStore {
   async logout() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      telemetry.track({ name: "auth", properties: { action: "logout" } });
     } finally {
       this.state = { mode: "unauthenticated" };
+      telemetry.reset();
       void goto("/");
     }
   }

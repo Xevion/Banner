@@ -1,7 +1,13 @@
 import { env } from "$env/dynamic/private";
-import type { Handle } from "@sveltejs/kit";
+import type { Handle, HandleServerError } from "@sveltejs/kit";
+import { PostHog } from "posthog-node";
 
 const backendUrl = env.BACKEND_URL ?? "http://localhost:8080";
+
+const posthog =
+  env.POSTHOG_KEY && env.POSTHOG_HOST
+    ? new PostHog(env.POSTHOG_KEY, { host: env.POSTHOG_HOST })
+    : null;
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { method } = event.request;
@@ -57,4 +63,27 @@ export const handle: Handle = async ({ event, resolve }) => {
   }
 
   return resolve(event);
+};
+
+export const handleError: HandleServerError = ({ error, event, status }) => {
+  const errorId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+
+  if (posthog && status !== 404) {
+    posthog.captureException(error, event.request.headers.get("x-request-id") ?? errorId, {
+      method: event.request.method,
+      path: event.url.pathname,
+      status,
+      errorId,
+    });
+  }
+
+  return {
+    message: status === 404 ? "Not Found" : errorMessage,
+    errorId,
+    timestamp,
+    stack,
+  };
 };
