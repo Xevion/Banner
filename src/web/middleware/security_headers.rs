@@ -10,6 +10,8 @@ use axum::response::Response;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
+static SERVER: HeaderValue =
+    HeaderValue::from_static(concat!("banner/", env!("CARGO_PKG_VERSION")));
 static XFO: HeaderValue = HeaderValue::from_static("DENY");
 static XCTO: HeaderValue = HeaderValue::from_static("nosniff");
 static REFERRER: HeaderValue = HeaderValue::from_static("strict-origin-when-cross-origin");
@@ -59,6 +61,7 @@ where
             let mut response = future.await?;
             let headers = response.headers_mut();
 
+            headers.insert(axum::http::header::SERVER, SERVER.clone());
             headers.insert("x-frame-options", XFO.clone());
             headers.insert("x-content-type-options", XCTO.clone());
             headers.insert("referrer-policy", REFERRER.clone());
