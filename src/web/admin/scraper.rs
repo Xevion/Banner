@@ -6,12 +6,10 @@ use std::time::{Duration, Instant};
 
 use crate::utils::log_if_slow;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use axum::response::Json;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use tracing::{error, instrument, trace};
 use ts_rs::TS;
 
@@ -21,8 +19,7 @@ use crate::data::unsigned::{Count, DurationMs};
 use crate::scraper::adaptive::{self, SubjectSchedule, SubjectStats};
 use crate::state::{AppState, ReferenceCache};
 use crate::web::auth::extractors::AdminUser;
-
-type ApiError = (StatusCode, Json<serde_json::Value>);
+use crate::web::error::ApiError;
 
 const SLOW_OP_THRESHOLD: Duration = Duration::from_secs(1);
 
@@ -33,12 +30,9 @@ fn parse_period(period: &str) -> Result<chrono::Duration, ApiError> {
         "24h" => Ok(chrono::Duration::hours(24)),
         "7d" => Ok(chrono::Duration::days(7)),
         "30d" => Ok(chrono::Duration::days(30)),
-        _ => Err((
-            StatusCode::BAD_REQUEST,
-            Json(
-                json!({"error": format!("Invalid period '{period}'. Valid: 1h, 6h, 24h, 7d, 30d")}),
-            ),
-        )),
+        _ => Err(ApiError::bad_request(format!(
+            "Invalid period '{period}'. Valid: 1h, 6h, 24h, 7d, 30d"
+        ))),
     }
 }
 
@@ -60,12 +54,9 @@ fn parse_bucket(bucket: &str) -> Result<&'static str, ApiError> {
         "15m" => Ok("15 minutes"),
         "1h" => Ok("1 hour"),
         "6h" => Ok("6 hours"),
-        _ => Err((
-            StatusCode::BAD_REQUEST,
-            Json(
-                json!({"error": format!("Invalid bucket '{bucket}'. Valid: 1m, 5m, 15m, 1h, 6h")}),
-            ),
-        )),
+        _ => Err(ApiError::bad_request(format!(
+            "Invalid bucket '{bucket}'. Valid: 1m, 5m, 15m, 1h, 6h"
+        ))),
     }
 }
 
@@ -134,10 +125,7 @@ pub async fn scraper_stats(
         .await
         .map_err(|e| {
             error!(error = %e, "failed to fetch scraper stats");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch scraper stats"})),
-            )
+            ApiError::internal_error("Failed to fetch scraper stats")
         })?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_stats");
@@ -211,10 +199,7 @@ pub async fn scraper_timeseries(
     .await
     .map_err(|e| {
         error!(error = %e, "failed to fetch scraper timeseries");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to fetch scraper timeseries"})),
-        )
+        ApiError::internal_error("Failed to fetch scraper timeseries")
     })?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_timeseries");
@@ -294,10 +279,7 @@ pub async fn scraper_subjects(
         .await
         .map_err(|e| {
             error!(error = %e, "failed to fetch subject stats");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch subject stats"})),
-            )
+            ApiError::internal_error("Failed to fetch subject stats")
         })?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_subjects");
@@ -356,50 +338,29 @@ pub async fn scraper_subject_detail(
     let start = Instant::now();
     let limit = params.limit.clamp(1, 200);
 
-    let rows = sqlx::query(
-        "SELECT id, completed_at, duration_ms, success, error_message, \
-                courses_fetched, courses_changed, courses_unchanged, \
-                audits_generated, metrics_generated \
-         FROM scrape_job_results \
-         WHERE target_type = 'Subject' AND payload->>'subject' = $1 \
-         ORDER BY completed_at DESC \
-         LIMIT $2",
-    )
-    .bind(&subject)
-    .bind(limit)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "failed to fetch subject detail");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to fetch subject detail"})),
-        )
-    })?;
+    let rows =
+        crate::data::scrape_jobs::list_results_for_subject(&state.db_pool, &subject, limit as i64)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "failed to fetch subject detail");
+                ApiError::internal_error("Failed to fetch subject detail")
+            })?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_subject_detail");
 
     let results: Vec<SubjectResultEntry> = rows
-        .iter()
-        .map(|row| {
-            let duration_ms_raw: i32 = row.get("duration_ms");
-            let courses_fetched: Option<i32> = row.get("courses_fetched");
-            let courses_changed: Option<i32> = row.get("courses_changed");
-            let courses_unchanged: Option<i32> = row.get("courses_unchanged");
-            let audits_generated: Option<i32> = row.get("audits_generated");
-            let metrics_generated: Option<i32> = row.get("metrics_generated");
-            SubjectResultEntry {
-                id: row.get("id"),
-                completed_at: row.get("completed_at"),
-                duration_ms: DurationMs::new(duration_ms_raw.max(0) as u32),
-                success: row.get("success"),
-                error_message: row.get("error_message"),
-                courses_fetched: courses_fetched.and_then(|v| Count::try_from(v).ok()),
-                courses_changed: courses_changed.and_then(|v| Count::try_from(v).ok()),
-                courses_unchanged: courses_unchanged.and_then(|v| Count::try_from(v).ok()),
-                audits_generated: audits_generated.and_then(|v| Count::try_from(v).ok()),
-                metrics_generated: metrics_generated.and_then(|v| Count::try_from(v).ok()),
-            }
+        .into_iter()
+        .map(|row| SubjectResultEntry {
+            id: row.id as i64,
+            completed_at: row.completed_at,
+            duration_ms: DurationMs::new(row.duration_ms.max(0) as u32),
+            success: row.success,
+            error_message: row.error_message,
+            courses_fetched: row.courses_fetched.and_then(|v| Count::try_from(v).ok()),
+            courses_changed: row.courses_changed.and_then(|v| Count::try_from(v).ok()),
+            courses_unchanged: row.courses_unchanged.and_then(|v| Count::try_from(v).ok()),
+            audits_generated: row.audits_generated.and_then(|v| Count::try_from(v).ok()),
+            metrics_generated: row.metrics_generated.and_then(|v| Count::try_from(v).ok()),
         })
         .collect();
 
@@ -437,71 +398,10 @@ pub async fn compute_stats(
     let interval_str =
         validate_period(period).ok_or_else(|| anyhow::anyhow!("Invalid period: {period}"))?;
 
-    let (query_str, term_filter) = if let Some(term) = term {
-        (
-            "SELECT \
-                COUNT(*) AS total_scrapes, \
-                COUNT(*) FILTER (WHERE success) AS successful_scrapes, \
-                COUNT(*) FILTER (WHERE NOT success) AS failed_scrapes, \
-                (AVG(duration_ms) FILTER (WHERE success))::FLOAT8 AS avg_duration_ms, \
-                COALESCE(SUM(courses_changed) FILTER (WHERE success), 0) AS total_courses_changed, \
-                COALESCE(SUM(courses_fetched) FILTER (WHERE success), 0) AS total_courses_fetched, \
-                COALESCE(SUM(audits_generated) FILTER (WHERE success), 0) AS total_audits_generated \
-             FROM scrape_job_results \
-             WHERE completed_at > NOW() - $1::interval AND payload->>'term' = $2",
-            Some(term.to_string()),
-        )
-    } else {
-        (
-            "SELECT \
-                COUNT(*) AS total_scrapes, \
-                COUNT(*) FILTER (WHERE success) AS successful_scrapes, \
-                COUNT(*) FILTER (WHERE NOT success) AS failed_scrapes, \
-                (AVG(duration_ms) FILTER (WHERE success))::FLOAT8 AS avg_duration_ms, \
-                COALESCE(SUM(courses_changed) FILTER (WHERE success), 0) AS total_courses_changed, \
-                COALESCE(SUM(courses_fetched) FILTER (WHERE success), 0) AS total_courses_fetched, \
-                COALESCE(SUM(audits_generated) FILTER (WHERE success), 0) AS total_audits_generated \
-             FROM scrape_job_results \
-             WHERE completed_at > NOW() - $1::interval",
-            None,
-        )
-    };
+    let stats = crate::data::admin_scraper::compute_stats(pool, interval_str, term).await?;
 
-    let row = if let Some(term) = &term_filter {
-        sqlx::query(query_str)
-            .bind(interval_str)
-            .bind(term)
-            .fetch_one(pool)
-            .await?
-    } else {
-        sqlx::query(query_str)
-            .bind(interval_str)
-            .fetch_one(pool)
-            .await?
-    };
-
-    let total_scrapes: i64 = row.get("total_scrapes");
-    let successful_scrapes: i64 = row.get("successful_scrapes");
-    let failed_scrapes: i64 = row.get("failed_scrapes");
-    let avg_duration_ms: Option<f64> = row.get("avg_duration_ms");
-    let total_courses_changed: i64 = row.get("total_courses_changed");
-    let total_courses_fetched: i64 = row.get("total_courses_fetched");
-    let total_audits_generated: i64 = row.get("total_audits_generated");
-
-    let queue_row = sqlx::query(
-        "SELECT \
-            COUNT(*) FILTER (WHERE locked_at IS NULL) AS pending_jobs, \
-            COUNT(*) FILTER (WHERE locked_at IS NOT NULL) AS locked_jobs \
-         FROM scrape_jobs",
-    )
-    .fetch_one(pool)
-    .await?;
-
-    let pending_jobs: i64 = queue_row.get("pending_jobs");
-    let locked_jobs: i64 = queue_row.get("locked_jobs");
-
-    let success_rate = if total_scrapes > 0 {
-        Some(successful_scrapes as f64 / total_scrapes as f64)
+    let success_rate = if stats.total_scrapes > 0 {
+        Some(stats.successful_scrapes as f64 / stats.total_scrapes as f64)
     } else {
         None
     };
@@ -509,16 +409,16 @@ pub async fn compute_stats(
     Ok(ScraperStatsResponse {
         period: period.to_string(),
         term: term.map(|t| t.to_string()),
-        total_scrapes,
-        successful_scrapes,
-        failed_scrapes,
+        total_scrapes: stats.total_scrapes,
+        successful_scrapes: stats.successful_scrapes,
+        failed_scrapes: stats.failed_scrapes,
         success_rate,
-        avg_duration_ms,
-        total_courses_changed,
-        total_courses_fetched,
-        total_audits_generated,
-        pending_jobs,
-        locked_jobs,
+        avg_duration_ms: stats.avg_duration_ms,
+        total_courses_changed: stats.total_courses_changed,
+        total_courses_fetched: stats.total_courses_fetched,
+        total_audits_generated: stats.total_audits_generated,
+        pending_jobs: stats.pending_jobs,
+        locked_jobs: stats.locked_jobs,
     })
 }
 
@@ -536,86 +436,23 @@ pub async fn compute_timeseries(
     let bucket_interval = validate_bucket(bucket_code)
         .ok_or_else(|| anyhow::anyhow!("Invalid bucket: {bucket_code}"))?;
 
-    let rows = if let Some(term) = term {
-        sqlx::query(
-            "WITH buckets AS ( \
-                SELECT generate_series( \
-                    date_bin($1::interval, NOW() - $2::interval, '2020-01-01'::timestamptz), \
-                    date_bin($1::interval, NOW(), '2020-01-01'::timestamptz), \
-                    $1::interval \
-                ) AS bucket_start \
-             ), \
-             raw AS ( \
-                SELECT date_bin($1::interval, completed_at, '2020-01-01'::timestamptz) AS bucket_start, \
-                       COUNT(*)::BIGINT AS scrape_count, \
-                       COUNT(*) FILTER (WHERE success)::BIGINT AS success_count, \
-                       COUNT(*) FILTER (WHERE NOT success)::BIGINT AS error_count, \
-                       COALESCE(SUM(courses_changed) FILTER (WHERE success), 0)::BIGINT AS courses_changed, \
-                       COALESCE(AVG(duration_ms) FILTER (WHERE success), 0)::FLOAT8 AS avg_duration_ms \
-                FROM scrape_job_results \
-                WHERE completed_at > NOW() - $2::interval AND payload->>'term' = $3 \
-                GROUP BY 1 \
-             ) \
-             SELECT b.bucket_start, \
-                    COALESCE(r.scrape_count, 0) AS scrape_count, \
-                    COALESCE(r.success_count, 0) AS success_count, \
-                    COALESCE(r.error_count, 0) AS error_count, \
-                    COALESCE(r.courses_changed, 0) AS courses_changed, \
-                    COALESCE(r.avg_duration_ms, 0) AS avg_duration_ms \
-             FROM buckets b \
-             LEFT JOIN raw r ON b.bucket_start = r.bucket_start \
-             ORDER BY b.bucket_start",
-        )
-        .bind(bucket_interval)
-        .bind(period_interval)
-        .bind(term)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query(
-            "WITH buckets AS ( \
-                SELECT generate_series( \
-                    date_bin($1::interval, NOW() - $2::interval, '2020-01-01'::timestamptz), \
-                    date_bin($1::interval, NOW(), '2020-01-01'::timestamptz), \
-                    $1::interval \
-                ) AS bucket_start \
-             ), \
-             raw AS ( \
-                SELECT date_bin($1::interval, completed_at, '2020-01-01'::timestamptz) AS bucket_start, \
-                       COUNT(*)::BIGINT AS scrape_count, \
-                       COUNT(*) FILTER (WHERE success)::BIGINT AS success_count, \
-                       COUNT(*) FILTER (WHERE NOT success)::BIGINT AS error_count, \
-                       COALESCE(SUM(courses_changed) FILTER (WHERE success), 0)::BIGINT AS courses_changed, \
-                       COALESCE(AVG(duration_ms) FILTER (WHERE success), 0)::FLOAT8 AS avg_duration_ms \
-                FROM scrape_job_results \
-                WHERE completed_at > NOW() - $2::interval \
-                GROUP BY 1 \
-             ) \
-             SELECT b.bucket_start, \
-                    COALESCE(r.scrape_count, 0) AS scrape_count, \
-                    COALESCE(r.success_count, 0) AS success_count, \
-                    COALESCE(r.error_count, 0) AS error_count, \
-                    COALESCE(r.courses_changed, 0) AS courses_changed, \
-                    COALESCE(r.avg_duration_ms, 0) AS avg_duration_ms \
-             FROM buckets b \
-             LEFT JOIN raw r ON b.bucket_start = r.bucket_start \
-             ORDER BY b.bucket_start",
-        )
-        .bind(bucket_interval)
-        .bind(period_interval)
-        .fetch_all(pool)
-        .await?
-    };
+    let raw = crate::data::admin_scraper::compute_timeseries(
+        pool,
+        bucket_interval,
+        period_interval,
+        term,
+    )
+    .await?;
 
-    let points: Vec<TimeseriesPoint> = rows
-        .iter()
-        .map(|row| TimeseriesPoint {
-            timestamp: row.get("bucket_start"),
-            scrape_count: row.get("scrape_count"),
-            success_count: row.get("success_count"),
-            error_count: row.get("error_count"),
-            courses_changed: row.get("courses_changed"),
-            avg_duration_ms: row.get("avg_duration_ms"),
+    let points: Vec<TimeseriesPoint> = raw
+        .into_iter()
+        .map(|p| TimeseriesPoint {
+            timestamp: p.timestamp,
+            scrape_count: p.scrape_count,
+            success_count: p.success_count,
+            error_count: p.error_count,
+            courses_changed: p.courses_changed,
+            avg_duration_ms: p.avg_duration_ms,
         })
         .collect();
 
@@ -638,15 +475,7 @@ pub async fn compute_subjects(
 
     // Filter to current term stats only for the admin dashboard
     let raw_stats: Vec<_> = all_stats.into_iter().filter(|s| s.term == term).collect();
-    let course_counts: std::collections::HashMap<String, i64> = sqlx::query_as(
-        "SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject",
-    )
-    .bind(&term)
-    .fetch_all(pool)
-    .await?
-    .into_iter()
-    .map(|(subject, cnt): (String, i64)| (subject, cnt))
-    .collect();
+    let course_counts = crate::data::courses::count_by_subject(pool, &term).await?;
 
     let subjects: Vec<SubjectSummary> = raw_stats
         .into_iter()

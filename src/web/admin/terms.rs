@@ -6,28 +6,17 @@ use std::time::{Duration, Instant};
 
 use crate::utils::log_if_slow;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::Json;
 use serde::Serialize;
-use serde_json::{Value, json};
 use tracing::{error, info, instrument, trace};
 use ts_rs::TS;
 
 use crate::data::terms::{self, DbTerm, SyncResult};
 use crate::state::AppState;
 use crate::web::auth::extractors::AdminUser;
-
-type ApiError = (StatusCode, Json<Value>);
+use crate::web::error::{ApiError, db_error};
 
 const SLOW_OP_THRESHOLD: Duration = Duration::from_secs(1);
-
-fn db_error(context: &str, e: anyhow::Error) -> ApiError {
-    error!(error = %e, "{context}");
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({"error": context})),
-    )
-}
 
 /// Response for `GET /api/admin/terms`.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -96,10 +85,7 @@ pub async fn enable_term(
         .map_err(|e| db_error("Failed to enable scraping", e))?;
 
     if !found {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Term not found"})),
-        ));
+        return Err(ApiError::not_found("Term not found"));
     }
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
@@ -130,10 +116,7 @@ pub async fn disable_term(
         .map_err(|e| db_error("Failed to disable scraping", e))?;
 
     if !found {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Term not found"})),
-        ));
+        return Err(ApiError::not_found("Term not found"));
     }
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
@@ -160,10 +143,7 @@ pub async fn sync_terms(
 
     let banner_terms = state.banner_api.get_terms("", 1, 500).await.map_err(|e| {
         error!(error = %e, "failed to fetch terms from Banner API");
-        (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({"error": "Failed to fetch terms from Banner API"})),
-        )
+        ApiError::internal_error("Failed to fetch terms from Banner API")
     })?;
 
     let result = terms::sync_terms_from_banner(&state.db_pool, banner_terms)

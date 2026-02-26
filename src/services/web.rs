@@ -33,11 +33,8 @@ impl WebService {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    let status = match sqlx::query_scalar::<_, i32>("SELECT 1")
-                        .fetch_one(&state.db_pool)
-                        .await
-                    {
-                        Ok(_) => ServiceStatus::Connected,
+                    let status = match crate::data::health::ping(&state.db_pool).await {
+                        Ok(()) => ServiceStatus::Connected,
                         Err(e) => {
                             warn!(error = %e, "DB health check failed");
                             ServiceStatus::Error

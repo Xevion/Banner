@@ -622,3 +622,35 @@ impl<'a> CourseOps<'a> {
         Ok(counts)
     }
 }
+
+/// Count all courses in the database.
+pub async fn count_all(pool: &PgPool) -> Result<i64> {
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
+/// Look up a course's internal ID by term code and CRN.
+pub async fn get_id_by_crn(pool: &PgPool, term_code: &str, crn: &str) -> Result<Option<i32>> {
+    let row: Option<(i32,)> =
+        sqlx::query_as("SELECT id FROM courses WHERE term_code = $1 AND crn = $2")
+            .bind(term_code)
+            .bind(crn)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+/// Count courses grouped by subject for a given term.
+///
+/// Returns a map of subject code → count.
+pub async fn count_by_subject(pool: &PgPool, term_code: &str) -> Result<HashMap<String, i64>> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject",
+    )
+    .bind(term_code)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
+}

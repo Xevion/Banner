@@ -49,6 +49,14 @@ pub async fn list_users(pool: &PgPool) -> Result<Vec<User>> {
         .context("failed to list users")
 }
 
+/// Count all registered users.
+pub async fn count_all(pool: &PgPool) -> Result<i64> {
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
 /// Set the admin flag for a user, returning the updated user if found.
 pub async fn set_admin(pool: &PgPool, discord_id: i64, is_admin: bool) -> Result<Option<User>> {
     sqlx::query_as::<_, User>(

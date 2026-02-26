@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
+use sqlx::PgPool;
 use tracing::debug;
 
 use super::context::DbContext;
@@ -13,6 +14,71 @@ use crate::data::models::{
 use crate::data::unsigned::{Count, DurationMs};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 use anyhow::Result;
+
+/// A single row from scrape_job_results for a given subject.
+#[derive(sqlx::FromRow, Debug)]
+pub struct SubjectResultRow {
+    pub id: i32,
+    pub completed_at: chrono::DateTime<chrono::Utc>,
+    pub duration_ms: i32,
+    pub success: bool,
+    pub error_message: Option<String>,
+    pub courses_fetched: Option<i32>,
+    pub courses_changed: Option<i32>,
+    pub courses_unchanged: Option<i32>,
+    pub audits_generated: Option<i32>,
+    pub metrics_generated: Option<i32>,
+}
+
+/// List scrape jobs ordered by priority descending, then execute_at ascending.
+pub async fn list_ordered(pool: &PgPool, limit: i64) -> Result<Vec<ScrapeJob>> {
+    sqlx::query_as::<_, ScrapeJob>(
+        "SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT $1",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(anyhow::Error::from)
+}
+
+/// Count all scrape jobs in the queue.
+pub async fn count_all(pool: &PgPool) -> Result<i64> {
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM scrape_jobs")
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
+/// Fetch a single scrape job by ID.
+pub async fn get_by_id(pool: &PgPool, id: i32) -> Result<Option<ScrapeJob>> {
+    sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(anyhow::Error::from)
+}
+
+/// Fetch recent scrape job results for a given subject.
+pub async fn list_results_for_subject(
+    pool: &PgPool,
+    subject: &str,
+    limit: i64,
+) -> Result<Vec<SubjectResultRow>> {
+    sqlx::query_as::<_, SubjectResultRow>(
+        "SELECT id, completed_at, duration_ms, success, error_message, \
+                courses_fetched, courses_changed, courses_unchanged, \
+                audits_generated, metrics_generated \
+         FROM scrape_job_results \
+         WHERE target_type = 'Subject' AND payload->>'subject' = $1 \
+         ORDER BY completed_at DESC \
+         LIMIT $2",
+    )
+    .bind(subject)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(anyhow::Error::from)
+}
 
 /// Lock expiry duration in seconds.
 const LOCK_EXPIRY_SECS: i32 = 10 * 60;

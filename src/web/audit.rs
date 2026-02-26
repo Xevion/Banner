@@ -20,22 +20,7 @@ pub struct AuditLogEntry {
     pub term_code: Option<String>,
 }
 
-/// Row returned by audit-log queries (audit + joined course fields).
-/// Shared across batch, admin, and stream handlers.
-#[derive(sqlx::FromRow, Debug)]
-pub struct AuditRow {
-    pub id: i32,
-    pub course_id: i32,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
-    pub field_changed: String,
-    pub old_value: Option<serde_json::Value>,
-    pub new_value: serde_json::Value,
-    pub subject: Option<String>,
-    pub course_number: Option<String>,
-    pub crn: Option<String>,
-    pub title: Option<String>,
-    pub term_code: Option<String>,
-}
+pub use crate::data::models::AuditRow;
 
 impl From<AuditRow> for AuditLogEntry {
     fn from(row: AuditRow) -> Self {

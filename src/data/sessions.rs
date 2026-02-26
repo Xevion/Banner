@@ -90,6 +90,15 @@ pub async fn delete_user_sessions(pool: &PgPool, user_id: i64) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
+/// Count active (non-expired) sessions.
+pub async fn count_active(pool: &PgPool) -> Result<i64> {
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM user_sessions WHERE expires_at > now()")
+            .fetch_one(pool)
+            .await?;
+    Ok(count)
+}
+
 /// Delete all expired sessions. Returns the number of sessions cleaned up.
 pub async fn cleanup_expired(pool: &PgPool) -> Result<u64> {
     let result = sqlx::query("DELETE FROM user_sessions WHERE expires_at <= now()")

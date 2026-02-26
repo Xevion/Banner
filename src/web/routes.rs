@@ -377,60 +377,34 @@ async fn metrics(
     } else if let (Some(term), Some(crn)) = (params.term.as_deref(), params.crn.as_deref()) {
         use crate::banner::models::terms::Term;
         let resolved = Term::resolve_to_code(term).unwrap_or_else(|| term.to_string());
-        let row: Option<(i32,)> =
-            sqlx::query_as("SELECT id FROM courses WHERE term_code = $1 AND crn = $2")
-                .bind(&resolved)
-                .bind(crn)
-                .fetch_optional(&state.db_pool)
-                .await
-                .map_err(|e| db_error("Course lookup for metrics", e.into()))?;
-        row.map(|(id,)| id)
+        crate::data::courses::get_id_by_crn(&state.db_pool, &resolved, crn)
+            .await
+            .map_err(|e| db_error("Course lookup for metrics", e))?
     } else {
         None
     };
 
-    let metrics: Vec<(i32, i32, chrono::DateTime<chrono::Utc>, i32, i32, i32)> =
-        if let Some(cid) = course_id {
-            sqlx::query_as(
-                "SELECT id, course_id, timestamp, enrollment, wait_count, seats_available \
-             FROM course_metrics \
-             WHERE course_id = $1 AND timestamp >= $2 \
-             ORDER BY timestamp DESC \
-             LIMIT $3",
-            )
-            .bind(cid)
-            .bind(since)
-            .bind(limit)
-            .fetch_all(&state.db_pool)
+    let metrics = if let Some(cid) = course_id {
+        crate::data::metrics::list_for_course(&state.db_pool, cid, since, limit)
             .await
-        } else {
-            sqlx::query_as(
-                "SELECT id, course_id, timestamp, enrollment, wait_count, seats_available \
-             FROM course_metrics \
-             WHERE timestamp >= $1 \
-             ORDER BY timestamp DESC \
-             LIMIT $2",
-            )
-            .bind(since)
-            .bind(limit)
-            .fetch_all(&state.db_pool)
+            .map_err(|e| db_error("Metrics query", e))?
+    } else {
+        crate::data::metrics::list_all(&state.db_pool, since, limit)
             .await
-        }
-        .map_err(|e| db_error("Metrics query", e.into()))?;
+            .map_err(|e| db_error("Metrics query", e))?
+    };
 
     let count = metrics.len();
     let metrics_entries: Vec<MetricEntry> = metrics
         .into_iter()
-        .map(
-            |(id, course_id, timestamp, enrollment, wait_count, seats_available)| MetricEntry {
-                id,
-                course_id,
-                timestamp: timestamp.to_rfc3339(),
-                enrollment,
-                wait_count,
-                seats_available,
-            },
-        )
+        .map(|row| MetricEntry {
+            id: row.id,
+            course_id: row.course_id,
+            timestamp: row.timestamp.to_rfc3339(),
+            enrollment: row.enrollment,
+            wait_count: row.wait_count,
+            seats_available: row.seats_available,
+        })
         .collect();
 
     Ok(Json(MetricsResponse {

@@ -3,7 +3,6 @@
 use sqlx::PgPool;
 use std::collections::HashSet;
 
-use crate::data::models::ScrapeJob;
 use crate::web::stream::filters::ScrapeJobsFilter;
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 
@@ -11,11 +10,9 @@ pub async fn build_snapshot(
     db_pool: &PgPool,
     filter: &ScrapeJobsFilter,
 ) -> Result<Vec<ScrapeJobDto>, sqlx::Error> {
-    let rows = sqlx::query_as::<_, ScrapeJob>(
-        "SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT 200",
-    )
-    .fetch_all(db_pool)
-    .await?;
+    let rows = crate::data::scrape_jobs::list_ordered(db_pool, 200)
+        .await
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
     let jobs = rows
         .iter()
@@ -129,10 +126,10 @@ fn payload_term_subject(job: &ScrapeJobDto) -> (Option<String>, Option<String>) 
 }
 
 async fn fetch_by_id(db_pool: &PgPool, id: i32) -> Result<ScrapeJobDto, sqlx::Error> {
-    let row = sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs WHERE id = $1")
-        .bind(id)
-        .fetch_one(db_pool)
-        .await?;
+    let row = crate::data::scrape_jobs::get_by_id(db_pool, id)
+        .await
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?
+        .ok_or(sqlx::Error::RowNotFound)?;
 
     Ok(ScrapeJobDto::from(&row))
 }

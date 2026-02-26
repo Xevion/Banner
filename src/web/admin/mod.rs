@@ -19,8 +19,9 @@ use ts_rs::TS;
 use crate::data::models::User;
 use crate::state::AppState;
 use crate::state::ServiceStatus;
-use crate::web::audit::{AuditLogEntry, AuditLogResponse, AuditRow};
+use crate::web::audit::{AuditLogEntry, AuditLogResponse};
 use crate::web::auth::extractors::AdminUser;
+use crate::web::error::{ApiError, db_error};
 use crate::web::ws::ScrapeJobDto;
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -58,48 +59,22 @@ pub struct AdminStatusResponse {
 pub async fn admin_status(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
-) -> Result<Json<AdminStatusResponse>, (StatusCode, Json<Value>)> {
-    let (user_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-        .fetch_one(&state.db_pool)
+) -> Result<Json<AdminStatusResponse>, ApiError> {
+    let user_count = crate::data::users::count_all(&state.db_pool)
         .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to count users");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "failed to count users"})),
-            )
-        })?;
+        .map_err(|e| db_error("count users", e))?;
 
-    let (session_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM user_sessions WHERE expires_at > now()")
-            .fetch_one(&state.db_pool)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to count sessions");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "failed to count sessions"})),
-                )
-            })?;
-
-    let course_count = state.get_course_count().await.map_err(|e| {
-        error!(error = %e, "Failed to count courses");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "failed to count courses"})),
-        )
-    })?;
-
-    let (scrape_job_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM scrape_jobs")
-        .fetch_one(&state.db_pool)
+    let session_count = crate::data::sessions::count_active(&state.db_pool)
         .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to count scrape jobs");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "failed to count scrape jobs"})),
-            )
-        })?;
+        .map_err(|e| db_error("count sessions", e))?;
+
+    let course_count = crate::data::courses::count_all(&state.db_pool)
+        .await
+        .map_err(|e| db_error("count courses", e))?;
+
+    let scrape_job_count = crate::data::scrape_jobs::count_all(&state.db_pool)
+        .await
+        .map_err(|e| db_error("count scrape jobs", e))?;
 
     let services: Vec<AdminServiceInfo> = state
         .service_statuses
@@ -192,19 +167,10 @@ pub async fn set_user_admin(
 pub async fn list_scrape_jobs(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
-) -> Result<Json<ScrapeJobsResponse>, (StatusCode, Json<Value>)> {
-    let rows = sqlx::query_as::<_, crate::data::models::ScrapeJob>(
-        "SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT 100",
-    )
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to list scrape jobs");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "failed to list scrape jobs"})),
-        )
-    })?;
+) -> Result<Json<ScrapeJobsResponse>, ApiError> {
+    let rows = crate::data::scrape_jobs::list_ordered(&state.db_pool, 100)
+        .await
+        .map_err(|e| db_error("list scrape jobs", e))?;
 
     let jobs: Vec<ScrapeJobDto> = rows.iter().map(ScrapeJobDto::from).collect();
 
@@ -234,23 +200,10 @@ pub async fn list_audit_log(
     AdminUser(_user): AdminUser,
     headers: HeaderMap,
     State(state): State<AppState>,
-) -> Result<Response, (StatusCode, Json<Value>)> {
-    let rows = sqlx::query_as::<_, AuditRow>(
-        "SELECT a.id, a.course_id, a.timestamp, a.field_changed, a.old_value, a.new_value, \
-                c.subject, c.course_number, c.crn, c.title, c.term_code \
-         FROM course_audits a \
-         LEFT JOIN courses c ON c.id = a.course_id \
-         ORDER BY a.timestamp DESC LIMIT 200",
-    )
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| {
-        error!(error = %e, "Failed to list audit log");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "failed to list audit log"})),
-        )
-    })?;
+) -> Result<Response, ApiError> {
+    let rows = crate::data::audit::list_recent(&state.db_pool, 200)
+        .await
+        .map_err(|e| db_error("list audit log", e))?;
 
     // Determine the latest timestamp across all rows (query is DESC so first row is newest)
     let latest = rows.first().map(|r| r.timestamp);

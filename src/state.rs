@@ -243,9 +243,6 @@ impl AppState {
 
     /// Get the total number of courses in the database
     pub async fn get_course_count(&self) -> Result<i64> {
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
-            .fetch_one(&self.db_pool)
-            .await?;
-        Ok(count.0)
+        crate::data::courses::count_all(&self.db_pool).await
     }
 }
