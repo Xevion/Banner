@@ -201,7 +201,7 @@ pub(crate) async fn timeline(
                 if active {
                     *subject_totals
                         .entry(Arc::clone(&course.subject))
-                        .or_default() += course.enrollment as i64;
+                        .or_default() += i64::from(course.enrollment);
                 }
             }
 

@@ -5,6 +5,7 @@ use crate::banner::models::meetings::{FacultyItem, TimeRange};
 use crate::data::course_types::{DateRange, MeetingLocation};
 use crate::data::models::{DayOfWeek, DbMeetingTime, UpsertCounts};
 use crate::data::names::{decode_html_entities, parse_banner_name};
+use crate::data::unsigned::Count;
 use crate::utils::fmt_duration;
 use crate::web::audit::{AuditLogEntry, AuditRow};
 use anyhow::Result;
@@ -494,14 +495,16 @@ pub async fn batch_upsert_courses(
 
     // Count courses that had at least one field change (existing rows only)
     let changed_ids: HashSet<i32> = audits.iter().map(|a| a.course_id).collect();
-    let courses_changed = changed_ids.len() as i32;
+    let courses_changed = Count::try_from(changed_ids.len())?;
 
     let counts = UpsertCounts {
-        courses_fetched: course_count as i32,
+        courses_fetched: Count::try_from(course_count)?,
         courses_changed,
-        courses_unchanged: course_count as i32 - courses_changed,
-        audits_generated: audits.len() as i32,
-        metrics_generated: metrics.len() as i32,
+        courses_unchanged: Count::new(
+            u32::try_from(course_count)?.saturating_sub(courses_changed.get()),
+        ),
+        audits_generated: Count::try_from(audits.len())?,
+        metrics_generated: Count::try_from(metrics.len())?,
     };
 
     // Step 6: Insert audits and metrics
@@ -520,35 +523,35 @@ pub async fn batch_upsert_courses(
 
     let duration = start.elapsed();
 
-    if counts.courses_changed > 0 {
-        if counts.audits_generated > 0 {
+    if counts.courses_changed.get() > 0 {
+        if counts.audits_generated.get() > 0 {
             info!(
                 courses_count = course_count,
-                courses_changed = counts.courses_changed,
+                courses_changed = counts.courses_changed.get(),
                 duration = fmt_duration(duration),
-                audit_entries = counts.audits_generated,
+                audit_entries = counts.audits_generated.get(),
                 "Batch upserted courses"
             );
         } else {
             info!(
                 courses_count = course_count,
-                courses_changed = counts.courses_changed,
+                courses_changed = counts.courses_changed.get(),
                 duration = fmt_duration(duration),
                 "Batch upserted courses"
             );
         }
-    } else if counts.audits_generated > 0 {
+    } else if counts.audits_generated.get() > 0 {
         debug!(
             courses_count = course_count,
-            courses_changed = counts.courses_changed,
+            courses_changed = counts.courses_changed.get(),
             duration = fmt_duration(duration),
-            audit_entries = counts.audits_generated,
+            audit_entries = counts.audits_generated.get(),
             "Batch upserted courses"
         );
     } else {
         debug!(
             courses_count = course_count,
-            courses_changed = counts.courses_changed,
+            courses_changed = counts.courses_changed.get(),
             duration = fmt_duration(duration),
             "Batch upserted courses"
         );

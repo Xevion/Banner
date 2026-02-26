@@ -15,6 +15,7 @@ use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, Se
 use crate::data::reference_types::{
     Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
 };
+use crate::data::unsigned::Count;
 
 /// Cache-Control presets for public endpoints.
 ///
@@ -590,7 +591,7 @@ pub struct InstructorResponse {
 #[ts(export)]
 pub struct SearchResponse {
     courses: Vec<CourseResponse>,
-    total_count: i32,
+    total_count: Count,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -801,10 +802,10 @@ pub fn build_course_response(
     });
 
     let enrollment = Enrollment {
-        current: course.enrollment,
-        max: course.max_enrollment,
-        wait_count: course.wait_count,
-        wait_capacity: course.wait_capacity,
+        current: Count::new(course.enrollment.max(0) as u32),
+        max: Count::new(course.max_enrollment.max(0) as u32),
+        wait_count: Count::new(course.wait_count.max(0) as u32),
+        wait_capacity: Count::new(course.wait_capacity.max(0) as u32),
     };
 
     let credit_hours = match (
@@ -971,10 +972,13 @@ async fn search_courses(
         })
         .collect();
 
+    let total_count = Count::try_from(total_count)
+        .map_err(|_| ApiError::internal_error("total count overflow"))?;
+
     Ok(with_cache_control(
         SearchResponse {
             courses: course_responses,
-            total_count: total_count as i32,
+            total_count,
         },
         cache::SEARCH,
     ))

@@ -17,6 +17,7 @@ use ts_rs::TS;
 
 use crate::banner::models::terms::Term;
 use crate::data::DbContext;
+use crate::data::unsigned::{Count, DurationMs};
 use crate::scraper::adaptive::{self, SubjectSchedule, SubjectStats};
 use crate::state::{AppState, ReferenceCache};
 use crate::web::auth::extractors::AdminUser;
@@ -353,14 +354,14 @@ pub struct SubjectResultEntry {
     /// ISO-8601 UTC timestamp when the scrape job completed (e.g., "2024-01-15T10:30:00Z")
     #[ts(type = "string")]
     completed_at: DateTime<Utc>,
-    duration_ms: i32,
+    duration_ms: DurationMs,
     success: bool,
     error_message: Option<String>,
-    courses_fetched: Option<i32>,
-    courses_changed: Option<i32>,
-    courses_unchanged: Option<i32>,
-    audits_generated: Option<i32>,
-    metrics_generated: Option<i32>,
+    courses_fetched: Option<Count>,
+    courses_changed: Option<Count>,
+    courses_unchanged: Option<Count>,
+    audits_generated: Option<Count>,
+    metrics_generated: Option<Count>,
 }
 
 #[instrument(skip_all, fields(%subject))]
@@ -404,17 +405,25 @@ pub async fn scraper_subject_detail(
 
     let results: Vec<SubjectResultEntry> = rows
         .iter()
-        .map(|row| SubjectResultEntry {
-            id: row.get("id"),
-            completed_at: row.get("completed_at"),
-            duration_ms: row.get("duration_ms"),
-            success: row.get("success"),
-            error_message: row.get("error_message"),
-            courses_fetched: row.get("courses_fetched"),
-            courses_changed: row.get("courses_changed"),
-            courses_unchanged: row.get("courses_unchanged"),
-            audits_generated: row.get("audits_generated"),
-            metrics_generated: row.get("metrics_generated"),
+        .map(|row| {
+            let duration_ms_raw: i32 = row.get("duration_ms");
+            let courses_fetched: Option<i32> = row.get("courses_fetched");
+            let courses_changed: Option<i32> = row.get("courses_changed");
+            let courses_unchanged: Option<i32> = row.get("courses_unchanged");
+            let audits_generated: Option<i32> = row.get("audits_generated");
+            let metrics_generated: Option<i32> = row.get("metrics_generated");
+            SubjectResultEntry {
+                id: row.get("id"),
+                completed_at: row.get("completed_at"),
+                duration_ms: DurationMs::new(duration_ms_raw.max(0) as u32),
+                success: row.get("success"),
+                error_message: row.get("error_message"),
+                courses_fetched: courses_fetched.and_then(|v| Count::try_from(v).ok()),
+                courses_changed: courses_changed.and_then(|v| Count::try_from(v).ok()),
+                courses_unchanged: courses_unchanged.and_then(|v| Count::try_from(v).ok()),
+                audits_generated: audits_generated.and_then(|v| Count::try_from(v).ok()),
+                metrics_generated: metrics_generated.and_then(|v| Count::try_from(v).ok()),
+            }
         })
         .collect();
 

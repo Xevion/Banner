@@ -2,6 +2,7 @@ use crate::banner::{BannerApi, BannerApiError};
 use crate::data::DbContext;
 use crate::data::models::{ScrapeJob, UpsertCounts};
 use crate::data::terms;
+use crate::data::unsigned::{Count, DurationMs};
 use crate::scraper::jobs::{JobError, JobType};
 use crate::utils::fmt_duration;
 use anyhow::Result;
@@ -171,8 +172,8 @@ impl Worker {
     async fn handle_job_result(
         &self,
         job_id: i32,
-        retry_count: i32,
-        max_retries: i32,
+        retry_count: Count,
+        max_retries: Count,
         result: Result<UpsertCounts, JobError>,
         duration: std::time::Duration,
         target_type: crate::data::models::TargetType,
@@ -181,7 +182,7 @@ impl Worker {
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,
     ) {
-        let duration_ms_i32 = duration.as_millis() as i32;
+        let duration_ms = DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
 
         const SLOW_THRESHOLD: Duration = Duration::from_secs(30);
         if duration > SLOW_THRESHOLD {
@@ -196,15 +197,15 @@ impl Worker {
         match result {
             Ok(counts) => {
                 // Log at INFO if data changed, DEBUG if no changes
-                let has_changes = counts.courses_changed > 0;
+                let has_changes = counts.courses_changed > Count::default();
                 if has_changes {
                     info!(
                         worker_id = self.id,
                         job_id,
                         duration = fmt_duration(duration),
-                        courses_fetched = counts.courses_fetched,
-                        courses_changed = counts.courses_changed,
-                        courses_unchanged = counts.courses_unchanged,
+                        courses_fetched = %counts.courses_fetched,
+                        courses_changed = %counts.courses_changed,
+                        courses_unchanged = %counts.courses_unchanged,
                         "Job completed with changes"
                     );
                 } else {
@@ -212,9 +213,9 @@ impl Worker {
                         worker_id = self.id,
                         job_id,
                         duration = fmt_duration(duration),
-                        courses_fetched = counts.courses_fetched,
-                        courses_changed = counts.courses_changed,
-                        courses_unchanged = counts.courses_unchanged,
+                        courses_fetched = %counts.courses_fetched,
+                        courses_changed = %counts.courses_changed,
+                        courses_unchanged = %counts.courses_unchanged,
                         "Job completed (no changes)"
                     );
                 }
@@ -235,7 +236,7 @@ impl Worker {
                         priority,
                         queued_at,
                         started_at,
-                        duration_ms_i32,
+                        duration_ms,
                         true,
                         None,
                         retry_count,
@@ -284,7 +285,7 @@ impl Worker {
                         priority,
                         queued_at,
                         started_at,
-                        duration_ms_i32,
+                        duration_ms,
                         false,
                         Some(&err_msg),
                         retry_count,
@@ -315,8 +316,8 @@ impl Worker {
     async fn handle_recoverable_error(
         &self,
         job_id: i32,
-        retry_count: i32,
-        max_retries: i32,
+        retry_count: Count,
+        max_retries: Count,
         e: anyhow::Error,
         duration: std::time::Duration,
         target_type: crate::data::models::TargetType,
@@ -325,8 +326,8 @@ impl Worker {
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,
     ) {
-        let next_attempt = retry_count.saturating_add(1);
-        let remaining_retries = max_retries.saturating_sub(next_attempt);
+        let next_attempt = Count::new(retry_count.get().saturating_add(1));
+        let remaining_retries = max_retries.get().saturating_sub(next_attempt.get());
 
         // Log the error appropriately based on type
         match e.downcast_ref::<BannerApiError>() {
@@ -335,9 +336,9 @@ impl Worker {
                     worker_id = self.id,
                     job_id,
                     duration = fmt_duration(duration),
-                    retry_attempt = next_attempt,
-                    max_retries = max_retries,
-                    remaining_retries = remaining_retries,
+                    retry_attempt = %next_attempt,
+                    max_retries = %max_retries,
+                    remaining_retries,
                     "Invalid session detected, will retry"
                 );
             }
@@ -350,9 +351,9 @@ impl Worker {
                     worker_id = self.id,
                     job_id,
                     duration = fmt_duration(duration),
-                    retry_attempt = next_attempt,
-                    max_retries = max_retries,
-                    remaining_retries = remaining_retries,
+                    retry_attempt = %next_attempt,
+                    max_retries = %max_retries,
+                    remaining_retries,
                     status,
                     url,
                     error = ?source,
@@ -364,9 +365,9 @@ impl Worker {
                     worker_id = self.id,
                     job_id,
                     duration = fmt_duration(duration),
-                    retry_attempt = next_attempt,
-                    max_retries = max_retries,
-                    remaining_retries = remaining_retries,
+                    retry_attempt = %next_attempt,
+                    max_retries = %max_retries,
+                    remaining_retries,
                     error = ?e,
                     "Failed to process job, will retry"
                 );
@@ -388,8 +389,8 @@ impl Worker {
                     debug!(
                         worker_id = self.id,
                         job_id,
-                        retry_attempt = next_attempt,
-                        remaining_retries = remaining_retries,
+                        retry_attempt = %next_attempt,
+                        remaining_retries,
                         "Job unlocked for retry"
                     );
                     // Retried event emitted automatically by retry()
@@ -400,7 +401,8 @@ impl Worker {
             }
         } else {
             // Max retries exceeded -- log final failure result
-            let duration_ms_i32 = duration.as_millis() as i32;
+            let duration_ms =
+                DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
             let err_msg = format!("{e:#}");
             if let Err(log_err) = self
                 .db
@@ -411,7 +413,7 @@ impl Worker {
                     priority,
                     queued_at,
                     started_at,
-                    duration_ms_i32,
+                    duration_ms,
                     false,
                     Some(&err_msg),
                     next_attempt,
@@ -426,8 +428,8 @@ impl Worker {
                 worker_id = self.id,
                 job_id,
                 duration = fmt_duration(duration),
-                retry_count = next_attempt,
-                max_retries = max_retries,
+                retry_count = %next_attempt,
+                max_retries = %max_retries,
                 error = ?e,
                 "Job failed permanently (max retries exceeded), deleting"
             );

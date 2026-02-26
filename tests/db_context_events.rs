@@ -3,6 +3,7 @@
 use banner::data::DbContext;
 use banner::data::events::{DomainEvent, EventBuffer};
 use banner::data::models::{ScrapePriority, TargetType};
+use banner::data::unsigned::Count;
 use banner::web::ws::ScrapeJobEvent;
 use serde_json::json;
 use std::sync::Arc;
@@ -108,14 +109,14 @@ async fn db_context_emits_event_on_job_retry(pool: sqlx::PgPool) {
 
     // Retry the job with incremented count (emits Retried event at cursor + 1)
     ctx.scrape_jobs()
-        .retry(job_id, 1, chrono::Utc::now())
+        .retry(job_id, Count::new(1), chrono::Utc::now())
         .await
         .unwrap();
 
     // Verify Retried event was emitted (at position after Locked)
     let event = events.read(cursor + 1);
     assert!(
-        matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Retried { id, retry_count, .. })) if id == job_id && retry_count == 1),
+        matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Retried { id, retry_count, .. })) if id == job_id && retry_count == Count::new(1)),
         "Expected Retried event for job {} with retry_count 1, got {:?}",
         job_id,
         event

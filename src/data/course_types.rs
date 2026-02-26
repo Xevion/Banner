@@ -7,6 +7,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::data::unsigned::Count;
+
 /// An inclusive date range with the invariant that `start <= end`.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -92,17 +94,17 @@ pub struct SectionLink {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Enrollment {
-    pub current: i32,
-    pub max: i32,
-    pub wait_count: i32,
-    pub wait_capacity: i32,
+    pub current: Count,
+    pub max: Count,
+    pub wait_count: Count,
+    pub wait_capacity: Count,
 }
 
 impl Enrollment {
     /// Number of open seats remaining (never negative).
     #[allow(dead_code)]
-    pub fn open_seats(&self) -> i32 {
-        (self.max - self.current).max(0)
+    pub fn open_seats(&self) -> u32 {
+        self.max.get().saturating_sub(self.current.get())
     }
 
     /// Whether the section is at or over capacity.
@@ -155,7 +157,7 @@ pub struct RmpBrief {
 #[ts(export)]
 pub struct BlueBookBrief {
     pub avg_instructor_rating: f32,
-    pub total_responses: i32,
+    pub total_responses: Count,
 }
 
 /// Full BlueBook summary for instructor detail pages.
@@ -166,8 +168,8 @@ pub struct BlueBookFull {
     pub calibrated_rating: f32,
     pub avg_instructor_rating: f32,
     pub avg_course_rating: Option<f32>,
-    pub total_responses: i32,
-    pub eval_count: i32,
+    pub total_responses: Count,
+    pub eval_count: Count,
 }
 
 /// Full RateMyProfessors summary for instructor detail pages.
@@ -236,7 +238,7 @@ pub fn build_bluebook_brief(
     match (avg_rating, total_responses) {
         (Some(r), Some(n)) if r > 0.0 && n > 0 => Some(BlueBookBrief {
             avg_instructor_rating: r,
-            total_responses: n as i32,
+            total_responses: Count::try_from(n).ok()?,
         }),
         _ => None,
     }

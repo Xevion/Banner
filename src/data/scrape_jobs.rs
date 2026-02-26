@@ -10,6 +10,7 @@ use super::events::DomainEvent;
 use crate::data::models::{
     ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetType, UpsertCounts,
 };
+use crate::data::unsigned::{Count, DurationMs};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 use anyhow::Result;
 
@@ -115,7 +116,7 @@ impl<'a> ScrapeJobOps<'a> {
     pub async fn retry(
         &self,
         job_id: i32,
-        retry_count: i32,
+        retry_count: Count,
         execute_at: DateTime<Utc>,
     ) -> Result<()> {
         sqlx::query(
@@ -196,10 +197,10 @@ impl<'a> ScrapeJobOps<'a> {
         priority: ScrapePriority,
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,
-        duration_ms: i32,
+        duration_ms: DurationMs,
         success: bool,
         error_message: Option<&str>,
-        retry_count: i32,
+        retry_count: Count,
         counts: Option<&UpsertCounts>,
     ) -> Result<()> {
         sqlx::query(

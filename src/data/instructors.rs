@@ -5,6 +5,8 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
+use crate::data::unsigned::Count;
+
 const NANOID_ALPHABET: &[char] = &[
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
     'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -133,7 +135,7 @@ pub struct TeachingHistoryCourse {
     pub subject: String,
     pub course_number: String,
     pub title: String,
-    pub section_count: i32,
+    pub section_count: Count,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -319,9 +321,11 @@ pub async fn list_public_instructors(
             });
             let bluebook = match (r.bb_avg_instructor_rating, r.bb_total_responses) {
                 (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                    Some(super::course_types::BlueBookBrief {
-                        avg_instructor_rating: avg,
-                        total_responses: n as i32,
+                    Count::try_from(n).ok().map(|total_responses| {
+                        super::course_types::BlueBookBrief {
+                            avg_instructor_rating: avg,
+                            total_responses,
+                        }
                     })
                 }
                 _ => None,
@@ -512,17 +516,24 @@ pub async fn get_public_instructor_by_slug(
     let bluebook_summary = match bb {
         Some(ref r) => match (r.avg_instructor_rating, r.total_responses) {
             (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                let calibrated_rating = score_row
-                    .as_ref()
-                    .and_then(|s| s.calibrated_bb)
-                    .unwrap_or_else(|| (-2.58 + 1.45 * avg as f64).clamp(1.0, 5.0) as f32);
-                Some(super::course_types::BlueBookFull {
-                    calibrated_rating,
-                    avg_instructor_rating: avg,
-                    avg_course_rating: r.avg_course_rating,
-                    total_responses: n as i32,
-                    eval_count: r.eval_count.unwrap_or(0) as i32,
-                })
+                let total_responses = Count::try_from(n).ok();
+                let eval_count = Count::try_from(r.eval_count.unwrap_or(0)).ok();
+                match (total_responses, eval_count) {
+                    (Some(total_responses), Some(eval_count)) => {
+                        let calibrated_rating = score_row
+                            .as_ref()
+                            .and_then(|s| s.calibrated_bb)
+                            .unwrap_or_else(|| (-2.58 + 1.45 * avg as f64).clamp(1.0, 5.0) as f32);
+                        Some(super::course_types::BlueBookFull {
+                            calibrated_rating,
+                            avg_instructor_rating: avg,
+                            avg_course_rating: r.avg_course_rating,
+                            total_responses,
+                            eval_count,
+                        })
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         },
@@ -560,7 +571,7 @@ async fn get_teaching_history(
         subject: String,
         course_number: String,
         title: String,
-        section_count: i32,
+        section_count: Count,
     }
 
     let rows = sqlx::query_as::<_, Row>(

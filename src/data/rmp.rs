@@ -40,7 +40,10 @@ pub async fn batch_upsert_rmp_professors(
     let departments: Vec<Option<&str>> = deduped.iter().map(|p| p.department.as_deref()).collect();
     let avg_ratings: Vec<Option<f32>> = deduped.iter().map(|p| p.avg_rating).collect();
     let avg_difficulties: Vec<Option<f32>> = deduped.iter().map(|p| p.avg_difficulty).collect();
-    let num_ratings: Vec<i32> = deduped.iter().map(|p| p.num_ratings).collect();
+    let num_ratings: Vec<i32> = deduped
+        .iter()
+        .map(|p| i32::try_from(p.num_ratings.get()).unwrap_or(i32::MAX))
+        .collect();
     let would_take_again_pcts: Vec<Option<f32>> =
         deduped.iter().map(|p| p.would_take_again_pct).collect();
 

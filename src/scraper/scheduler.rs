@@ -2,6 +2,7 @@ use crate::banner::{BannerApi, Term};
 use crate::bluebook::BlueBookClient;
 use crate::data::DbContext;
 use crate::data::models::{ReferenceData, ScrapePriority, TargetType};
+use crate::data::unsigned::Count;
 use crate::data::{kv, term_subjects, terms};
 use crate::rmp::RmpClient;
 use crate::scraper::adaptive::{
@@ -712,7 +713,8 @@ impl Scheduler {
         for (legacy_id, graphql_id) in &eligible {
             match client.fetch_professor_with_reviews(graphql_id).await {
                 Ok((detail, reviews)) => {
-                    let num_reviews = reviews.len() as i32;
+                    let num_reviews =
+                        Count::try_from(reviews.len()).unwrap_or(Count::new(u32::MAX));
 
                     if let Err(e) =
                         crate::data::rmp::upsert_professor_detail(&detail, db_pool).await
@@ -731,7 +733,7 @@ impl Scheduler {
 
                     if let Err(e) = crate::data::rmp::mark_professor_reviews_scraped(
                         *legacy_id,
-                        num_reviews,
+                        i32::try_from(num_reviews.get()).unwrap_or(i32::MAX),
                         db_pool,
                     )
                     .await
@@ -740,7 +742,7 @@ impl Scheduler {
                         continue;
                     }
 
-                    debug!(legacy_id, num_reviews, "Scraped professor reviews");
+                    debug!(legacy_id, num_reviews = %num_reviews, "Scraped professor reviews");
                     success_count += 1;
                 }
                 Err(e) => {

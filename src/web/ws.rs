@@ -4,6 +4,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::data::models::{ScrapeJob, ScrapeJobStatus, ScrapePriority, TargetType};
+use crate::data::unsigned::Count;
 
 /// A serializable DTO for `ScrapeJob` with computed `status`.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -17,8 +18,8 @@ pub struct ScrapeJobDto {
     pub execute_at: String,
     pub created_at: String,
     pub locked_at: Option<String>,
-    pub retry_count: i32,
-    pub max_retries: i32,
+    pub retry_count: Count,
+    pub max_retries: Count,
     pub queued_at: String,
     pub status: ScrapeJobStatus,
 }
@@ -62,7 +63,7 @@ pub enum ScrapeJobEvent {
     Retried {
         id: i32,
         #[serde(rename = "retryCount")]
-        retry_count: i32,
+        retry_count: Count,
         #[serde(rename = "queuedAt")]
         queued_at: String,
         status: ScrapeJobStatus,

@@ -11,6 +11,7 @@ use ts_rs::TS;
 
 use crate::banner::models::meetings::TimeRange;
 use crate::data::course_types::{DateRange, MeetingLocation};
+use crate::data::unsigned::Count;
 
 /// Serialize an `i64` as a string to avoid JavaScript precision loss for values exceeding 2^53.
 fn serialize_i64_as_string<S: Serializer>(value: &i64, serializer: S) -> Result<S::Ok, S::Error> {
@@ -415,8 +416,9 @@ pub struct CourseMetric {
     pub id: i32,
     pub course_id: i32,
     pub timestamp: DateTime<Utc>,
-    pub enrollment: i32,
-    pub wait_count: i32,
+    pub enrollment: Count,
+    pub wait_count: Count,
+    /// Legitimately negative for overenrolled courses -- stays as i32.
     pub seats_available: i32,
 }
 
@@ -434,11 +436,11 @@ pub struct CourseAudit {
 /// Aggregate counts returned by batch upsert, used for scrape job result logging.
 #[derive(Debug, Clone, Default)]
 pub struct UpsertCounts {
-    pub courses_fetched: i32,
-    pub courses_changed: i32,
-    pub courses_unchanged: i32,
-    pub audits_generated: i32,
-    pub metrics_generated: i32,
+    pub courses_fetched: Count,
+    pub courses_changed: Count,
+    pub courses_unchanged: Count,
+    pub audits_generated: Count,
+    pub metrics_generated: Count,
 }
 
 /// The priority level of a scrape job.
@@ -492,9 +494,9 @@ pub struct ScrapeJob {
     pub created_at: DateTime<Utc>,
     pub locked_at: Option<DateTime<Utc>>,
     /// Number of retry attempts for this job (non-negative, enforced by CHECK constraint)
-    pub retry_count: i32,
+    pub retry_count: Count,
     /// Maximum number of retry attempts allowed (non-negative, enforced by CHECK constraint)
-    pub max_retries: i32,
+    pub max_retries: Count,
     /// When the job last entered the "ready to pick up" state.
     /// Set to NOW() on creation; updated to NOW() on retry.
     pub queued_at: DateTime<Utc>,
@@ -509,7 +511,7 @@ impl ScrapeJob {
                 ScrapeJobStatus::Processing
             }
             Some(_) => ScrapeJobStatus::StaleLock,
-            None if self.retry_count >= self.max_retries && self.max_retries > 0 => {
+            None if self.retry_count >= self.max_retries && self.max_retries.get() > 0 => {
                 ScrapeJobStatus::Exhausted
             }
             None if self.execute_at > now => ScrapeJobStatus::Scheduled,

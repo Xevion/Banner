@@ -9,6 +9,8 @@ use sqlx::PgPool;
 use tracing::info;
 use ts_rs::TS;
 
+use crate::data::unsigned::Count;
+
 use crate::data::names::{MatchCandidate, NameMatchQuality, find_best_candidate};
 
 /// Domain errors for BlueBook link operations.
@@ -39,7 +41,7 @@ pub struct BluebookLinkListItem {
     pub confidence: Option<f32>,
     pub instructor_id: Option<i32>,
     pub instructor_display_name: Option<String>,
-    pub eval_count: i32,
+    pub eval_count: Count,
 }
 
 /// Aggregate status counts for the link list.
@@ -47,11 +49,11 @@ pub struct BluebookLinkListItem {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct BluebookLinkStats {
-    pub total: i32,
-    pub auto: i32,
-    pub pending: i32,
-    pub approved: i32,
-    pub rejected: i32,
+    pub total: Count,
+    pub auto: Count,
+    pub pending: Count,
+    pub approved: Count,
+    pub rejected: Count,
 }
 
 /// Response for the paginated link list.
@@ -60,7 +62,7 @@ pub struct BluebookLinkStats {
 #[ts(export)]
 pub struct ListBluebookLinksResponse {
     pub links: Vec<BluebookLinkListItem>,
-    pub total: i32,
+    pub total: Count,
     pub page: i32,
     pub per_page: i32,
     pub stats: BluebookLinkStats,
@@ -78,7 +80,7 @@ pub struct BluebookLinkDetail {
     pub confidence: Option<f32>,
     pub instructor_id: Option<i32>,
     pub instructor_display_name: Option<String>,
-    pub eval_count: i32,
+    pub eval_count: Count,
     pub courses: Vec<BluebookLinkCourse>,
     /// Email of the proposed/matched instructor (if any).
     pub instructor_email: Option<String>,
@@ -87,8 +89,7 @@ pub struct BluebookLinkDetail {
     /// Sorted distinct academic years in which the proposed/matched instructor taught.
     pub instructor_teaching_years: Vec<i16>,
     /// Total course count for the proposed/matched instructor.
-    #[ts(as = "Option<i32>")]
-    pub instructor_course_count: Option<i64>,
+    pub instructor_course_count: Option<Count>,
 }
 
 /// A course associated with a BlueBook link (via evaluations).
@@ -248,15 +249,15 @@ pub async fn list_links(
     .context("failed to get bluebook link stats")?;
 
     let mut stats = BluebookLinkStats {
-        total: 0,
-        auto: 0,
-        pending: 0,
-        approved: 0,
-        rejected: 0,
+        total: Count::default(),
+        auto: Count::default(),
+        pending: Count::default(),
+        approved: Count::default(),
+        rejected: Count::default(),
     };
     for row in &stats_rows {
-        let count = row.count as i32;
-        stats.total += count;
+        let count = Count::try_from(row.count)?;
+        stats.total = Count::new(stats.total.get() + count.get());
         match row.status.as_str() {
             "auto" => stats.auto = count,
             "pending" => stats.pending = count,
@@ -268,21 +269,23 @@ pub async fn list_links(
 
     let links = rows
         .into_iter()
-        .map(|r| BluebookLinkListItem {
-            id: r.id,
-            instructor_name: r.instructor_name,
-            subject: r.subject,
-            status: r.status,
-            confidence: r.confidence,
-            instructor_id: r.instructor_id,
-            instructor_display_name: r.instructor_display_name,
-            eval_count: r.eval_count.unwrap_or(0) as i32,
+        .map(|r| {
+            Ok(BluebookLinkListItem {
+                id: r.id,
+                instructor_name: r.instructor_name,
+                subject: r.subject,
+                status: r.status,
+                confidence: r.confidence,
+                instructor_id: r.instructor_id,
+                instructor_display_name: r.instructor_display_name,
+                eval_count: Count::try_from(r.eval_count.unwrap_or(0))?,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(ListBluebookLinksResponse {
         links,
-        total: total as i32,
+        total: Count::try_from(total)?,
         page,
         per_page,
         stats,
@@ -379,7 +382,7 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
                 email,
                 subjects.into_iter().map(|(s,)| s).collect(),
                 teaching_years.into_iter().map(|(y,)| y).collect(),
-                Some(course_count),
+                Some(Count::try_from(course_count)?),
             )
         } else {
             (None, vec![], vec![], None)
@@ -393,7 +396,7 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
         confidence: r.confidence,
         instructor_id: r.instructor_id,
         instructor_display_name: r.instructor_display_name,
-        eval_count: r.eval_count.unwrap_or(0) as i32,
+        eval_count: Count::try_from(r.eval_count.unwrap_or(0))?,
         courses,
         instructor_email,
         instructor_subjects,

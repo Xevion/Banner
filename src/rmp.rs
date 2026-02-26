@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
+use crate::data::unsigned::Count;
+
 /// UTSA's school ID on RateMyProfessors (base64 of "School-1516").
 const UTSA_SCHOOL_ID: &str = "U2Nob29sLTE1MTY=";
 
@@ -28,7 +30,7 @@ pub struct RmpProfessor {
     pub department: Option<String>,
     pub avg_rating: Option<f32>,
     pub avg_difficulty: Option<f32>,
-    pub num_ratings: i32,
+    pub num_ratings: Count,
     pub would_take_again_pct: Option<f32>,
 }
 
@@ -36,11 +38,11 @@ pub struct RmpProfessor {
 #[derive(Debug, Clone)]
 pub struct RmpProfessorDetail {
     pub legacy_id: i32,
-    pub ratings_r1: Option<i32>,
-    pub ratings_r2: Option<i32>,
-    pub ratings_r3: Option<i32>,
-    pub ratings_r4: Option<i32>,
-    pub ratings_r5: Option<i32>,
+    pub ratings_r1: Option<Count>,
+    pub ratings_r2: Option<Count>,
+    pub ratings_r3: Option<Count>,
+    pub ratings_r4: Option<Count>,
+    pub ratings_r5: Option<Count>,
     pub course_codes: Vec<RmpCourseCode>,
 }
 
@@ -49,7 +51,7 @@ pub struct RmpProfessorDetail {
 #[serde(rename_all = "camelCase")]
 pub struct RmpCourseCode {
     pub course_name: String,
-    pub course_count: i32,
+    pub course_count: Count,
 }
 
 /// A single review from RateMyProfessors.
@@ -67,9 +69,9 @@ pub struct RmpReview {
     pub is_for_online_class: Option<bool>,
     pub attendance_mandatory: Option<String>,
     pub flag_status: String,
-    pub textbook_use: Option<i32>,
-    pub thumbs_up_total: i32,
-    pub thumbs_down_total: i32,
+    pub textbook_use: Option<Count>,
+    pub thumbs_up_total: Count,
+    pub thumbs_down_total: Count,
     pub posted_at: Option<DateTime<Utc>>,
 }
 
@@ -179,7 +181,7 @@ impl RmpClient {
                     department: node["department"].as_str().map(|s| s.to_string()),
                     avg_rating: node["avgRating"].as_f64().map(|v| v as f32),
                     avg_difficulty: node["avgDifficulty"].as_f64().map(|v| v as f32),
-                    num_ratings: node["numRatings"].as_i64().unwrap_or(0) as i32,
+                    num_ratings: Count::try_from(node["numRatings"].as_i64().unwrap_or(0))?,
                     would_take_again_pct: wta,
                 });
             }
@@ -255,7 +257,7 @@ impl RmpClient {
             .filter_map(|cc| {
                 Some(RmpCourseCode {
                     course_name: cc["courseName"].as_str()?.to_string(),
-                    course_count: cc["courseCount"].as_i64()? as i32,
+                    course_count: Count::try_from(cc["courseCount"].as_i64()?).ok()?,
                 })
             })
             .collect();
@@ -265,11 +267,11 @@ impl RmpClient {
                 .as_i64()
                 .ok_or_else(|| anyhow::anyhow!("Missing legacyId in professor detail"))?
                 as i32,
-            ratings_r1: dist["r1"].as_i64().map(|v| v as i32),
-            ratings_r2: dist["r2"].as_i64().map(|v| v as i32),
-            ratings_r3: dist["r3"].as_i64().map(|v| v as i32),
-            ratings_r4: dist["r4"].as_i64().map(|v| v as i32),
-            ratings_r5: dist["r5"].as_i64().map(|v| v as i32),
+            ratings_r1: dist["r1"].as_i64().and_then(|v| Count::try_from(v).ok()),
+            ratings_r2: dist["r2"].as_i64().and_then(|v| Count::try_from(v).ok()),
+            ratings_r3: dist["r3"].as_i64().and_then(|v| Count::try_from(v).ok()),
+            ratings_r4: dist["r4"].as_i64().and_then(|v| Count::try_from(v).ok()),
+            ratings_r5: dist["r5"].as_i64().and_then(|v| Count::try_from(v).ok()),
             course_codes,
         })
     }
@@ -347,9 +349,13 @@ impl RmpClient {
                         .as_str()
                         .map(|s| s.to_string()),
                     flag_status: node["flagStatus"].as_str().unwrap_or("visible").to_string(),
-                    textbook_use: node["textbookUse"].as_i64().map(|v| v as i32),
-                    thumbs_up_total: node["thumbsUpTotal"].as_i64().unwrap_or(0) as i32,
-                    thumbs_down_total: node["thumbsDownTotal"].as_i64().unwrap_or(0) as i32,
+                    textbook_use: node["textbookUse"]
+                        .as_i64()
+                        .and_then(|v| Count::try_from(v).ok()),
+                    thumbs_up_total: Count::try_from(node["thumbsUpTotal"].as_i64().unwrap_or(0))?,
+                    thumbs_down_total: Count::try_from(
+                        node["thumbsDownTotal"].as_i64().unwrap_or(0),
+                    )?,
                     posted_at,
                 });
             }
