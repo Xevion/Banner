@@ -6,6 +6,7 @@ pub mod assets;
 pub mod audit;
 pub mod auth;
 pub mod calendar;
+pub mod csp_report;
 #[cfg(feature = "embed-assets")]
 pub mod encoding;
 pub mod error;

@@ -48,6 +48,7 @@ use crate::data::models;
 use crate::web::admin;
 use crate::web::auth::{self, AuthConfig};
 use crate::web::calendar;
+use crate::web::csp_report;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::instructors;
 use crate::web::stream;
@@ -63,6 +64,7 @@ use ts_rs::TS;
 use crate::state::AppState;
 use crate::state::ServiceStatus;
 use crate::web::middleware::request_id::RequestIdLayer;
+use crate::web::middleware::security_headers::SecurityHeadersLayer;
 use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
 use tracing::{error, trace, warn};
 
@@ -99,6 +101,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .route("/timeline", post(timeline::timeline))
         .route("/ws", get(stream::stream_ws))
+        .route("/csp-report", post(csp_report::csp_report))
         .with_state(app_state.clone());
 
     let auth_router = Router::new()
@@ -186,8 +189,10 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .with_state(app_state);
 
     router.layer((
-        // Outermost: per-request ULID span + severity-proportional response logging.
+        // Outermost: per-request ID span + severity-proportional response logging.
         RequestIdLayer,
+        // Security headers on every response (HSTS is prod-only).
+        SecurityHeadersLayer,
         // Compress API responses (gzip/brotli/zstd). Pre-compressed static
         // assets already have Content-Encoding set, so tower-http skips them.
         CompressionLayer::new()

@@ -92,6 +92,7 @@ export default defineConfig({
   clearScreen: false,
   server: {
     port: 3001,
+    hmr: { port: 3001 },
     watch: { ignored: ["**/.svelte-kit/generated/**"] },
     proxy: {
       "/api": {
