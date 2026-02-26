@@ -24,7 +24,7 @@ pub async fn list_recent(pool: &PgPool, limit: i32) -> Result<Vec<AuditRow>> {
 
 /// Fetch audit log entries with optional filters applied in SQL.
 ///
-/// All filter parameters are nullable — passing `None` disables that filter.
+/// All filter parameters are nullable -- passing `None` disables that filter.
 pub async fn list_filtered(
     pool: &PgPool,
     since_dt: Option<DateTime<Utc>>,

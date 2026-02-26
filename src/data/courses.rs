@@ -644,7 +644,7 @@ pub async fn get_id_by_crn(pool: &PgPool, term_code: &str, crn: &str) -> Result<
 
 /// Count courses grouped by subject for a given term.
 ///
-/// Returns a map of subject code → count.
+/// Returns a map of subject code -> count.
 pub async fn count_by_subject(pool: &PgPool, term_code: &str) -> Result<HashMap<String, i64>> {
     let rows: Vec<(String, i64)> = sqlx::query_as(
         "SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject",

@@ -159,9 +159,15 @@ impl App {
         // Spawn background reference cache refresh every 30 minutes
         app_state.spawn_reference_cache_refresh(std::time::Duration::from_secs(30 * 60));
 
-        // Load schedule cache for timeline enrollment queries
-        if let Err(e) = app_state.schedule_cache.load().await {
-            info!(error = ?e, "Could not load schedule cache on startup (may be empty)");
+        // Load schedule cache in the background -- don't block port open.
+        // Requests during the ~3s load window get an empty snapshot.
+        {
+            let cache = app_state.schedule_cache.clone();
+            tokio::spawn(async move {
+                if let Err(e) = cache.load().await {
+                    info!(error = ?e, "Could not load schedule cache on startup (may be empty)");
+                }
+            });
         }
 
         // Seed the initial admin user if configured
@@ -231,27 +237,20 @@ impl App {
     }
 
     /// Setup bot service if enabled
-    pub async fn setup_bot_service(&mut self) -> Result<(), anyhow::Error> {
+    pub fn setup_bot_service(&mut self) -> Result<(), anyhow::Error> {
         use std::sync::Arc;
         use tokio::sync::{Mutex, broadcast};
 
-        // Create shutdown channel for status update task
         let (status_shutdown_tx, status_shutdown_rx) = broadcast::channel(1);
         let status_task_handle = Arc::new(Mutex::new(None));
 
-        let client = BotService::create_client(
-            &self.config,
-            self.app_state.clone(),
-            status_task_handle.clone(),
-            status_shutdown_rx,
-        )
-        .await
-        .context("Failed to create Discord client")?;
-
         let bot_service = Box::new(BotService::new(
-            client,
+            self.config.bot_token.clone(),
+            self.config.bot_target_guild,
+            self.app_state.clone(),
             status_task_handle,
             status_shutdown_tx,
+            status_shutdown_rx,
             self.app_state.service_statuses.clone(),
         ));
 

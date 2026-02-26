@@ -75,7 +75,6 @@ async fn main() -> ExitCode {
     // Setup bot service if enabled
     if enabled_services.contains(&ServiceName::Bot) {
         app.setup_bot_service()
-            .await
             .expect("Failed to setup bot service");
     }
 

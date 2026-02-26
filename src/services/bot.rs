@@ -1,6 +1,5 @@
 use super::Service;
 use crate::bot::{Data, get_commands};
-use crate::config::Config;
 use crate::state::AppState;
 use crate::state::{ServiceStatus, ServiceStatusRegistry};
 use num_format::{Locale, ToFormattedString};
@@ -14,23 +13,49 @@ use tracing::{debug, error, info, trace, warn};
 
 /// Discord bot service implementation
 pub struct BotService {
-    client: Client,
-    shard_manager: Arc<serenity::gateway::ShardManager>,
+    bot_token: String,
+    bot_target_guild: u64,
+    app_state: AppState,
     status_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    /// Consumed once in `run()` and passed into `create_client`.
+    status_shutdown_rx: Option<broadcast::Receiver<()>>,
     status_shutdown_tx: Option<broadcast::Sender<()>>,
     service_statuses: ServiceStatusRegistry,
+    /// Populated inside `run()` after the Discord client is built.
+    shard_manager: Arc<Mutex<Option<Arc<serenity::gateway::ShardManager>>>>,
 }
 
 impl BotService {
+    pub fn new(
+        bot_token: String,
+        bot_target_guild: u64,
+        app_state: AppState,
+        status_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+        status_shutdown_tx: broadcast::Sender<()>,
+        status_shutdown_rx: broadcast::Receiver<()>,
+        service_statuses: ServiceStatusRegistry,
+    ) -> Self {
+        Self {
+            bot_token,
+            bot_target_guild,
+            app_state,
+            status_task_handle,
+            status_shutdown_rx: Some(status_shutdown_rx),
+            status_shutdown_tx: Some(status_shutdown_tx),
+            service_statuses,
+            shard_manager: Arc::new(Mutex::new(None)),
+        }
+    }
+
     /// Create a new Discord bot client with full configuration
-    pub async fn create_client(
-        config: &Config,
+    async fn create_client(
+        bot_token: &str,
+        bot_target_guild: u64,
         app_state: AppState,
         status_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
         status_shutdown_rx: broadcast::Receiver<()>,
     ) -> Result<Client, anyhow::Error> {
         let intents = GatewayIntents::non_privileged();
-        let bot_target_guild = config.bot_target_guild;
 
         let framework = poise::Framework::builder()
             .options(poise::FrameworkOptions {
@@ -150,7 +175,7 @@ impl BotService {
             })
             .build();
 
-        Ok(ClientBuilder::new(config.bot_token.clone(), intents)
+        Ok(ClientBuilder::new(bot_token, intents)
             .framework(framework)
             .await?)
     }
@@ -229,22 +254,6 @@ impl BotService {
         })
     }
 
-    pub fn new(
-        client: Client,
-        status_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
-        status_shutdown_tx: broadcast::Sender<()>,
-        service_statuses: ServiceStatusRegistry,
-    ) -> Self {
-        let shard_manager = client.shard_manager.clone();
-
-        Self {
-            client,
-            shard_manager,
-            status_task_handle,
-            status_shutdown_tx: Some(status_shutdown_tx),
-            service_statuses,
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -254,7 +263,23 @@ impl Service for BotService {
     }
 
     async fn run(&mut self) -> Result<(), anyhow::Error> {
-        match self.client.start().await {
+        let status_shutdown_rx = self
+            .status_shutdown_rx
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("BotService::run called more than once"))?;
+
+        let mut client = Self::create_client(
+            &self.bot_token,
+            self.bot_target_guild,
+            self.app_state.clone(),
+            self.status_task_handle.clone(),
+            status_shutdown_rx,
+        )
+        .await?;
+
+        *self.shard_manager.lock().await = Some(client.shard_manager.clone());
+
+        match client.start().await {
             Ok(()) => {
                 warn!(service = "bot", "stopped early");
                 Err(anyhow::anyhow!("bot stopped early"))
@@ -268,12 +293,11 @@ impl Service for BotService {
 
     async fn shutdown(&mut self) -> Result<(), anyhow::Error> {
         self.service_statuses.set("bot", ServiceStatus::Disabled);
-        // Signal status update task to stop
+
         if let Some(status_shutdown_tx) = self.status_shutdown_tx.take() {
             let _ = status_shutdown_tx.send(());
         }
 
-        // Wait for status update task to complete (with timeout)
         let handle = self.status_task_handle.lock().await.take();
         if let Some(handle) = handle {
             match tokio::time::timeout(Duration::from_secs(2), handle).await {
@@ -289,8 +313,10 @@ impl Service for BotService {
             }
         }
 
-        // Shutdown Discord shards
-        self.shard_manager.shutdown_all().await;
+        if let Some(shard_manager) = self.shard_manager.lock().await.take() {
+            shard_manager.shutdown_all().await;
+        }
+
         Ok(())
     }
 }
