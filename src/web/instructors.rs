@@ -13,28 +13,57 @@ use crate::web::routes::{CourseResponse, build_course_response};
 pub async fn list_instructors(
     State(state): State<AppState>,
     Query(params): Query<PublicInstructorListParams>,
-) -> Result<Json<data::instructors::PublicInstructorListResponse>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
+    use crate::web::routes::{cache, with_cache_control};
     let result = data::instructors::list_public_instructors(&state.db_pool, &params)
         .await
         .map_err(|e| db_error("List instructors", e))?;
-    Ok(Json(result))
+    Ok(with_cache_control(result, cache::REFERENCE))
 }
 
 /// `GET /api/instructors/{slug}`
 pub async fn get_instructor(
     State(state): State<AppState>,
     Path(raw): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<axum::response::Response, ApiError> {
+    use crate::web::routes::cache;
+    use axum::http::{HeaderValue, StatusCode, header};
     use axum::response::{IntoResponse, Redirect};
 
-    let (_, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
-        .await
-        .map_err(|e| db_error("Resolve instructor", e))?
-        .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
+    let (instructor_id, slug) =
+        data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
+            .await
+            .map_err(|e| db_error("Resolve instructor", e))?
+            .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
 
     // Non-canonical identifier: redirect to the canonical slug URL
     if !matches!(classify_identifier(&raw), IdentifierKind::Slug) {
         return Ok(Redirect::permanent(&format!("/api/instructors/{slug}")).into_response());
+    }
+
+    // Build ETag from instructor score timestamp (most frequently changing data)
+    let score_ts: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT computed_at FROM instructor_scores WHERE instructor_id = $1")
+            .bind(instructor_id)
+            .fetch_optional(&state.db_pool)
+            .await
+            .unwrap_or(None);
+
+    let etag = format!("\"i:{}:{}\"", slug, score_ts.map_or(0, |ts| ts.timestamp()));
+
+    // 304 Not Modified if client ETag matches
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+        && if_none_match.as_bytes() == etag.as_bytes()
+    {
+        let mut resp = StatusCode::NOT_MODIFIED.into_response();
+        resp.headers_mut()
+            .insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
+        resp.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(cache::DETAIL),
+        );
+        return Ok(resp);
     }
 
     let profile = data::instructors::get_public_instructor_by_slug(&state.db_pool, &slug)
@@ -42,7 +71,14 @@ pub async fn get_instructor(
         .map_err(|e| db_error("Get instructor", e))?
         .ok_or_else(|| ApiError::not_found("Instructor not found"))?;
 
-    Ok(Json(profile).into_response())
+    let mut resp = Json(profile).into_response();
+    resp.headers_mut()
+        .insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
+    resp.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(cache::DETAIL),
+    );
+    Ok(resp)
 }
 
 #[derive(serde::Deserialize)]
@@ -97,5 +133,8 @@ pub async fn get_instructor_sections(
         })
         .collect();
 
-    Ok(Json(responses).into_response())
+    Ok(crate::web::routes::with_cache_control(
+        responses,
+        crate::web::routes::cache::DETAIL,
+    ))
 }

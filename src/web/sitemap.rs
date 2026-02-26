@@ -23,7 +23,9 @@ fn xml_response(body: Arc<String>) -> Response {
     );
     response.headers_mut().insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=3600"),
+        HeaderValue::from_static(
+            "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
+        ),
     );
     response
 }
@@ -36,15 +38,13 @@ fn try_cache_or_claim(state: &AppState, key: &str) -> Result<Response, ()> {
     }
 
     if !state.sitemap_cache.try_claim(key) {
-        // Another request is building — serve stale if available, else 503
+        // Another request is building -- serve stale if available, else 503
         if let Some(stale) = state.sitemap_cache.get_stale(key) {
             return Ok(xml_response(stale));
         }
         let mut resp = StatusCode::SERVICE_UNAVAILABLE.into_response();
-        resp.headers_mut().insert(
-            header::RETRY_AFTER,
-            HeaderValue::from_static("5"),
-        );
+        resp.headers_mut()
+            .insert(header::RETRY_AFTER, HeaderValue::from_static("5"));
         return Ok(resp);
     }
 
@@ -60,7 +60,7 @@ fn finish(state: &AppState, key: &str, xml: String) -> Response {
     xml_response(cached)
 }
 
-/// `GET /sitemap.xml` — sitemap index pointing to sub-sitemaps.
+/// `GET /sitemap.xml` -- sitemap index pointing to sub-sitemaps.
 pub async fn sitemap_index(State(state): State<AppState>) -> Response {
     let Some(ref origin) = state.public_origin else {
         return StatusCode::NOT_FOUND.into_response();
@@ -91,7 +91,10 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
         "  <sitemap><loc>{origin}/sitemap-instructors.xml</loc></sitemap>\n"
     ));
     for code in &terms {
-        let slug = code.parse::<Term>().map(|t| t.slug()).unwrap_or(code.clone());
+        let slug = code
+            .parse::<Term>()
+            .map(|t| t.slug())
+            .unwrap_or(code.clone());
         xml.push_str(&format!(
             "  <sitemap><loc>{origin}/sitemap-courses-{slug}.xml</loc></sitemap>\n"
         ));
@@ -102,7 +105,7 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
     finish(&state, key, xml)
 }
 
-/// `GET /sitemap-static.xml` — homepage, instructors directory, timeline.
+/// `GET /sitemap-static.xml` -- homepage, instructors directory, timeline.
 pub async fn sitemap_static(State(state): State<AppState>) -> Response {
     let Some(ref origin) = state.public_origin else {
         return StatusCode::NOT_FOUND.into_response();
@@ -129,7 +132,7 @@ pub async fn sitemap_static(State(state): State<AppState>) -> Response {
     finish(&state, key, xml)
 }
 
-/// `GET /sitemap-instructors.xml` — all instructor profile URLs.
+/// `GET /sitemap-instructors.xml` -- all instructor profile URLs.
 pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
     let Some(ref origin) = state.public_origin else {
         return StatusCode::NOT_FOUND.into_response();
@@ -140,14 +143,14 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let entries =
-        match data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await {
-            Ok(e) => e,
-            Err(_) => {
-                state.sitemap_cache.release(key);
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        };
+    let entries = match data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await
+    {
+        Ok(e) => e,
+        Err(_) => {
+            state.sitemap_cache.release(key);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -174,15 +177,12 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
     finish(&state, key, xml)
 }
 
-/// `GET /sitemap-courses-{rest}` — all course URLs for a term.
+/// `GET /sitemap-courses-{rest}` -- all course URLs for a term.
 ///
 /// The route captures everything after `sitemap-courses-` as `rest`.
-/// E.g. `/sitemap-courses-spring-2026.xml` → rest = `spring-2026.xml`.
+/// E.g. `/sitemap-courses-spring-2026.xml` -> rest = `spring-2026.xml`.
 /// We strip the `.xml` suffix and resolve the remainder as a term slug or code.
-pub async fn sitemap_courses(
-    State(state): State<AppState>,
-    Path(rest): Path<String>,
-) -> Response {
+pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<String>) -> Response {
     let Some(ref origin) = state.public_origin else {
         return StatusCode::NOT_FOUND.into_response();
     };

@@ -27,7 +27,7 @@ class TelemetryClient {
       api_host: host,
       ui_host: "https://us.posthog.com",
       defaults: "2025-11-30",
-      // Disable PostHog's history monkey-patching — it conflicts with
+      // Disable PostHog's history monkey-patching -- it conflicts with
       // SvelteKit's router. Page views are captured via afterNavigate below.
       capture_pageview: false,
       capture_pageleave: true,

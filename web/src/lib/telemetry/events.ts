@@ -1,4 +1,4 @@
-/** Page view (PostHog standard — captured via afterNavigate, not history monkey-patching) */
+/** Page view (PostHog standard -- captured via afterNavigate, not history monkey-patching) */
 export interface PageViewEvent {
   name: "$pageview";
   properties: {
@@ -32,7 +32,7 @@ export interface CourseInteractionEvent {
   };
 }
 
-/** User auth events (logout only — login is handled implicitly via identify) */
+/** User auth events (logout only -- login is handled implicitly via identify) */
 export interface AuthEvent {
   name: "auth";
   properties: {

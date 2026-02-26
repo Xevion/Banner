@@ -32,7 +32,7 @@ struct CspReportWrapper {
     csp_report: CspReport,
 }
 
-/// `POST /api/csp-report` — receives CSP violation reports from browsers.
+/// `POST /api/csp-report` -- receives CSP violation reports from browsers.
 ///
 /// Accepts both `application/csp-report` and `application/json` content types.
 pub(crate) async fn csp_report(body: Bytes) -> StatusCode {

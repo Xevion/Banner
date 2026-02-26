@@ -70,7 +70,7 @@ where
             }
 
             // Fallback CSP for non-SSR responses (API JSON, embedded static assets).
-            // SvelteKit-proxied responses already carry a CSP from kit.csp — don't override.
+            // SvelteKit-proxied responses already carry a CSP from kit.csp -- don't override.
             if !headers.contains_key("content-security-policy")
                 && !headers.contains_key("content-security-policy-report-only")
             {

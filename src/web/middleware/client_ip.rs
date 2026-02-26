@@ -1,7 +1,7 @@
 //! On-demand client IP extraction from trusted proxy headers.
 //!
-//! Priority: `CF-Connecting-IP` (Cloudflare) → rightmost `X-Forwarded-For`
-//! (Railway-appended) → socket peer address.
+//! Priority: `CF-Connecting-IP` (Cloudflare) -> rightmost `X-Forwarded-For`
+//! (Railway-appended) -> socket peer address.
 //!
 //! Use as an Axum extractor in handlers that need the client's real IP:
 //!
@@ -22,14 +22,14 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // 1. CF-Connecting-IP — set by Cloudflare, most trustworthy.
+        // 1. CF-Connecting-IP -- set by Cloudflare, most trustworthy.
         if let Some(ip) =
             header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok())
         {
             return Ok(ClientIp(ip));
         }
 
-        // 2. Rightmost X-Forwarded-For — appended by Railway's edge proxy.
+        // 2. Rightmost X-Forwarded-For -- appended by Railway's edge proxy.
         if let Some(xff) = header_str(&parts.headers, "x-forwarded-for")
             && let Some(ip) = xff
                 .rsplit(',')

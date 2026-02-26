@@ -15,8 +15,23 @@ use crate::data::reference_types::{
     Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
 };
 
+/// Cache-Control presets for public endpoints.
+///
+/// Cloudflare respects `s-maxage` for edge caching and `stale-while-revalidate`
+/// for serving stale content while re-fetching in the background.
+pub mod cache {
+    /// Reference data, search-options, suggest, instructor list.
+    pub const REFERENCE: &str = "public, max-age=300, s-maxage=3600, stale-while-revalidate=300";
+    /// Course search results.
+    pub const SEARCH: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
+    /// Course/instructor detail (typically paired with ETag).
+    pub const DETAIL: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
+    /// Admin endpoints -- never cache.
+    pub const ADMIN: &str = "private, no-store, must-revalidate";
+}
+
 /// Wraps a JSON response with a `Cache-Control` header.
-fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -> Response {
+pub fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -> Response {
     let mut response = Json(value).into_response();
     response.headers_mut().insert(
         axum::http::header::CACHE_CONTROL,
@@ -53,7 +68,6 @@ use crate::web::error::{ApiError, ApiErrorCode, db_error};
 use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
-#[cfg(feature = "embed-assets")]
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
@@ -179,14 +193,27 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             "/admin/terms/{code}/disable",
             post(admin::terms::disable_term),
         )
+        .layer(axum::middleware::map_response(
+            |mut resp: Response| async move {
+                resp.headers_mut().insert(
+                    axum::http::header::CACHE_CONTROL,
+                    HeaderValue::from_static(cache::ADMIN),
+                );
+                resp
+            },
+        ))
         .with_state(app_state.clone());
 
     use crate::web::sitemap;
 
     let router = Router::new()
+        .route("/robots.txt", get(robots_txt))
         .route("/sitemap.xml", get(sitemap::sitemap_index))
         .route("/sitemap-static.xml", get(sitemap::sitemap_static))
-        .route("/sitemap-instructors.xml", get(sitemap::sitemap_instructors))
+        .route(
+            "/sitemap-instructors.xml",
+            get(sitemap::sitemap_instructors),
+        )
         .route("/sitemap-courses-{rest}", get(sitemap::sitemap_courses))
         .nest("/api", api_router)
         .nest("/api", auth_router)
@@ -823,7 +850,7 @@ pub fn build_course_response(
 async fn search_courses(
     State(state): State<AppState>,
     axum_extra::extract::Query(params): axum_extra::extract::Query<SearchParams>,
-) -> Result<Json<SearchResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
 
     let term_code =
@@ -925,17 +952,21 @@ async fn search_courses(
         })
         .collect();
 
-    Ok(Json(SearchResponse {
-        courses: course_responses,
-        total_count: total_count as i32,
-    }))
+    Ok(with_cache_control(
+        SearchResponse {
+            courses: course_responses,
+            total_count: total_count as i32,
+        },
+        cache::SEARCH,
+    ))
 }
 
 /// `GET /api/courses/:term/:crn`
 async fn get_course(
     State(state): State<AppState>,
     Path((term, crn)): Path<(String, String)>,
-) -> Result<Json<CourseResponse>, ApiError> {
+    headers: axum::http::HeaderMap,
+) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term_code)
@@ -943,13 +974,47 @@ async fn get_course(
         .map_err(|e| db_error("Course lookup", e))?
         .ok_or_else(|| ApiError::not_found("Course not found"))?;
 
+    // ETag based on term, CRN, and last scrape timestamp
+    let etag = format!(
+        "\"c:{}:{}:{}\"",
+        term_code,
+        crn,
+        course.last_scraped_at.timestamp()
+    );
+
+    // 304 Not Modified if client ETag matches
+    if let Some(if_none_match) = headers.get(axum::http::header::IF_NONE_MATCH)
+        && if_none_match.as_bytes() == etag.as_bytes()
+    {
+        let mut resp = StatusCode::NOT_MODIFIED.into_response();
+        resp.headers_mut().insert(
+            axum::http::header::ETAG,
+            HeaderValue::from_str(&etag).unwrap(),
+        );
+        resp.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static(cache::DETAIL),
+        );
+        return Ok(resp);
+    }
+
     let instructors = data::courses::get_course_instructors(&state.db_pool, course.id)
         .await
         .unwrap_or_else(|e| {
             error!(error = %e, course_id = course.id, "Failed to fetch instructors for course");
             Vec::new()
         });
-    Ok(Json(build_course_response(&course, instructors)))
+
+    let mut resp = Json(build_course_response(&course, instructors)).into_response();
+    resp.headers_mut().insert(
+        axum::http::header::ETAG,
+        HeaderValue::from_str(&etag).unwrap(),
+    );
+    resp.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static(cache::DETAIL),
+    );
+    Ok(resp)
 }
 
 /// `GET /api/courses/:term/:subject/:course_number/sections`
@@ -958,7 +1023,7 @@ async fn get_course(
 async fn get_related_sections(
     State(state): State<AppState>,
     Path((term, subject, course_number)): Path<(String, String, String)>,
-) -> Result<Json<Vec<CourseResponse>>, ApiError> {
+) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let courses =
@@ -983,7 +1048,7 @@ async fn get_related_sections(
         })
         .collect();
 
-    Ok(Json(responses))
+    Ok(with_cache_control(responses, cache::DETAIL))
 }
 
 /// `GET /api/reference/:category`
@@ -1011,10 +1076,7 @@ async fn get_reference(
                 }
             })
             .collect();
-        return Ok(with_cache_control(
-            rows_mapped,
-            "private, max-age=600, stale-while-revalidate=60",
-        ));
+        return Ok(with_cache_control(rows_mapped, cache::REFERENCE));
     }
 
     let entries_mapped: Vec<CodeDescription> = entries
@@ -1028,10 +1090,7 @@ async fn get_reference(
             }
         })
         .collect();
-    Ok(with_cache_control(
-        entries_mapped,
-        "private, max-age=600, stale-while-revalidate=60",
-    ))
+    Ok(with_cache_control(entries_mapped, cache::REFERENCE))
 }
 
 /// `GET /api/search-options?term={slug}` (term optional, defaults to latest)
@@ -1061,10 +1120,7 @@ async fn get_search_options(
         Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
 
     if let Some(cached) = state.search_options_cache.get(&term_code) {
-        return Ok(with_cache_control(
-            (*cached).clone(),
-            "private, max-age=600, stale-while-revalidate=60",
-        ));
+        return Ok(with_cache_control((*cached).clone(), cache::REFERENCE));
     }
 
     if !state.search_options_cache.try_claim(&term_code) {
@@ -1138,10 +1194,7 @@ async fn get_search_options(
         .insert(term_code.clone(), response.clone());
     state.search_options_cache.release(&term_code);
 
-    Ok(with_cache_control(
-        response,
-        "private, max-age=600, stale-while-revalidate=60",
-    ))
+    Ok(with_cache_control(response, cache::REFERENCE))
 }
 
 #[derive(Deserialize, Serialize, TS)]
@@ -1183,7 +1236,7 @@ async fn suggest(
                 courses: vec![],
                 instructors: vec![],
             },
-            "private, max-age=60",
+            cache::REFERENCE,
         ));
     }
 
@@ -1198,7 +1251,7 @@ async fn suggest(
             courses,
             instructors,
         },
-        "private, max-age=60",
+        cache::REFERENCE,
     ))
 }
 
@@ -1223,7 +1276,7 @@ async fn suggest_instructors(
     if q.chars().count() < 2 {
         return Ok(with_cache_control(
             Vec::<InstructorSuggestion>::new(),
-            "private, max-age=60",
+            cache::REFERENCE,
         ));
     }
 
@@ -1238,7 +1291,7 @@ async fn suggest_instructors(
             .await
             .map_err(|e| db_error("Suggest instructors", e))?;
 
-    Ok(with_cache_control(instructors, "private, max-age=60"))
+    Ok(with_cache_control(instructors, cache::REFERENCE))
 }
 
 #[derive(Deserialize)]
@@ -1251,9 +1304,12 @@ pub struct ResolveInstructorsParams {
 async fn resolve_instructors(
     State(state): State<AppState>,
     axum_extra::extract::Query(params): axum_extra::extract::Query<ResolveInstructorsParams>,
-) -> Result<Json<HashMap<String, String>>, ApiError> {
+) -> Result<Response, ApiError> {
     if params.slug.is_empty() {
-        return Ok(Json(HashMap::new()));
+        return Ok(with_cache_control(
+            HashMap::<String, String>::new(),
+            cache::REFERENCE,
+        ));
     }
 
     if params.slug.len() > 50 {
@@ -1264,5 +1320,31 @@ async fn resolve_instructors(
         .await
         .map_err(|e| db_error("Resolve instructor slugs", e))?;
 
-    Ok(Json(rows.into_iter().collect()))
+    let map: HashMap<String, String> = rows.into_iter().collect();
+    Ok(with_cache_control(map, cache::REFERENCE))
+}
+
+/// `GET /robots.txt`
+///
+/// Blocks crawlers from API and admin paths. Includes sitemap directive when
+/// `PUBLIC_ORIGIN` is configured.
+async fn robots_txt(State(state): State<AppState>) -> Response {
+    let mut body = String::from(
+        "User-agent: *\n\
+         Disallow: /api/\n\
+         Disallow: /admin/\n",
+    );
+    if let Some(ref origin) = state.public_origin {
+        body.push_str(&format!("\nSitemap: {origin}/sitemap.xml\n"));
+    }
+    let mut resp = body.into_response();
+    resp.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    resp.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=86400"),
+    );
+    resp
 }
