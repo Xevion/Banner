@@ -4,13 +4,13 @@
 
 use std::time::{Duration, Instant};
 
-use crate::utils::fmt_duration;
+use crate::utils::log_if_slow;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Json;
 use serde::Serialize;
 use serde_json::{Value, json};
-use tracing::{error, info, instrument, trace, warn};
+use tracing::{error, info, instrument, trace};
 use ts_rs::TS;
 
 use crate::data::terms::{self, DbTerm, SyncResult};
@@ -76,13 +76,7 @@ pub async fn list_terms(
         .await
         .map_err(|e| db_error("Failed to fetch terms", e))?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: list_terms"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "list_terms");
 
     trace!(count = terms.len(), "listed terms");
     Ok(Json(TermsListResponse { terms }))
@@ -112,13 +106,7 @@ pub async fn enable_term(
         .await
         .map_err(|e| db_error("Failed to fetch updated term", e))?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: enable_term"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "enable_term");
 
     info!(term_code = %code, "term scraping enabled");
 
@@ -152,13 +140,7 @@ pub async fn disable_term(
         .await
         .map_err(|e| db_error("Failed to fetch updated term", e))?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: disable_term"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "disable_term");
 
     info!(term_code = %code, "term scraping disabled");
 
@@ -188,13 +170,7 @@ pub async fn sync_terms(
         .await
         .map_err(|e| db_error("Failed to sync terms to database", e))?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: sync_terms"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "sync_terms");
 
     info!(
         inserted = result.inserted,

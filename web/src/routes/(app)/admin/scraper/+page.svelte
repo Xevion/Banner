@@ -2,13 +2,13 @@
 import type { ScraperPeriod } from "$lib/api";
 import type { ScraperStatsResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
+import StyledSelect from "$lib/components/StyledSelect.svelte";
 import { mergeByKey } from "$lib/composables/reducers";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatDurationMs } from "$lib/time";
 import { formatNumber } from "$lib/utils";
-import { ChevronDown, ChevronUp, Info } from "@lucide/svelte";
+import { Info } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
-import { Select } from "bits-ui";
 import type { PageData } from "./$types";
 
 import { untrack } from "svelte";
@@ -106,63 +106,12 @@ function successRateColor(rate: number): string {
 
     <div class="flex items-center gap-2 sm:justify-self-end">
       <!-- Term Dropdown -->
-      <Select.Root
-        type="single"
-        value={termSelectValue}
-        onValueChange={(v: string) => {
-          selectedTerm = v === "" ? undefined : v;
-        }}
+      <StyledSelect
         items={termItems}
-      >
-        <Select.Trigger
-          class="inline-flex items-center justify-between gap-1.5 h-[30px] px-2.5
-                 rounded-md text-xs font-medium
-                 bg-muted text-muted-foreground
-                 hover:text-foreground transition-colors
-                 cursor-pointer select-none outline-none
-                 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          <span class="truncate max-w-[120px]">
-            {termItems.find((t) => t.value === termSelectValue)?.label ?? "All Terms"}
-          </span>
-          <ChevronDown class="size-3.5 shrink-0 opacity-60" />
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Content
-            class="border border-border bg-card shadow-md outline-hidden z-50
-                   max-h-72 min-w-[140px] w-auto
-                   select-none rounded-md p-1
-                   data-[state=open]:animate-in data-[state=closed]:animate-out
-                   data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
-                   data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95
-                   data-[side=top]:slide-in-from-bottom-2
-                   data-[side=bottom]:slide-in-from-top-2"
-            side="bottom"
-            sideOffset={4}
-          >
-            <Select.ScrollUpButton class="flex w-full items-center justify-center py-0.5">
-              <ChevronUp class="size-3.5 text-muted-foreground" />
-            </Select.ScrollUpButton>
-            <Select.Viewport class="p-0.5">
-              {#each termItems as item (item.value)}
-                <Select.Item
-                  class="rounded-sm outline-hidden flex h-8 w-full select-none items-center
-                         px-2.5 text-xs
-                         data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground
-                         data-[selected]:font-semibold"
-                  value={item.value}
-                  label={item.label}
-                >
-                  {item.label}
-                </Select.Item>
-              {/each}
-            </Select.Viewport>
-            <Select.ScrollDownButton class="flex w-full items-center justify-center py-0.5">
-              <ChevronDown class="size-3.5 text-muted-foreground" />
-            </Select.ScrollDownButton>
-          </Select.Content>
-        </Select.Portal>
-      </Select.Root>
+        value={termSelectValue}
+        onValueChange={(v) => { selectedTerm = v === "" ? undefined : v; }}
+        placeholder="All Terms"
+      />
 
       <!-- Period Selector -->
       <div class="bg-muted flex rounded-md p-0.5">

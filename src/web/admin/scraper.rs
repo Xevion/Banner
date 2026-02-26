@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::utils::fmt_duration;
+use crate::utils::log_if_slow;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Json;
@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
-use tracing::{error, instrument, trace, warn};
+use tracing::{error, instrument, trace};
 use ts_rs::TS;
 
 use crate::banner::models::terms::Term;
@@ -140,13 +140,7 @@ pub async fn scraper_stats(
             )
         })?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: scraper_stats"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_stats");
 
     trace!(
         total_scrapes = result.total_scrapes,
@@ -223,13 +217,7 @@ pub async fn scraper_timeseries(
         )
     })?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: scraper_timeseries"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_timeseries");
 
     trace!(point_count = points.len(), "fetched scraper timeseries");
 
@@ -312,13 +300,7 @@ pub async fn scraper_subjects(
             )
         })?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: scraper_subjects"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_subjects");
 
     trace!(count = subjects.len(), "fetched scraper subjects");
 
@@ -395,13 +377,7 @@ pub async fn scraper_subject_detail(
         )
     })?;
 
-    let elapsed = start.elapsed();
-    if elapsed > SLOW_OP_THRESHOLD {
-        warn!(
-            duration = fmt_duration(elapsed),
-            "slow operation: scraper_subject_detail"
-        );
-    }
+    log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_subject_detail");
 
     let results: Vec<SubjectResultEntry> = rows
         .iter()

@@ -115,7 +115,6 @@ pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
 }
 
 /// Extension trait for `Option<T>` to convert `None` into a 404 [`ApiError`].
-#[allow(dead_code)]
 pub trait OptionNotFoundExt<T> {
     /// Convert `None` into [`ApiError::not_found`] with a message like
     /// `"Course 'CRN-12345' not found"`.

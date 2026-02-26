@@ -66,7 +66,7 @@ use crate::web::admin;
 use crate::web::auth::{self, AuthConfig};
 use crate::web::calendar;
 use crate::web::csp_report;
-use crate::web::error::{ApiError, ApiErrorCode, db_error};
+use crate::web::error::{ApiError, ApiErrorCode, OptionNotFoundExt, db_error};
 use crate::web::instructors;
 use crate::web::stream;
 use crate::web::timeline;
@@ -995,7 +995,7 @@ async fn get_course(
     let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term_code)
         .await
         .map_err(|e| db_error("Course lookup", e))?
-        .ok_or_else(|| ApiError::not_found("Course not found"))?;
+        .or_not_found("Course", &crn)?;
 
     // ETag based on term, CRN, and last scrape timestamp
     let etag = format!(

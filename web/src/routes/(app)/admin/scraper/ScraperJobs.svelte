@@ -1,15 +1,17 @@
 <script lang="ts">
 import { client } from "$lib/api";
 import type { ScrapeJobDto } from "$lib/bindings";
-import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import SortableHeader from "$lib/components/SortableHeader.svelte";
+import TableSkeleton from "$lib/components/TableSkeleton.svelte";
+import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import { createSortingHandler } from "$lib/composables/sorting";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration } from "$lib/time";
-import { ArrowDown, ArrowUp, ArrowUpDown, TriangleAlert } from "@lucide/svelte";
+import { TriangleAlert } from "@lucide/svelte";
 import {
   type ColumnDef,
   type SortingState,
-  type Updater,
   getCoreRowModel,
   getSortedRowModel,
 } from "@tanstack/table-core";
@@ -117,9 +119,12 @@ onMount(() => {
   };
 });
 
-function handleSortingChange(updater: Updater<SortingState>) {
-  sorting = typeof updater === "function" ? updater(sorting) : updater;
-}
+const handleSortingChange = createSortingHandler(
+  () => sorting,
+  (next) => {
+    sorting = next;
+  }
+);
 
 const PRIORITY_ORDER: Record<string, number> = {
   critical: 0,
@@ -413,63 +418,9 @@ function getTimingDisplay(
       onmousemove={moveTooltip}
       onmouseleave={hideTooltip}
     >
-      <thead>
-        {#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
-          <tr class="border-b border-border text-left text-muted-foreground">
-            {#each headerGroup.headers as header (header.id)}
-              <th
-                class="px-3 py-2.5 font-medium whitespace-nowrap"
-                class:cursor-pointer={header.column.getCanSort()}
-                class:select-none={header.column.getCanSort()}
-                onclick={header.column.getToggleSortingHandler()}
-              >
-                {#if header.column.getCanSort()}
-                  <span class="inline-flex items-center gap-1">
-                    {#if typeof header.column.columnDef.header === "string"}
-                      {header.column.columnDef.header}
-                    {:else}
-                      <FlexRender
-                        content={header.column.columnDef.header}
-                        context={header.getContext()}
-                      />
-                    {/if}
-                    {#if header.column.getIsSorted() === "asc"}
-                      <ArrowUp class="size-3.5" />
-                    {:else if header.column.getIsSorted() === "desc"}
-                      <ArrowDown class="size-3.5" />
-                    {:else}
-                      <ArrowUpDown class="size-3.5 text-muted-foreground/40" />
-                    {/if}
-                  </span>
-                {:else if typeof header.column.columnDef.header === "string"}
-                  {header.column.columnDef.header}
-                {:else}
-                  <FlexRender
-                    content={header.column.columnDef.header}
-                    context={header.getContext()}
-                  />
-                {/if}
-              </th>
-            {/each}
-          </tr>
-        {/each}
-      </thead>
+      <SortableHeader headerGroups={table.getHeaderGroups()} />
       {#if !initialized}
-        <tbody>
-          {#each Array(5) as _row, i (i)}
-            <tr class="border-b border-border">
-              {#each columns as col (col.id)}
-                <td class="px-3 py-2.5">
-                  <div
-                    class="h-3.5 rounded bg-muted animate-pulse {skeletonWidths[
-                      col.id ?? ''
-                    ] ?? 'w-20'}"
-                  ></div>
-                </td>
-              {/each}
-            </tr>
-          {/each}
-        </tbody>
+        <TableSkeleton {columns} rowCount={5} {skeletonWidths} />
       {:else if jobs.length === 0}
         <tbody>
           <tr>

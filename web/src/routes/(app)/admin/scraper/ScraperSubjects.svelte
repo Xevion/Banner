@@ -2,14 +2,16 @@
 import { client } from "$lib/api";
 import type { SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
-import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import SortableHeader from "$lib/components/SortableHeader.svelte";
+import TableSkeleton from "$lib/components/TableSkeleton.svelte";
+import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import { createSortingHandler } from "$lib/composables/sorting";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration, formatDurationMs, relativeTime } from "$lib/time";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight } from "@lucide/svelte";
+import { ChevronDown, ChevronRight } from "@lucide/svelte";
 import {
   type ColumnDef,
   type SortingState,
-  type Updater,
   getCoreRowModel,
   getSortedRowModel,
 } from "@tanstack/table-core";
@@ -68,9 +70,12 @@ function emphasisClass(value: number): string {
 
 let sorting: SortingState = $state([{ id: "subject", desc: false }]);
 
-function handleSortingChange(updater: Updater<SortingState>) {
-  sorting = typeof updater === "function" ? updater(sorting) : updater;
-}
+const handleSortingChange = createSortingHandler(
+  () => sorting,
+  (next) => {
+    sorting = next;
+  }
+);
 
 const columns: ColumnDef<SubjectSummary, unknown>[] = [
   {
@@ -172,62 +177,16 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
   </h2>
   <div class="overflow-x-auto">
     <table class="w-full min-w-160 border-collapse text-xs">
-      <thead>
-        {#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
-          <tr class="border-border border-b text-left text-muted-foreground">
-            {#each headerGroup.headers as header (header.id)}
-              <th
-                class="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider whitespace-nowrap"
-                class:cursor-pointer={header.column.getCanSort()}
-                class:select-none={header.column.getCanSort()}
-                onclick={header.column.getToggleSortingHandler()}
-              >
-                {#if header.column.getCanSort()}
-                  <span class="inline-flex items-center gap-1 hover:text-foreground">
-                    {#if typeof header.column.columnDef.header === "string"}
-                      {header.column.columnDef.header}
-                    {:else}
-                      <FlexRender
-                        content={header.column.columnDef.header}
-                        context={header.getContext()}
-                      />
-                    {/if}
-                    {#if header.column.getIsSorted() === "asc"}
-                      <ArrowUp class="size-3.5" />
-                    {:else if header.column.getIsSorted() === "desc"}
-                      <ArrowDown class="size-3.5" />
-                    {:else}
-                      <ArrowUpDown class="size-3.5 text-muted-foreground/40" />
-                    {/if}
-                  </span>
-                {:else if typeof header.column.columnDef.header === "string"}
-                  {header.column.columnDef.header}
-                {:else}
-                  <FlexRender
-                    content={header.column.columnDef.header}
-                    context={header.getContext()}
-                  />
-                {/if}
-              </th>
-            {/each}
-          </tr>
-        {/each}
-      </thead>
+      <SortableHeader
+        headerGroups={table.getHeaderGroups()}
+        thClass="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider whitespace-nowrap"
+        sortSpanClass="inline-flex items-center gap-1 hover:text-foreground"
+      />
+      {#if isLoading && subjects.length === 0}
+        <TableSkeleton {columns} rowCount={12} {skeletonWidths} cellClass="px-3 py-2" defaultWidth="w-16" />
+      {:else}
       <tbody>
-        {#if isLoading && subjects.length === 0}
-          <!-- Skeleton loading -->
-          {#each Array(12) as _, i (i)}
-            <tr class="border-border border-b">
-              {#each columns as col (col.id)}
-                <td class="px-3 py-2">
-                  <div
-                    class="h-3.5 rounded bg-muted animate-pulse {skeletonWidths[col.id ?? ''] ?? 'w-16'}"
-                  ></div>
-                </td>
-              {/each}
-            </tr>
-          {/each}
-        {:else if subjects.length === 0}
+        {#if subjects.length === 0}
           <tr>
             <td colspan={columnCount} class="px-3 py-8 text-center text-muted-foreground">
               No subjects found.
@@ -410,6 +369,7 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
           {/each}
         {/if}
       </tbody>
+      {/if}
     </table>
   </div>
 </div>

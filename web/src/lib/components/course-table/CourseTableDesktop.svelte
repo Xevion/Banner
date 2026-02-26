@@ -1,11 +1,13 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
-import { FlexRender, createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import SortableHeader from "$lib/components/SortableHeader.svelte";
+import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
 import { useTooltipDelegation } from "$lib/composables/useTooltipDelegation";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, RotateCcw } from "@lucide/svelte";
+import { createSortingHandler } from "$lib/composables/sorting";
+import { Check, RotateCcw } from "@lucide/svelte";
 import {
   type SortingState,
   type Updater,
@@ -103,10 +105,12 @@ function handleVisibilityChange(updater: Updater<VisibilityState>) {
   columnVisibility = newVisibility;
 }
 
-function handleSortingChange(updater: Updater<SortingState>) {
-  const newSorting = typeof updater === "function" ? updater(sorting) : updater;
-  onSortingChange?.(newSorting);
-}
+const handleSortingChange = createSortingHandler(
+  () => sorting,
+  (next) => {
+    onSortingChange?.(next);
+  }
+);
 
 const table = createSvelteTable({
   get data() {
@@ -149,48 +153,12 @@ const table = createSvelteTable({
   <ContextMenu.Root>
     <ContextMenu.Trigger class="contents">
       <table bind:this={tableElement} class="w-full min-w-120 md:min-w-160 border-collapse text-sm">
-        <thead>
-          {#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
-            <tr class="border-b border-border text-left text-muted-foreground">
-              {#each headerGroup.headers as header (header.id)}
-                {#if header.column.getIsVisible()}
-                  <th
-                    class="py-2 px-2 font-medium select-none {header.id === 'seats' ? 'text-right' : ''}"
-                    class:cursor-pointer={header.column.getCanSort()}
-                    onclick={header.column.getToggleSortingHandler()}
-                  >
-                    {#if header.column.getCanSort()}
-                      <span class="inline-flex items-center gap-1">
-                        {#if typeof header.column.columnDef.header === "string"}
-                          {header.column.columnDef.header}
-                        {:else}
-                          <FlexRender
-                            content={header.column.columnDef.header}
-                            context={header.getContext()}
-                          />
-                        {/if}
-                        {#if header.column.getIsSorted() === "asc"}
-                          <ArrowUp class="size-3.5" />
-                        {:else if header.column.getIsSorted() === "desc"}
-                          <ArrowDown class="size-3.5" />
-                        {:else}
-                          <ArrowUpDown class="size-3.5 text-muted-foreground/40" />
-                        {/if}
-                      </span>
-                    {:else if typeof header.column.columnDef.header === "string"}
-                      {header.column.columnDef.header}
-                    {:else}
-                      <FlexRender
-                        content={header.column.columnDef.header}
-                        context={header.getContext()}
-                      />
-                    {/if}
-                  </th>
-                {/if}
-              {/each}
-            </tr>
-          {/each}
-        </thead>
+        <SortableHeader
+          headerGroups={table.getHeaderGroups()}
+          thClass="py-2 px-2 font-medium select-none"
+          checkVisibility={true}
+          headerClass={(id) => id === "seats" ? "text-right" : ""}
+        />
         {#if loading && courses.length === 0}
           <tbody>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -- Static skeleton markup, no user input -->
