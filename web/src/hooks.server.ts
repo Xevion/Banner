@@ -72,7 +72,8 @@ export const handleError: HandleServerError = ({ error, event, status }) => {
   const stack = error instanceof Error ? error.stack : undefined;
 
   if (posthog && status !== 404) {
-    posthog.captureException(error, event.request.headers.get("x-request-id") ?? errorId, {
+    posthog.captureException(error, undefined, {
+      requestId: event.request.headers.get("x-request-id") ?? errorId,
       method: event.request.method,
       path: event.url.pathname,
       status,

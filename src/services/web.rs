@@ -121,16 +121,21 @@ impl Service for WebService {
             Self::session_cleanup_loop(cleanup_state, cleanup_shutdown_rx).await;
         });
 
-        // Use axum's graceful shutdown with the internal shutdown signal
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move {
-                let _ = shutdown_rx.recv().await;
-                trace!(
-                    service = "web",
-                    "received shutdown signal, starting graceful shutdown"
-                );
-            })
-            .await?;
+        // Use axum's graceful shutdown with the internal shutdown signal.
+        // `into_make_service_with_connect_info` makes `ConnectInfo<SocketAddr>`
+        // available to handlers (used by the SSR proxy for x-forwarded-for).
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.recv().await;
+            trace!(
+                service = "web",
+                "received shutdown signal, starting graceful shutdown"
+            );
+        })
+        .await?;
 
         trace!(service = "web", "graceful shutdown completed");
         info!(service = "web", "web server stopped");

@@ -8,7 +8,8 @@ use axum::{
     routing::{get, post, put},
 };
 
-use axum::extract::Request;
+use axum::extract::{ConnectInfo, Request};
+use std::net::SocketAddr;
 
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, SectionLink};
 use crate::data::reference_types::{
@@ -239,12 +240,31 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
 }
 
 /// SSR fallback: try embedded static assets first, then proxy to the SSR server.
-async fn ssr_fallback(State(state): State<AppState>, request: Request) -> axum::response::Response {
+async fn ssr_fallback(
+    State(state): State<AppState>,
+    connect_info: ConnectInfo<SocketAddr>,
+    request: Request,
+) -> axum::response::Response {
     let method = request.method().clone();
     let uri = request.uri().clone();
     let path = uri.path();
     let query = uri.query();
-    let headers = request.headers().clone();
+    let mut headers = request.headers().clone();
+
+    // Augment X-Forwarded-For so the SSR server (and its backend calls) see
+    // the real client IP, not localhost. Append the peer address to any
+    // existing value rather than replacing it.
+    let client_ip = connect_info.0.ip().to_string();
+    let xff_value = match headers.get("x-forwarded-for") {
+        Some(existing) => {
+            let existing = existing.to_str().unwrap_or("");
+            format!("{existing}, {client_ip}")
+        }
+        None => client_ip,
+    };
+    if let Ok(value) = HeaderValue::from_str(&xff_value) {
+        headers.insert("x-forwarded-for", value);
+    }
 
     // Try serving embedded static assets (production only)
     #[cfg(feature = "embed-assets")]
