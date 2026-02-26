@@ -25,7 +25,7 @@ const config = {
           posthogHost,
           ...(process.env.NODE_ENV !== "production" ? ["ws://localhost:3001"] : []),
         ],
-        "font-src": ["self"],
+        "font-src": ["self", "data:"],
         "frame-ancestors": ["none"],
         "base-uri": ["self"],
         "form-action": ["self"],
