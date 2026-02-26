@@ -1,6 +1,6 @@
 //! XML sitemap endpoints for search engine discovery.
 //!
-//! Four endpoints: sitemap index, static pages, instructors, and per-term courses.
+//! Five endpoints: sitemap index, static pages, subjects, instructors, and per-term courses.
 //! All responses are cached in-memory with a 15-minute TTL via `SitemapCache`.
 
 use axum::{
@@ -90,6 +90,9 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
     xml.push_str(&format!(
         "  <sitemap><loc>{origin}/sitemap-instructors.xml</loc></sitemap>\n"
     ));
+    xml.push_str(&format!(
+        "  <sitemap><loc>{origin}/sitemap-subjects.xml</loc></sitemap>\n"
+    ));
     for code in &terms {
         let slug = code
             .parse::<Term>()
@@ -116,7 +119,7 @@ pub async fn sitemap_static(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let pages = ["/", "/instructors", "/timeline"];
+    let pages = ["/", "/instructors", "/subjects", "/timeline"];
 
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -236,6 +239,41 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
             xml.push_str(&format!("    <lastmod>{lm}</lastmod>\n"));
         }
         xml.push_str("  </url>\n");
+    }
+
+    xml.push_str("</urlset>\n");
+
+    finish(&state, key, xml)
+}
+
+/// `GET /sitemap-subjects.xml` -- all subject directory URLs.
+pub async fn sitemap_subjects(State(state): State<AppState>) -> Response {
+    let Some(ref origin) = state.public_origin else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let key = "subjects";
+    if let Ok(resp) = try_cache_or_claim(&state, key) {
+        return resp;
+    }
+
+    let subjects = match data::courses::list_all_subjects(&state.db_pool).await {
+        Ok(s) => s,
+        Err(_) => {
+            state.sitemap_cache.release(key);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let mut xml = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
+
+    for code in &subjects {
+        xml.push_str(&format!(
+            "  <url><loc>{origin}/subjects/{code}</loc></url>\n"
+        ));
     }
 
     xml.push_str("</urlset>\n");

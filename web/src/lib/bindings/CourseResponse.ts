@@ -10,7 +10,7 @@ import type { InstructorResponse } from "./InstructorResponse";
 import type { PartOfTerm } from "./PartOfTerm";
 import type { SectionLink } from "./SectionLink";
 
-export type CourseResponse = { crn: string, subject: string, courseNumber: string, title: string, termCode: string, termSlug: string, sequenceNumber: string | null, instructionalMethod: InstructionalMethod | null, 
+export type CourseResponse = { crn: string, subject: string, courseNumber: string, title: string, termSlug: string, sequenceNumber: string | null, instructionalMethod: InstructionalMethod | null, 
 /**
  * Raw instructional method code, included when parsing fails (Tier 1 fallback).
  */

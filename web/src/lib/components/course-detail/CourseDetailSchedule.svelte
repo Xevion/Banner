@@ -39,7 +39,7 @@ let hasCalendar = $derived(course.meetingTimes.length > 0);
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-sm cursor-pointer data-[highlighted]:bg-muted transition-colors"
               onSelect={() => {
                 const a = document.createElement("a");
-                a.href = `/api/courses/${course.termCode}/${course.crn}/calendar.ics`;
+                a.href = `/api/courses/${course.termSlug}/${course.crn}/calendar.ics`;
                 a.download = "";
                 a.click();
               }}
@@ -51,7 +51,7 @@ let hasCalendar = $derived(course.meetingTimes.length > 0);
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-sm cursor-pointer data-[highlighted]:bg-muted transition-colors"
               onSelect={() => {
                 window.open(
-                  `/api/courses/${course.termCode}/${course.crn}/gcal`,
+                  `/api/courses/${course.termSlug}/${course.crn}/gcal`,
                   "_blank",
                   "noopener"
                 );

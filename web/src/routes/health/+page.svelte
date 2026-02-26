@@ -5,8 +5,8 @@ import Footer from "$lib/components/Footer.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
 import { formatNumber } from "$lib/utils";
+import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import {
-  ArrowLeft,
   Bot,
   Clock,
   Database,
@@ -246,15 +246,8 @@ onMount(() => {
 </svelte:head>
 
 <div class="min-h-screen flex flex-col items-center pt-24 px-5 pb-8">
-  <!-- Page header row: back link -->
-  <div class="w-full max-w-lg mb-4">
-    <a
-      href="/"
-      class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground no-underline transition-colors"
-    >
-      <ArrowLeft size={14} />
-      Back
-    </a>
+  <div class="w-full max-w-lg">
+    <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "System Status" }]} />
   </div>
 
   <!-- Main card -->

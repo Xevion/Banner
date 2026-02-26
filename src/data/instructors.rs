@@ -121,7 +121,7 @@ pub struct PublicInstructorProfile {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TeachingHistoryTerm {
-    pub term_code: String,
+    pub term_slug: String,
     pub term_description: String,
     pub courses: Vec<TeachingHistoryCourse>,
 }
@@ -582,14 +582,18 @@ async fn get_teaching_history(
 
     let mut terms: Vec<TeachingHistoryTerm> = Vec::new();
     for row in rows {
-        let term_description = row
-            .term_code
-            .parse::<Term>()
+        let parsed_term = row.term_code.parse::<Term>().ok();
+        let term_slug = parsed_term
+            .as_ref()
+            .map(|t| t.slug())
+            .unwrap_or_else(|| row.term_code.clone());
+        let term_description = parsed_term
+            .as_ref()
             .map(|t| t.description())
-            .unwrap_or_else(|_| row.term_code.clone());
+            .unwrap_or_else(|| row.term_code.clone());
 
         if let Some(last) = terms.last_mut()
-            && last.term_code == row.term_code
+            && last.term_slug == term_slug
         {
             last.courses.push(TeachingHistoryCourse {
                 subject: row.subject,
@@ -601,7 +605,7 @@ async fn get_teaching_history(
         }
 
         terms.push(TeachingHistoryTerm {
-            term_code: row.term_code.clone(),
+            term_slug,
             term_description,
             courses: vec![TeachingHistoryCourse {
                 subject: row.subject,

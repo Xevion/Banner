@@ -3,6 +3,7 @@ import { goto } from "$app/navigation";
 import { client } from "$lib/api";
 import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/bindings";
 import { useQuery } from "$lib/composables";
+import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import SortSelect from "$lib/components/SortSelect.svelte";
@@ -98,6 +99,7 @@ function resolveSubject(code: string): string {
 
 <div class="min-h-screen flex flex-col items-center px-3 md:px-5 pb-5 pt-20">
   <div class="w-full max-w-6xl flex flex-col pt-2">
+    <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Instructors" }]} />
     <h1 class="text-2xl font-bold mb-4">Instructor Directory</h1>
 
     <!-- Filters -->
@@ -152,14 +154,21 @@ function resolveSubject(code: string): string {
       >
         {#if query.data}
           {#each query.data.instructors as instructor (instructor.id)}
-            <a
-              href="/instructors/{instructor.slug}"
-              class="block rounded-lg border border-border bg-card p-4
+            <div
+              class="relative rounded-lg border border-border bg-card p-4
                      hover:border-foreground/20 hover:shadow-sm transition-all"
             >
+              <a
+                href="/instructors/{instructor.slug}"
+                class="absolute inset-0 rounded-lg
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                aria-label={instructor.displayName}
+              ></a>
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0 flex-1">
-                  <h2 class="font-semibold text-sm truncate">{instructor.displayName}</h2>
+                  <h2 class="font-semibold text-sm truncate">
+                    {instructor.displayName}
+                  </h2>
                   {#if instructor.email}
                     <div class="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
                       <Mail class="size-3 shrink-0" />
@@ -180,14 +189,15 @@ function resolveSubject(code: string): string {
               </div>
 
               {#if instructor.subjects.length > 0}
-                <div class="flex flex-wrap gap-1 mt-2.5">
+                <div class="relative flex flex-wrap gap-1 mt-2.5">
                   {#each instructor.subjects.slice(0, 4) as subject (subject)}
-                    <span
-                      class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded
-                             bg-muted text-muted-foreground truncate max-w-32"
+                    <a
+                      href="/subjects/{subject}"
+                      class="relative z-10 inline-block px-1.5 py-0.5 text-[10px] font-medium rounded
+                             bg-muted text-muted-foreground truncate max-w-32 hover:bg-muted/80 hover:text-foreground transition-colors"
                     >
                       {resolveSubject(subject)}
-                    </span>
+                    </a>
                   {/each}
                   {#if instructor.subjects.length > 4}
                     <span class="text-[10px] text-muted-foreground self-center">
@@ -196,7 +206,7 @@ function resolveSubject(code: string): string {
                   {/if}
                 </div>
               {/if}
-            </a>
+            </div>
           {/each}
         {/if}
       </div>

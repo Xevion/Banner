@@ -381,6 +381,15 @@ pub async fn list_crns_for_term(db_pool: &PgPool, term_code: &str) -> Result<Vec
     Ok(rows.into_iter().map(|(crn,)| crn).collect())
 }
 
+/// List all distinct subject codes, for sitemap generation.
+pub async fn list_all_subjects(db_pool: &PgPool) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT subject FROM courses ORDER BY subject")
+            .fetch_all(db_pool)
+            .await?;
+    Ok(rows.into_iter().map(|(s,)| s).collect())
+}
+
 type RangeRow = (
     Option<i32>,
     Option<i32>,

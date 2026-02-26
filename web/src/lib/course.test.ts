@@ -369,7 +369,6 @@ function makeCourse(overrides: Partial<CourseResponse> = {}): CourseResponse {
     subject: "CS",
     courseNumber: "1234",
     title: "Test Course",
-    termCode: "202510",
     termSlug: "Spring-2025",
     sequenceNumber: null,
     instructionalMethod: null,

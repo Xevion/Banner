@@ -26,10 +26,10 @@ type LoadState =
 let state = $state<LoadState>({ mode: "loading" });
 
 $effect(() => {
-  const { termCode, subject, courseNumber } = course;
+  const { termSlug, subject, courseNumber } = course;
   state = { mode: "loading" };
 
-  void client.getRelatedSections(termCode, subject, courseNumber).then((result) => {
+  void client.getRelatedSections(termSlug, subject, courseNumber).then((result) => {
     if (result.isErr) {
       state = { mode: "error", message: result.error.message };
     } else {
@@ -97,9 +97,11 @@ function handleNavigate(crn: string) {
                 >
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0">
-                            <span
-                                class="text-xs font-mono text-muted-foreground"
-                                >{section.crn}</span
+                            <a
+                                href="/courses/{course.termSlug}/{section.crn}"
+                                class="text-xs font-mono text-muted-foreground hover:underline hover:text-foreground transition-colors"
+                                onclick={(e) => e.stopPropagation()}
+                                >{section.crn}</a
                             >
                             {#if section.instructionalMethod}
                                 <span
@@ -131,9 +133,19 @@ function handleNavigate(crn: string) {
 
                     <div class="flex items-center justify-between gap-2 mt-0.5">
                         <span class="text-xs text-muted-foreground truncate">
-                            {abbreviateInstructor(
-                                primary?.displayName ?? "Staff",
-                            )}
+                            {#if primary?.slug}
+                                <a
+                                    href="/instructors/{primary.slug}"
+                                    class="hover:underline hover:text-foreground transition-colors"
+                                    onclick={(e) => e.stopPropagation()}
+                                >
+                                    {abbreviateInstructor(primary.displayName)}
+                                </a>
+                            {:else}
+                                {abbreviateInstructor(
+                                    primary?.displayName ?? "Staff",
+                                )}
+                            {/if}
                             {#if primary?.rmp?.avgRating != null}
                                 <span class="font-medium text-foreground/70"
                                     >{primary.rmp.avgRating.toFixed(1)}</span

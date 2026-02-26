@@ -24,8 +24,8 @@ export const load: PageLoad = async ({ params, fetch }) => {
 
   // Fetch sections for the instructor's most recent known term
   const allTerms = searchOptions?.terms ?? [];
-  const instructorTermCodes = new Set(profile.teachingHistory.map((h) => h.termCode));
-  const instructorTerms = allTerms.filter((t) => instructorTermCodes.has(t.code));
+  const instructorTermSlugs = new Set(profile.teachingHistory.map((h) => h.termSlug));
+  const instructorTerms = allTerms.filter((t) => instructorTermSlugs.has(t.slug));
   const defaultTerm = instructorTerms[0]?.slug ?? null;
   let initialSections = null;
   if (defaultTerm) {

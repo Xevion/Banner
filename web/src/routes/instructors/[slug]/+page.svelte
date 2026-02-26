@@ -11,6 +11,7 @@ import TermCombobox from "$lib/components/TermCombobox.svelte";
 import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
+import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import { formatInstructorName, rmpUrl } from "$lib/course";
 import { Copy, ExternalLink, Mail } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
@@ -38,8 +39,8 @@ let sectionsLoading = $state(false);
 let copiedEmail = $state(false);
 
 const allTerms = $derived(data.searchOptions?.terms ?? []);
-const instructorTermCodes = $derived(new Set(profile.teachingHistory.map((t) => t.termCode)));
-const terms = $derived(allTerms.filter((t) => instructorTermCodes.has(t.code)));
+const instructorTermSlugs = $derived(new Set(profile.teachingHistory.map((t) => t.termSlug)));
+const terms = $derived(allTerms.filter((t) => instructorTermSlugs.has(t.slug)));
 const subjects = $derived(data.searchOptions?.subjects ?? []);
 const subjectMap = $derived(
   new Map(subjects.map((s: { code: string; description: string }) => [s.code, s.description]))
@@ -81,12 +82,6 @@ async function copyEmail() {
   await navigator.clipboard.writeText(instructor.email);
   copiedEmail = true;
   setTimeout(() => (copiedEmail = false), 2000);
-}
-
-function courseSearchUrl(termCode: string, subject: string, courseNumber: string): string {
-  const term = terms.find((t) => t.code === termCode);
-  const slug = term?.slug ?? termCode;
-  return `/?term=${encodeURIComponent(slug)}&subject=${encodeURIComponent(subject)}&q=${encodeURIComponent(subject + " " + courseNumber)}`;
 }
 
 function resolveSubject(code: string): string {
@@ -131,14 +126,13 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
 
 <div class="min-h-screen flex flex-col items-center px-3 md:px-5 pb-5 pt-20">
   <div class="w-full max-w-6xl flex flex-col pt-2">
-    <!-- Breadcrumbs -->
-    <nav class="text-xs text-muted-foreground mb-4">
-      <a href="/" class="hover:text-foreground transition-colors">Home</a>
-      <span class="mx-1">&gt;</span>
-      <a href="/instructors" class="hover:text-foreground transition-colors">Instructors</a>
-      <span class="mx-1">&gt;</span>
-      <span class="text-foreground">{displayName}</span>
-    </nav>
+    <Breadcrumb
+      items={[
+        { label: "Home", href: "/" },
+        { label: "Instructors", href: "/instructors" },
+        { label: displayName },
+      ]}
+    />
 
     <!-- Header -->
     <div class="mb-6">
@@ -163,12 +157,13 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
       {#if instructor.subjects.length > 0}
         <div class="flex flex-wrap gap-1.5 mt-3">
           {#each instructor.subjects as subject (subject)}
-            <span
+            <a
+              href="/subjects/{subject}"
               class="inline-block px-2 py-0.5 text-xs font-medium rounded
-                     bg-muted text-muted-foreground truncate max-w-48"
+                     bg-muted text-muted-foreground truncate max-w-48 hover:bg-muted/80 hover:text-foreground transition-colors"
             >
               {resolveSubject(subject)}
-            </span>
+            </a>
           {/each}
         </div>
       {/if}
@@ -310,8 +305,9 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
               </tr>
             </thead>
             <tbody>
-              {#each profile.teachingHistory as term (term.termCode)}
-                {#each term.courses as course, ci (`${term.termCode}-${course.subject}-${course.courseNumber}-${course.title}`)}
+              {#each profile.teachingHistory as term (term.termSlug)}
+                {#each term.courses as course, ci (`${term.termSlug}-${course.subject}-${course.courseNumber}-${course.title}`)}
+                  {@const coursePageUrl = `/courses/${term.termSlug}/${course.subject}/${course.courseNumber}`}
                   <tr class="border-t border-border first:border-t-0 hover:bg-muted/20 transition-colors">
                     <td class="px-3 py-2 text-muted-foreground whitespace-nowrap">
                       {#if ci === 0}
@@ -320,14 +316,19 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                     </td>
                     <td class="px-3 py-2 font-medium whitespace-nowrap">
                       <a
-                        href={courseSearchUrl(term.termCode, course.subject, course.courseNumber)}
-                        class="hover:underline"
+                        href={coursePageUrl}
+                        class="hover:underline hover:text-foreground transition-colors"
                       >
                         {course.subject} {course.courseNumber}
                       </a>
                     </td>
                     <td class="px-3 py-2 text-muted-foreground truncate max-w-xs">
-                      {course.title}
+                      <a
+                        href={coursePageUrl}
+                        class="hover:underline hover:text-foreground transition-colors"
+                      >
+                        {course.title}
+                      </a>
                     </td>
                     <td class="px-3 py-2 text-right tabular-nums text-muted-foreground">
                       {course.sectionCount}

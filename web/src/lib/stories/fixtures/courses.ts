@@ -12,7 +12,6 @@ export const courseWithSeats: CourseResponse = {
   subject: "CS",
   courseNumber: "3443",
   title: "Application Programming",
-  termCode: "202510",
   termSlug: "Spring-2025",
   sequenceNumber: "001",
   instructionalMethod: { type: "InPerson" },

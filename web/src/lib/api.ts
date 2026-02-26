@@ -242,6 +242,12 @@ export class BannerApiClient {
     return this.request<SearchResponse>(`/courses/search?${query.toString()}`);
   }
 
+  async getCourse(term: string, crn: string): Promise<Result<CourseResponse, ApiErrorClass>> {
+    return this.request<CourseResponse>(
+      `/courses/${encodeURIComponent(term)}/${encodeURIComponent(crn)}`
+    );
+  }
+
   async getRelatedSections(
     term: string,
     subject: string,

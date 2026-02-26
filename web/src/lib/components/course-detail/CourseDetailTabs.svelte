@@ -19,8 +19,13 @@ const crnClipboard = useClipboard();
 const linkClipboard = useClipboard();
 
 function courseUrl(): string {
-  return `${window.location.origin}/courses/${course.termCode}/${course.crn}`;
+  return `${window.location.origin}/courses/${course.termSlug}/${course.crn}`;
 }
+
+const coursePageUrl = $derived(
+  `/courses/${course.termSlug}/${course.subject}/${course.courseNumber}`
+);
+const crnUrl = $derived(`/courses/${course.termSlug}/${course.crn}`);
 
 let leftColumn: HTMLDivElement;
 let rightColumn: HTMLDivElement;
@@ -78,7 +83,7 @@ $effect(() => {
                             <h3
                                 class="text-sm font-semibold text-foreground truncate"
                             >
-                                {course.title}
+                                <a href={coursePageUrl} class="hover:underline transition-colors">{course.title}</a>
                             </h3>
                             <button
                                 onclick={(e) =>
@@ -94,18 +99,20 @@ $effect(() => {
                             </button>
                         </div>
                         <div class="flex items-center gap-2 mt-1">
-                            <span
-                                class="text-xs text-muted-foreground font-mono"
+                            <a
+                                href={coursePageUrl}
+                                class="text-xs text-muted-foreground font-mono hover:underline hover:text-foreground transition-colors"
                             >
                                 {course.subject}
                                 {course.courseNumber}{course.sequenceNumber
                                     ? `-${course.sequenceNumber}`
                                     : ""}
-                            </span>
+                            </a>
                             <span class="text-border">|</span>
-                            <span
-                                class="text-xs text-muted-foreground font-mono"
-                                >CRN {course.crn}</span
+                            <a
+                                href={crnUrl}
+                                class="text-xs text-muted-foreground font-mono hover:underline hover:text-foreground transition-colors"
+                                >CRN {course.crn}</a
                             >
                             <button
                                 onclick={(e) =>

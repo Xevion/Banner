@@ -215,6 +215,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             get(sitemap::sitemap_instructors),
         )
         .route("/sitemap-courses-{rest}", get(sitemap::sitemap_courses))
+        .route("/sitemap-subjects.xml", get(sitemap::sitemap_subjects))
         .nest("/api", api_router)
         .nest("/api", auth_router)
         .nest("/api", admin_router)
@@ -524,7 +525,6 @@ pub struct CourseResponse {
     subject: String,
     course_number: String,
     title: String,
-    term_code: String,
     term_slug: String,
     sequence_number: Option<String>,
     instructional_method: Option<InstructionalMethod>,
@@ -825,7 +825,6 @@ pub fn build_course_response(
         subject: course.subject.clone(),
         course_number: course.course_number.clone(),
         title: course.title.clone(),
-        term_code: course.term_code.clone(),
         term_slug,
         sequence_number: course.sequence_number.clone(),
         instructional_method,
