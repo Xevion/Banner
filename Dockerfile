@@ -20,6 +20,12 @@ RUN bun install --frozen-lockfile
 # Copy frontend source code
 COPY ./web ./
 
+# PostHog host is needed at build time for the CSP reportOnly header in svelte.config.js.
+# Defaults to the official PostHog EU ingestion endpoint; override at build time if using a
+# self-hosted or proxied instance (e.g. --build-arg PUBLIC_POSTHOG_HOST=https://observe.example.com).
+ARG PUBLIC_POSTHOG_HOST="https://us.posthog.com"
+ENV PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST}
+
 # Build SSR output, then pre-compress static client assets (gzip, brotli, zstd)
 RUN bun run build && bun run scripts/compress-assets.ts
 
