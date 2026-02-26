@@ -49,7 +49,7 @@ const coursePageUrl = $derived(`/courses/${data.term}/${course.subject}/${course
           label: course.courseNumber,
           href: `/courses/${data.term}/${course.subject}/${course.courseNumber}`,
         },
-        { label: `CRN ${course.crn}` },
+        { label: course.sequenceNumber ?? `CRN ${course.crn}` },
       ]}
     />
 

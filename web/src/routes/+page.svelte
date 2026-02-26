@@ -100,10 +100,13 @@ const subjectMap: Record<string, string> = $derived(
   Object.fromEntries(subjects.map((s) => [s.code, s.description]))
 );
 
+const isSummerTerm = $derived(selectedTerm.startsWith("summer-"));
+
 const referenceData = $derived({
   instructionalMethods: searchOptions?.reference.instructionalMethods ?? [],
   campuses: searchOptions?.reference.campuses ?? [],
-  partsOfTerm: searchOptions?.reference.partsOfTerm ?? [],
+  // Summer terms don't have parts of term; suppress the filter entirely
+  partsOfTerm: isSummerTerm ? [] : (searchOptions?.reference.partsOfTerm ?? []),
   attributes: searchOptions?.reference.attributes ?? [],
 });
 
@@ -143,6 +146,13 @@ const columns = new ColumnVisibilityController({
     { id: "location", label: "Location" },
     { id: "seats", label: "Seats" },
   ],
+});
+
+// Clear part-of-term selections when switching to a summer term
+$effect(() => {
+  if (isSummerTerm && filters.partOfTerm.length > 0) {
+    filters.partOfTerm = [];
+  }
 });
 
 // Reset offset when filters change
