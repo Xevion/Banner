@@ -3,7 +3,7 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::search_courses;
+use banner::data::courses::{SearchFilter, search_courses};
 use helpers::make_course;
 
 #[sqlx::test]
@@ -53,32 +53,15 @@ async fn test_search_alphanumeric_course_numbers(pool: sqlx::PgPool) {
         .expect("Failed to insert test courses");
 
     // Test: Search for course numbers 100-5500 (should include alphanumeric)
-    let (results, _total) = search_courses(
-        &pool,
-        term,
-        None,       // subject
-        None,       // title_query
-        Some(100),  // course_number_low
-        Some(5500), // course_number_high
-        false,      // open_only
-        None,       // instructional_method
-        None,       // campus
-        None,       // wait_count_max
-        None,       // days
-        None,       // time_start
-        None,       // time_end
-        None,       // part_of_term
-        None,       // attributes
-        None,       // credit_hour_min
-        None,       // credit_hour_max
-        None,       // instructor
-        100,        // limit
-        0,          // offset
-        None,       // sort_by
-        None,       // sort_dir
-    )
-    .await
-    .expect("Search failed");
+    let filter = SearchFilter {
+        term_code: term,
+        course_number_low: Some(100),
+        course_number_high: Some(5500),
+        ..Default::default()
+    };
+    let (results, _total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("Search failed");
 
     // Should include:
     // - 0100 (100 >= 100)

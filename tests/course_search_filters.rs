@@ -6,66 +6,15 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::search_courses;
+use banner::data::courses::{SearchFilter, search_courses};
 use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
-/// Search parameters with defaults for every filter.
-///
-/// Tests set only the fields they care about; everything else passes through
-/// as `None` / `false` / sensible defaults.
-struct SearchParams<'a> {
-    subject: Option<&'a [String]>,
-    open_only: bool,
-    days: Option<&'a [String]>,
-    time_start: Option<&'a str>,
-    time_end: Option<&'a str>,
-    limit: i32,
-    offset: i32,
-}
-
-impl<'a> Default for SearchParams<'a> {
-    fn default() -> Self {
-        Self {
-            subject: None,
-            open_only: false,
-            days: None,
-            time_start: None,
-            time_end: None,
-            limit: 100,
-            offset: 0,
-        }
-    }
-}
-
-/// Run `search_courses` using a `SearchParams`, returning (CRNs, total_count).
-async fn search(pool: &PgPool, p: &SearchParams<'_>) -> (Vec<String>, i64) {
-    let (results, total) = search_courses(
-        pool,
-        "202620",
-        p.subject,    // subject
-        None,         // title_query
-        None,         // course_number_low
-        None,         // course_number_high
-        p.open_only,  // open_only
-        None,         // instructional_method
-        None,         // campus
-        None,         // wait_count_max
-        p.days,       // days
-        p.time_start, // time_start
-        p.time_end,   // time_end
-        None,         // part_of_term
-        None,         // attributes
-        None,         // credit_hour_min
-        None,         // credit_hour_max
-        None,         // instructor
-        p.limit,      // limit
-        p.offset,     // offset
-        None,         // sort_by
-        None,         // sort_dir
-    )
-    .await
-    .expect("search_courses failed");
+/// Run `search_courses` using a `SearchFilter`, returning (CRNs, total_count).
+async fn search(pool: &PgPool, filter: &SearchFilter<'_>) -> (Vec<String>, i64) {
+    let (results, total) = search_courses(pool, filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     let crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
     (crns, total)
@@ -217,7 +166,8 @@ async fn test_filter_open_only(pool: PgPool) {
 
     let (crns, total) = search(
         &pool,
-        &SearchParams {
+        &SearchFilter {
+            term_code: "202620",
             open_only: true,
             ..Default::default()
         },
@@ -237,8 +187,9 @@ async fn test_filter_by_subject(pool: PgPool) {
     let subjects = vec!["CS".to_owned()];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
-            subject: Some(&subjects),
+        &SearchFilter {
+            term_code: "202620",
+            subjects: Some(&subjects),
             ..Default::default()
         },
     )
@@ -261,8 +212,9 @@ async fn test_filter_by_multiple_subjects(pool: PgPool) {
     let subjects = vec!["CS".to_owned(), "MATH".to_owned()];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
-            subject: Some(&subjects),
+        &SearchFilter {
+            term_code: "202620",
+            subjects: Some(&subjects),
             ..Default::default()
         },
     )
@@ -285,7 +237,8 @@ async fn test_filter_by_time_start(pool: PgPool) {
     // Courses with at least one meeting starting at or after 10:00:00
     let (crns, total) = search(
         &pool,
-        &SearchParams {
+        &SearchFilter {
+            term_code: "202620",
             time_start: Some("10:00:00"),
             ..Default::default()
         },
@@ -317,7 +270,8 @@ async fn test_filter_by_time_end(pool: PgPool) {
     // Courses with at least one meeting ending at or before 12:00:00
     let (crns, total) = search(
         &pool,
-        &SearchParams {
+        &SearchFilter {
+            term_code: "202620",
             time_end: Some("12:00:00"),
             ..Default::default()
         },
@@ -350,8 +304,9 @@ async fn test_combined_subject_and_days(pool: PgPool) {
     let days = vec!["monday".to_owned()];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
-            subject: Some(&subjects),
+        &SearchFilter {
+            term_code: "202620",
+            subjects: Some(&subjects),
             days: Some(&days),
             ..Default::default()
         },
@@ -380,7 +335,8 @@ async fn test_combined_open_only_and_days(pool: PgPool) {
     let days = vec!["tuesday".to_owned(), "thursday".to_owned()];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
+        &SearchFilter {
+            term_code: "202620",
             open_only: true,
             days: Some(&days),
             ..Default::default()
@@ -411,7 +367,8 @@ async fn test_combined_days_and_time_range(pool: PgPool) {
     ];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
+        &SearchFilter {
+            term_code: "202620",
             days: Some(&days),
             time_start: Some("09:00:00"),
             time_end: Some("10:00:00"),
@@ -448,8 +405,9 @@ async fn test_combined_triple_filter(pool: PgPool) {
     let days = vec!["monday".to_owned()];
     let (crns, total) = search(
         &pool,
-        &SearchParams {
-            subject: Some(&subjects),
+        &SearchFilter {
+            term_code: "202620",
+            subjects: Some(&subjects),
             open_only: true,
             days: Some(&days),
             ..Default::default()
@@ -478,47 +436,35 @@ async fn test_pagination_with_filters(pool: PgPool) {
     // Monday courses: 20001 (MWF), 20003 (MW), 20004 (MWF), 20006 (MW), 20007 (has MWF)
     // That's 5 courses total.
 
+    let filter = SearchFilter {
+        term_code: "202620",
+        days: Some(&days),
+        ..Default::default()
+    };
+
     // First page
-    let (page1_crns, total1) = search(
-        &pool,
-        &SearchParams {
-            days: Some(&days),
-            limit: 2,
-            offset: 0,
-            ..Default::default()
-        },
-    )
-    .await;
+    let (results, total1) = search_courses(&pool, &filter, 2, 0, None, None)
+        .await
+        .expect("search_courses failed");
+    let page1_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
 
     assert_eq!(total1, 5, "5 courses have Monday meetings");
     assert_eq!(page1_crns.len(), 2, "page 1 returns limit=2 results");
 
     // Second page
-    let (page2_crns, total2) = search(
-        &pool,
-        &SearchParams {
-            days: Some(&days),
-            limit: 2,
-            offset: 2,
-            ..Default::default()
-        },
-    )
-    .await;
+    let (results, total2) = search_courses(&pool, &filter, 2, 2, None, None)
+        .await
+        .expect("search_courses failed");
+    let page2_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
 
     assert_eq!(total2, 5, "total count is stable across pages");
     assert_eq!(page2_crns.len(), 2, "page 2 returns limit=2 results");
 
     // Third page (remainder)
-    let (page3_crns, total3) = search(
-        &pool,
-        &SearchParams {
-            days: Some(&days),
-            limit: 2,
-            offset: 4,
-            ..Default::default()
-        },
-    )
-    .await;
+    let (results, total3) = search_courses(&pool, &filter, 2, 4, None, None)
+        .await
+        .expect("search_courses failed");
+    let page3_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
 
     assert_eq!(total3, 5, "total count is stable across pages");
     assert_eq!(page3_crns.len(), 1, "page 3 returns the remaining 1 result");

@@ -7,7 +7,7 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::search_courses;
+use banner::data::courses::{SearchFilter, search_courses};
 use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
@@ -129,30 +129,14 @@ async fn insert_test_courses(pool: &PgPool) {
 
 /// Helper: run `search_courses` with only the `days` filter set.
 async fn search_by_days(pool: &PgPool, days: Option<&[String]>) -> (Vec<String>, i64) {
-    let (results, total) = search_courses(
-        pool, "202620", None,  // subject
-        None,  // title_query
-        None,  // course_number_low
-        None,  // course_number_high
-        false, // open_only
-        None,  // instructional_method
-        None,  // campus
-        None,  // wait_count_max
-        days,  // days
-        None,  // time_start
-        None,  // time_end
-        None,  // part_of_term
-        None,  // attributes
-        None,  // credit_hour_min
-        None,  // credit_hour_max
-        None,  // instructor
-        100,   // limit
-        0,     // offset
-        None,  // sort_by
-        None,  // sort_dir
-    )
-    .await
-    .expect("search_courses failed");
+    let filter = SearchFilter {
+        term_code: "202620",
+        days,
+        ..Default::default()
+    };
+    let (results, total) = search_courses(pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     let crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
     (crns, total)

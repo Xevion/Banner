@@ -432,53 +432,57 @@ pub(super) async fn search_courses(
         .map(|fv| fv.to_code().into_owned())
         .collect();
 
-    let (courses, total_count) = data::courses::search_courses(
-        &state.db_pool,
-        &term_code,
-        if params.subject.is_empty() {
+    let filter = data::courses::SearchFilter {
+        term_code: &term_code,
+        subjects: if params.subject.is_empty() {
             None
         } else {
             Some(&params.subject)
         },
-        params.query.as_deref(),
-        params.course_number_low,
-        params.course_number_high,
-        params.open_only,
-        if method_codes.is_empty() {
+        query: params.query.as_deref(),
+        course_number_low: params.course_number_low,
+        course_number_high: params.course_number_high,
+        open_only: params.open_only,
+        instructional_method: if method_codes.is_empty() {
             None
         } else {
             Some(&method_codes)
         },
-        if campus_codes.is_empty() {
+        campus: if campus_codes.is_empty() {
             None
         } else {
             Some(&campus_codes)
         },
-        params.wait_count_max,
-        if params.days.is_empty() {
+        wait_count_max: params.wait_count_max,
+        days: if params.days.is_empty() {
             None
         } else {
             Some(&params.days)
         },
-        params.time_start.as_deref(),
-        params.time_end.as_deref(),
-        if pot_codes.is_empty() {
+        time_start: params.time_start.as_deref(),
+        time_end: params.time_end.as_deref(),
+        part_of_term: if pot_codes.is_empty() {
             None
         } else {
             Some(&pot_codes)
         },
-        if attr_codes.is_empty() {
+        attributes: if attr_codes.is_empty() {
             None
         } else {
             Some(&attr_codes)
         },
-        params.credit_hour_min,
-        params.credit_hour_max,
-        if params.instructor.is_empty() {
+        credit_hour_min: params.credit_hour_min,
+        credit_hour_max: params.credit_hour_max,
+        instructors: if params.instructor.is_empty() {
             None
         } else {
             Some(&params.instructor[..])
         },
+    };
+
+    let (courses, total_count) = data::courses::search_courses(
+        &state.db_pool,
+        &filter,
         limit,
         offset,
         params.sort_by,

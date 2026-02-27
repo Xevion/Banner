@@ -6,7 +6,7 @@ use crate::banner::Course as BannerCourse;
 use crate::data::batch::batch_upsert_courses as batch_upsert_impl;
 use crate::data::models::{Course, CourseInstructorDetail, UpsertCounts};
 use anyhow::Result;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::HashMap;
 use ts_rs::TS;
 
@@ -43,52 +43,158 @@ pub struct FilterRanges {
     pub wait_count_max: i32,
 }
 
-/// Shared WHERE clause for course search filters.
+/// Filter parameters for course search queries.
 ///
-/// Parameters $1-$17 match the bind order in `search_courses`.
+/// Borrows all data from the caller -- the filter is short-lived (one request).
+#[derive(Debug, Default)]
+pub struct SearchFilter<'a> {
+    pub term_code: &'a str,
+    pub subjects: Option<&'a [String]>,
+    pub query: Option<&'a str>,
+    pub course_number_low: Option<i32>,
+    pub course_number_high: Option<i32>,
+    pub open_only: bool,
+    pub instructional_method: Option<&'a [String]>,
+    pub campus: Option<&'a [String]>,
+    pub wait_count_max: Option<i32>,
+    pub days: Option<&'a [String]>,
+    pub time_start: Option<&'a str>,
+    pub time_end: Option<&'a str>,
+    pub part_of_term: Option<&'a [String]>,
+    pub attributes: Option<&'a [String]>,
+    pub credit_hour_min: Option<f64>,
+    pub credit_hour_max: Option<f64>,
+    pub instructors: Option<&'a [String]>,
+}
+
+/// Append search filter WHERE conditions to a QueryBuilder.
 ///
-/// Note: Course number filtering extracts numeric prefix to support alphanumeric
+/// Course number filtering extracts the numeric prefix to support alphanumeric
 /// course numbers (e.g., "015X", "399H"). The numeric part is compared against
 /// the range, so "399H" matches a search for courses 300-400.
-const SEARCH_WHERE: &str = r#"
-    WHERE term_code = $1
-      AND ($2::text[] IS NULL OR subject = ANY($2))
-      AND ($3::text IS NULL OR title_search @@ plainto_tsquery('simple_unaccent', $3) OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent($3) || '%')
-      AND ($4::int IS NULL OR (substring(course_number from '^\d+'))::int >= $4)
-      AND ($5::int IS NULL OR (substring(course_number from '^\d+'))::int <= $5)
-      AND ($6::bool = false OR max_enrollment > enrollment)
-      AND ($7::text[] IS NULL OR instructional_method = ANY($7))
-      AND ($8::text[] IS NULL OR campus = ANY($8))
-      AND ($9::int IS NULL OR wait_count <= $9)
-      AND ($10::text[] IS NULL OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt,
-               LATERAL jsonb_array_elements_text(mt->'days') AS d(day)
-          WHERE d.day = ANY($10)
-          GROUP BY mt
-          HAVING COUNT(DISTINCT d.day) = array_length($10, 1)
-      ))
-      AND ($11::text IS NULL OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt
-          WHERE (mt->'timeRange'->>'start') >= $11
-      ))
-      AND ($12::text IS NULL OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt
-          WHERE (mt->'timeRange'->>'end') <= $12
-      ))
-      AND ($13::text[] IS NULL OR part_of_term = ANY($13))
-      AND ($14::text[] IS NULL OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements_text(attributes) a
-          WHERE a = ANY($14)
-      ))
-      AND ($15::float8 IS NULL OR COALESCE(credit_hours, credit_hour_low, 0) >= $15)
-      AND ($16::float8 IS NULL OR COALESCE(credit_hours, credit_hour_high, 0) <= $16)
-      AND ($17::text[] IS NULL OR EXISTS (
-          SELECT 1 FROM course_instructors ci
-          JOIN instructors i ON i.id = ci.instructor_id
-          WHERE ci.course_id = courses.id
-            AND i.slug = ANY($17)
-      ))
-"#;
+fn push_search_conditions<'args>(
+    builder: &mut QueryBuilder<'args, Postgres>,
+    filter: &'args SearchFilter<'_>,
+) {
+    builder.push(" WHERE term_code = ");
+    builder.push_bind(filter.term_code);
+
+    if let Some(subjects) = filter.subjects {
+        builder.push(" AND subject = ANY(");
+        builder.push_bind(subjects);
+        builder.push(")");
+    }
+
+    if let Some(query) = filter.query {
+        builder.push(" AND (title_search @@ plainto_tsquery('simple_unaccent', ");
+        builder.push_bind(query);
+        builder.push(") OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent(");
+        builder.push_bind(query);
+        builder.push(") || '%')");
+    }
+
+    if let Some(low) = filter.course_number_low {
+        builder.push(r" AND (substring(course_number from '^\d+'))::int >= ");
+        builder.push_bind(low);
+    }
+
+    if let Some(high) = filter.course_number_high {
+        builder.push(r" AND (substring(course_number from '^\d+'))::int <= ");
+        builder.push_bind(high);
+    }
+
+    if filter.open_only {
+        builder.push(" AND max_enrollment > enrollment");
+    }
+
+    if let Some(method) = filter.instructional_method {
+        builder.push(" AND instructional_method = ANY(");
+        builder.push_bind(method);
+        builder.push(")");
+    }
+
+    if let Some(campus) = filter.campus {
+        builder.push(" AND campus = ANY(");
+        builder.push_bind(campus);
+        builder.push(")");
+    }
+
+    if let Some(wc) = filter.wait_count_max {
+        builder.push(" AND wait_count <= ");
+        builder.push_bind(wc);
+    }
+
+    if let Some(days) = filter.days {
+        builder.push(
+            " AND EXISTS (\
+             SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt, \
+             LATERAL jsonb_array_elements_text(mt->'days') AS d(day) \
+             WHERE d.day = ANY(",
+        );
+        builder.push_bind(days);
+        builder.push(") GROUP BY mt HAVING COUNT(DISTINCT d.day) = array_length(");
+        builder.push_bind(days);
+        builder.push(", 1))");
+    }
+
+    if let Some(start) = filter.time_start {
+        builder.push(
+            " AND EXISTS (\
+             SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt \
+             WHERE (mt->'timeRange'->>'start') >= ",
+        );
+        builder.push_bind(start);
+        builder.push(")");
+    }
+
+    if let Some(end) = filter.time_end {
+        builder.push(
+            " AND EXISTS (\
+             SELECT 1 FROM jsonb_array_elements(meeting_times) AS mt \
+             WHERE (mt->'timeRange'->>'end') <= ",
+        );
+        builder.push_bind(end);
+        builder.push(")");
+    }
+
+    if let Some(pot) = filter.part_of_term {
+        builder.push(" AND part_of_term = ANY(");
+        builder.push_bind(pot);
+        builder.push(")");
+    }
+
+    if let Some(attrs) = filter.attributes {
+        builder.push(
+            " AND EXISTS (\
+             SELECT 1 FROM jsonb_array_elements_text(attributes) a \
+             WHERE a = ANY(",
+        );
+        builder.push_bind(attrs);
+        builder.push("))");
+    }
+
+    if let Some(min) = filter.credit_hour_min {
+        builder.push(" AND COALESCE(credit_hours, credit_hour_low, 0) >= ");
+        builder.push_bind(min);
+    }
+
+    if let Some(max) = filter.credit_hour_max {
+        builder.push(" AND COALESCE(credit_hours, credit_hour_high, 0) <= ");
+        builder.push_bind(max);
+    }
+
+    if let Some(instructors) = filter.instructors {
+        builder.push(
+            " AND EXISTS (\
+             SELECT 1 FROM course_instructors ci \
+             JOIN instructors i ON i.id = ci.instructor_id \
+             WHERE ci.course_id = courses.id \
+             AND i.slug = ANY(",
+        );
+        builder.push_bind(instructors);
+        builder.push("))");
+    }
+}
 
 /// Build a safe ORDER BY clause from typed sort parameters.
 ///
@@ -126,26 +232,9 @@ fn sort_clause(column: Option<SortColumn>, direction: Option<SortDirection>) -> 
 ///
 /// Returns `(courses, total_count)` for pagination. Uses FTS tsvector for word
 /// search and falls back to trigram ILIKE for substring matching.
-#[allow(clippy::too_many_arguments)]
 pub async fn search_courses(
     db_pool: &PgPool,
-    term_code: &str,
-    subject: Option<&[String]>,
-    title_query: Option<&str>,
-    course_number_low: Option<i32>,
-    course_number_high: Option<i32>,
-    open_only: bool,
-    instructional_method: Option<&[String]>,
-    campus: Option<&[String]>,
-    wait_count_max: Option<i32>,
-    days: Option<&[String]>,
-    time_start: Option<&str>,
-    time_end: Option<&str>,
-    part_of_term: Option<&[String]>,
-    attributes: Option<&[String]>,
-    credit_hour_min: Option<f64>,
-    credit_hour_max: Option<f64>,
-    instructor: Option<&[String]>,
+    filter: &SearchFilter<'_>,
     limit: i32,
     offset: i32,
     sort_by: Option<SortColumn>,
@@ -153,53 +242,27 @@ pub async fn search_courses(
 ) -> Result<(Vec<Course>, i64)> {
     let order_by = sort_clause(sort_by, sort_dir);
 
-    let data_query =
-        format!("SELECT * FROM courses {SEARCH_WHERE} ORDER BY {order_by} LIMIT $18 OFFSET $19");
-    let count_query = format!("SELECT COUNT(*) FROM courses {SEARCH_WHERE}");
+    // Data query
+    let mut data_builder: QueryBuilder<Postgres> = QueryBuilder::new("SELECT * FROM courses");
+    push_search_conditions(&mut data_builder, filter);
+    data_builder.push(" ORDER BY ");
+    data_builder.push(&order_by);
+    data_builder.push(" LIMIT ");
+    data_builder.push_bind(limit);
+    data_builder.push(" OFFSET ");
+    data_builder.push_bind(offset);
 
-    let courses = sqlx::query_as::<_, Course>(&data_query)
-        .bind(term_code) // $1
-        .bind(subject) // $2
-        .bind(title_query) // $3
-        .bind(course_number_low) // $4
-        .bind(course_number_high) // $5
-        .bind(open_only) // $6
-        .bind(instructional_method) // $7
-        .bind(campus) // $8
-        .bind(wait_count_max) // $9
-        .bind(days) // $10
-        .bind(time_start) // $11
-        .bind(time_end) // $12
-        .bind(part_of_term) // $13
-        .bind(attributes) // $14
-        .bind(credit_hour_min) // $15
-        .bind(credit_hour_max) // $16
-        .bind(instructor) // $17
-        .bind(limit) // $18
-        .bind(offset) // $19
+    let courses = data_builder
+        .build_query_as::<Course>()
         .fetch_all(db_pool)
         .await?;
 
-    let total: (i64,) = sqlx::query_as(&count_query)
-        .bind(term_code) // $1
-        .bind(subject) // $2
-        .bind(title_query) // $3
-        .bind(course_number_low) // $4
-        .bind(course_number_high) // $5
-        .bind(open_only) // $6
-        .bind(instructional_method) // $7
-        .bind(campus) // $8
-        .bind(wait_count_max) // $9
-        .bind(days) // $10
-        .bind(time_start) // $11
-        .bind(time_end) // $12
-        .bind(part_of_term) // $13
-        .bind(attributes) // $14
-        .bind(credit_hour_min) // $15
-        .bind(credit_hour_max) // $16
-        .bind(instructor) // $17
-        .fetch_one(db_pool)
-        .await?;
+    // Count query
+    let mut count_builder: QueryBuilder<Postgres> =
+        QueryBuilder::new("SELECT COUNT(*) FROM courses");
+    push_search_conditions(&mut count_builder, filter);
+
+    let total: (i64,) = count_builder.build_query_as().fetch_one(db_pool).await?;
 
     Ok((courses, total.0))
 }

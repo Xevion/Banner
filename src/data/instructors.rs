@@ -175,85 +175,62 @@ pub async fn list_public_instructors(
     pool: &PgPool,
     params: &PublicInstructorListParams,
 ) -> Result<PublicInstructorListResponse> {
+    use sqlx::{Postgres, QueryBuilder};
+
+    use super::scoring::{self, UnratedPolicy};
+
     let page = params.page.max(1);
     let per_page = params.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    use super::scoring::{self, UnratedPolicy};
-
-    // Build dynamic WHERE
-    let mut conditions = vec![
-        // Only instructors that have taught at least one section
-        "EXISTS (SELECT 1 FROM course_instructors ci WHERE ci.instructor_id = i.id)".to_string(),
-        // Must have a slug
-        "i.slug IS NOT NULL".to_string(),
-    ];
-
+    // Determine sort clause and any additional filter it requires
+    let mut extra_condition: Option<String> = None;
     let sort_clause = match params.sort.as_str() {
         "name_desc" => "i.display_name DESC".to_string(),
         sort_key if sort_key.starts_with("score_") => {
             let ascending = sort_key.ends_with("_asc");
             let (order, filter) = scoring::rating_sort_sql(ascending, UnratedPolicy::AsPrior);
-            if let Some(f) = filter {
-                conditions.push(f);
-            }
+            extra_condition = filter;
             order
         }
         _ => "i.display_name ASC".to_string(),
     };
 
-    let mut bind_idx = 0u32;
+    /// Append instructor list WHERE conditions to a QueryBuilder.
+    fn push_instructor_conditions<'args>(
+        builder: &mut QueryBuilder<'args, Postgres>,
+        params: &'args PublicInstructorListParams,
+        extra_condition: &Option<String>,
+    ) {
+        builder.push(
+            " WHERE EXISTS (SELECT 1 FROM course_instructors ci WHERE ci.instructor_id = i.id) \
+             AND i.slug IS NOT NULL",
+        );
 
-    if params.search.is_some() {
-        bind_idx += 1;
-        conditions.push(format!(
-            "(immutable_unaccent(i.display_name) % immutable_unaccent(${bind_idx}) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(${bind_idx}) || '%')"
-        ));
+        if let Some(cond) = extra_condition {
+            builder.push(" AND ");
+            builder.push(cond.as_str());
+        }
+
+        if let Some(ref search) = params.search {
+            builder.push(" AND (immutable_unaccent(i.display_name) % immutable_unaccent(");
+            builder.push_bind(search);
+            builder
+                .push(") OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(");
+            builder.push_bind(search);
+            builder.push(") || '%')");
+        }
+
+        if let Some(ref subject) = params.subject {
+            builder.push(
+                " AND EXISTS (SELECT 1 FROM course_instructors ci2 \
+                 JOIN courses c2 ON c2.id = ci2.course_id \
+                 WHERE ci2.instructor_id = i.id AND c2.subject = ",
+            );
+            builder.push_bind(subject);
+            builder.push(")");
+        }
     }
-    if params.subject.is_some() {
-        bind_idx += 1;
-        conditions.push(format!(
-            "EXISTS (SELECT 1 FROM course_instructors ci2 JOIN courses c2 ON c2.id = ci2.course_id WHERE ci2.instructor_id = i.id AND c2.subject = ${bind_idx})"
-        ));
-    }
-
-    let where_clause = format!("WHERE {}", conditions.join(" AND "));
-
-    let query_str = format!(
-        r#"
-        SELECT
-            i.id, i.slug, i.display_name, i.email,
-            COALESCE(
-                (SELECT array_agg(DISTINCT c.subject ORDER BY c.subject)
-                 FROM course_instructors ci JOIN courses c ON c.id = ci.course_id
-                 WHERE ci.instructor_id = i.id),
-                ARRAY[]::text[]
-            ) as subjects,
-            rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,
-            bb.bb_avg_instructor_rating, bb.bb_total_responses,
-            sc.display_score, sc.sort_score, sc.ci_lower, sc.ci_upper,
-            sc.confidence, sc.source as score_source,
-            sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
-        FROM instructors i
-        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
-        LEFT JOIN (
-            SELECT ibl.instructor_id,
-                AVG(be.instructor_rating)::real as bb_avg_instructor_rating,
-                SUM(be.instructor_response_count)::bigint as bb_total_responses
-            FROM instructor_bluebook_links ibl
-            JOIN bluebook_evaluations be ON ibl.instructor_name = be.instructor_name
-                AND (ibl.subject IS NULL OR ibl.subject = be.subject)
-            WHERE ibl.status IN ('approved', 'auto')
-                AND be.instructor_rating IS NOT NULL
-                AND be.instructor_response_count > 0
-            GROUP BY ibl.instructor_id
-        ) bb ON bb.instructor_id = i.id
-        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id
-        {where_clause}
-        ORDER BY {sort_clause}
-        LIMIT {per_page} OFFSET {offset}
-        "#
-    );
 
     #[derive(sqlx::FromRow)]
     struct Row {
@@ -277,30 +254,58 @@ pub async fn list_public_instructors(
         sc_bb_count: Option<i32>,
     }
 
-    let mut query = sqlx::query_as::<_, Row>(&query_str);
-    if let Some(ref search) = params.search {
-        query = query.bind(search);
-    }
-    if let Some(ref subject) = params.subject {
-        query = query.bind(subject);
-    }
+    // Data query
+    let mut data_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+        "SELECT \
+            i.id, i.slug, i.display_name, i.email, \
+            COALESCE(\
+                (SELECT array_agg(DISTINCT c.subject ORDER BY c.subject) \
+                 FROM course_instructors ci JOIN courses c ON c.id = ci.course_id \
+                 WHERE ci.instructor_id = i.id), \
+                ARRAY[]::text[]\
+            ) as subjects, \
+            rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id, \
+            bb.bb_avg_instructor_rating, bb.bb_total_responses, \
+            sc.display_score, sc.sort_score, sc.ci_lower, sc.ci_upper, \
+            sc.confidence, sc.source as score_source, \
+            sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count \
+         FROM instructors i \
+         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id \
+         LEFT JOIN (\
+             SELECT ibl.instructor_id, \
+                 AVG(be.instructor_rating)::real as bb_avg_instructor_rating, \
+                 SUM(be.instructor_response_count)::bigint as bb_total_responses \
+             FROM instructor_bluebook_links ibl \
+             JOIN bluebook_evaluations be ON ibl.instructor_name = be.instructor_name \
+                 AND (ibl.subject IS NULL OR ibl.subject = be.subject) \
+             WHERE ibl.status IN ('approved', 'auto') \
+                 AND be.instructor_rating IS NOT NULL \
+                 AND be.instructor_response_count > 0 \
+             GROUP BY ibl.instructor_id\
+         ) bb ON bb.instructor_id = i.id \
+         LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id",
+    );
+    push_instructor_conditions(&mut data_builder, params, &extra_condition);
+    data_builder.push(" ORDER BY ");
+    data_builder.push(sort_clause.as_str());
+    data_builder.push(" LIMIT ");
+    data_builder.push_bind(per_page);
+    data_builder.push(" OFFSET ");
+    data_builder.push_bind(offset);
 
-    let rows = query
+    let rows = data_builder
+        .build_query_as::<Row>()
         .fetch_all(pool)
         .await
         .context("failed to list public instructors")?;
 
-    // Count total
-    let count_str = format!("SELECT COUNT(*) FROM instructors i {where_clause}");
-    let mut count_query = sqlx::query_as::<_, (i64,)>(&count_str);
-    if let Some(ref search) = params.search {
-        count_query = count_query.bind(search);
-    }
-    if let Some(ref subject) = params.subject {
-        count_query = count_query.bind(subject);
-    }
+    // Count query
+    let mut count_builder: QueryBuilder<Postgres> =
+        QueryBuilder::new("SELECT COUNT(*) FROM instructors i");
+    push_instructor_conditions(&mut count_builder, params, &extra_condition);
 
-    let (total,) = count_query
+    let (total,): (i64,) = count_builder
+        .build_query_as()
         .fetch_one(pool)
         .await
         .context("failed to count public instructors")?;

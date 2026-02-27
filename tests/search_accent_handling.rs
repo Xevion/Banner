@@ -6,7 +6,7 @@ mod helpers;
 
 use banner::banner::models::meetings::FacultyItem;
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{search_courses, suggest_courses, suggest_instructors};
+use banner::data::courses::{SearchFilter, search_courses, suggest_courses, suggest_instructors};
 use banner::data::instructors::{PublicInstructorListParams, list_public_instructors};
 use helpers::make_course;
 use sqlx::PgPool;
@@ -126,33 +126,15 @@ async fn insert_accented_test_data(pool: &PgPool) {
 async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Search "Introduccion" (no accent) should find "Introducción a la Lingüística"
-    let (results, total) = search_courses(
-        &pool,
-        "202620",
-        None,                 // subject
-        Some("Introduccion"), // title_query -- no accent
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        100,
-        0,
-        None,
-        None,
-    )
-    .await
-    .expect("search_courses failed");
+    // Search "Introduccion" (no accent) should find "Introduccion a la Linguistica"
+    let filter = SearchFilter {
+        term_code: "202620",
+        query: Some("Introduccion"),
+        ..Default::default()
+    };
+    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     assert!(
         total >= 1,
@@ -168,33 +150,15 @@ async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
 async fn test_search_courses_title_unaccented_finds_umlaut(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Search "Etudes" (no accent) should find "Études in Music Theory"
-    let (results, total) = search_courses(
-        &pool,
-        "202620",
-        None,
-        Some("Etudes"),
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        100,
-        0,
-        None,
-        None,
-    )
-    .await
-    .expect("search_courses failed");
+    // Search "Etudes" (no accent) should find "Etudes in Music Theory"
+    let filter = SearchFilter {
+        term_code: "202620",
+        query: Some("Etudes"),
+        ..Default::default()
+    };
+    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     assert!(
         total >= 1,
@@ -210,33 +174,15 @@ async fn test_search_courses_title_unaccented_finds_umlaut(pool: PgPool) {
 async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Search "Algebra" (no accent) should find "Álgebra Lineal"
-    let (results, total) = search_courses(
-        &pool,
-        "202620",
-        None,
-        Some("Algebra"),
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        100,
-        0,
-        None,
-        None,
-    )
-    .await
-    .expect("search_courses failed");
+    // Search "Algebra" (no accent) should find "Algebra Lineal"
+    let filter = SearchFilter {
+        term_code: "202620",
+        query: Some("Algebra"),
+        ..Default::default()
+    };
+    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     assert!(
         total >= 1,
@@ -252,34 +198,16 @@ async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
 async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Filter by slug for García López, José -- slug assigned in insert_accented_test_data
+    // Filter by slug for Garcia Lopez, Jose -- slug assigned in insert_accented_test_data
     let slugs = vec!["garcia-lopez-jose-t001".to_string()];
-    let (results, total) = search_courses(
-        &pool,
-        "202620",
-        None,
-        None,
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(&slugs),
-        100,
-        0,
-        None,
-        None,
-    )
-    .await
-    .expect("search_courses failed");
+    let filter = SearchFilter {
+        term_code: "202620",
+        instructors: Some(&slugs),
+        ..Default::default()
+    };
+    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     assert!(
         total >= 1,
@@ -295,34 +223,16 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
 async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
     insert_accented_test_data(&pool).await;
 
-    // Filter by slug for Müller, François -- slug assigned in insert_accented_test_data
+    // Filter by slug for Muller, Francois -- slug assigned in insert_accented_test_data
     let slugs = vec!["muller-francois-t002".to_string()];
-    let (results, total) = search_courses(
-        &pool,
-        "202620",
-        None,
-        None,
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(&slugs),
-        100,
-        0,
-        None,
-        None,
-    )
-    .await
-    .expect("search_courses failed");
+    let filter = SearchFilter {
+        term_code: "202620",
+        instructors: Some(&slugs),
+        ..Default::default()
+    };
+    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+        .await
+        .expect("search_courses failed");
 
     assert!(
         total >= 1,
