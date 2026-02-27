@@ -1,6 +1,6 @@
 //! Database operations for the `term_subjects` table (cached per-term subject lists).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use sqlx::PgPool;
 
 use crate::banner::models::common::Pair;
@@ -18,7 +18,8 @@ pub async fn get_cached(term_code: &str, pool: &PgPool) -> Result<Vec<Pair>> {
     )
     .bind(term_code)
     .fetch_all(pool)
-    .await?;
+    .await
+    .context("failed to fetch cached term subjects")?;
 
     Ok(rows
         .into_iter()
@@ -32,12 +33,16 @@ pub async fn cache(term_code: &str, subjects: &[Pair], pool: &PgPool) -> Result<
         return Ok(());
     }
 
-    let mut tx = pool.begin().await?;
+    let mut tx = pool
+        .begin()
+        .await
+        .context("failed to begin transaction for term subjects cache")?;
 
     sqlx::query("DELETE FROM term_subjects WHERE term_code = $1")
         .bind(term_code)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to delete existing term subjects")?;
 
     let term_codes: Vec<&str> = subjects.iter().map(|_| term_code).collect();
     let subject_codes: Vec<&str> = subjects.iter().map(|s| s.code.as_str()).collect();
@@ -51,8 +56,11 @@ pub async fn cache(term_code: &str, subjects: &[Pair], pool: &PgPool) -> Result<
     .bind(&term_codes)
     .bind(&subject_codes)
     .execute(&mut *tx)
-    .await?;
+    .await
+    .context("failed to insert term subjects")?;
 
-    tx.commit().await?;
+    tx.commit()
+        .await
+        .context("failed to commit term subjects cache transaction")?;
     Ok(())
 }

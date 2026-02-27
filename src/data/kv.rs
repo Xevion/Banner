@@ -4,7 +4,7 @@
 //! bot command fingerprints, and other ephemeral state that should survive
 //! normal restarts but is safe to lose on DB crash recovery.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
@@ -12,7 +12,8 @@ use sqlx::PgPool;
 pub async fn get(pool: &PgPool, key: &str) -> Result<Option<String>> {
     let value = sqlx::query_scalar!("SELECT value FROM app_kv WHERE key = $1", key)
         .fetch_optional(pool)
-        .await?;
+        .await
+        .context("failed to fetch kv value")?;
     Ok(value)
 }
 
@@ -29,7 +30,8 @@ pub async fn set(pool: &PgPool, key: &str, value: &str) -> Result<()> {
         value,
     )
     .execute(pool)
-    .await?;
+    .await
+    .context("failed to upsert kv pair")?;
     Ok(())
 }
 

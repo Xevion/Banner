@@ -20,6 +20,9 @@ export const load: PageLoad = async ({ params, fetch }) => {
   }
 
   const profile = profileResult.value;
+  if (searchOptionsResult.isErr) {
+    console.warn("Failed to load search options:", searchOptionsResult.error.message);
+  }
   const searchOptions = searchOptionsResult.isOk ? searchOptionsResult.value : null;
 
   // Fetch sections for the instructor's most recent known term
@@ -32,6 +35,8 @@ export const load: PageLoad = async ({ params, fetch }) => {
     const sectionsResult = await client.getInstructorSections(params.slug, defaultTerm);
     if (sectionsResult.isOk) {
       initialSections = sectionsResult.value;
+    } else {
+      console.warn("Failed to load initial sections:", sectionsResult.error.message);
     }
   }
 

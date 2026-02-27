@@ -63,6 +63,8 @@ async function onTermChange() {
   const result = await client.getInstructorSections(data.slug, selectedTerm);
   if (result.isOk) {
     sections = result.value;
+  } else {
+    console.warn("Failed to load instructor sections:", result.error.message);
   }
   sectionsLoading = false;
 }

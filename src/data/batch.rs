@@ -8,7 +8,7 @@ use crate::data::names::{decode_html_entities, parse_banner_name};
 use crate::data::unsigned::Count;
 use crate::utils::fmt_duration;
 use crate::web::audit::{AuditLogEntry, AuditRow};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use sqlx::PgConnection;
 use sqlx::PgPool;
@@ -468,7 +468,10 @@ pub async fn batch_upsert_courses(
     let start = Instant::now();
     let course_count = courses.len();
 
-    let mut tx = db_pool.begin().await?;
+    let mut tx = db_pool
+        .begin()
+        .await
+        .context("failed to begin batch upsert transaction")?;
 
     // Step 1: Upsert courses with CTE, returning diff rows
     let diff_rows = upsert_courses(courses, &mut tx).await?;
@@ -511,7 +514,9 @@ pub async fn batch_upsert_courses(
     let audit_ids = insert_audits(&audits, &mut tx).await?;
     insert_metrics(&metrics, &mut tx).await?;
 
-    tx.commit().await?;
+    tx.commit()
+        .await
+        .context("failed to commit batch upsert transaction")?;
 
     let audit_entries = if !audit_ids.is_empty() {
         fetch_audit_entries_by_ids(db_pool, &audit_ids)
@@ -989,7 +994,8 @@ async fn upsert_course_instructors(
     )
     .bind(&unique_cids)
     .fetch_all(&mut *conn)
-    .await?;
+    .await
+    .context("failed to fetch existing instructor names for courses")?;
 
     let mut old_names: HashMap<i32, Vec<String>> = HashMap::new();
     for (course_id, name) in old_rows {
@@ -1000,7 +1006,8 @@ async fn upsert_course_instructors(
     sqlx::query("DELETE FROM course_instructors WHERE course_id = ANY($1)")
         .bind(&unique_cids)
         .execute(&mut *conn)
-        .await?;
+        .await
+        .context("failed to delete existing course instructor links")?;
 
     sqlx::query(
         r#"

@@ -38,6 +38,9 @@ async function toggleSubjectDetail(subject: string) {
   expandedSubject = subject;
   detailLoading = true;
   const result = await client.getScraperSubjectDetail(subject);
+  if (result.isErr) {
+    console.warn("Failed to load subject detail:", result.error.message);
+  }
   subjectDetail = result.isOk ? result.value : null;
   detailLoading = false;
 }

@@ -9,9 +9,12 @@
  * - Cleaning up timers on destroy
  */
 
+import type { ApiErrorClass } from "$lib/api";
+import type Result from "true-myth/result";
+
 export interface AutoRefreshOptions<T> {
-  /** Async function that fetches data */
-  fetcher: () => Promise<T>;
+  /** Async function returning a Result */
+  fetcher: () => Promise<Result<T, ApiErrorClass>>;
   /** Base refresh interval in ms (default: 5000). Set to 0 to disable auto-refresh. */
   interval?: number;
   /** Max interval after repeated errors (default: 60000) */
@@ -37,14 +40,14 @@ const DEFAULT_MAX_INTERVAL = 60_000;
 export class AutoRefreshController<T> {
   // Reactive state
   data = $state<T | null>(null);
-  error = $state<string | null>(null);
+  error = $state<ApiErrorClass | null>(null);
   isLoading = $state(false);
 
   // Configuration
   readonly #baseInterval: number;
   readonly #maxInterval: number;
   readonly #minLoadingMs: number;
-  readonly #fetcher: () => Promise<T>;
+  readonly #fetcher: () => Promise<Result<T, ApiErrorClass>>;
 
   // Internal state
   #currentInterval: number;
@@ -96,38 +99,37 @@ export class AutoRefreshController<T> {
     clearTimeout(this.#loadingHoldTimer);
     const startedAt = performance.now();
 
-    try {
-      const result = await this.#fetcher();
-      if (this.#destroyed) return;
+    const result = await this.#fetcher();
+    if (this.#destroyed) {
+      this.#fetchInProgress = false;
+      return;
+    }
 
-      this.data = result;
+    if (result.isOk) {
+      this.data = result.value;
       this.error = null;
       this.#currentInterval = this.#baseInterval; // Reset backoff on success
-    } catch (e) {
-      if (this.#destroyed) return;
-
-      this.error = e instanceof Error ? e.message : "Fetch failed";
+    } else {
+      this.error = result.error;
       // Exponential backoff on error
       this.#currentInterval = Math.min(this.#currentInterval * 2, this.#maxInterval);
-    } finally {
-      this.#fetchInProgress = false;
-
-      if (!this.#destroyed) {
-        // Hold loading state for minimum duration if specified
-        const elapsed = performance.now() - startedAt;
-        const remaining = this.#minLoadingMs - elapsed;
-
-        if (remaining > 0) {
-          this.#loadingHoldTimer = setTimeout(() => {
-            this.isLoading = false;
-          }, remaining);
-        } else {
-          this.isLoading = false;
-        }
-
-        this.#scheduleRefresh();
-      }
     }
+
+    this.#fetchInProgress = false;
+
+    // Hold loading state for minimum duration if specified
+    const elapsed = performance.now() - startedAt;
+    const remaining = this.#minLoadingMs - elapsed;
+
+    if (remaining > 0) {
+      this.#loadingHoldTimer = setTimeout(() => {
+        this.isLoading = false;
+      }, remaining);
+    } else {
+      this.isLoading = false;
+    }
+
+    this.#scheduleRefresh();
   }
 
   /** Pause auto-refresh (does not cancel in-flight request) */
@@ -162,14 +164,15 @@ export class AutoRefreshController<T> {
  * @example
  * ```svelte
  * const stats = useAutoRefresh({
- *   fetcher: () => client.getStats(period),
- *   deps: () => [period],
+ *   fetcher: () => client.getScraperStats(period, term),
+ *   deps: () => [period, term],
  *   interval: 5000,
  * });
  *
  * // Access reactive state
  * {stats.data?.count}
  * {#if stats.isLoading}Loading...{/if}
+ * {#if stats.error}Error: {stats.error.message}{/if}
  * ```
  */
 export function useAutoRefresh<T>(options: AutoRefreshHookOptions<T>): AutoRefreshController<T> {

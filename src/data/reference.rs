@@ -1,7 +1,7 @@
 //! Database operations for the `reference_data` table (code->description lookups).
 
 use crate::data::models::ReferenceData;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use html_escape::decode_html_entities;
 use sqlx::PgPool;
 
@@ -30,7 +30,8 @@ pub async fn batch_upsert(pool: &PgPool, entries: &[ReferenceData]) -> Result<()
     .bind(&codes)
     .bind(&descriptions)
     .execute(pool)
-    .await?;
+    .await
+    .context("failed to batch upsert reference data")?;
 
     Ok(())
 }
@@ -42,7 +43,8 @@ pub async fn get_by_category(pool: &PgPool, category: &str) -> Result<Vec<Refere
     )
     .bind(category)
     .fetch_all(pool)
-    .await?;
+    .await
+    .context("failed to fetch reference data by category")?;
     Ok(rows)
 }
 
@@ -52,6 +54,7 @@ pub async fn get_all(pool: &PgPool) -> Result<Vec<ReferenceData>> {
         "SELECT category, code, description FROM reference_data ORDER BY category, description",
     )
     .fetch_all(pool)
-    .await?;
+    .await
+    .context("failed to fetch all reference data")?;
     Ok(rows)
 }

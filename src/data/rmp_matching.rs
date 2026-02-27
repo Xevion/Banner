@@ -1,7 +1,7 @@
 //! Confidence scoring and candidate generation for RMP instructor matching.
 
 use crate::data::names::{KeyOrigin, matching_keys, parse_banner_name, parse_rmp_name};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
@@ -443,13 +443,15 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     let deleted_candidates =
         sqlx::query("DELETE FROM rmp_match_candidates WHERE status != 'rejected'")
             .execute(&mut *tx)
-            .await?
+            .await
+            .context("failed to delete non-rejected match candidates")?
             .rows_affected() as usize;
 
     // Step 2: Delete all non-manual links.
     let deleted_links = sqlx::query("DELETE FROM instructor_rmp_links WHERE source != 'manual'")
         .execute(&mut *tx)
-        .await?
+        .await
+        .context("failed to delete non-manual rmp links")?
         .rows_affected() as usize;
 
     // Step 3: Reset all non-confirmed/rejected instructors back to unmatched.
@@ -458,7 +460,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
          WHERE rmp_match_status NOT IN ('confirmed', 'rejected')",
     )
     .execute(&mut *tx)
-    .await?;
+    .await
+    .context("failed to reset instructor match statuses to unmatched")?;
 
     // Step 4: Load all instructors eligible for matching.
     // 'confirmed' and 'rejected' are manual decisions -- never touch them.
@@ -467,7 +470,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
          WHERE rmp_match_status NOT IN ('confirmed', 'rejected')",
     )
     .fetch_all(&mut *tx)
-    .await?;
+    .await
+    .context("failed to fetch eligible instructors for matching")?;
 
     if instructors.is_empty() {
         tx.commit().await?;
@@ -498,7 +502,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     )
     .bind(&instructor_ids)
     .fetch_all(&mut *tx)
-    .await?;
+    .await
+    .context("failed to fetch instructor subjects for matching")?;
 
     let mut subject_map: HashMap<i32, Vec<String>> = HashMap::new();
     for (iid, subject) in subject_rows {
@@ -516,7 +521,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         "#,
     )
     .fetch_all(&mut *tx)
-    .await?;
+    .await
+    .context("failed to fetch rmp review data for matching")?;
 
     let mut review_subjects_map: HashMap<i32, HashSet<String>> = HashMap::new();
     let mut review_years_map: HashMap<i32, HashSet<i16>> = HashMap::new();
@@ -547,7 +553,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
          FROM rmp_professors",
     )
     .fetch_all(&mut *tx)
-    .await?;
+    .await
+    .context("failed to fetch rmp professors for name index")?;
 
     let mut name_index: HashMap<(String, String), Vec<RmpProfForMatching>> = HashMap::new();
     let mut rmp_parse_failures = 0usize;
@@ -601,7 +608,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
          WHERE status = 'rejected'",
     )
     .fetch_all(&mut *tx)
-    .await?;
+    .await
+    .context("failed to fetch rejected match pairs")?;
 
     let rejected_pairs: HashSet<(i32, i32)> = rejected_rows.into_iter().collect();
 
@@ -768,7 +776,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .bind(&c_scores)
         .bind(&c_breakdowns)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to batch insert match candidates")?;
 
         // Batch-update review subjects and years using JSONB->array conversion.
         sqlx::query(
@@ -792,7 +801,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .bind(&c_review_subjects_json)
         .bind(&c_review_years_json)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to batch update candidate review data")?;
     }
 
     // Step 8: Auto-accept high-confidence candidates.
@@ -815,7 +825,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .bind(&aa_instructor_ids)
         .bind(&aa_legacy_ids)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to update auto-accepted candidates")?;
 
         let actually_linked: Vec<(i32,)> = sqlx::query_as(
             r#"
@@ -829,7 +840,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .bind(&aa_instructor_ids)
         .bind(&aa_legacy_ids)
         .fetch_all(&mut *tx)
-        .await?;
+        .await
+        .context("failed to insert auto rmp links")?;
 
         linked_ids = actually_linked.into_iter().map(|(id,)| id).collect();
 
@@ -844,7 +856,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
             )
             .bind(&linked_ids)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .context("failed to update instructor status to auto")?;
         }
     }
 
@@ -872,7 +885,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         )
         .bind(&pending_instructor_ids)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to update instructor status to pending")?;
     }
 
     tx.commit().await?;

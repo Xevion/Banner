@@ -5,7 +5,7 @@ use super::events::{AuditLogEvent, DomainEvent};
 use crate::banner::Course as BannerCourse;
 use crate::data::batch::batch_upsert_courses as batch_upsert_impl;
 use crate::data::models::{Course, CourseInstructorDetail, UpsertCounts};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::HashMap;
 use ts_rs::TS;
@@ -255,14 +255,19 @@ pub async fn search_courses(
     let courses = data_builder
         .build_query_as::<Course>()
         .fetch_all(db_pool)
-        .await?;
+        .await
+        .context("failed to search courses")?;
 
     // Count query
     let mut count_builder: QueryBuilder<Postgres> =
         QueryBuilder::new("SELECT COUNT(*) FROM courses");
     push_search_conditions(&mut count_builder, filter);
 
-    let total: (i64,) = count_builder.build_query_as().fetch_one(db_pool).await?;
+    let total: (i64,) = count_builder
+        .build_query_as()
+        .fetch_one(db_pool)
+        .await
+        .context("failed to count search results")?;
 
     Ok((courses, total.0))
 }
@@ -278,7 +283,8 @@ pub async fn get_course_by_crn(
             .bind(crn)
             .bind(term_code)
             .fetch_optional(db_pool)
-            .await?;
+            .await
+            .context("failed to fetch course by crn and term")?;
     Ok(course)
 }
 
@@ -321,7 +327,8 @@ pub async fn get_course_instructors(
     )
     .bind(course_id)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to fetch instructors for course")?;
     Ok(rows)
 }
 
@@ -370,7 +377,8 @@ pub async fn get_instructors_for_courses(
     )
     .bind(course_ids)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to batch fetch instructors for courses")?;
 
     let mut map: HashMap<i32, Vec<CourseInstructorDetail>> = HashMap::new();
     for row in rows {
@@ -403,7 +411,8 @@ pub async fn get_subjects_by_enrollment(
     )
     .bind(term_code)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to fetch subjects by enrollment")?;
     Ok(rows)
 }
 
@@ -421,7 +430,8 @@ pub async fn get_related_sections(
     .bind(subject)
     .bind(course_number)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to fetch related sections")?;
     Ok(courses)
 }
 
@@ -430,7 +440,8 @@ pub async fn get_available_terms(db_pool: &PgPool) -> Result<Vec<String>> {
     let rows: Vec<(String,)> =
         sqlx::query_as("SELECT DISTINCT term_code FROM courses ORDER BY term_code DESC")
             .fetch_all(db_pool)
-            .await?;
+            .await
+            .context("failed to fetch available terms")?;
     Ok(rows.into_iter().map(|(tc,)| tc).collect())
 }
 
@@ -440,7 +451,8 @@ pub async fn list_crns_for_term(db_pool: &PgPool, term_code: &str) -> Result<Vec
         sqlx::query_as("SELECT crn FROM courses WHERE term_code = $1 ORDER BY crn")
             .bind(term_code)
             .fetch_all(db_pool)
-            .await?;
+            .await
+            .context("failed to list crns for term")?;
     Ok(rows.into_iter().map(|(crn,)| crn).collect())
 }
 
@@ -449,7 +461,8 @@ pub async fn list_all_subjects(db_pool: &PgPool) -> Result<Vec<String>> {
     let rows: Vec<(String,)> =
         sqlx::query_as("SELECT DISTINCT subject FROM courses ORDER BY subject")
             .fetch_all(db_pool)
-            .await?;
+            .await
+            .context("failed to list all subjects")?;
     Ok(rows.into_iter().map(|(s,)| s).collect())
 }
 
@@ -478,7 +491,8 @@ pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<Filt
     )
     .bind(term_code)
     .fetch_one(db_pool)
-    .await?;
+    .await
+    .context("failed to fetch filter ranges for term")?;
 
     let cn_max = row.1.unwrap_or(9000);
     let ch_min = row.2.unwrap_or(0.0);
@@ -553,7 +567,8 @@ pub async fn suggest_courses(
     .bind(query)
     .bind(limit)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to suggest courses")?;
 
     Ok(rows
         .into_iter()
@@ -596,7 +611,8 @@ pub async fn suggest_instructors(
     .bind(query)
     .bind(limit)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to suggest instructors")?;
 
     Ok(rows
         .into_iter()
@@ -641,7 +657,8 @@ pub async fn suggest_instructors_global(
     .bind(query)
     .bind(limit)
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to suggest instructors globally")?;
 
     Ok(rows
         .into_iter()
@@ -690,7 +707,8 @@ impl<'a> CourseOps<'a> {
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
         .fetch_one(pool)
-        .await?;
+        .await
+        .context("failed to count all courses")?;
     Ok(count)
 }
 
@@ -701,7 +719,8 @@ pub async fn get_id_by_crn(pool: &PgPool, term_code: &str, crn: &str) -> Result<
             .bind(term_code)
             .bind(crn)
             .fetch_optional(pool)
-            .await?;
+            .await
+            .context("failed to get course id by crn")?;
     Ok(row.map(|(id,)| id))
 }
 
@@ -714,6 +733,7 @@ pub async fn count_by_subject(pool: &PgPool, term_code: &str) -> Result<HashMap<
     )
     .bind(term_code)
     .fetch_all(pool)
-    .await?;
+    .await
+    .context("failed to count courses by subject")?;
     Ok(rows.into_iter().collect())
 }

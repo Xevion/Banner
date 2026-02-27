@@ -110,8 +110,9 @@ onMount(() => {
       for (const entry of result.value) {
         subjectMap.set(entry.code, entry.description);
       }
+    } else {
+      console.warn("Failed to load subject reference data:", result.error.message);
     }
-    // Subject lookup is best-effort
   });
 
   return () => {

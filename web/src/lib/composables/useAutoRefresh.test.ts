@@ -1,5 +1,12 @@
+import type { ApiErrorClass } from "$lib/api";
+import { err, ok } from "true-myth/result";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutoRefreshController } from "./useAutoRefresh.svelte";
+
+/** Helper to create a mock ApiErrorClass */
+function mockApiError(message: string, code = "INTERNAL_ERROR"): ApiErrorClass {
+  return { message, code, name: "ApiError", details: null } as unknown as ApiErrorClass;
+}
 
 describe("AutoRefreshController", () => {
   beforeEach(() => {
@@ -12,7 +19,7 @@ describe("AutoRefreshController", () => {
 
   describe("initial state", () => {
     it("starts with null data and no error", () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 42 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 42 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       expect(controller.data).toBeNull();
@@ -22,7 +29,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("does not fetch automatically on construction", () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 42 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 42 }));
       new AutoRefreshController({ fetcher, interval: 5000 });
 
       expect(fetcher).not.toHaveBeenCalled();
@@ -31,7 +38,7 @@ describe("AutoRefreshController", () => {
 
   describe("fetch", () => {
     it("sets loading state and fetches data", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 42 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 42 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       const fetchPromise = controller.fetch();
@@ -48,26 +55,30 @@ describe("AutoRefreshController", () => {
     });
 
     it("sets error state on fetch failure", async () => {
-      const fetcher = vi.fn().mockRejectedValue(new Error("Network error"));
+      const apiError = mockApiError("Network error");
+      const fetcher = vi.fn().mockResolvedValue(err(apiError));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
 
       expect(controller.data).toBeNull();
-      expect(controller.error).toBe("Network error");
+      expect(controller.error?.message).toBe("Network error");
+      expect(controller.error?.code).toBe("INTERNAL_ERROR");
       expect(controller.hasError).toBe(true);
       expect(controller.isLoading).toBe(false);
 
       controller.destroy();
     });
 
-    it("handles non-Error exceptions", async () => {
-      const fetcher = vi.fn().mockRejectedValue("string error");
+    it("preserves error code and details", async () => {
+      const apiError = mockApiError("Not found", "NOT_FOUND");
+      const fetcher = vi.fn().mockResolvedValue(err(apiError));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
 
-      expect(controller.error).toBe("Fetch failed");
+      expect(controller.error?.code).toBe("NOT_FOUND");
+      expect(controller.error?.message).toBe("Not found");
       controller.destroy();
     });
 
@@ -76,7 +87,10 @@ describe("AutoRefreshController", () => {
       const firstPromise = new Promise((resolve) => {
         resolveFirst = resolve;
       });
-      const fetcher = vi.fn().mockReturnValueOnce(firstPromise).mockResolvedValue({ count: 2 });
+      const fetcher = vi
+        .fn()
+        .mockReturnValueOnce(firstPromise)
+        .mockResolvedValue(ok({ count: 2 }));
 
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
@@ -89,7 +103,7 @@ describe("AutoRefreshController", () => {
       expect(fetcher).toHaveBeenCalledTimes(1); // Still 1 - blocked
 
       // Complete first fetch
-      resolveFirst!({ count: 1 });
+      resolveFirst!(ok({ count: 1 }));
       await fetch1;
 
       expect(controller.data).toEqual({ count: 1 });
@@ -99,14 +113,14 @@ describe("AutoRefreshController", () => {
 
   describe("auto-refresh", () => {
     it("schedules refresh after successful fetch", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
       expect(fetcher).toHaveBeenCalledTimes(1);
 
       // Advance time to trigger refresh
-      fetcher.mockResolvedValue({ count: 2 });
+      fetcher.mockResolvedValue(ok({ count: 2 }));
       await vi.advanceTimersByTimeAsync(5000);
 
       expect(fetcher).toHaveBeenCalledTimes(2);
@@ -116,7 +130,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("disables auto-refresh when interval is 0", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 0 });
 
       await controller.fetch();
@@ -132,7 +146,7 @@ describe("AutoRefreshController", () => {
 
   describe("exponential backoff", () => {
     it("doubles interval on error", async () => {
-      const fetcher = vi.fn().mockRejectedValue(new Error("fail"));
+      const fetcher = vi.fn().mockResolvedValue(err(mockApiError("fail")));
       const controller = new AutoRefreshController({ fetcher, interval: 5000, maxInterval: 60000 });
 
       // Initial fetch fails
@@ -150,7 +164,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("caps backoff at maxInterval", async () => {
-      const fetcher = vi.fn().mockRejectedValue(new Error("fail"));
+      const fetcher = vi.fn().mockResolvedValue(err(mockApiError("fail")));
       const controller = new AutoRefreshController({
         fetcher,
         interval: 30000,
@@ -174,8 +188,8 @@ describe("AutoRefreshController", () => {
     it("resets interval on success after failures", async () => {
       const fetcher = vi
         .fn()
-        .mockRejectedValueOnce(new Error("fail"))
-        .mockResolvedValue({ ok: true });
+        .mockResolvedValueOnce(err(mockApiError("fail")))
+        .mockResolvedValue(ok({ ok: true }));
 
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
@@ -196,7 +210,7 @@ describe("AutoRefreshController", () => {
 
   describe("pause and resume", () => {
     it("does not fetch when started paused", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000, paused: true });
 
       await controller.fetch();
@@ -207,7 +221,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("resumes fetching when resume() is called", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000, paused: true });
 
       await controller.fetch();
@@ -222,7 +236,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("stops auto-refresh when pause() is called", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
@@ -238,7 +252,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("resume() is a no-op when not paused", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
@@ -255,7 +269,7 @@ describe("AutoRefreshController", () => {
 
   describe("trigger", () => {
     it("clears pending refresh and fetches immediately", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
@@ -265,7 +279,7 @@ describe("AutoRefreshController", () => {
       await vi.advanceTimersByTimeAsync(2000);
 
       // Trigger should fetch immediately and reset timer
-      fetcher.mockResolvedValue({ count: 2 });
+      fetcher.mockResolvedValue(ok({ count: 2 }));
       controller.trigger();
       // Wait for fetch to complete
       await vi.waitFor(() => expect(controller.data).toEqual({ count: 2 }));
@@ -273,7 +287,7 @@ describe("AutoRefreshController", () => {
       expect(fetcher).toHaveBeenCalledTimes(2);
 
       // Next refresh should be 5000ms from now, not 3000ms
-      fetcher.mockResolvedValue({ count: 3 });
+      fetcher.mockResolvedValue(ok({ count: 3 }));
       await vi.advanceTimersByTimeAsync(3000);
       expect(fetcher).toHaveBeenCalledTimes(2); // Not yet
 
@@ -286,7 +300,7 @@ describe("AutoRefreshController", () => {
 
   describe("minLoadingMs", () => {
     it("holds loading state for minimum duration", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000, minLoadingMs: 500 });
 
       const fetchPromise = controller.fetch();
@@ -309,7 +323,7 @@ describe("AutoRefreshController", () => {
       const fetcher = vi.fn().mockImplementation(async () => {
         // Simulate slow fetch by advancing timers during the fetch
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        return { count: 1 };
+        return ok({ count: 1 });
       });
       const controller = new AutoRefreshController({ fetcher, interval: 5000, minLoadingMs: 500 });
 
@@ -327,7 +341,7 @@ describe("AutoRefreshController", () => {
 
   describe("destroy", () => {
     it("cancels pending refresh", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       await controller.fetch();
@@ -342,7 +356,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("prevents future fetches", async () => {
-      const fetcher = vi.fn().mockResolvedValue({ count: 1 });
+      const fetcher = vi.fn().mockResolvedValue(ok({ count: 1 }));
       const controller = new AutoRefreshController({ fetcher, interval: 5000 });
 
       controller.destroy();

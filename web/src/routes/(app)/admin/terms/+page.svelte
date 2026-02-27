@@ -101,6 +101,8 @@ async function syncTerms() {
   const refreshResult = await client.getAdminTerms();
   if (refreshResult.isOk) {
     terms = refreshResult.value.terms;
+  } else {
+    console.warn("Failed to refresh term list:", refreshResult.error.message);
   }
 }
 </script>

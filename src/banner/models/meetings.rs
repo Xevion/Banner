@@ -434,7 +434,7 @@ impl MeetingScheduleInfo {
             .as_deref()
             .unwrap_or("")
             .parse()
-            .unwrap();
+            .unwrap_or(MeetingType::Unknown(String::new()));
         let location = MeetingLocation::from_meeting_time(meeting_time);
         let duration_weeks = date_range.weeks_duration();
 
@@ -452,7 +452,7 @@ impl MeetingScheduleInfo {
     pub fn days_of_week(&self) -> Vec<Weekday> {
         self.days
             .iter()
-            .map(|day| <MeetingDays as TryInto<Weekday>>::try_into(day).unwrap())
+            .filter_map(|day| <MeetingDays as TryInto<Weekday>>::try_into(day).ok())
             .collect()
     }
 

@@ -9,7 +9,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::data::events::{AuditLogEvent, DomainEvent};
 use crate::data::scraper_stats::{compute_subjects, compute_timeseries, default_bucket_for_period};
@@ -275,7 +275,20 @@ async fn handle_client_message(
             }
 
             // Now get mutable reference and update
-            let subscription = registry.get_mut(&subscription_id).unwrap();
+            let Some(subscription) = registry.get_mut(&subscription_id) else {
+                warn!(
+                    subscription_id,
+                    "subscription disappeared from registry during modify"
+                );
+                let sent = send_error(
+                    sink,
+                    Some(request_id),
+                    StreamErrorCode::UnknownSubscription,
+                    "Subscription removed during modification",
+                )
+                .await;
+                return ClientMessageResult::from_error_send(sent);
+            };
             *subscription = updated;
             let modified = StreamServerMessage::Modified {
                 request_id,

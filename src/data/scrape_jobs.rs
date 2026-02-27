@@ -13,7 +13,7 @@ use crate::data::models::{
 };
 use crate::data::unsigned::{Count, DurationMs};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 /// A single row from scrape_job_results for a given subject.
 #[derive(sqlx::FromRow, Debug)]
@@ -38,14 +38,15 @@ pub async fn list_ordered(pool: &PgPool, limit: i64) -> Result<Vec<ScrapeJob>> {
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(anyhow::Error::from)
+    .context("failed to list ordered scrape jobs")
 }
 
 /// Count all scrape jobs in the queue.
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM scrape_jobs")
         .fetch_one(pool)
-        .await?;
+        .await
+        .context("failed to count scrape jobs")?;
     Ok(count)
 }
 
@@ -55,7 +56,7 @@ pub async fn get_by_id(pool: &PgPool, id: i32) -> Result<Option<ScrapeJob>> {
         .bind(id)
         .fetch_optional(pool)
         .await
-        .map_err(anyhow::Error::from)
+        .context("failed to fetch scrape job by id")
 }
 
 /// Fetch recent scrape job results for a given subject.
@@ -77,7 +78,7 @@ pub async fn list_results_for_subject(
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(anyhow::Error::from)
+    .context("failed to list results for subject")
 }
 
 /// Lock expiry duration in seconds.
@@ -97,7 +98,12 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// Emits a `ScrapeJobEvent::Locked` event on success.
     pub async fn lock_next(&self) -> Result<Option<ScrapeJob>> {
-        let mut tx = self.ctx.pool().begin().await?;
+        let mut tx = self
+            .ctx
+            .pool()
+            .begin()
+            .await
+            .context("failed to begin transaction for lock_next")?;
 
         let job = sqlx::query_as::<_, ScrapeJob>(
             "SELECT * FROM scrape_jobs \
@@ -109,16 +115,20 @@ impl<'a> ScrapeJobOps<'a> {
         )
         .bind(LOCK_EXPIRY_SECS)
         .fetch_optional(&mut *tx)
-        .await?;
+        .await
+        .context("failed to fetch next lockable scrape job")?;
 
         if let Some(ref job) = job {
             sqlx::query("UPDATE scrape_jobs SET locked_at = NOW() WHERE id = $1")
                 .bind(job.id)
                 .execute(&mut *tx)
-                .await?;
+                .await
+                .context("failed to update locked_at for scrape job")?;
         }
 
-        tx.commit().await?;
+        tx.commit()
+            .await
+            .context("failed to commit lock_next transaction")?;
 
         // Emit event after successful commit
         if let Some(ref job) = job {
@@ -142,7 +152,8 @@ impl<'a> ScrapeJobOps<'a> {
         sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
             .bind(job_id)
             .execute(self.ctx.pool())
-            .await?;
+            .await
+            .context("failed to delete scrape job")?;
 
         self.ctx
             .events()
@@ -163,7 +174,8 @@ impl<'a> ScrapeJobOps<'a> {
         )
         .bind(job_id)
         .fetch_optional(self.ctx.pool())
-        .await?
+        .await
+        .context("failed to complete scrape job")?
         .flatten();
 
         self.ctx
@@ -192,7 +204,8 @@ impl<'a> ScrapeJobOps<'a> {
         .bind(retry_count)
         .bind(execute_at)
         .execute(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to retry scrape job")?;
 
         let queued_at = Utc::now().to_rfc3339();
         self.ctx
@@ -214,7 +227,8 @@ impl<'a> ScrapeJobOps<'a> {
         sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
             .bind(job_id)
             .execute(self.ctx.pool())
-            .await?;
+            .await
+            .context("failed to exhaust scrape job")?;
 
         self.ctx
             .events()
@@ -239,7 +253,8 @@ impl<'a> ScrapeJobOps<'a> {
             "UPDATE scrape_jobs SET locked_at = NULL, queued_at = NOW() WHERE locked_at IS NOT NULL",
         )
         .execute(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to force unlock all scrape jobs")?;
         Ok(result.rows_affected())
     }
 
@@ -250,7 +265,8 @@ impl<'a> ScrapeJobOps<'a> {
         sqlx::query("UPDATE scrape_jobs SET locked_at = NULL WHERE id = $1")
             .bind(job_id)
             .execute(self.ctx.pool())
-            .await?;
+            .await
+            .context("failed to unlock scrape job")?;
         Ok(())
     }
 
@@ -295,7 +311,8 @@ impl<'a> ScrapeJobOps<'a> {
         .bind(counts.map(|c| c.audits_generated))
         .bind(counts.map(|c| c.metrics_generated))
         .execute(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to insert scrape job result")?;
 
         Ok(())
     }
@@ -316,7 +333,8 @@ impl<'a> ScrapeJobOps<'a> {
         .bind(target_type)
         .bind(candidate_payloads)
         .fetch_all(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to find existing scrape job payloads")?;
 
         let existing_payloads = existing_jobs
             .into_iter()
@@ -368,7 +386,8 @@ impl<'a> ScrapeJobOps<'a> {
             "#,
         )
         .fetch_all(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to fetch subject stats")?;
 
         Ok(rows)
     }
@@ -408,7 +427,8 @@ impl<'a> ScrapeJobOps<'a> {
         .bind(&payloads)
         .bind(&priorities)
         .fetch_all(self.ctx.pool())
-        .await?;
+        .await
+        .context("failed to batch insert scrape jobs")?;
 
         for job in &inserted {
             debug!(job_id = job.id, "Emitting JobCreated event");

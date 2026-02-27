@@ -113,12 +113,14 @@ pub async fn unmatch_instructor(
         .bind(instructor_id)
         .bind(legacy_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to delete specific rmp link for instructor")?;
     } else {
         sqlx::query("DELETE FROM instructor_rmp_links WHERE instructor_id = $1")
             .bind(instructor_id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .context("failed to delete all rmp links for instructor")?;
     }
 
     // Check if any links remain
@@ -126,14 +128,16 @@ pub async fn unmatch_instructor(
         sqlx::query_as("SELECT COUNT(*) FROM instructor_rmp_links WHERE instructor_id = $1")
             .bind(instructor_id)
             .fetch_one(&mut *tx)
-            .await?;
+            .await
+            .context("failed to count remaining rmp links for instructor")?;
 
     // Update instructor status if no links remain
     if remaining == 0 {
         sqlx::query("UPDATE instructors SET rmp_match_status = 'unmatched' WHERE id = $1")
             .bind(instructor_id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .context("failed to update instructor rmp match status to unmatched")?;
     }
 
     // Reset accepted candidates back to pending when unmatching
@@ -148,7 +152,8 @@ pub async fn unmatch_instructor(
         .bind(instructor_id)
         .bind(legacy_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to reset specific rmp match candidate to pending")?;
     } else {
         // Reset all accepted candidates for this instructor
         sqlx::query(
@@ -158,7 +163,8 @@ pub async fn unmatch_instructor(
         )
         .bind(instructor_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to reset all rmp match candidates to pending")?;
     }
 
     tx.commit().await?;
@@ -185,7 +191,8 @@ pub async fn get_professors_eligible_for_review_scrape(
     )
     .bind(limit)
     .fetch_all(pool)
-    .await?;
+    .await
+    .context("failed to fetch professors eligible for review scrape")?;
 
     Ok(rows)
 }
@@ -214,7 +221,8 @@ pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail)
     .bind(&course_codes_json)
     .bind(detail.legacy_id)
     .execute(pool)
-    .await?;
+    .await
+    .context("failed to upsert professor detail")?;
 
     Ok(())
 }
@@ -233,7 +241,8 @@ pub async fn replace_professor_reviews(
     sqlx::query("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1")
         .bind(legacy_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to delete reviews for professor")?;
 
     for review in reviews {
         sqlx::query(
@@ -266,7 +275,8 @@ pub async fn replace_professor_reviews(
         .bind(review.thumbs_down_total)
         .bind(review.posted_at)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .context("failed to insert rmp review")?;
     }
 
     tx.commit().await?;
@@ -300,7 +310,8 @@ pub async fn mark_professor_reviews_scraped(
     .bind(interval_days)
     .bind(legacy_id)
     .execute(pool)
-    .await?;
+    .await
+    .context("failed to mark professor reviews as scraped")?;
 
     Ok(())
 }
@@ -313,6 +324,7 @@ pub async fn mark_professor_reviews_scraped(
 pub async fn refresh_rmp_summary(pool: &PgPool) -> Result<()> {
     sqlx::query("REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary")
         .execute(pool)
-        .await?;
+        .await
+        .context("failed to refresh rmp summary materialized view")?;
     Ok(())
 }

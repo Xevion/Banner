@@ -14,6 +14,13 @@ export const load: PageLoad = async ({ url, fetch }) => {
     client.getSearchOptions(),
   ]);
 
+  if (instructorsResult.isErr) {
+    console.warn("Failed to load instructors:", instructorsResult.error.message);
+  }
+  if (searchOptionsResult.isErr) {
+    console.warn("Failed to load search options:", searchOptionsResult.error.message);
+  }
+
   return {
     instructors: instructorsResult.isOk ? instructorsResult.value : null,
     searchOptions: searchOptionsResult.isOk ? searchOptionsResult.value : null,

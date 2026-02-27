@@ -6,6 +6,7 @@
 use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
 use sqlx::PgPool;
+use tracing::warn;
 use ts_rs::TS;
 
 use crate::data::models::RmpMatchStatus;
@@ -338,7 +339,9 @@ pub async fn list_instructors(
             "auto" => stats.auto = row.count,
             "confirmed" => stats.confirmed = row.count,
             "rejected" => stats.rejected = row.count,
-            _ => {}
+            _ => {
+                warn!(status = %row.rmp_match_status, "unexpected rmp_match_status value");
+            }
         }
     }
 

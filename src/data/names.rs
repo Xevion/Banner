@@ -6,6 +6,7 @@
 
 use std::collections::HashSet;
 
+use anyhow::Context;
 use sqlx::PgPool;
 use tracing::{info, warn};
 use unicode_normalization::UnicodeNormalization;
@@ -613,7 +614,8 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
         "SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL",
     )
     .fetch_all(db_pool)
-    .await?;
+    .await
+    .context("failed to fetch instructors for name backfill")?;
 
     if rows.is_empty() {
         return Ok(());
@@ -659,7 +661,8 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
         .bind(&first_refs)
         .bind(&last_refs)
         .execute(db_pool)
-        .await?;
+        .await
+        .context("failed to update instructor names")?;
     }
 
     info!(
