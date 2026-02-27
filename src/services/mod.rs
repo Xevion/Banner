@@ -20,7 +20,14 @@ pub trait Service: Send + Sync {
     /// The name of the service for logging
     fn name(&self) -> &'static str;
 
-    /// Run the service's main work loop
+    /// Run the service's main work loop.
+    ///
+    /// This method is expected to block indefinitely. A normal (non-error) return is
+    /// treated as an unexpected completion by the ServiceManager (`ServiceResult::NormalCompletion`)
+    /// and will be logged as a warning.
+    ///
+    /// Services that spawn tasks internally and then park should use
+    /// `std::future::pending::<()>().await` to satisfy this contract.
     async fn run(&mut self) -> Result<(), anyhow::Error>;
 
     /// Gracefully shutdown the service

@@ -94,9 +94,15 @@ impl App {
         .context("Failed to create BannerApi")?;
         let banner_api_arc = Arc::new(banner_api);
 
-        // Sync terms from Banner API (non-fatal if fails).
-        // Persist the timestamp so the scheduler doesn't repeat this on its first cycle.
-        match Self::sync_terms_on_startup(&db_pool, &banner_api_arc).await {
+        // Run startup DB operations in parallel
+        let (term_result, name_result, slug_result) = tokio::join!(
+            Self::sync_terms_on_startup(&db_pool, &banner_api_arc),
+            crate::data::names::backfill_instructor_names(&db_pool),
+            crate::data::instructors::backfill_instructor_slugs(&db_pool),
+        );
+
+        // Persist term sync timestamp so the scheduler doesn't repeat this on its first cycle.
+        match term_result {
             Ok(result) => {
                 info!(
                     inserted = result.inserted,
@@ -115,13 +121,11 @@ impl App {
             }
         }
 
-        // Backfill structured name columns for existing instructors
-        if let Err(e) = crate::data::names::backfill_instructor_names(&db_pool).await {
+        if let Err(e) = name_result {
             warn!(error = ?e, "Failed to backfill instructor names (non-fatal)");
         }
 
-        // Backfill URL slugs for instructors that don't have one
-        match crate::data::instructors::backfill_instructor_slugs(&db_pool).await {
+        match slug_result {
             Ok(0) => {}
             Ok(n) => info!(count = n, "Backfilled instructor slugs"),
             Err(e) => warn!(error = ?e, "Failed to backfill instructor slugs (non-fatal)"),
@@ -131,10 +135,7 @@ impl App {
         match crate::data::scoring::recompute_all_scores(&db_pool).await {
             Ok(0) => info!("Computed instructor scores (none found - no RMP or BlueBook data)"),
             Ok(n) => info!(count = n, "Computed instructor scores"),
-            Err(e) => {
-                error!(error = ?e, "Failed to compute instructor scores");
-                return Err(e.context("Failed to compute instructor scores on startup"));
-            }
+            Err(e) => warn!(error = ?e, "Failed to compute instructor scores (non-fatal)"),
         }
 
         // Create shared BlueBook sync notify and force flag for manual trigger from admin endpoints
@@ -151,23 +152,24 @@ impl App {
             config.public_origin.clone(),
         );
 
-        // Load reference data cache from DB (may be empty on first run)
-        if let Err(e) = app_state.load_reference_cache().await {
+        // Load reference cache and schedule cache in parallel
+        let schedule_cache = app_state.schedule_cache.clone();
+        let (ref_result, sched_result) = tokio::join!(
+            async {
+                let entries = crate::data::reference::get_all(&db_pool).await?;
+                let count = entries.len();
+                let cache = crate::state::ReferenceCache::from_entries(entries);
+                *app_state.reference_cache.write().await = cache;
+                tracing::info!(entries = count, "Reference cache loaded");
+                Ok::<_, anyhow::Error>(())
+            },
+            schedule_cache.load(),
+        );
+        if let Err(e) = ref_result {
             info!(error = ?e, "Could not load reference cache on startup (may be empty)");
         }
-
-        // Spawn background reference cache refresh every 30 minutes
-        app_state.spawn_reference_cache_refresh(std::time::Duration::from_secs(30 * 60));
-
-        // Load schedule cache in the background -- don't block port open.
-        // Requests during the ~3s load window get an empty snapshot.
-        {
-            let cache = app_state.schedule_cache.clone();
-            tokio::spawn(async move {
-                if let Err(e) = cache.load().await {
-                    info!(error = ?e, "Could not load schedule cache on startup (may be empty)");
-                }
-            });
+        if let Err(e) = sched_result {
+            info!(error = ?e, "Could not load schedule cache on startup (may be empty)");
         }
 
         // Seed the initial admin user if configured

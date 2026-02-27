@@ -197,7 +197,7 @@ impl BotService {
                 tokio::select! {
                     _ = interval.tick() => {
                         // Get the course count, update the activity if it has changed/hasn't been set this session
-                        let course_count = match app_state.get_course_count().await {
+                        let course_count = match crate::data::courses::count_all(&app_state.db_pool).await {
                             Ok(count) => count,
                             Err(e) => {
                                 warn!(error = %e, "Failed to fetch course count for status update");

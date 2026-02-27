@@ -1,7 +1,6 @@
 //! Application state shared across components (bot, web, scheduler).
 
 use crate::banner::BannerApi;
-use crate::banner::Course;
 use crate::data::events::EventBuffer;
 use crate::data::models::ReferenceData;
 use crate::web::auth::session::{OAuthStateStore, SessionCache};
@@ -9,7 +8,7 @@ use crate::web::schedule_cache::ScheduleCache;
 use crate::web::search_options_cache::SearchOptionsCache;
 use crate::web::sitemap_cache::SitemapCache;
 use crate::web::stream::computed::ComputedStreamManager;
-use anyhow::Result;
+use axum::extract::FromRef;
 use dashmap::DashMap;
 use serde::Serialize;
 use sqlx::PgPool;
@@ -135,7 +134,7 @@ impl ReferenceCache {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, FromRef)]
 pub struct AppState {
     pub banner_api: Arc<BannerApi>,
     pub db_pool: PgPool,
@@ -197,52 +196,5 @@ impl AppState {
             public_origin,
             sitemap_cache: SitemapCache::new(),
         }
-    }
-
-    /// Spawn a background task that refreshes the reference cache every `interval`.
-    /// The task runs until the process exits.
-    pub fn spawn_reference_cache_refresh(&self, interval: std::time::Duration) {
-        let state = self.clone();
-        tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
-            ticker.tick().await; // skip the immediate first tick
-            loop {
-                ticker.tick().await;
-                match crate::data::reference::get_all(&state.db_pool).await {
-                    Ok(entries) => {
-                        let count = entries.len();
-                        let cache = ReferenceCache::from_entries(entries);
-                        *state.reference_cache.write().await = cache;
-                        tracing::info!(entries = count, "Reference cache refreshed");
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Failed to refresh reference cache");
-                    }
-                }
-            }
-        });
-    }
-
-    /// Initialize the reference cache from the database.
-    pub async fn load_reference_cache(&self) -> Result<()> {
-        let entries = crate::data::reference::get_all(&self.db_pool).await?;
-        let count = entries.len();
-        let cache = ReferenceCache::from_entries(entries);
-        *self.reference_cache.write().await = cache;
-        tracing::info!(entries = count, "Reference cache loaded");
-        Ok(())
-    }
-
-    /// Get a course by CRN directly from Banner API
-    pub async fn get_course_or_fetch(&self, term: &str, crn: &str) -> Result<Course> {
-        self.banner_api
-            .get_course_by_crn(term, crn)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Course not found for CRN {crn}"))
-    }
-
-    /// Get the total number of courses in the database
-    pub async fn get_course_count(&self) -> Result<i64> {
-        crate::data::courses::count_all(&self.db_pool).await
     }
 }

@@ -13,10 +13,11 @@ pub async fn get_course_by_crn(ctx: &Context<'_>, crn: i32) -> Result<Course> {
     let current_term_status = Term::get_current();
     let term = current_term_status.inner();
 
-    // Fetch live course data from database via AppState
     app_state
-        .get_course_or_fetch(&term.to_string(), &crn.to_string())
-        .await
+        .banner_api
+        .get_course_by_crn(&term.to_string(), &crn.to_string())
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Course not found for CRN {crn}"))
         .map_err(|e| {
             error!(error = %e, crn = %crn, "failed to fetch course data");
             e

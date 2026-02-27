@@ -11,7 +11,7 @@ embed-assets = ["dep:rust-embed", "dep:mime_guess"]
 [dependencies]
 anyhow = "1.0.99"
 async-trait = "0.1"
-axum = { version = "0.8.4", features = ["ws"] }
+axum = { version = "0.8.4", features = ["ws", "macros"] }
 bitflags = { version = "2.9.4", features = ["serde"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 compile-time = "0.2.0"

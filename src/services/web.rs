@@ -49,6 +49,35 @@ impl WebService {
         }
     }
 
+    /// Periodically refreshes the reference cache from the database.
+    async fn reference_cache_refresh_loop(
+        state: AppState,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) {
+        use std::time::Duration;
+        let mut ticker = tokio::time::interval(Duration::from_secs(30 * 60));
+        ticker.tick().await; // skip immediate first tick
+
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {
+                    match crate::data::reference::get_all(&state.db_pool).await {
+                        Ok(entries) => {
+                            let count = entries.len();
+                            let cache = crate::state::ReferenceCache::from_entries(entries);
+                            *state.reference_cache.write().await = cache;
+                            tracing::info!(entries = count, "Reference cache refreshed");
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "Failed to refresh reference cache");
+                        }
+                    }
+                }
+                _ = shutdown_rx.recv() => { break; }
+            }
+        }
+    }
+
     /// Periodically cleans up expired sessions from the database and in-memory cache.
     async fn session_cleanup_loop(state: AppState, mut shutdown_rx: broadcast::Receiver<()>) {
         use std::time::Duration;
@@ -116,6 +145,13 @@ impl Service for WebService {
         let cleanup_shutdown_rx = shutdown_tx.subscribe();
         tokio::spawn(async move {
             Self::session_cleanup_loop(cleanup_state, cleanup_shutdown_rx).await;
+        });
+
+        // Spawn reference cache refresh task
+        let refresh_state = self.app_state.clone();
+        let refresh_shutdown_rx = shutdown_tx.subscribe();
+        tokio::spawn(async move {
+            Self::reference_cache_refresh_loop(refresh_state, refresh_shutdown_rx).await;
         });
 
         // Use axum's graceful shutdown with the internal shutdown signal.
