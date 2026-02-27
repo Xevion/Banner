@@ -49,7 +49,7 @@ pub(super) async fn get_reference(
 
     if entries.is_empty() {
         drop(cache_guard);
-        let rows = data::reference::get_by_category(&category, &state.db_pool)
+        let rows = data::reference::get_by_category(&state.db_pool, &category)
             .await
             .map_err(|e| db_error(&format!("Reference lookup for {}", category), e))?;
 

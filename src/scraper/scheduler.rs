@@ -648,7 +648,7 @@ impl Scheduler {
         let total = professors.len();
 
         let start = Instant::now();
-        crate::data::rmp::batch_upsert_rmp_professors(&professors, db_pool).await?;
+        crate::data::rmp::batch_upsert_rmp_professors(db_pool, &professors).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
             warn!(
@@ -717,14 +717,14 @@ impl Scheduler {
                         Count::try_from(reviews.len()).unwrap_or(Count::new(u32::MAX));
 
                     if let Err(e) =
-                        crate::data::rmp::upsert_professor_detail(&detail, db_pool).await
+                        crate::data::rmp::upsert_professor_detail(db_pool, &detail).await
                     {
                         warn!(legacy_id, error = ?e, "Failed to upsert professor detail");
                         continue;
                     }
 
                     if let Err(e) =
-                        crate::data::rmp::replace_professor_reviews(*legacy_id, &reviews, db_pool)
+                        crate::data::rmp::replace_professor_reviews(db_pool, *legacy_id, &reviews)
                             .await
                     {
                         warn!(legacy_id, error = ?e, "Failed to replace professor reviews");
@@ -732,9 +732,9 @@ impl Scheduler {
                     }
 
                     if let Err(e) = crate::data::rmp::mark_professor_reviews_scraped(
+                        db_pool,
                         *legacy_id,
                         i32::try_from(num_reviews.get()).unwrap_or(i32::MAX),
-                        db_pool,
                     )
                     .await
                     {
@@ -874,7 +874,7 @@ impl Scheduler {
         // Batch upsert all entries
         let total = all_entries.len();
         let start = Instant::now();
-        crate::data::reference::batch_upsert(&all_entries, db_pool).await?;
+        crate::data::reference::batch_upsert(db_pool, &all_entries).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
             warn!(

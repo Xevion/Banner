@@ -1,7 +1,7 @@
 //! Database operations for RateMyProfessors data.
 
 use crate::rmp::{RmpProfessor, RmpProfessorDetail, RmpReview};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use sqlx::PgPool;
 use std::collections::HashSet;
 
@@ -9,10 +9,7 @@ use std::collections::HashSet;
 ///
 /// Deduplicates by `legacy_id` before inserting -- the RMP API can return
 /// the same professor on multiple pages.
-pub async fn batch_upsert_rmp_professors(
-    professors: &[RmpProfessor],
-    db_pool: &PgPool,
-) -> Result<()> {
+pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfessor]) -> Result<()> {
     if professors.is_empty() {
         return Ok(());
     }
@@ -87,9 +84,9 @@ pub async fn batch_upsert_rmp_professors(
     .bind(&avg_difficulties)
     .bind(&num_ratings)
     .bind(&would_take_again_pcts)
-    .execute(db_pool)
+    .execute(pool)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch upsert RMP professors: {}", e))?;
+    .context("Failed to batch upsert RMP professors")?;
 
     Ok(())
 }
@@ -102,11 +99,11 @@ pub async fn batch_upsert_rmp_professors(
 /// If `rmp_legacy_id` is `Some`, removes only that specific link.
 /// If `None`, removes all links for the instructor.
 pub async fn unmatch_instructor(
-    db_pool: &PgPool,
+    pool: &PgPool,
     instructor_id: i32,
     rmp_legacy_id: Option<i32>,
 ) -> Result<()> {
-    let mut tx = db_pool.begin().await?;
+    let mut tx = pool.begin().await?;
 
     // Delete specific link or all links
     if let Some(legacy_id) = rmp_legacy_id {
@@ -165,7 +162,7 @@ pub async fn unmatch_instructor(
     }
 
     tx.commit().await?;
-    refresh_rmp_summary(db_pool).await?;
+    refresh_rmp_summary(pool).await?;
     Ok(())
 }
 
@@ -174,7 +171,7 @@ pub async fn unmatch_instructor(
 /// Returns `(legacy_id, graphql_id)` pairs for professors whose
 /// `reviews_last_scraped_at` is NULL or past their individual interval.
 pub async fn get_professors_eligible_for_review_scrape(
-    db_pool: &PgPool,
+    pool: &PgPool,
     limit: i64,
 ) -> Result<Vec<(i32, String)>> {
     let rows: Vec<(i32, String)> = sqlx::query_as(
@@ -187,14 +184,14 @@ pub async fn get_professors_eligible_for_review_scrape(
         "#,
     )
     .bind(limit)
-    .fetch_all(db_pool)
+    .fetch_all(pool)
     .await?;
 
     Ok(rows)
 }
 
 /// Update extended profile columns on `rmp_professors` for one professor.
-pub async fn upsert_professor_detail(detail: &RmpProfessorDetail, db_pool: &PgPool) -> Result<()> {
+pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail) -> Result<()> {
     let course_codes_json = serde_json::to_value(&detail.course_codes)?;
 
     sqlx::query(
@@ -216,7 +213,7 @@ pub async fn upsert_professor_detail(detail: &RmpProfessorDetail, db_pool: &PgPo
     .bind(detail.ratings_r5)
     .bind(&course_codes_json)
     .bind(detail.legacy_id)
-    .execute(db_pool)
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -227,11 +224,11 @@ pub async fn upsert_professor_detail(detail: &RmpProfessorDetail, db_pool: &PgPo
 /// Uses a transaction to ensure atomicity. Delete-and-reinsert is simpler
 /// than composite-key upsert since RMP reviews lack stable IDs.
 pub async fn replace_professor_reviews(
+    pool: &PgPool,
     legacy_id: i32,
     reviews: &[RmpReview],
-    db_pool: &PgPool,
 ) -> Result<()> {
-    let mut tx = db_pool.begin().await?;
+    let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1")
         .bind(legacy_id)
@@ -281,9 +278,9 @@ pub async fn replace_professor_reviews(
 /// Only called after `replace_professor_reviews` succeeds to prevent
 /// failed inserts from pushing the next scrape forward.
 pub async fn mark_professor_reviews_scraped(
+    pool: &PgPool,
     legacy_id: i32,
     num_ratings: i32,
-    db_pool: &PgPool,
 ) -> Result<()> {
     let interval_days = match num_ratings {
         0 => 14,
@@ -302,7 +299,7 @@ pub async fn mark_professor_reviews_scraped(
     )
     .bind(interval_days)
     .bind(legacy_id)
-    .execute(db_pool)
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -313,9 +310,9 @@ pub async fn mark_professor_reviews_scraped(
 /// Call after any operation that changes `instructor_rmp_links`
 /// or updates `rmp_professors` rating data. Uses `CONCURRENTLY`
 /// to avoid blocking reads during refresh.
-pub async fn refresh_rmp_summary(db_pool: &PgPool) -> Result<()> {
+pub async fn refresh_rmp_summary(pool: &PgPool) -> Result<()> {
     sqlx::query("REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary")
-        .execute(db_pool)
+        .execute(pool)
         .await?;
     Ok(())
 }

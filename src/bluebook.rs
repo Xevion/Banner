@@ -733,7 +733,7 @@ impl BlueBookClient {
                     progress, subject_count, "Skipped (no results)"
                 );
                 skipped_no_radio += 1;
-                if let Err(e) = mark_subject_scraped(&subject.code, db_pool).await {
+                if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
                     warn!(
                         code = subject.code.as_str(),
                         error = %e,
@@ -795,7 +795,7 @@ impl BlueBookClient {
 
             // Upsert immediately so data is available without waiting for the full scrape
             if !subject_evals.is_empty()
-                && let Err(e) = batch_upsert_bluebook_evaluations(&subject_evals, db_pool).await
+                && let Err(e) = batch_upsert_bluebook_evaluations(db_pool, &subject_evals).await
             {
                 warn!(
                     code = subject.code.as_str(),
@@ -809,7 +809,7 @@ impl BlueBookClient {
 
             total_evals += subject_eval_count;
 
-            if let Err(e) = mark_subject_scraped(&subject.code, db_pool).await {
+            if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
                 warn!(
                     code = subject.code.as_str(),
                     error = %e,

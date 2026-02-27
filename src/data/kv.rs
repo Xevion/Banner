@@ -4,18 +4,20 @@
 //! bot command fingerprints, and other ephemeral state that should survive
 //! normal restarts but is safe to lose on DB crash recovery.
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 /// Retrieve a value by key, or `None` if not present.
-pub async fn get(pool: &PgPool, key: &str) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar!("SELECT value FROM app_kv WHERE key = $1", key)
+pub async fn get(pool: &PgPool, key: &str) -> Result<Option<String>> {
+    let value = sqlx::query_scalar!("SELECT value FROM app_kv WHERE key = $1", key)
         .fetch_optional(pool)
-        .await
+        .await?;
+    Ok(value)
 }
 
 /// Insert or update a key-value pair.
-pub async fn set(pool: &PgPool, key: &str, value: &str) -> Result<(), sqlx::Error> {
+pub async fn set(pool: &PgPool, key: &str, value: &str) -> Result<()> {
     sqlx::query!(
         r#"
         INSERT INTO app_kv (key, value)
@@ -32,12 +34,12 @@ pub async fn set(pool: &PgPool, key: &str, value: &str) -> Result<(), sqlx::Erro
 }
 
 /// Retrieve a persisted UTC timestamp, or `None` if absent or unparseable.
-pub async fn get_timestamp(pool: &PgPool, key: &str) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
+pub async fn get_timestamp(pool: &PgPool, key: &str) -> Result<Option<DateTime<Utc>>> {
     let value = get(pool, key).await?;
     Ok(value.and_then(|v| DateTime::parse_from_rfc3339(&v).ok().map(|dt| dt.to_utc())))
 }
 
 /// Persist a UTC timestamp under the given key.
-pub async fn set_timestamp(pool: &PgPool, key: &str, ts: DateTime<Utc>) -> Result<(), sqlx::Error> {
+pub async fn set_timestamp(pool: &PgPool, key: &str, ts: DateTime<Utc>) -> Result<()> {
     set(pool, key, &ts.to_rfc3339()).await
 }
