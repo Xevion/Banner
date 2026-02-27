@@ -54,7 +54,7 @@
     "jsdom": "^26.1.0",
     "playwright": "^1.58.1",
     "storybook": "^10.2.13",
-    "svelte": "^5.53.2",
+    "svelte": "^5.53.5",
     "svelte-check": "^4.3.5",
     "svelte-eslint-parser": "^1.4.1",
     "svelte-range-slider-pips": "^4.1.0",
