@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2](https://github.com/Xevion/Banner/compare/v0.7.1...v0.7.2) (2026-02-28)
+
+
+### Features
+
+* **backend:** Add multi-layer per-IP rate limiting middleware ([a106025](https://github.com/Xevion/Banner/commit/a106025cfa6518b6882af441d0e42b0fc9fe3e7d))
+
+
+### Bug Fixes
+
+* Add package overrides for minimatch and cookie vulnerabilities ([9bbc97f](https://github.com/Xevion/Banner/commit/9bbc97f6a433cd19f7cad08b33837c625ba9d571))
+* **security:** Update svelte to 5.53.5 to patch XSS vulnerabilities ([a5f163c](https://github.com/Xevion/Banner/commit/a5f163c189d2e24019bc3f3622560c0ca30baf5a))
+
+
+### Performance Improvements
+
+* **backend:** Deferred sync bot client init, non-blocking schedule cache load ([f607403](https://github.com/Xevion/Banner/commit/f6074038af85dcfb36cfecf680b0623d74a9c9c9))
+
+
+### Code Refactoring
+
+* Add error context to uncovered db operations and harden stream subscription lookup ([4ae1409](https://github.com/Xevion/Banner/commit/4ae14093046481f3e136e647d2c37851e813e8cb))
+* **backend:** Cleanup AppState, parallelize startup, move bg tasks, fix layering ([708ab81](https://github.com/Xevion/Banner/commit/708ab8197dd996dc40a87fec20abee312d8b7ec8))
+* **data:** Replace fixed-parameter search functions with SearchFilter struct ([7d31d0c](https://github.com/Xevion/Banner/commit/7d31d0c2715f62637994efdd2f03b0c5ee83b641))
+* Decompose routes.rs into focused handler modules ([e3bd22c](https://github.com/Xevion/Banner/commit/e3bd22c5d9ffcb8f3a90e5bef73e46e6c2ca89d1))
+* Extract database query functions into data layer ([a6b00fd](https://github.com/Xevion/Banner/commit/a6b00fd82f1a0b3ec408b0b366f933ed62ea2658))
+* Extract reusable table components and deduplicate slow-op logging ([8b5d052](https://github.com/Xevion/Banner/commit/8b5d05214949d052e98e1c37425fd5ee2a818c6c))
+* Standardize data layer signatures to pool-first, use anyhow::Context ([a4566cc](https://github.com/Xevion/Banner/commit/a4566ccdd369eed9fbf6c0b1cde4e514df7ed39c))
+
 ## [0.7.1](https://github.com/Xevion/Banner/compare/v0.7.0...v0.7.1) (2026-02-26)
 
 
