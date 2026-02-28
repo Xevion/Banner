@@ -4,6 +4,7 @@ use crate::banner::BannerApi;
 use crate::data::events::EventBuffer;
 use crate::data::models::ReferenceData;
 use crate::web::auth::session::{OAuthStateStore, SessionCache};
+use crate::web::middleware::rate_limit::{RateLimitState, SharedRateLimitState};
 use crate::web::schedule_cache::ScheduleCache;
 use crate::web::search_options_cache::SearchOptionsCache;
 use crate::web::sitemap_cache::SitemapCache;
@@ -158,9 +159,16 @@ pub struct AppState {
     pub public_origin: Option<String>,
     /// In-memory cache for pre-rendered sitemap XML.
     pub sitemap_cache: SitemapCache,
+    /// Shared rate limiting state for inbound HTTP requests.
+    pub rate_limit: SharedRateLimitState,
 }
 
 impl AppState {
+    /// The internal token that the SSR proxy injects to bypass rate limiting.
+    pub fn internal_token(&self) -> &str {
+        self.rate_limit.internal_token()
+    }
+
     pub fn new(
         banner_api: Arc<BannerApi>,
         db_pool: PgPool,
@@ -178,6 +186,11 @@ impl AppState {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("Failed to create SSR proxy client");
+
+        // Generate a random internal token for SSR -> API bypass.
+        let internal_token = ulid::Ulid::new().to_string();
+        let rate_limit = Arc::new(RateLimitState::new(internal_token));
+
         Self {
             session_cache: SessionCache::new(db_pool.clone()),
             oauth_state_store: OAuthStateStore::new(),
@@ -195,6 +208,7 @@ impl AppState {
             bluebook_force_flag,
             public_origin,
             sitemap_cache: SitemapCache::new(),
+            rate_limit,
         }
     }
 }

@@ -6,6 +6,7 @@
 //!
 //! Always sets an `X-Request-Id` response header with the resolved ID.
 
+use crate::web::middleware::client_ip::header_str;
 use axum::extract::Request;
 use axum::http::HeaderValue;
 use axum::response::Response;
@@ -64,9 +65,28 @@ where
             req.headers_mut().insert("x-request-id", value);
         }
 
+        // Cloudflare ray ID for cross-layer debugging.
+        let cf_ray = header_str(req.headers(), "cf-ray")
+            .map(String::from)
+            .unwrap_or_default();
+
+        // Client IP for tracing correlation (same priority as ClientIp extractor).
+        let client_ip = header_str(req.headers(), "cf-connecting-ip")
+            .or_else(|| {
+                header_str(req.headers(), "x-forwarded-for")
+                    .and_then(|xff| xff.rsplit(',').next().map(str::trim))
+            })
+            .unwrap_or("-")
+            .to_string();
+
         let method = req.method().clone();
         let path = req.uri().path().to_string();
-        let span = tracing::info_span!("request", req_id = %req_id);
+        let span = tracing::info_span!(
+            "request",
+            req_id = %req_id,
+            cf_ray = %cf_ray,
+            client_ip = %client_ip,
+        );
         let start = Instant::now();
 
         let future = self.inner.call(req);

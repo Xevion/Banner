@@ -52,7 +52,6 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
     }
 }
 
-#[allow(dead_code)]
-fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> Option<&'a str> {
+pub fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
 }

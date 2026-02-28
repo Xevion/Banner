@@ -2,20 +2,22 @@
 
 use axum::{
     Extension, Router,
-    extract::{ConnectInfo, Request, State},
+    extract::{Request, State},
     http::HeaderValue,
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
 
-use std::net::SocketAddr;
 use std::time::Duration;
 
+#[cfg(feature = "embed-assets")]
 use axum::http::StatusCode;
 use axum::response::Json;
 
 use crate::state::AppState;
 use crate::web::auth::{self, AuthConfig};
+use crate::web::middleware::client_ip::ClientIp;
+use crate::web::middleware::rate_limit::RateLimitLayer;
 use crate::web::middleware::request_id::RequestIdLayer;
 use crate::web::middleware::security_headers::SecurityHeadersLayer;
 use crate::web::{
@@ -173,6 +175,8 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
 
     use crate::web::sitemap;
 
+    let rate_limit_state = app_state.rate_limit.clone();
+
     let router = Router::new()
         .route("/robots.txt", get(robots_txt))
         .route("/sitemap.xml", get(sitemap::sitemap_index))
@@ -201,6 +205,9 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             .br(true)
             .gzip(true)
             .quality(tower_http::CompressionLevel::Fastest),
+        // Per-IP rate limiting (burst + sustained + long-term, multi-layer).
+        // Inside compression so 429 responses get compressed too.
+        RateLimitLayer::new(rate_limit_state),
         TimeoutLayer::new(Duration::from_secs(60)),
     ))
 }
@@ -208,7 +215,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
 /// SSR fallback: try embedded static assets first, then proxy to the SSR server.
 async fn ssr_fallback(
     State(state): State<AppState>,
-    connect_info: ConnectInfo<SocketAddr>,
+    ClientIp(client_ip): ClientIp,
     request: Request,
 ) -> axum::response::Response {
     let method = request.method().clone();
@@ -217,19 +224,16 @@ async fn ssr_fallback(
     let query = uri.query();
     let mut headers = request.headers().clone();
 
-    // Augment X-Forwarded-For so the SSR server (and its backend calls) see
-    // the real client IP, not localhost. Append the peer address to any
-    // existing value rather than replacing it.
-    let client_ip = connect_info.0.ip().to_string();
-    let xff_value = match headers.get("x-forwarded-for") {
-        Some(existing) => {
-            let existing = existing.to_str().unwrap_or("");
-            format!("{existing}, {client_ip}")
-        }
-        None => client_ip,
-    };
-    if let Ok(value) = HeaderValue::from_str(&xff_value) {
+    // Set the real client IP (resolved from Cloudflare/Railway headers) so the
+    // SSR server sees the actual visitor, not the reverse proxy.
+    if let Ok(value) = HeaderValue::from_str(&client_ip.to_string()) {
         headers.insert("x-forwarded-for", value);
+    }
+
+    // Inject the internal bypass token so SvelteKit's server-side API calls
+    // (which hit us on localhost) skip rate limiting.
+    if let Ok(value) = HeaderValue::from_str(state.internal_token()) {
+        headers.insert("x-internal-token", value);
     }
 
     // Try serving embedded static assets (production only)
