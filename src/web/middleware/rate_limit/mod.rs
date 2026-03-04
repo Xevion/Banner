@@ -33,6 +33,8 @@ enum RouteGroup {
     Admin,
     /// Health/metrics endpoints -- no route-group limiting.
     Internal,
+    /// Static assets (JS, CSS, fonts, images) -- exempt from all rate limiting.
+    Static,
 }
 
 /// Endpoints with their own tight limits.
@@ -50,9 +52,50 @@ fn classify_route(path: &str) -> RouteGroup {
         RouteGroup::Internal
     } else if path.starts_with("/api/") {
         RouteGroup::Api
+    } else if is_static_asset(path) {
+        RouteGroup::Static
     } else {
         RouteGroup::Ssr
     }
+}
+
+/// Returns true for paths that are static assets (JS/CSS bundles, fonts, images).
+///
+/// These are trivial to serve (embedded hashmap lookup or proxy pass), arrive in
+/// bursts during page loads, and are already protected by Cloudflare caching and
+/// Cache-Control headers. Rate limiting them causes false 429s on normal browsing.
+fn is_static_asset(path: &str) -> bool {
+    let trimmed = path.strip_prefix('/').unwrap_or(path);
+
+    // SvelteKit build output and explicit asset directories
+    if trimmed.starts_with("_app/") || trimmed.starts_with("assets/") {
+        return true;
+    }
+
+    // Common static file extensions at any path
+    matches!(
+        path.rsplit_once('.').map(|(_, ext)| ext),
+        Some(
+            "js" | "css"
+                | "mjs"
+                | "woff"
+                | "woff2"
+                | "ttf"
+                | "otf"
+                | "eot"
+                | "png"
+                | "jpg"
+                | "jpeg"
+                | "gif"
+                | "svg"
+                | "ico"
+                | "webp"
+                | "avif"
+                | "map"
+                | "json"
+                | "webmanifest"
+        )
+    )
 }
 
 fn classify_endpoint(path: &str) -> Option<TrackedEndpoint> {
@@ -182,6 +225,13 @@ impl RateLimitState {
     /// Check all applicable rate limits for the request. Returns `Ok(())` if
     /// allowed, or `Err(retry_after_secs)` with the longest wait time.
     fn check(&self, ip: IpAddr, path: &str, _tier: AuthTier) -> Result<(), u64> {
+        let group = classify_route(path);
+
+        // Static assets are exempt from all rate limiting.
+        if group == RouteGroup::Static {
+            return Ok(());
+        }
+
         // Layer 1: global
         let mut max_wait: Option<Duration> = None;
 
@@ -213,8 +263,7 @@ impl RateLimitState {
             rejected = true;
         }
 
-        // Route-group
-        let group = classify_route(path);
+        // Route-group (Static already short-circuited above)
         match group {
             RouteGroup::Api => {
                 if !check_limiter(&self.api_sustained, &ip, &mut max_wait) {
@@ -240,7 +289,7 @@ impl RateLimitState {
                     rejected = true;
                 }
             }
-            RouteGroup::Internal => {}
+            RouteGroup::Internal | RouteGroup::Static => {}
         }
 
         // Endpoint-specific
