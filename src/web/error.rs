@@ -20,6 +20,7 @@ pub enum ApiErrorCode {
     Unauthorized,
     Forbidden,
     NoTerms,
+    RateLimited,
 }
 
 /// Standardized error response for all API endpoints.
@@ -71,6 +72,17 @@ impl ApiError {
         Self::new(ApiErrorCode::Conflict, message)
     }
 
+    pub fn rate_limited(retry_after_secs: u64) -> Self {
+        Self {
+            code: ApiErrorCode::RateLimited,
+            message: format!(
+                "Too many requests. Retry after {} seconds.",
+                retry_after_secs
+            ),
+            details: Some(serde_json::json!({ "retryAfter": retry_after_secs })),
+        }
+    }
+
     fn status_code(&self) -> StatusCode {
         match self.code {
             ApiErrorCode::NotFound => StatusCode::NOT_FOUND,
@@ -82,6 +94,7 @@ impl ApiError {
             ApiErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
             ApiErrorCode::Forbidden => StatusCode::FORBIDDEN,
             ApiErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiErrorCode::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 }

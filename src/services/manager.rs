@@ -86,7 +86,7 @@ impl ServiceManager {
         }
 
         info!(
-            "servicemanager running {} services",
+            "service manager running {} services",
             self.service_handles.len()
         );
 

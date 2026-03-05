@@ -29,7 +29,7 @@ describe("BannerApiClient", () => {
 
     const result = await apiClient.getStatus();
 
-    expect(fetch).toHaveBeenCalledWith("/api/status");
+    expect(fetch).toHaveBeenCalledWith("/api/status", undefined);
     expect(result.isOk).toBe(true);
     if (result.isOk) {
       expect(result.value).toEqual(mockStatus);
@@ -73,7 +73,8 @@ describe("BannerApiClient", () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/courses/search?term=202420&subject=CS&query=data&openOnly=true&limit=25&offset=50"
+      "/api/courses/search?term=202420&subject=CS&query=data&openOnly=true&limit=25&offset=50",
+      undefined
     );
     expect(result.isOk).toBe(true);
     if (result.isOk) {
@@ -94,7 +95,7 @@ describe("BannerApiClient", () => {
 
     const result = await apiClient.searchCourses({ term: "202420" });
 
-    expect(fetch).toHaveBeenCalledWith("/api/courses/search?term=202420");
+    expect(fetch).toHaveBeenCalledWith("/api/courses/search?term=202420", undefined);
     expect(result.isOk).toBe(true);
   });
 
@@ -111,7 +112,7 @@ describe("BannerApiClient", () => {
 
     const result = await apiClient.getReference("instructional_methods");
 
-    expect(fetch).toHaveBeenCalledWith("/api/reference/instructional_methods");
+    expect(fetch).toHaveBeenCalledWith("/api/reference/instructional_methods", undefined);
     expect(result.isOk).toBe(true);
     if (result.isOk) {
       expect(result.value).toEqual(mockRef);

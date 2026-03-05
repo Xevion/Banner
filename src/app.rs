@@ -79,12 +79,12 @@ impl App {
         );
 
         // Run database migrations
-        info!("Running database migrations...");
+        info!("Checking database migrations...");
         sqlx::migrate!("./migrations")
             .run(&db_pool)
             .await
             .context("Failed to run database migrations")?;
-        info!("Database migrations completed successfully");
+        info!("Database migrations up to date");
 
         // Create BannerApi early so we can use it for term sync
         let banner_api = BannerApi::new_with_config(
@@ -177,7 +177,7 @@ impl App {
             let user = crate::data::users::ensure_seed_admin(&db_pool, admin_id as i64)
                 .await
                 .context("Failed to seed admin user")?;
-            info!(discord_id = admin_id, username = %user.discord_username, "Seed admin ensured");
+            info!(discord_id = %admin_id, username = %user.discord_username, "Seed admin ensured");
 
             #[cfg(debug_assertions)]
             {

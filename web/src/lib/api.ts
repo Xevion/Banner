@@ -119,6 +119,19 @@ export class ApiErrorClass extends Error {
   isInternalError(): boolean {
     return this.code === "INTERNAL_ERROR";
   }
+
+  isRateLimited(): boolean {
+    return this.code === "RATE_LIMITED";
+  }
+
+  /** Seconds the client should wait before retrying (from rate limit details). */
+  get retryAfter(): number | undefined {
+    if (!this.isRateLimited() || typeof this.details !== "object" || this.details === null) {
+      return undefined;
+    }
+    const val = (this.details as Record<string, unknown>).retryAfter;
+    return typeof val === "number" ? val : undefined;
+  }
 }
 
 /** Module-level cache shared by all BannerApiClient instances. */
@@ -163,27 +176,68 @@ export class BannerApiClient {
     return err(new ApiErrorClass(error));
   }
 
+  /**
+   * Execute a fetch with automatic retry on 429 (rate limited).
+   *
+   * On a 429 response, waits for the `Retry-After` duration (capped at 30s)
+   * then retries once. If the retry also fails, returns the error normally.
+   */
+  private async fetchWithRetry(
+    url: string,
+    init?: RequestInit
+  ): Promise<Result<Response, ApiErrorClass>> {
+    const doFetch = async (): Promise<Result<Response, ApiErrorClass>> => {
+      try {
+        return ok(await this.fetchFn(url, init));
+      } catch (e) {
+        return err(
+          new ApiErrorClass({
+            code: "INTERNAL_ERROR",
+            message: e instanceof Error ? e.message : "Network request failed",
+            details: null,
+          })
+        );
+      }
+    };
+
+    const result = await doFetch();
+    if (result.isErr) return result;
+
+    const response = result.value;
+    if (response.status !== 429) return ok(response);
+
+    // Parse Retry-After from the response body (not headers, since the
+    // structured ApiError includes retryAfter in details).
+    let waitSecs = 1;
+    try {
+      const body = (await response.clone().json()) as ApiError;
+      const details = body.details as Record<string, unknown> | null;
+      if (details && typeof details.retryAfter === "number") {
+        waitSecs = details.retryAfter;
+      }
+    } catch {
+      // Fall back to Retry-After header
+      const header = response.headers.get("retry-after");
+      if (header) waitSecs = Number.parseInt(header, 10) || 1;
+    }
+
+    // Cap the wait to avoid hanging the UI
+    const cappedMs = Math.min(waitSecs, 30) * 1000;
+    await new Promise((resolve) => setTimeout(resolve, cappedMs));
+
+    // Single retry attempt
+    return doFetch();
+  }
+
   private async request<T>(
     endpoint: string,
     options?: { method?: string; body?: unknown }
   ): Promise<Result<T, ApiErrorClass>> {
     const init = this.buildInit(options);
-    const args: [string, RequestInit?] = [`${this.baseUrl}${endpoint}`];
-    if (init) args.push(init);
+    const result = await this.fetchWithRetry(`${this.baseUrl}${endpoint}`, init);
+    if (result.isErr) return err(result.error);
 
-    let response: Response;
-    try {
-      response = await this.fetchFn(...args);
-    } catch (e) {
-      return err(
-        new ApiErrorClass({
-          code: "INTERNAL_ERROR",
-          message: e instanceof Error ? e.message : "Network request failed",
-          details: null,
-        })
-      );
-    }
-
+    const response = result.value;
     if (!response.ok) {
       let apiError: ApiError | undefined;
       try {
@@ -202,22 +256,10 @@ export class BannerApiClient {
     options?: { method?: string; body?: unknown }
   ): Promise<Result<void, ApiErrorClass>> {
     const init = this.buildInit(options);
-    const args: [string, RequestInit?] = [`${this.baseUrl}${endpoint}`];
-    if (init) args.push(init);
+    const result = await this.fetchWithRetry(`${this.baseUrl}${endpoint}`, init);
+    if (result.isErr) return err(result.error);
 
-    let response: Response;
-    try {
-      response = await this.fetchFn(...args);
-    } catch (e) {
-      return err(
-        new ApiErrorClass({
-          code: "INTERNAL_ERROR",
-          message: e instanceof Error ? e.message : "Network request failed",
-          details: null,
-        })
-      );
-    }
-
+    const response = result.value;
     if (!response.ok) {
       let apiError: ApiError | undefined;
       try {

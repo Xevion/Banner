@@ -13,7 +13,7 @@
 use crate::web::middleware::client_ip::header_str;
 use axum::body::Body;
 use axum::extract::Request;
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::HeaderValue;
 use axum::response::Response;
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter, clock::Clock};
 use std::net::IpAddr;
@@ -454,15 +454,10 @@ fn extract_ip_from_headers(headers: &http::HeaderMap) -> Option<IpAddr> {
 }
 
 fn rate_limit_response(retry_after: u64) -> Response<Body> {
-    let body = format!(
-        r#"{{"code":"RATE_LIMITED","message":"Too many requests. Retry after {} seconds.","details":null}}"#,
-        retry_after
-    );
-    let mut response = Response::new(Body::from(body));
-    *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
-    response
-        .headers_mut()
-        .insert("content-type", HeaderValue::from_static("application/json"));
+    use crate::web::error::ApiError;
+    use axum::response::IntoResponse;
+
+    let mut response = ApiError::rate_limited(retry_after).into_response();
     response.headers_mut().insert(
         "retry-after",
         HeaderValue::from_str(&retry_after.to_string()).unwrap(),

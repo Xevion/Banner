@@ -49,15 +49,7 @@ async fn main() -> ExitCode {
     };
     setup_logging(&early_config, args.tracing);
 
-    // Create and initialize the application
-    let mut app = App::new().await.expect("Failed to initialize application");
-
-    info!(
-        enabled_services = ?enabled_services,
-        "services configuration loaded"
-    );
-
-    // Log application startup context
+    // Log application startup context before App::new() so these appear first
     info!(
         version = env!("CARGO_PKG_VERSION"),
         environment = if cfg!(debug_assertions) {
@@ -67,6 +59,15 @@ async fn main() -> ExitCode {
         },
         "starting banner"
     );
+
+    let service_strs: Vec<&str> = enabled_services.iter().map(|s| s.as_str()).collect();
+    info!(
+        enabled_services = ?service_strs,
+        "services configuration loaded"
+    );
+
+    // Create and initialize the application
+    let mut app = App::new().await.expect("Failed to initialize application");
 
     // Setup services (web, scraper)
     app.setup_services(&enabled_services)

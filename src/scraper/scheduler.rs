@@ -140,11 +140,11 @@ impl Scheduler {
             || persisted_rmp_reviews.is_some()
         {
             info!(
-                last_ref_scrape = ?persisted_ref,
-                last_rmp_sync = ?persisted_rmp,
-                last_term_sync = ?persisted_term,
-                last_bluebook_sync = ?persisted_bb,
-                last_rmp_review_scrape = ?persisted_rmp_reviews,
+                last_ref_scrape = persisted_ref.map(|v| v.to_rfc3339()).as_deref(),
+                last_rmp_sync = persisted_rmp.map(|v| v.to_rfc3339()).as_deref(),
+                last_term_sync = persisted_term.map(|v| v.to_rfc3339()).as_deref(),
+                last_bluebook_sync = persisted_bb.map(|v| v.to_rfc3339()).as_deref(),
+                last_rmp_review_scrape = persisted_rmp_reviews.map(|v| v.to_rfc3339()).as_deref(),
                 "Loaded persisted scheduler timestamps"
             );
         }
