@@ -9,7 +9,7 @@ use crate::data::unsigned::Count;
 use crate::utils::fmt_duration;
 use crate::web::audit::{AuditLogEntry, AuditRow};
 use anyhow::{Context, Result};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Timelike};
 use sqlx::PgConnection;
 use sqlx::PgPool;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -496,6 +496,9 @@ pub async fn batch_upsert_courses(
         upsert_course_instructors(courses, &crn_term_to_id, &instructor_lookup, &mut tx).await?;
     audits.extend(instructor_audits);
 
+    // Step 6: Sync denormalized course_meetings table for schedule cache
+    sync_course_meetings(courses, &crn_term_to_id, &mut tx).await?;
+
     // Count courses that had at least one field change (existing rows only)
     let changed_ids: HashSet<i32> = audits.iter().map(|a| a.course_id).collect();
     let courses_changed = Count::try_from(changed_ids.len())?;
@@ -510,7 +513,7 @@ pub async fn batch_upsert_courses(
         metrics_generated: Count::try_from(metrics.len())?,
     };
 
-    // Step 6: Insert audits and metrics
+    // Step 7: Insert audits and metrics
     let audit_ids = insert_audits(&audits, &mut tx).await?;
     insert_metrics(&metrics, &mut tx).await?;
 
@@ -792,8 +795,9 @@ impl InstructorLookup {
         if let Some(email) = &faculty.email_address {
             self.by_email.get(&email.to_lowercase()).copied()
         } else {
+            let name = faculty.display_name.as_deref()?;
             self.by_display_name
-                .get(&decode_html_entities(&faculty.display_name))
+                .get(&decode_html_entities(name))
                 .copied()
         }
     }
@@ -823,8 +827,12 @@ async fn upsert_instructors(
 
     for course in courses {
         for faculty in &course.faculty {
-            let display_name = decode_html_entities(&faculty.display_name);
-            let parts = parse_banner_name(&faculty.display_name);
+            // Skip faculty with no display name (TBA/unassigned instructors)
+            let Some(raw_name) = &faculty.display_name else {
+                continue;
+            };
+            let display_name = decode_html_entities(raw_name);
+            let parts = parse_banner_name(raw_name);
             if let Some(email) = &faculty.email_address {
                 let email_lower = email.to_lowercase();
                 if seen_emails.insert(email_lower.clone()) {
@@ -967,7 +975,9 @@ async fn upsert_course_instructors(
                 instructor_ids.push(instructor_id);
                 banner_ids.push(faculty.banner_id.as_str());
                 primaries.push(faculty.primary_indicator);
-                names.push(decode_html_entities(&faculty.display_name));
+                if let Some(name) = &faculty.display_name {
+                    names.push(decode_html_entities(name));
+                }
             }
         }
     }
@@ -1046,4 +1056,131 @@ async fn upsert_course_instructors(
     }
 
     Ok(audits)
+}
+
+/// Sync the denormalized `course_meetings` table for the upserted courses.
+///
+/// Deletes existing rows for the affected course IDs and re-inserts from the
+/// current meeting time data. This keeps the table in sync with the JSONB
+/// `meeting_times` column without parsing JSON at query time.
+async fn sync_course_meetings(
+    courses: &[Course],
+    crn_term_to_id: &HashMap<(&str, &str), i32>,
+    conn: &mut PgConnection,
+) -> Result<()> {
+    let mut course_ids: Vec<i32> = Vec::new();
+    let mut day_bits_vec: Vec<i16> = Vec::new();
+    let mut begin_minutes_vec: Vec<i16> = Vec::new();
+    let mut end_minutes_vec: Vec<i16> = Vec::new();
+    let mut start_dates: Vec<NaiveDate> = Vec::new();
+    let mut end_dates: Vec<NaiveDate> = Vec::new();
+
+    for course in courses {
+        let key = (
+            course.course_reference_number.as_str(),
+            course.term.as_str(),
+        );
+        let Some(&course_id) = crn_term_to_id.get(&key) else {
+            continue;
+        };
+
+        for mf in &course.meetings_faculty {
+            let mt = &mf.meeting_time;
+
+            // Compute day bitmask
+            let mut bits: i16 = 0;
+            if mt.monday {
+                bits |= 1;
+            }
+            if mt.tuesday {
+                bits |= 2;
+            }
+            if mt.wednesday {
+                bits |= 4;
+            }
+            if mt.thursday {
+                bits |= 8;
+            }
+            if mt.friday {
+                bits |= 16;
+            }
+            if mt.saturday {
+                bits |= 32;
+            }
+            if mt.sunday {
+                bits |= 64;
+            }
+            if bits == 0 {
+                continue;
+            }
+
+            // Parse time range
+            let (begin, end) = match (mt.begin_time.as_deref(), mt.end_time.as_deref()) {
+                (Some(b), Some(e)) => {
+                    let begin_tr = TimeRange::from_hhmm(b, e);
+                    match begin_tr {
+                        Some(tr) => {
+                            let b_min = (tr.start.hour() * 60 + tr.start.minute()) as i16;
+                            let e_min = (tr.end.hour() * 60 + tr.end.minute()) as i16;
+                            if e_min <= b_min {
+                                continue;
+                            }
+                            (b_min, e_min)
+                        }
+                        None => continue,
+                    }
+                }
+                _ => continue,
+            };
+
+            // Parse date range
+            let start_date = match parse_mm_dd_yyyy(&mt.start_date) {
+                Some(d) => d,
+                None => continue,
+            };
+            let end_date = match parse_mm_dd_yyyy(&mt.end_date) {
+                Some(d) => d,
+                None => continue,
+            };
+
+            course_ids.push(course_id);
+            day_bits_vec.push(bits);
+            begin_minutes_vec.push(begin);
+            end_minutes_vec.push(end);
+            start_dates.push(start_date);
+            end_dates.push(end_date);
+        }
+    }
+
+    // Delete existing meetings for affected courses
+    let unique_cids: Vec<i32> = crn_term_to_id.values().copied().collect();
+    if !unique_cids.is_empty() {
+        sqlx::query("DELETE FROM course_meetings WHERE course_id = ANY($1)")
+            .bind(&unique_cids)
+            .execute(&mut *conn)
+            .await
+            .context("failed to delete existing course_meetings")?;
+    }
+
+    if course_ids.is_empty() {
+        return Ok(());
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO course_meetings (course_id, day_bits, begin_minutes, end_minutes, start_date, end_date)
+        SELECT * FROM UNNEST($1::int4[], $2::int2[], $3::int2[], $4::int2[], $5::date[], $6::date[])
+        "#,
+    )
+    .bind(&course_ids)
+    .bind(&day_bits_vec)
+    .bind(&begin_minutes_vec)
+    .bind(&end_minutes_vec)
+    .bind(&start_dates)
+    .bind(&end_dates)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {}", e))?;
+
+    Ok(())
 }

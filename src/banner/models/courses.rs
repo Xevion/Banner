@@ -72,7 +72,7 @@ impl Course {
     pub fn primary_instructor_name(&self) -> &str {
         self.faculty
             .first()
-            .map(|f| f.display_name.as_str())
+            .and_then(|f| f.display_name.as_deref())
             .unwrap_or("Unknown")
     }
 }

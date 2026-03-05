@@ -63,7 +63,7 @@ pub struct FacultyItem {
     pub class: String,            // internal class name
     #[serde(deserialize_with = "deserialize_string_to_u32")]
     pub course_reference_number: u32, // CRN, e.g 27294
-    pub display_name: String,     // "LastName, FirstName"
+    pub display_name: Option<String>, // "LastName, FirstName" or null for TBA/unassigned
     pub email_address: Option<String>, // e.g. FirstName.LastName@utsaedu
     pub primary_indicator: bool,
     pub term: String, // e.g "202420"

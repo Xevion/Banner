@@ -382,6 +382,11 @@ impl Scheduler {
             })
             .collect();
 
+        let total_past = categorized
+            .iter()
+            .filter(|(_, c)| matches!(c, TermCategory::Past | TermCategory::Archived))
+            .count();
+
         // Filter out terms that don't need evaluation this cycle:
         // - Past and Archived terms only need evaluation every ARCHIVED_INTERVAL (48h).
         let active_terms: Vec<_> = {
@@ -418,18 +423,19 @@ impl Scheduler {
             })
             .collect();
 
-        let active_count = active_terms.len();
         let current_future: Vec<&str> = active_terms
             .iter()
             .filter(|(_, c)| matches!(c, TermCategory::Current | TermCategory::Future))
             .map(|(t, _)| t.code.as_str())
             .collect();
-        let past_count = active_count - current_future.len();
+        let past_evaluated = active_terms.len() - current_future.len();
+        let past_on_cooldown = total_past - past_evaluated;
 
-        if !current_future.is_empty() || past_count > 0 {
+        if !current_future.is_empty() || past_evaluated > 0 || past_on_cooldown > 0 {
             info!(
                 current_future = ?current_future,
-                past_terms = past_count,
+                past_evaluated,
+                past_on_cooldown,
                 "Scheduling cycle"
             );
         }
