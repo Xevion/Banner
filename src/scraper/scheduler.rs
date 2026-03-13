@@ -388,7 +388,7 @@ impl Scheduler {
             .count();
 
         // Filter out terms that don't need evaluation this cycle:
-        // - Past and Archived terms only need evaluation every ARCHIVED_INTERVAL (48h).
+        // - Past and Archived terms only need evaluation every ARCHIVED_INTERVAL (3 weeks).
         let active_terms: Vec<_> = {
             let eval_times = archived_eval_times.lock().unwrap();
             categorized

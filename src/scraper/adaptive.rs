@@ -17,7 +17,7 @@ const ZERO_5_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const ZERO_10_INTERVAL: Duration = Duration::from_secs(2 * 60 * 60);
 const CEILING_INTERVAL: Duration = Duration::from_secs(4 * 60 * 60);
 const COLD_START_INTERVAL: Duration = FLOOR_INTERVAL;
-pub(crate) const ARCHIVED_INTERVAL: Duration = Duration::from_secs(48 * 60 * 60);
+pub(crate) const ARCHIVED_INTERVAL: Duration = Duration::from_secs(21 * 24 * 60 * 60);
 const PAUSE_PROBE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const EMPTY_FETCH_PAUSE_THRESHOLD: i64 = 3;
 const FAILURE_PAUSE_THRESHOLD: i64 = 5;
@@ -29,9 +29,9 @@ pub enum TermCategory {
     Current,
     /// Upcoming term -- full adaptive scheduling (same as current).
     Future,
-    /// Banner "View Only" term -- fixed 48-hour interval.
+    /// Banner "View Only" term -- fixed 3-week interval.
     Archived,
-    /// Past non-archived term -- fixed 48-hour interval (same as Archived).
+    /// Past non-archived term -- fixed 3-week interval (same as Archived).
     Past,
 }
 
@@ -286,13 +286,13 @@ mod tests {
     #[test]
     fn test_past_term_uses_archived_interval() {
         let mut stats = make_stats("CS");
-        stats.last_completed = Utc::now() - chrono::Duration::hours(49);
+        stats.last_completed = Utc::now() - chrono::Duration::days(22);
         let result = evaluate_subject(&stats, Utc::now(), TermCategory::Past);
         assert_eq!(result, SubjectSchedule::Eligible(ARCHIVED_INTERVAL));
     }
 
     #[test]
-    fn test_past_term_cooldown_before_48h() {
+    fn test_past_term_cooldown_before_interval() {
         let mut stats = make_stats("CS");
         stats.last_completed = Utc::now() - chrono::Duration::hours(24);
         let result = evaluate_subject(&stats, Utc::now(), TermCategory::Past);
@@ -300,15 +300,15 @@ mod tests {
     }
 
     #[test]
-    fn test_archived_eligible_after_48h() {
+    fn test_archived_eligible_after_interval() {
         let mut stats = make_stats("CS");
-        stats.last_completed = Utc::now() - chrono::Duration::hours(49);
+        stats.last_completed = Utc::now() - chrono::Duration::days(22);
         let result = evaluate_subject(&stats, Utc::now(), TermCategory::Archived);
         assert_eq!(result, SubjectSchedule::Eligible(ARCHIVED_INTERVAL));
     }
 
     #[test]
-    fn test_archived_cooldown_before_48h() {
+    fn test_archived_cooldown_before_interval() {
         let mut stats = make_stats("CS");
         stats.last_completed = Utc::now() - chrono::Duration::hours(24);
         let result = evaluate_subject(&stats, Utc::now(), TermCategory::Archived);
