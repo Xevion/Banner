@@ -28,5 +28,6 @@ pub mod term_subjects;
 pub mod terms;
 pub mod unsigned;
 pub mod users;
+pub mod watches;
 
 pub use context::DbContext;

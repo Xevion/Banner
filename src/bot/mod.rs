@@ -18,6 +18,9 @@ pub fn get_commands() -> Vec<poise::Command<Data, Error>> {
         commands::terms(),
         commands::ics(),
         commands::gcal(),
+        commands::watch(),
+        commands::unwatch(),
+        commands::watches(),
     ]
 }
 

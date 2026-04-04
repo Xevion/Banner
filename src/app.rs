@@ -5,6 +5,7 @@ use crate::scraper::ScraperService;
 use crate::scraper::scheduler::KV_TERM_SYNC;
 use crate::services::bot::BotService;
 use crate::services::manager::ServiceManager;
+use crate::services::notifications::NotificationService;
 use crate::services::web::WebService;
 use crate::state::AppState;
 use crate::utils::fmt_duration;
@@ -245,6 +246,21 @@ impl App {
 
         let (status_shutdown_tx, status_shutdown_rx) = broadcast::channel(1);
         let status_task_handle = Arc::new(Mutex::new(None));
+
+        // Build a standalone Discord HTTP client for the notification dispatcher.
+        // This avoids coupling the dispatcher to BotService internals while
+        // sharing the same bot token.
+        let discord_http = Arc::new(serenity::http::Http::new(&self.config.bot_token));
+
+        let notification_service = Box::new(NotificationService::new(
+            self.db_pool.clone(),
+            self.app_state.events.clone(),
+            discord_http,
+            self.config.public_origin.clone(),
+        ));
+
+        self.service_manager
+            .register_service("notifications", notification_service);
 
         let bot_service = Box::new(BotService::new(
             self.config.bot_token.clone(),
