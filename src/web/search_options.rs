@@ -90,13 +90,13 @@ pub(super) async fn get_search_options(
         t.clone()
     } else {
         // Fetch available terms to get the default (latest)
-        let term_codes = data::courses::get_available_terms(&state.db_pool)
+        let terms = data::terms::get_all_terms(&state.db_pool)
             .await
             .map_err(|e| db_error("Get terms for default", e))?;
 
-        let first_term: Term = term_codes
+        let first_term: Term = terms
             .first()
-            .and_then(|code| code.parse().ok())
+            .and_then(|t| t.code.parse().ok())
             .ok_or_else(|| ApiError::new(ApiErrorCode::NoTerms, "No terms available"))?;
 
         first_term.slug()
@@ -114,19 +114,19 @@ pub(super) async fn get_search_options(
         // (Acceptable: singleflight is best-effort, not strict.)
     }
 
-    let (term_codes, subject_rows, ranges) = tokio::try_join!(
-        data::courses::get_available_terms(&state.db_pool),
+    let (all_terms, subject_rows, ranges) = tokio::try_join!(
+        data::terms::get_all_terms(&state.db_pool),
         data::courses::get_subjects_by_enrollment(&state.db_pool, &term_code),
         data::courses::get_filter_ranges(&state.db_pool, &term_code),
     )
     .map_err(|e| db_error("Search options", e))?;
 
-    let terms: Vec<TermResponse> = term_codes
+    let terms: Vec<TermResponse> = all_terms
         .into_iter()
-        .filter_map(|code| {
-            let term: Term = code.parse().ok()?;
+        .filter_map(|t| {
+            let term: Term = t.code.parse().ok()?;
             Some(TermResponse {
-                code,
+                code: t.code,
                 slug: term.slug(),
                 description: term.description(),
             })
