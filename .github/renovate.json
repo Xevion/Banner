@@ -1,0 +1,85 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "dependencyDashboard": false,
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "SvelteKit ecosystem — update together",
+      "matchPackageNames": [
+        "@sveltejs/kit",
+        "@sveltejs/vite-plugin-svelte",
+        "@xevion/svelte-adapter-bun",
+        "svelte",
+        "svelte-check",
+        "svelte-eslint-parser",
+        "eslint-plugin-svelte"
+      ],
+      "groupName": "SvelteKit ecosystem"
+    },
+    {
+      "description": "Storybook suite — update together",
+      "matchPackagePatterns": ["^@storybook/", "^storybook$", "^@chromatic-com/"],
+      "matchPackageNames": ["eslint-plugin-storybook"],
+      "groupName": "Storybook"
+    },
+    {
+      "description": "TypeScript ESLint toolchain — update together",
+      "matchPackagePatterns": ["^@typescript-eslint/", "^typescript-eslint$"],
+      "groupName": "typescript-eslint"
+    },
+    {
+      "description": "Vitest + browser testing suite — update together",
+      "matchPackagePatterns": ["^@vitest/", "^vitest$"],
+      "groupName": "Vitest"
+    },
+    {
+      "description": "Tailwind CSS v4 ecosystem — update together",
+      "matchPackageNames": ["tailwindcss", "@tailwindcss/vite"],
+      "groupName": "Tailwind CSS"
+    },
+    {
+      "description": "D3 libraries + types — update together",
+      "matchPackagePatterns": ["^d3-", "^@types/d3-"],
+      "groupName": "D3"
+    },
+    {
+      "description": "ESLint core + compat — update together",
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/js",
+        "@eslint/compat",
+        "globals"
+      ],
+      "groupName": "ESLint core"
+    },
+    {
+      "description": "PostHog analytics — update together",
+      "matchPackageNames": [
+        "posthog-js",
+        "posthog-node",
+        "@posthog/rollup-plugin"
+      ],
+      "groupName": "PostHog"
+    },
+    {
+      "description": "OverlayScrollbars — update together",
+      "matchPackageNames": ["overlayscrollbars", "overlayscrollbars-svelte"],
+      "groupName": "OverlayScrollbars"
+    },
+    {
+      "description": "Fontsource — update together",
+      "matchPackagePatterns": ["^@fontsource"],
+      "groupName": "Fontsource"
+    },
+    {
+      "description": "GitHub Actions — pin to SHA digests (handled by helpers:pinGitHubActionDigests)",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}
