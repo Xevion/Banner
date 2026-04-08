@@ -15,44 +15,44 @@ alias b := bun
 default:
     just --list
 
-# Run all checks in parallel. Targets: backend,frontend. Pass -f/--fix to auto-format first.
+# Run all checks in parallel. Targets: backend,frontend. Pass --fix to auto-format first.
 check *args:
-    bun scripts/check.ts {{args}}
+    tempo check {{args}}
 
 # Auto-format code. Targets: backend,frontend
 format *targets:
-    bun scripts/format.ts {{targets}}
+    tempo fmt {{targets}}
 
 # Lint code. Targets: backend,frontend
 lint *targets:
-    bun scripts/lint.ts {{targets}}
+    tempo lint {{targets}}
 
 # Run tests. Usage: just test [rust|web|<nextest filter args>]
 test *args:
-    bun scripts/test.ts {{args}}
+    tempo test {{args}}
 
 # Generate TypeScript bindings from Rust types (ts-rs)
 bindings:
-    bun scripts/bindings.ts
+    tempo bindings
 
 # Run the Banner API search demo (hits live UTSA API, ~20s)
 search *ARGS:
-    cargo run -q --bin search -- {{ARGS}}
+    tempo search {{ARGS}}
 
 # Dev server. Flags: -f(rontend) -b(ackend) -W(no-watch) -n(o-build) -r(elease) -e(mbed) -I(no-interrupt) -V(erbose-build) --tracing <fmt>
 # Pass args to binary after --: just dev -n -- --some-flag
 [no-exit-message]
 dev *flags:
-    exec bun scripts/dev.ts {{flags}}
+    exec tempo dev {{flags}}
 
 # Production build. Flags: -d(ebug) -f(rontend-only) -b(ackend-only)
 build *flags:
-    bun scripts/build.ts {{flags}}
+    tempo build {{flags}}
 
 # Start PostgreSQL in Docker and update .env with connection string
 # Commands: start (default), reset, rm
 db cmd="start":
-    bun scripts/db.ts {{cmd}}
+    tempo db {{cmd}}
 
 bun *ARGS:
 	cd web && bun {{ ARGS }}
@@ -72,7 +72,6 @@ install-hooks:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p .husky
-    chmod +x scripts/pre-commit.ts
-    echo "bun scripts/pre-commit.ts" > .husky/pre-commit
+    echo "tempo pre-commit" > .husky/pre-commit
     chmod +x .husky/pre-commit
     echo "(ok) Pre-commit hook installed"
