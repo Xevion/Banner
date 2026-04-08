@@ -37,6 +37,8 @@ function generateBarrel(): void {
 // Advisory IDs to ignore in bun audit (transitive, no fix available)
 const IGNORED_ADVISORIES = [
   "GHSA-3ppc-4f35-3m26", // minimatch ReDoS -- transitive via eslint/@typescript-eslint/vitest
+  "GHSA-r5fr-rjxr-66jc", // lodash-es code injection via _.template -- transitive via layerchart
+  "GHSA-f23m-r3pf-42rh", // lodash-es prototype pollution via _.unset/_.omit -- transitive via layerchart
 ];
 
 const bunAuditCmd = [
