@@ -184,6 +184,9 @@ impl AppState {
             ComputedStreamManager::new(events.clone(), db_pool.clone(), reference_cache.clone());
         let ssr_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            // Bound a down/hung localhost SSR; well under the outer 60s layer.
+            .connect_timeout(std::time::Duration::from_secs(2))
+            .timeout(std::time::Duration::from_secs(10))
             .build()
             .expect("Failed to create SSR proxy client");
 

@@ -41,7 +41,8 @@ pub async fn proxy_to_ssr(
     let resp = match req.send().await {
         Ok(r) => r,
         Err(e) => {
-            warn!(error = %e, "SSR proxy request failed");
+            // The 502 is already logged by request_id middleware; avoid doubling.
+            debug!(error = %e, "SSR proxy request failed");
             return (StatusCode::BAD_GATEWAY, "SSR server unavailable").into_response();
         }
     };

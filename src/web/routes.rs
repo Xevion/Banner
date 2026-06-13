@@ -222,6 +222,13 @@ async fn ssr_fallback(
     let uri = request.uri().clone();
     let path = uri.path();
     let query = uri.query();
+
+    // Unmatched /api/* is never an SSR page; 404 directly instead of proxying
+    // (the SSR has no /api routes and would hang until timeout).
+    if path == "/api" || path.starts_with("/api/") {
+        return crate::web::error::ApiError::not_found("No such API route").into_response();
+    }
+
     let mut headers = request.headers().clone();
 
     // Set the real client IP (resolved from Cloudflare/Railway headers) so the

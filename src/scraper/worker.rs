@@ -361,7 +361,9 @@ impl Worker {
                 );
             }
             _ => {
-                error!(
+                // Recoverable + retries remaining: transient, not an error.
+                // Exhaustion is logged at error! below.
+                warn!(
                     worker_id = self.id,
                     job_id,
                     duration = fmt_duration(duration),
@@ -376,9 +378,9 @@ impl Worker {
 
         // Check if retries remain
         if next_attempt < max_retries {
-            // Retry is allowed - unlock job with incremented retry count
-            // Use immediate retry for now (execute_at = NOW)
-            let execute_at = Utc::now();
+            // Jittered exponential backoff so a mass failure (e.g. a whole term
+            // timing out at once) doesn't re-hammer the upstream in lockstep.
+            let execute_at = Utc::now() + retry_backoff(next_attempt.get());
             match self
                 .db
                 .scrape_jobs()
@@ -436,6 +438,49 @@ impl Worker {
             // Mark as exhausted (emits Exhausted + Deleted events automatically)
             if let Err(e) = self.db.scrape_jobs().exhaust(job_id).await {
                 error!(worker_id = self.id, job_id, error = ?e, "Failed to exhaust job");
+            }
+        }
+    }
+}
+
+/// Delay before the next retry: exponential by attempt, capped, with equal
+/// jitter. Equal jitter keeps a guaranteed minimum spacing while spreading
+/// simultaneous retries across a window (avoids a thundering herd).
+fn retry_backoff(attempt: u32) -> chrono::Duration {
+    const BASE_SECS: u64 = 10;
+    const MAX_SECS: u64 = 300;
+
+    let shift = attempt.saturating_sub(1).min(20);
+    let capped = BASE_SECS.saturating_mul(1u64 << shift).min(MAX_SECS);
+    let half = capped / 2;
+    let delay = half + rand::random_range(0..=half);
+    chrono::Duration::seconds(delay as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::retry_backoff;
+
+    #[test]
+    fn test_retry_backoff_grows_then_caps_within_jitter_bounds() {
+        // (attempt, expected capped ceiling in seconds)
+        let cases = [
+            (1, 10),
+            (2, 20),
+            (3, 40),
+            (4, 80),
+            (5, 160),
+            (6, 300),
+            (20, 300),
+        ];
+        for (attempt, ceiling) in cases {
+            let floor = ceiling / 2;
+            for _ in 0..1000 {
+                let secs = retry_backoff(attempt).num_seconds();
+                assert!(
+                    secs >= floor && secs <= ceiling,
+                    "attempt {attempt}: {secs}s outside [{floor}, {ceiling}]"
+                );
             }
         }
     }
