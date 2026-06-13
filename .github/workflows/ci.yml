@@ -191,7 +191,10 @@ jobs:
 
       - name: Frontend security audit
         working-directory: web
-        run: bun audit --audit-level=moderate --ignore=GHSA-3ppc-4f35-3m26 --ignore=GHSA-r5fr-rjxr-66jc --ignore=GHSA-f23m-r3pf-42rh
+        # Ignore list lives in audit-ignore.json (shared with tempo.config.ts) -- derive --ignore flags from it.
+        run: |
+          mapfile -t ignores < <(jq -r 'map("--ignore=" + .id)[]' ../audit-ignore.json)
+          bun audit --audit-level=moderate "${ignores[@]}"
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.35.0
