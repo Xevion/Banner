@@ -9,13 +9,13 @@
  *   bun scripts/backup/script.ts --dry-run    # Dump + compress locally, skip upload
  */
 
-import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { existsSync, readFileSync } from "fs";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
+import { createWriteStream, existsSync, readFileSync } from "fs";
 import { mkdir } from "fs/promises";
-import { promisify } from "util";
-import { gzip as gzipCb } from "zlib";
-
-const gzip = promisify(gzipCb);
+import { Readable, Transform } from "stream";
+import { pipeline } from "stream/promises";
+import { createGzip } from "zlib";
 
 /** Load .env when running locally (Railway injects env vars directly) */
 function loadEnv(): void {
@@ -106,56 +106,95 @@ function elapsedSec(start: number): string {
 	return ((Date.now() - start) / 1000).toFixed(1);
 }
 
-async function pgDump(): Promise<Buffer> {
-	console.log("running pg_dump...");
-	const start = Date.now();
+interface StreamSizes {
+	raw: number;
+	compressed: number;
+}
 
+/** Counts bytes flowing through a stream without buffering them. */
+function counter(onChunk: (n: number) => void): Transform {
+	return new Transform({
+		transform(chunk, _enc, cb) {
+			onChunk(chunk.length);
+			cb(null, chunk);
+		},
+	});
+}
+
+/** Spawn pg_dump; returns the process and a Node readable over its stdout. */
+function spawnDump(): { proc: Bun.Subprocess; source: Readable; stderr: Promise<string> } {
 	const proc = Bun.spawn(["pg_dump", "--no-owner", "--no-privileges", DATABASE_URL], {
 		stdout: "pipe",
 		stderr: "pipe",
 	});
+	return {
+		proc,
+		source: Readable.fromWeb(proc.stdout as ReadableStream),
+		stderr: new Response(proc.stderr).text(),
+	};
+}
 
-	const [stdout, stderr] = await Promise.all([
-		new Response(proc.stdout).arrayBuffer(),
-		new Response(proc.stderr).text(),
-	]);
+/** Fail loudly if pg_dump exited non-zero (guards against uploading a truncated dump). */
+async function assertDumpOk(proc: Bun.Subprocess, stderr: Promise<string>): Promise<void> {
 	await proc.exited;
-
 	if (proc.exitCode !== 0) {
-		console.error(`pg_dump failed (exit ${proc.exitCode}):\n${stderr}`);
+		console.error(`pg_dump failed (exit ${proc.exitCode}):\n${await stderr}`);
 		process.exit(1);
 	}
-
-	const raw = Buffer.from(stdout);
-	console.log(`pg_dump complete: ${humanBytes(raw.length)} in ${elapsedSec(start)}s`);
-	return raw;
 }
 
-async function compress(data: Buffer): Promise<Buffer> {
-	console.log("compressing...");
-	const start = Date.now();
-	const compressed = await gzip(data, { level: 9 });
-	const ratio = ((1 - compressed.length / data.length) * 100).toFixed(0);
+function logSizes(sizes: StreamSizes, start: number): void {
+	const ratio = ((1 - sizes.compressed / sizes.raw) * 100).toFixed(0);
 	console.log(
-		`compressed: ${humanBytes(data.length)} -> ${humanBytes(compressed.length)} (${ratio}% reduction) in ${elapsedSec(start)}s`,
+		`dump ${humanBytes(sizes.raw)} -> gz ${humanBytes(sizes.compressed)} (${ratio}% reduction) in ${elapsedSec(start)}s`,
 	);
-	return Buffer.from(compressed);
 }
 
-async function uploadToR2(client: S3Client, bucket: string, key: string, data: Buffer): Promise<void> {
-	console.log(`uploading to R2: ${key} (${humanBytes(data.length)})...`);
+/** Stream pg_dump -> gzip -> R2 multipart upload. Never materializes the full dump. */
+async function streamToR2(client: S3Client, bucket: string, key: string): Promise<StreamSizes> {
+	console.log(`streaming pg_dump -> gzip -> R2: ${key}`);
 	const start = Date.now();
 
-	await client.send(
-		new PutObjectCommand({
-			Bucket: bucket,
-			Key: key,
-			Body: data,
-			ContentType: "application/gzip",
-		}),
-	);
+	const { proc, source, stderr } = spawnDump();
+	const sizes: StreamSizes = { raw: 0, compressed: 0 };
+	const gzip = createGzip({ level: 9 });
+	const body = source
+		.pipe(counter((n) => (sizes.raw += n)))
+		.pipe(gzip)
+		.pipe(counter((n) => (sizes.compressed += n)));
 
+	const upload = new Upload({
+		client,
+		params: { Bucket: bucket, Key: key, Body: body, ContentType: "application/gzip" },
+	});
+
+	await Promise.all([upload.done(), assertDumpOk(proc, stderr)]);
+	logSizes(sizes, start);
 	console.log(`upload complete in ${elapsedSec(start)}s`);
+	return sizes;
+}
+
+/** Stream pg_dump -> gzip -> local file (dry-run path). */
+async function streamToFile(outPath: string): Promise<StreamSizes> {
+	console.log(`streaming pg_dump -> gzip -> file: ${outPath}`);
+	const start = Date.now();
+
+	const { proc, source, stderr } = spawnDump();
+	const sizes: StreamSizes = { raw: 0, compressed: 0 };
+	const gzip = createGzip({ level: 9 });
+
+	await Promise.all([
+		pipeline(
+			source,
+			counter((n) => (sizes.raw += n)),
+			gzip,
+			counter((n) => (sizes.compressed += n)),
+			createWriteStream(outPath),
+		),
+		assertDumpOk(proc, stderr),
+	]);
+	logSizes(sizes, start);
+	return sizes;
 }
 
 async function verifyUpload(client: S3Client, bucket: string, key: string, expectedSize: number): Promise<void> {
@@ -183,15 +222,11 @@ setTimeout(() => {
 }, 5 * 60 * 1000).unref();
 
 async function main(): Promise<void> {
-	const raw = await pgDump();
-	const compressed = await compress(raw);
-
 	if (DRY_RUN) {
 		const dir = "tmp";
 		if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-		const filename = `banner-${timestamp()}.sql.gz`;
-		const outPath = `${dir}/${filename}`;
-		await Bun.write(outPath, compressed);
+		const outPath = `${dir}/banner-${timestamp()}.sql.gz`;
+		await streamToFile(outPath);
 		console.log(`dry-run: saved to ${outPath}`);
 		return;
 	}
@@ -200,8 +235,8 @@ async function main(): Promise<void> {
 	const client = buildS3Client(r2);
 
 	const key = `${BACKUP_PREFIX}banner-${timestamp()}.sql.gz`;
-	await uploadToR2(client, r2.bucket, key, compressed);
-	await verifyUpload(client, r2.bucket, key, compressed.length);
+	const sizes = await streamToR2(client, r2.bucket, key);
+	await verifyUpload(client, r2.bucket, key, sizes.compressed);
 
 	client.destroy();
 	console.log("backup complete");
