@@ -112,7 +112,9 @@ textarea:focus-visible {
 /* Buttons get rounded box-shadow focus (outline doesn't support border-radius) */
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--ring);
 }
 
 /* Checkboxes get direct outline focus */
