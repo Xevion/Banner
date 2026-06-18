@@ -11,7 +11,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
     console.error("Failed to load search options:", optionsResult.error);
     return {
       searchOptions: null,
-      resolvedInstructors: {} as Record<string, string>,
+      resolvedInstructors: {},
       searchResult: null,
       searchError: "Failed to load search options",
       searchMeta: null,

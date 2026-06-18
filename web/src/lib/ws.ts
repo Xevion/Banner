@@ -217,13 +217,13 @@ export class StreamClient {
       case "snapshot": {
         const spec = this.subById.get(message.subscription_id);
         if (!spec) return;
-        spec.handlers.onSnapshot(message.snapshot as SnapshotFor<StreamKey>);
+        spec.handlers.onSnapshot(message.snapshot);
         return;
       }
       case "delta": {
         const spec = this.subById.get(message.subscription_id);
         if (!spec) return;
-        spec.handlers.onDelta(message.delta as DeltaFor<StreamKey>);
+        spec.handlers.onDelta(message.delta);
         return;
       }
       case "error": {

@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { ScraperPeriod } from "$lib/api";
-import type { TimeseriesPoint } from "$lib/bindings";
 import { mergeByKey } from "$lib/composables/reducers";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { scaleLinear, scaleTime } from "d3-scale";
@@ -17,17 +16,11 @@ interface Props {
 
 let { period, term }: Props = $props();
 
-interface TimeseriesState {
-  points: TimeseriesPoint[];
-  period: string;
-  bucket: string;
-}
-
 const timeseries = useStream(
   "scraperTimeseries",
   untrack(() => ({ period, term })),
   {
-    initial: { points: [], period: "", bucket: "" } as TimeseriesState,
+    initial: { points: [], period: "", bucket: "" },
     onSnapshot: (s) => ({ points: s.points, period: s.period, bucket: s.bucket }),
     onDelta: (state, delta) => ({
       ...state,

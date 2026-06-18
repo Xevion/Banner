@@ -6,6 +6,7 @@ import posthogPlugin from "@posthog/rollup-plugin";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import { playwright } from "@vitest/browser-playwright";
 import devtoolsJson from "vite-plugin-devtools-json";
 import { type Plugin, defineConfig } from "vitest/config";
 
@@ -80,7 +81,7 @@ export default defineConfig({
           name: "storybook",
           browser: {
             enabled: true,
-            provider: "playwright",
+            provider: playwright(),
             headless: true,
             instances: [{ browser: "chromium" }],
           },

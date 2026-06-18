@@ -5,7 +5,7 @@ import type { Snippet } from "svelte";
 
 let {
   delay = 150,
-  side = "top" as "top" | "bottom" | "left" | "right",
+  side = "top",
   sideOffset = 6,
   triggerClass = "",
   contentClass = "",

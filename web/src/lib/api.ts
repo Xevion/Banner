@@ -83,9 +83,13 @@ function toURLSearchParams(obj: Record<string, unknown>): URLSearchParams {
     } else if (typeof value === "object") {
       // JSON stringify objects
       params.set(key, JSON.stringify(value));
-    } else {
-      // Convert primitives to string (string, number, boolean, bigint, symbol)
-      params.set(key, String(value as string | number | boolean));
+    } else if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      params.set(key, String(value));
     }
   }
 
@@ -280,7 +284,7 @@ export class BannerApiClient {
   async searchCourses(
     params: Partial<SearchParams> & { term: string }
   ): Promise<Result<SearchResponse, ApiErrorClass>> {
-    const query = toURLSearchParams(params as Record<string, unknown>);
+    const query = toURLSearchParams(params);
     return this.request<SearchResponse>(`/courses/search?${query.toString()}`);
   }
 
@@ -338,7 +342,7 @@ export class BannerApiClient {
     if (!params) {
       return this.request<PublicInstructorListResponse>("/instructors");
     }
-    const query = toURLSearchParams(params as Record<string, unknown>);
+    const query = toURLSearchParams(params);
     const qs = query.toString();
     return this.request<PublicInstructorListResponse>(`/instructors${qs ? `?${qs}` : ""}`);
   }
@@ -443,7 +447,7 @@ export class BannerApiClient {
     if (!params) {
       return this.request<MetricsResponse>("/metrics");
     }
-    const query = toURLSearchParams(params as Record<string, unknown>);
+    const query = toURLSearchParams(params);
     const qs = query.toString();
     return this.request<MetricsResponse>(`/metrics${qs ? `?${qs}` : ""}`);
   }
@@ -456,7 +460,7 @@ export class BannerApiClient {
     if (!params) {
       return this.request<ListInstructorsResponse>("/admin/instructors");
     }
-    const query = toURLSearchParams(params as Record<string, unknown>);
+    const query = toURLSearchParams(params);
     const qs = query.toString();
     return this.request<ListInstructorsResponse>(`/admin/instructors${qs ? `?${qs}` : ""}`);
   }
@@ -571,7 +575,7 @@ export class BannerApiClient {
     if (!params) {
       return this.request<ListBluebookLinksResponse>("/admin/bluebook/links");
     }
-    const query = toURLSearchParams(params as Record<string, unknown>);
+    const query = toURLSearchParams(params);
     const qs = query.toString();
     return this.request<ListBluebookLinksResponse>(`/admin/bluebook/links${qs ? `?${qs}` : ""}`);
   }

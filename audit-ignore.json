@@ -6,13 +6,5 @@
   {
     "id": "GHSA-f23m-r3pf-42rh",
     "reason": "lodash-es prototype pollution via _.unset/_.omit -- transitive via layerchart; no patched lodash-es published"
-  },
-  {
-    "id": "GHSA-v6wh-96g9-6wx3",
-    "reason": "launch-editor NTLMv2 hash disclosure -- Windows-only, via vite dev server; not applicable on Linux deploy/CI. No fix without vite >=7 (major)"
-  },
-  {
-    "id": "GHSA-fx2h-pf6j-xcff",
-    "reason": "vite server.fs.deny bypass -- Windows-only dev-server path handling; not applicable on Linux deploy/CI. No fix without vite >=7 (major)"
   }
 ]

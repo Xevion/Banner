@@ -86,9 +86,7 @@ async function fetchFromApi(gaps: Range[]): Promise<TimeSlot[]> {
 
   return result.value.slots.map((slot) => ({
     time: new Date(slot.time),
-    subjects: Object.fromEntries(
-      Object.entries(slot.subjects).map(([k, v]) => [k, Number(v)])
-    ) as Record<string, number>,
+    subjects: Object.fromEntries(Object.entries(slot.subjects).map(([k, v]) => [k, Number(v)])),
   }));
 }
 

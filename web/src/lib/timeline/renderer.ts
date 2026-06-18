@@ -155,7 +155,7 @@ function traceStackOutline(chart: ChartContext, visibleStack: VisibleStack): voi
     .y0(() => yScale(0))
     .y1((d) => yScale(d[1]))
     .curve(curveMonotoneX)
-    .context(ctx)(topLayer as unknown as StackPoint[]);
+    .context(ctx)(topLayer);
 }
 
 export function drawHoverColumn(
@@ -197,7 +197,7 @@ export function drawStackedArea(chart: ChartContext, visibleStack: VisibleStack)
       .y0((d) => yScale(d[0]))
       .y1((d) => yScale(d[1]))
       .curve(curveMonotoneX)
-      .context(ctx)(layer as unknown as StackPoint[]);
+      .context(ctx)(layer);
 
     ctx.globalAlpha = AREA_FILL_ALPHA;
     ctx.fillStyle = color;
