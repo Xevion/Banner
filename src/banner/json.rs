@@ -175,7 +175,6 @@ mod tests {
         assert!(result.is_err());
 
         let err_msg = result.unwrap_err().to_string();
-        println!("\n=== Error output ===\n{}\n", err_msg);
 
         assert!(err_msg.contains("data[0].faculty[0].displayName"));
         assert!(err_msg.contains("expected") && err_msg.contains("got"));
