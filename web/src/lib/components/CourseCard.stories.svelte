@@ -8,6 +8,7 @@ import {
 } from "$lib/stories/fixtures/courses";
 import { defineMeta } from "@storybook/addon-svelte-csf";
 import { expect, fn, userEvent, within } from "storybook/test";
+import CourseDetailDecorator from "../../../.storybook/CourseDetailDecorator.svelte";
 import CourseCard from "./CourseCard.svelte";
 
 const { Story } = defineMeta({
@@ -17,6 +18,12 @@ const { Story } = defineMeta({
   parameters: {
     layout: "padded",
   },
+  decorators: [
+    (storyFn) => {
+      storyFn();
+      return { Component: CourseDetailDecorator };
+    },
+  ],
 });
 </script>
 

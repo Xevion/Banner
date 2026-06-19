@@ -36,7 +36,7 @@ const { Story } = defineMeta({
     bbCount: 1034,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -57,7 +57,7 @@ const { Story } = defineMeta({
     bbCount: 1512,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -78,7 +78,7 @@ const { Story } = defineMeta({
     bbCount: 725,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -97,7 +97,7 @@ const { Story } = defineMeta({
     rmpCount: 105,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -116,7 +116,7 @@ const { Story } = defineMeta({
     bbCount: 393,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -135,7 +135,7 @@ const { Story } = defineMeta({
     rmpCount: 1,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
@@ -154,14 +154,14 @@ const { Story } = defineMeta({
     rmpCount: 7,
   }}
 >
-  {#snippet children(args)}
+  {#snippet template(args)}
     <div class="w-[480px]"><ScoreBar {...args} /></div>
   {/snippet}
 </Story>
 
 <!-- Multiple bars side by side for comparison -->
 <Story name="Comparison List">
-  {#snippet children()}
+  {#snippet template()}
     <div class="w-[480px] space-y-2">
       <div class="flex items-center gap-3">
         <span class="w-32 shrink-0 truncate text-sm text-muted-foreground">Ang, Samuel</span>

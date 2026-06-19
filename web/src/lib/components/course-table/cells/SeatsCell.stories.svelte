@@ -15,7 +15,7 @@ const { Story } = defineMeta({
 });
 </script>
 
-<Story name="Available Seats">
+<Story name="Available Seats" asChild>
   <table class="text-sm">
     <tbody>
       <tr>
@@ -25,7 +25,7 @@ const { Story } = defineMeta({
   </table>
 </Story>
 
-<Story name="Full Class">
+<Story name="Full Class" asChild>
   <table class="text-sm">
     <tbody>
       <tr>
@@ -35,7 +35,7 @@ const { Story } = defineMeta({
   </table>
 </Story>
 
-<Story name="Low Availability">
+<Story name="Low Availability" asChild>
   <table class="text-sm">
     <tbody>
       <tr>
@@ -45,7 +45,7 @@ const { Story } = defineMeta({
   </table>
 </Story>
 
-<Story name="Overenrolled">
+<Story name="Overenrolled" asChild>
   <table class="text-sm">
     <tbody>
       <tr>
