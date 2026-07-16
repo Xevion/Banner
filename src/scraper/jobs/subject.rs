@@ -44,18 +44,14 @@ impl Job for SubjectJob {
 
         tracing::Span::current().record("term", term.as_str());
 
-        let query = SearchQuery::new().subject(subject_code).max_results(500);
+        let query = SearchQuery::new().subject(subject_code);
 
-        let search_result = banner_api
-            .search(&term, &query, "subjectDescription", false)
+        let courses = banner_api
+            .search_all(&term, &query, "subjectDescription", false)
             .await?;
 
-        let counts = if let Some(courses_from_api) = search_result.data {
-            debug!(count = courses_from_api.len(), "Found courses");
-            db.courses().batch_upsert(&courses_from_api).await?
-        } else {
-            UpsertCounts::default()
-        };
+        debug!(count = courses.len(), "Found courses");
+        let counts = db.courses().batch_upsert(&courses).await?;
         Ok(counts)
     }
 

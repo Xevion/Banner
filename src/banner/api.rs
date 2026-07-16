@@ -326,6 +326,41 @@ impl BannerApi {
             .await
     }
 
+    /// Performs a search and paginates until every matching section is collected.
+    ///
+    /// A single `search()` caps at 500 results; this loops `pageOffset` until the
+    /// reported `total_count` is reached. Subjects under 500 sections resolve in a
+    /// single request, so there is no added cost for the common case.
+    pub async fn search_all(
+        &self,
+        term: &str,
+        query: &SearchQuery,
+        sort: &str,
+        sort_descending: bool,
+    ) -> Result<Vec<Course>, BannerApiError> {
+        let mut collected: Vec<Course> = Vec::new();
+        let mut offset = 0;
+
+        for _ in 0..SEARCH_MAX_PAGES {
+            let page_query = query.clone().offset(offset).max_results(SEARCH_PAGE_SIZE);
+            let result = self
+                .perform_search(term, &page_query, sort, sort_descending)
+                .await?;
+
+            let total_count = result.total_count;
+            let page = result.data.unwrap_or_default();
+            let page_len = page.len();
+            collected.extend(page);
+
+            if !should_fetch_next_page(collected.len(), page_len, total_count, SEARCH_PAGE_SIZE) {
+                break;
+            }
+            offset += SEARCH_PAGE_SIZE;
+        }
+
+        Ok(collected)
+    }
+
     /// Retrieves a single course by CRN by issuing a minimal search
     pub async fn get_course_by_crn(
         &self,
@@ -354,5 +389,70 @@ impl BannerApi {
         Ok(search_result
             .data
             .and_then(|courses| courses.into_iter().next()))
+    }
+}
+
+/// Page size for paginated searches. Banner clamps `pageMaxSize` at 500.
+const SEARCH_PAGE_SIZE: i32 = 500;
+
+/// Hard cap on pages per paginated search, guarding against a misreported
+/// `total_count` that would otherwise loop forever.
+const SEARCH_MAX_PAGES: i32 = 40;
+
+/// Decides whether a paginated search should fetch another page.
+///
+/// Continues only while the last page came back full (more may remain) and the
+/// reported total has not been reached; a short page or reaching the total stops
+/// the loop.
+fn should_fetch_next_page(
+    collected: usize,
+    last_page_len: usize,
+    total_count: i32,
+    page_size: i32,
+) -> bool {
+    let page_size = page_size.max(1) as usize;
+    let total = total_count.max(0) as usize;
+    last_page_len >= page_size && collected < total
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_fetch_next_page;
+
+    const PAGE: i32 = 500;
+
+    #[test]
+    fn stops_on_single_short_page() {
+        // 141 sections returned in one page; no more to fetch.
+        assert!(!should_fetch_next_page(141, 141, 141, PAGE));
+    }
+
+    #[test]
+    fn continues_after_full_first_page() {
+        // 500 collected, total 940: a second page is needed.
+        assert!(should_fetch_next_page(500, 500, 940, PAGE));
+    }
+
+    #[test]
+    fn stops_on_trailing_partial_page() {
+        // Second page returned 440 (short), total reached.
+        assert!(!should_fetch_next_page(940, 440, 940, PAGE));
+    }
+
+    #[test]
+    fn stops_when_total_reached_on_full_page_boundary() {
+        // Exactly two full pages equal the total; no phantom third page.
+        assert!(!should_fetch_next_page(1000, 500, 1000, PAGE));
+    }
+
+    #[test]
+    fn stops_on_empty_result() {
+        assert!(!should_fetch_next_page(0, 0, 0, PAGE));
+    }
+
+    #[test]
+    fn stops_on_empty_page_despite_inflated_total() {
+        // Banner over-reports total but returns nothing: do not spin.
+        assert!(!should_fetch_next_page(0, 0, 99999, PAGE));
     }
 }
