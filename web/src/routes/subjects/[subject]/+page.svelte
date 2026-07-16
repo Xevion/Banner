@@ -5,7 +5,7 @@ import type { SearchOptionsResponse, SearchResponse } from "$lib/bindings";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
 import { untrack } from "svelte";
 
@@ -24,15 +24,7 @@ let courses = $state(untrack(() => data.searchResult?.courses ?? []));
 let loading = $state(false);
 
 const terms = $derived(data.searchOptions?.terms ?? []);
-const attributes = $derived(data.searchOptions?.reference.attributes ?? []);
-const attributeMap = $derived(buildAttributeMap(attributes));
-
-setCourseDetailContext({
-  get attributeMap() {
-    return attributeMap;
-  },
-  navigateToSection: null,
-});
+setCourseDetailContext({ navigateToSection: null });
 
 let columnVisibility = $state({ subject: false });
 

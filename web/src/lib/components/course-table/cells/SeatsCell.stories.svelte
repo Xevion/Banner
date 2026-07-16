@@ -5,6 +5,7 @@ import {
   lowSeatsCourse,
   overenrolledCourse,
 } from "$lib/stories/fixtures/courses";
+import TableRowDecorator from "$lib/stories/TableRowDecorator.svelte";
 import { defineMeta } from "@storybook/addon-svelte-csf";
 import SeatsCell from "./SeatsCell.svelte";
 
@@ -12,45 +13,19 @@ const { Story } = defineMeta({
   title: "Components/CourseTable/Cells/SeatsCell",
   component: SeatsCell,
   tags: ["autodocs"],
+  decorators: [
+    (storyFn) => {
+      storyFn();
+      return { Component: TableRowDecorator };
+    },
+  ],
 });
 </script>
 
-<Story name="Available Seats" asChild>
-  <table class="text-sm">
-    <tbody>
-      <tr>
-        <SeatsCell course={courseWithSeats} />
-      </tr>
-    </tbody>
-  </table>
-</Story>
+<Story name="Available Seats" args={{ course: courseWithSeats }} />
 
-<Story name="Full Class" asChild>
-  <table class="text-sm">
-    <tbody>
-      <tr>
-        <SeatsCell course={fullCourse} />
-      </tr>
-    </tbody>
-  </table>
-</Story>
+<Story name="Full Class" args={{ course: fullCourse }} />
 
-<Story name="Low Availability" asChild>
-  <table class="text-sm">
-    <tbody>
-      <tr>
-        <SeatsCell course={lowSeatsCourse} />
-      </tr>
-    </tbody>
-  </table>
-</Story>
+<Story name="Low Availability" args={{ course: lowSeatsCourse }} />
 
-<Story name="Overenrolled" asChild>
-  <table class="text-sm">
-    <tbody>
-      <tr>
-        <SeatsCell course={overenrolledCourse} />
-      </tr>
-    </tbody>
-  </table>
-</Story>
+<Story name="Overenrolled" args={{ course: overenrolledCourse }} />

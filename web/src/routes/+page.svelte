@@ -11,7 +11,6 @@ import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
 import SearchStatus from "$lib/components/SearchStatus.svelte";
 import {
   type CourseDetailContext,
-  buildAttributeMap,
   setCourseDetailContext,
 } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
@@ -120,13 +119,7 @@ const ranges = $derived(
   }
 );
 
-const attributeMap = $derived(buildAttributeMap(referenceData.attributes));
-const courseDetailCtx: CourseDetailContext = {
-  get attributeMap() {
-    return attributeMap;
-  },
-  navigateToSection: null,
-};
+const courseDetailCtx: CourseDetailContext = { navigateToSection: null };
 setCourseDetailContext(courseDetailCtx);
 
 $effect(() => {

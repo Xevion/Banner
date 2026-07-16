@@ -28,7 +28,7 @@ const { Story } = defineMeta({
 <Story name="Long Label" args={{ label: "Computer Science", onRemove: fn() }} />
 
 <Story name="Multiple Chips">
-  {#snippet children(_args)}
+  {#snippet template()}
     <div class="flex gap-2">
       <FilterChip label="Open Only" onRemove={fn()} />
       <FilterChip label="Computer Science" onRemove={fn()} />

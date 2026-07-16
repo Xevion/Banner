@@ -3,6 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "skipLibCheck": true,
+    // sb.mock() resolves its target through Node, so it needs a real file extension.
+    "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true

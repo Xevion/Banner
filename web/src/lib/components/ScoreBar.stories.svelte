@@ -20,6 +20,10 @@ const { Story } = defineMeta({
 });
 </script>
 
+{#snippet barTemplate(args)}
+  <div class="w-[480px]"><ScoreBar {...args} /></div>
+{/snippet}
+
 <!-- High confidence, both sources (e.g. Ang, Samuel) -->
 <Story
   name="High Score, High Confidence"
@@ -35,11 +39,8 @@ const { Story } = defineMeta({
     bbRating: 4.74,
     bbCount: 1034,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- Medium score, both sources (e.g. Luna, Carolyn) -->
 <Story
@@ -56,11 +57,8 @@ const { Story } = defineMeta({
     bbRating: 4.44,
     bbCount: 1512,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- Low score, both sources (e.g. Halfin, Igor) -->
 <Story
@@ -77,11 +75,8 @@ const { Story } = defineMeta({
     bbRating: 3.54,
     bbCount: 725,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- RMP only with decent data (e.g. Womack, David) -->
 <Story
@@ -96,11 +91,8 @@ const { Story } = defineMeta({
     rmpRating: 4.5,
     rmpCount: 105,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- BB only (e.g. Gibson, Matthew) -->
 <Story
@@ -115,11 +107,8 @@ const { Story } = defineMeta({
     bbRating: 4.68,
     bbCount: 393,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- Very low data, wide CI (e.g. Shu, John - 1 RMP rating) -->
 <Story
@@ -134,11 +123,8 @@ const { Story } = defineMeta({
     rmpRating: 1.0,
     rmpCount: 1,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- Perfect score edge case -->
 <Story
@@ -153,11 +139,8 @@ const { Story } = defineMeta({
     rmpRating: 5.0,
     rmpCount: 7,
   }}
->
-  {#snippet template(args)}
-    <div class="w-[480px]"><ScoreBar {...args} /></div>
-  {/snippet}
-</Story>
+  template={barTemplate}
+/>
 
 <!-- Multiple bars side by side for comparison -->
 <Story name="Comparison List">

@@ -264,6 +264,82 @@ export const overenrolledCourse: CourseResponse = {
 };
 
 /**
+ * Every section of courseWithSeats' course, as getRelatedSections returns them.
+ * The requested section is included; consumers filter it out by CRN.
+ */
+export const relatedSections: CourseResponse[] = [
+  courseWithSeats,
+  {
+    ...courseWithSeats,
+    crn: "12352",
+    sequenceNumber: "002",
+    enrollment: { current: 35, max: 35, waitCount: 4, waitCapacity: 10 },
+    primaryLocation: "MH 2.212",
+    meetingTimes: [
+      {
+        timeRange: { start: "11:00", end: "12:15" },
+        dateRange: { start: "2025-01-13", end: "2025-05-08" },
+        days: ["tuesday", "thursday"],
+        location: {
+          building: "MH",
+          buildingDescription: "Main Building",
+          room: "2.212",
+          campus: "Main",
+        },
+        meetingType: "Lecture",
+        meetingScheduleType: "LEC",
+      },
+    ],
+  },
+  {
+    ...courseWithSeats,
+    crn: "12353",
+    sequenceNumber: "003",
+    enrollment: { current: 12, max: 30, waitCount: 0, waitCapacity: 5 },
+    instructors: [],
+    primaryInstructorId: null,
+    primaryLocation: "MH 3.104",
+    meetingTimes: [
+      {
+        timeRange: { start: "18:00", end: "20:45" },
+        dateRange: { start: "2025-01-13", end: "2025-05-08" },
+        days: ["wednesday"],
+        location: {
+          building: "MH",
+          buildingDescription: "Main Building",
+          room: "3.104",
+          campus: "Main",
+        },
+        meetingType: "Lecture",
+        meetingScheduleType: "LEC",
+      },
+    ],
+  },
+  {
+    ...courseWithSeats,
+    crn: "12354",
+    sequenceNumber: "0W1",
+    instructionalMethod: { type: "Online", variant: "Async" },
+    instructionalMethodCode: "INET",
+    campus: { type: "Internet" },
+    isAsyncOnline: true,
+    primaryLocation: "Online",
+    hasPhysicalLocation: false,
+    enrollment: { current: 29, max: 50, waitCount: 0, waitCapacity: 0 },
+    meetingTimes: [
+      {
+        timeRange: null,
+        dateRange: { start: "2025-01-13", end: "2025-05-08" },
+        days: [],
+        location: null,
+        meetingType: "Web",
+        meetingScheduleType: "WEB",
+      },
+    ],
+  },
+];
+
+/**
  * Array of all mock courses for list/table stories
  */
 export const mockCourses: CourseResponse[] = [

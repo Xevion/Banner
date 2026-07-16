@@ -1,9 +1,13 @@
 import type { Preview } from "@storybook/sveltekit";
+import { sb } from "storybook/test";
 import "../src/routes/layout.css";
 import "overlayscrollbars/overlayscrollbars.css";
 import TooltipDecorator from "./TooltipDecorator.svelte";
 import ThemeDecorator from "./ThemeDecorator.svelte";
 import AuthDecorator from "./AuthDecorator.svelte";
+
+// Storybook has no backend; stories that fetch must stub the call they rely on.
+sb.mock(import("../src/lib/api.ts"), { spy: true });
 
 const preview: Preview = {
   globalTypes: {

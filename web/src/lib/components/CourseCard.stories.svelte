@@ -1,14 +1,17 @@
 <script module>
+import { client } from "$lib/api";
+import CourseDetailDecorator from "$lib/stories/CourseDetailDecorator.svelte";
 import {
   courseWithSeats,
   fullCourse,
   lowSeatsCourse,
   onlineCourse,
+  relatedSections,
   staffInstructorCourse,
 } from "$lib/stories/fixtures/courses";
 import { defineMeta } from "@storybook/addon-svelte-csf";
-import { expect, fn, userEvent, within } from "storybook/test";
-import CourseDetailDecorator from "../../../.storybook/CourseDetailDecorator.svelte";
+import { expect, fn, mocked, userEvent, within } from "storybook/test";
+import { ok } from "true-myth/result";
 import CourseCard from "./CourseCard.svelte";
 
 const { Story } = defineMeta({
@@ -17,6 +20,9 @@ const { Story } = defineMeta({
   tags: ["autodocs"],
   parameters: {
     layout: "padded",
+  },
+  beforeEach: () => {
+    mocked(client.getRelatedSections).mockResolvedValue(ok(relatedSections));
   },
   decorators: [
     (storyFn) => {
@@ -35,6 +41,13 @@ const { Story } = defineMeta({
 <Story
   name="Expanded"
   args={{ course: courseWithSeats, expanded: true, onToggle: fn() }}
+  play={async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const sibling = await canvas.findByText("12352");
+
+    await expect(sibling).toBeVisible();
+    await expect(canvas.queryByText(/Network request failed/i)).not.toBeInTheDocument();
+  }}
 />
 
 <Story

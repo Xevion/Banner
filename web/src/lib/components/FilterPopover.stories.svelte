@@ -10,7 +10,7 @@ const { Story } = defineMeta({
 </script>
 
 <Story name="Default" args={{ label: 'Filters', active: false }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <FilterPopover {...args}>
       {#snippet content()}
         <p class="text-sm text-muted-foreground">Popover content</p>
@@ -20,7 +20,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Active" args={{ label: 'Filters', active: true }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <FilterPopover {...args}>
       {#snippet content()}
         <p class="text-sm text-muted-foreground">Popover content</p>
@@ -30,7 +30,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="With Content" args={{ label: 'Schedule', active: false }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <FilterPopover {...args}>
       {#snippet content()}
         <div class="flex flex-col gap-2">

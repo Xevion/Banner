@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { CourseResponse, SearchOptionsResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
 import ScorePopover from "$lib/components/score/ScorePopover.svelte";
 import { formatCreditHours, formatInstructorName } from "$lib/course";
@@ -22,19 +22,11 @@ let { data }: { data: PageData } = $props();
 const sections = untrack(() => data.sections);
 const representative = sections[0];
 
-const attributes = $derived(data.searchOptions?.reference.attributes ?? []);
-const attributeMap = $derived(buildAttributeMap(attributes));
-
 const termDescription = $derived(
   data.searchOptions?.terms.find((t) => t.slug === data.term)?.description ?? data.term
 );
 
-setCourseDetailContext({
-  get attributeMap() {
-    return attributeMap;
-  },
-  navigateToSection: null,
-});
+setCourseDetailContext({ navigateToSection: null });
 
 let columnVisibility = $state({ course_code: false });
 

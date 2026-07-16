@@ -8,7 +8,7 @@ import type {
 import ScoreBar from "$lib/components/ScoreBar.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
@@ -45,15 +45,7 @@ const subjects = $derived(data.searchOptions?.subjects ?? []);
 const subjectMap = $derived(
   new Map(subjects.map((s: { code: string; description: string }) => [s.code, s.description]))
 );
-const attributes = $derived(data.searchOptions?.reference.attributes ?? []);
-const attributeMap = $derived(buildAttributeMap(attributes));
-
-setCourseDetailContext({
-  get attributeMap() {
-    return attributeMap;
-  },
-  navigateToSection: null,
-});
+setCourseDetailContext({ navigateToSection: null });
 
 let columnVisibility = $state({ instructor: false });
 

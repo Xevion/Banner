@@ -7,10 +7,7 @@ export const prerender = false;
 export const load: PageLoad = async ({ params, fetch }) => {
   const client = new BannerApiClient(undefined, fetch);
 
-  const [courseResult, searchOptionsResult] = await Promise.all([
-    client.getCourse(params.term, params.crn),
-    client.getSearchOptions(params.term),
-  ]);
+  const courseResult = await client.getCourse(params.term, params.crn);
 
   if (courseResult.isErr) {
     if (courseResult.error.isNotFound()) {
@@ -19,12 +16,8 @@ export const load: PageLoad = async ({ params, fetch }) => {
     error(500, courseResult.error.message);
   }
 
-  const course = courseResult.value;
-  const searchOptions = searchOptionsResult.isOk ? searchOptionsResult.value : null;
-
   return {
-    course,
-    searchOptions,
+    course: courseResult.value,
     term: params.term,
   };
 };

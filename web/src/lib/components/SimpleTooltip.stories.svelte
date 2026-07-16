@@ -10,7 +10,7 @@ const { Story } = defineMeta({
 </script>
 
 <Story name="Top" args={{ text: 'This is a tooltip', side: 'top' }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me
@@ -20,7 +20,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Bottom" args={{ text: 'This is a tooltip', side: 'bottom' }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me
@@ -30,7 +30,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Left" args={{ text: 'This is a tooltip', side: 'left' }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me
@@ -40,7 +40,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Right" args={{ text: 'This is a tooltip', side: 'right' }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me
@@ -50,7 +50,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Long Text" args={{ text: 'This is a longer tooltip message\nthat spans multiple lines\nto demonstrate text wrapping', side: 'top' }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me
@@ -60,7 +60,7 @@ const { Story } = defineMeta({
 </Story>
 
 <Story name="Custom Delay" args={{ text: 'This tooltip has a longer delay', side: 'top', delay: 500 }}>
-  {#snippet children(args)}
+  {#snippet template(args)}
     <SimpleTooltip {...args}>
       <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md">
         Hover me (500ms delay)

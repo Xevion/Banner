@@ -1,7 +1,7 @@
 <script lang="ts">
-import type { CourseResponse, SearchOptionsResponse } from "$lib/bindings";
+import type { CourseResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
-import { buildAttributeMap, setCourseDetailContext } from "$lib/components/course-detail/context";
+import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import CourseDetailTabs from "$lib/components/course-detail/CourseDetailTabs.svelte";
 import { formatCreditHours } from "$lib/course";
 import { getInstructionalMethodLabel } from "$lib/labels";
@@ -11,7 +11,6 @@ import { untrack } from "svelte";
 
 interface PageData {
   course: CourseResponse;
-  searchOptions: SearchOptionsResponse | null;
   term: string;
 }
 
@@ -19,15 +18,7 @@ let { data }: { data: PageData } = $props();
 
 const course = untrack(() => data.course);
 
-const attributes = $derived(data.searchOptions?.reference.attributes ?? []);
-const attributeMap = $derived(buildAttributeMap(attributes));
-
-setCourseDetailContext({
-  get attributeMap() {
-    return attributeMap;
-  },
-  navigateToSection: null,
-});
+setCourseDetailContext({ navigateToSection: null });
 
 const calendarIcsUrl = $derived(`/api/courses/${course.termSlug}/${course.crn}/calendar.ics`);
 const calendarGcalUrl = $derived(`/api/courses/${course.termSlug}/${course.crn}/gcal`);
