@@ -171,20 +171,4 @@ impl StreamError {
             message: message.into(),
         }
     }
-
-    #[allow(dead_code)]
-    pub fn unknown_subscription() -> Self {
-        Self {
-            code: StreamErrorCode::UnknownSubscription,
-            message: "Unknown subscription".to_string(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self {
-            code: StreamErrorCode::InternalError,
-            message: message.into(),
-        }
-    }
 }

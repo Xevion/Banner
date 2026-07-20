@@ -36,7 +36,6 @@ const SERVICE_ICONS: Record<string, typeof Bot> = {
 const STATUS_COLORS: Record<ServiceStatus | "Unreachable", string> = {
   active: "var(--status-green)",
   connected: "var(--status-green)",
-  starting: "var(--status-orange)",
   disabled: "var(--status-gray)",
   error: "var(--status-red)",
   Unreachable: "var(--status-red)",
@@ -53,7 +52,6 @@ function toTitleCase(s: string): string {
 const OVERALL_STATUS_LABELS: Record<ServiceStatus | "Unreachable", string> = {
   active: "All Good",
   connected: "All Good",
-  starting: "Starting Up",
   disabled: "Degraded",
   error: "Issues",
   Unreachable: "Offline",

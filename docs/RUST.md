@@ -37,7 +37,6 @@ src/
 |   +-- reference.rs
 |   +-- ...
 +-- db/           # Pool initialization, migrations, DbContext
-+-- error.rs      # AppError, AppResult
 +-- events/       # Event buffer and publishing
 +-- rmp/          # RateMyProfessors GraphQL client
 +-- scraper/      # Scheduler + Worker, job queue processing
@@ -58,30 +57,50 @@ Each route group lives in `web/`. Data modules expose functions that take `&PgPo
 
 ## Error Handling
 
-- `AppError` enum with `thiserror` for domain errors (NotFound, BadRequest, Conflict, Unauthorized, etc.)
-- `anyhow::Error` for internal/unexpected failures, wrapped via `AppError::Internal`
-- `AppResult<T>` alias for `Result<T, AppError>`
-- `From<sqlx::Error>` and `From<anyhow::Error>` conversions for `?` propagation
-- `anyhow::Context` for adding context to data/service errors
+Two layers, two error types. There is no shared `AppError` enum.
+
+**Data and service layers** return `anyhow::Result<T>`. Attach context at every fallible
+boundary with `anyhow::Context`; the message becomes the operator-facing breadcrumb.
+
+**Web layer** returns `Result<T, ApiError>` (`src/web/error.rs`). `ApiError` is a struct --
+an `ApiErrorCode` enum, a human-readable `message`, and optional `details` JSON. It
+implements `IntoResponse`, and `status_code()` maps each code to its HTTP status.
+
+Handlers bridge the two explicitly. There is no blanket `From<anyhow::Error>` conversion:
+crossing the boundary forces you to name the failure.
+
+- `db_error(context, err)` logs the `anyhow::Error` and returns a generic internal error,
+  so database details never leak to clients.
+- `OptionNotFoundExt::or_not_found(entity, id)` turns `None` into a 404.
+- `SqlxResultExt::conflict_on_unique(msg)` turns a PostgreSQL `23505` violation into a 409.
 
 ```rust
-// Data layer: use anyhow context
-let course = sqlx::query_as!(Course, "...")
-    .fetch_optional(pool).await
-    .context("Failed to fetch course")?
-    .ok_or(AppError::NotFound)?;
+// Data layer: anyhow::Result plus context
+pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
+    let terms = sqlx::query_as::<_, DbTerm>("SELECT * FROM terms ORDER BY code DESC")
+        .fetch_all(db_pool)
+        .await
+        .context("failed to fetch all terms")?;
 
-// Web handler: errors convert automatically
-async fn get_course(
+    Ok(terms)
+}
+
+// Web handler: map anyhow into ApiError at the boundary
+async fn get_instructor(
     State(state): State<AppState>,
-    Path((term, crn)): Path<(String, String)>,
-) -> AppResult<Json<CourseResponse>> {
-    let course = data::courses::get_course(state.db(), &term, &crn).await?;
-    Ok(Json(course))
+    Path(slug): Path<String>,
+) -> Result<Json<InstructorResponse>, ApiError> {
+    let instructor = data::instructors::get_instructor(state.db(), &slug)
+        .await
+        .map_err(|e| db_error("Get instructor", e))?
+        .or_not_found("Instructor", &slug)?;
+
+    Ok(Json(instructor))
 }
 ```
 
-The web layer's `ApiError` struct (with `ApiErrorCode` enum and message) handles serialization to the JSON error shape described in STYLE.md. `AppError` variants map to `ApiError` responses with appropriate HTTP status codes.
+`ApiError` serializes to the JSON error shape described in STYLE.md, and `ApiErrorCode` is
+exported to TypeScript via ts-rs so the frontend can match on codes.
 
 ## State Management
 
@@ -89,7 +108,7 @@ The web layer's `ApiError` struct (with `ApiErrorCode` enum and message) handles
 
 ```rust
 // Access via Axum extractor
-async fn handler(State(state): State<AppState>) -> AppResult<Json<T>> {
+async fn handler(State(state): State<AppState>) -> Result<Json<T>, ApiError> {
     let db = state.db();
     let events = state.events();
 }
@@ -99,27 +118,44 @@ Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashM
 
 ## Database
 
-- **SQLx with compile-time verification** -- prefer `sqlx::query_as!` and `sqlx::query!` macros for all queries. These are checked against the schema at build time.
-- **Runtime `query_as`** (non-macro) is acceptable for dynamically constructed queries but should be the exception, not the default.
+- **Runtime queries are the default.** Use `sqlx::query_as::<_, T>(sql)` for SELECTs that
+  map to a struct and `sqlx::query(sql)` for mutations, binding parameters with `.bind()`.
+  Nearly every query in `src/data/` uses this form.
+- **Do not add `query!`/`query_as!`/`query_scalar!` macros.** A few remain in `kv.rs` and
+  `scoring.rs`; treat them as legacy, not as the pattern to follow.
+- **Row structs** derive `sqlx::FromRow`. Column names must match field names (or be
+  aliased in the SQL).
 - **Migrations** run automatically on startup via `sqlx::migrate!()`
-- Prefer `query_as!` for SELECT (maps to structs), `query!` for mutations
 - Use `Option<T>` for nullable columns
 - **Batch operations**: Use `UNNEST` for bulk inserts/upserts instead of looping single inserts
 - **JSONB**: Used for nested structures (meeting times, enrollment). Query with `jsonb_array_elements` and lateral joins.
 
 ```rust
 // Batch upsert with UNNEST
-sqlx::query!(
+sqlx::query(
     r#"
     INSERT INTO reference_data (category, code, description)
     SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
     ON CONFLICT (category, code)
     DO UPDATE SET description = EXCLUDED.description
     "#,
-    &categories, &codes, &descriptions,
 )
-.execute(pool).await?;
+.bind(&categories)
+.bind(&codes)
+.bind(&descriptions)
+.execute(pool)
+.await
+.context("failed to batch upsert reference data")?;
 ```
+
+A handful of compile-time macro queries survive in `src/data/kv.rs` and
+`src/data/scoring.rs`. They are the reason `.sqlx/` exists: tempo's preflight regenerates
+that offline metadata when Rust sources or migrations change, so a `SQLX_OFFLINE=true`
+build can still verify them without a live database. Do not add more -- every new query
+uses the runtime form.
+
+The trade-off is explicit: runtime queries are not checked against the schema at build
+time, so a column rename surfaces as a runtime error. Cover new queries with tests.
 
 ## Serialization
 
@@ -195,7 +231,7 @@ async fn update_course(
     State(state): State<AppState>,
     Path((term, crn)): Path<(String, String)>,
     Json(body): Json<UpdateRequest>,
-) -> AppResult<Json<CourseResponse>> {
+) -> Result<Json<CourseResponse>, ApiError> {
     // tracing context automatically includes term and crn
 }
 ```

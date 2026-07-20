@@ -81,31 +81,10 @@ pub struct DbMeetingTime {
 }
 
 impl DbMeetingTime {
-    /// Whether no days of the week are set (i.e. days are TBA).
-    #[allow(dead_code)]
-    pub fn is_days_tba(&self) -> bool {
-        self.days.is_empty()
-    }
-
     /// Whether no time range is set (i.e. time is TBA).
-    #[allow(dead_code)]
     pub fn is_time_tba(&self) -> bool {
         self.time_range.is_none()
     }
-}
-
-/// Normalize a date string to ISO-8601 (YYYY-MM-DD).
-///
-/// Accepts MM/DD/YYYY (from Banner API) and returns YYYY-MM-DD.
-/// Already-normalized dates are returned as-is.
-#[allow(dead_code)]
-fn normalize_date(s: &str) -> String {
-    if let Some((month_day, year)) = s.rsplit_once('/')
-        && let Some((month, day)) = month_day.split_once('/')
-    {
-        return format!("{year}-{month:0>2}-{day:0>2}");
-    }
-    s.to_string()
 }
 
 /// Parse a date string that may be in MM/DD/YYYY or YYYY-MM-DD format.

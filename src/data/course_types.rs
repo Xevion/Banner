@@ -28,12 +28,6 @@ impl DateRange {
         }
         Ok(Self { start, end })
     }
-
-    /// Number of days in the range (inclusive of both endpoints).
-    #[allow(dead_code)]
-    pub fn days(&self) -> i64 {
-        (self.end - self.start).num_days() + 1
-    }
 }
 
 /// Physical location where a course section meets.
@@ -56,19 +50,6 @@ pub enum CreditHours {
     Fixed { hours: f64 },
     /// A range of credit hours with the invariant that `low <= high`.
     Range { low: f64, high: f64 },
-}
-
-impl CreditHours {
-    /// Creates a `CreditHours::Range`, returning an error if `low > high`.
-    #[allow(dead_code)]
-    pub fn range(low: f64, high: f64) -> Result<Self, String> {
-        if low > high {
-            return Err(format!(
-                "invalid credit hour range: low ({low}) is greater than high ({high})"
-            ));
-        }
-        Ok(Self::Range { low, high })
-    }
 }
 
 /// Cross-listed section information.
@@ -98,32 +79,6 @@ pub struct Enrollment {
     pub max: Count,
     pub wait_count: Count,
     pub wait_capacity: Count,
-}
-
-impl Enrollment {
-    /// Number of open seats remaining (never negative).
-    #[allow(dead_code)]
-    pub fn open_seats(&self) -> u32 {
-        self.max.get().saturating_sub(self.current.get())
-    }
-
-    /// Whether the section is at or over capacity.
-    #[allow(dead_code)]
-    pub fn is_full(&self) -> bool {
-        self.current >= self.max
-    }
-
-    /// Whether the section has at least one open seat.
-    #[allow(dead_code)]
-    pub fn is_open(&self) -> bool {
-        !self.is_full()
-    }
-
-    /// Whether more students are enrolled than the section's stated capacity.
-    #[allow(dead_code)]
-    pub fn is_overenrolled(&self) -> bool {
-        self.current > self.max
-    }
 }
 
 /// Treat 0 ratings / 0.0 average as "no data", returning `None` for both fields.

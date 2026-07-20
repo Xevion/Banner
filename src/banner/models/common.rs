@@ -10,10 +10,6 @@ pub struct Pair {
 /// Represents a term in the Banner system
 pub type BannerTerm = Pair;
 
-/// Represents an instructor in the Banner system
-#[allow(dead_code)]
-pub type Instructor = Pair;
-
 impl BannerTerm {
     /// Returns true if the term is in an archival (view-only) state
     pub fn is_archived(&self) -> bool {

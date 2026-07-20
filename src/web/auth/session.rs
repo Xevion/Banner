@@ -198,12 +198,4 @@ impl OAuthStateStore {
             None
         }
     }
-
-    /// Remove all expired entries from the store.
-    #[allow(dead_code)] // Intended for periodic cleanup task (not yet wired)
-    pub fn cleanup(&self) {
-        let ttl = self.ttl;
-        self.states
-            .retain(|_, entry| entry.created_at.elapsed() < ttl);
-    }
 }

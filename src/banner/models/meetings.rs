@@ -257,14 +257,6 @@ impl TimeRange {
         };
         format!("{display_hour}:{minute:02}{meridiem}")
     }
-
-    /// Get duration in minutes
-    #[allow(dead_code)]
-    pub fn duration_minutes(&self) -> i64 {
-        let start_minutes = self.start.hour() as i64 * 60 + self.start.minute() as i64;
-        let end_minutes = self.end.hour() as i64 * 60 + self.end.minute() as i64;
-        end_minutes - start_minutes
-    }
 }
 
 impl PartialOrd for TimeRange {
@@ -301,12 +293,6 @@ impl DateRange {
     pub fn weeks_duration(&self) -> u32 {
         let duration = self.end.signed_duration_since(self.start);
         duration.num_weeks().max(0) as u32
-    }
-
-    /// Check if a specific date falls within this range
-    #[allow(dead_code)]
-    pub fn contains_date(&self, date: NaiveDate) -> bool {
-        date >= self.start && date <= self.end
     }
 }
 

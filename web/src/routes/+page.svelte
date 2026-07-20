@@ -1,7 +1,7 @@
 <script lang="ts">
 import { invalidateAll } from "$app/navigation";
 import { navigating } from "$app/stores";
-import type { SearchResponse, Subject } from "$lib/api";
+import type { Subject } from "$lib/api";
 import type { SearchOptionsResponse } from "$lib/bindings";
 import ActiveFilterChips from "$lib/components/ActiveFilterChips.svelte";
 import ColumnVisibilityDropdown from "$lib/components/ColumnVisibilityDropdown.svelte";
@@ -20,17 +20,9 @@ import { parseFilters, searchKey } from "$lib/filters";
 import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { SortingState } from "@tanstack/table-core";
 import { untrack } from "svelte";
+import type { PageProps } from "./$types";
 
-interface PageLoadData {
-  searchOptions: SearchOptionsResponse | null;
-  resolvedInstructors: Record<string, string>;
-  searchResult: SearchResponse | null;
-  searchError: string | null;
-  searchMeta: { totalCount: number; durationMs: number; timestamp: Date } | null;
-  urlSearch: string;
-}
-
-let { data }: { data: PageLoadData } = $props();
+let { data }: PageProps = $props();
 
 let courseTableRef: { navigateToSection: (crn: string) => void } | undefined = $state();
 

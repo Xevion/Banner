@@ -3,4 +3,4 @@
 /**
  * Health status of a service.
  */
-export type ServiceStatus = "starting" | "active" | "connected" | "disabled" | "error";
+export type ServiceStatus = "active" | "connected" | "disabled" | "error";

@@ -1,7 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { client } from "$lib/api";
-import type { PublicInstructorListResponse, SearchOptionsResponse } from "$lib/bindings";
 import { useQuery } from "$lib/composables";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
@@ -12,14 +11,9 @@ import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import { formatNumber } from "$lib/utils";
 import { Mail, Search } from "@lucide/svelte";
 import { untrack } from "svelte";
+import type { PageProps } from "./$types";
 
-interface PageData {
-  instructors: PublicInstructorListResponse | null;
-  searchOptions: SearchOptionsResponse | null;
-  url: URL;
-}
-
-let { data }: { data: PageData } = $props();
+let { data }: PageProps = $props();
 
 let search = $state(untrack(() => data.url.searchParams.get("search") ?? ""));
 let selectedSubjects = $state<string[]>(

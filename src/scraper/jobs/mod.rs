@@ -31,10 +31,6 @@ pub trait Job: Send + Sync {
     /// Process the job with the given API client and database context.
     /// Returns upsert effectiveness counts on success.
     async fn process(&self, banner_api: &BannerApi, db: &DbContext) -> Result<UpsertCounts>;
-
-    /// Get a human-readable description of the job
-    #[allow(dead_code)]
-    fn description(&self) -> String;
 }
 
 /// Main job enum that dispatches to specific job implementations

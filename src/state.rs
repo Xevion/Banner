@@ -16,7 +16,6 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
 use ts_rs::TS;
 
@@ -25,8 +24,6 @@ use ts_rs::TS;
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum ServiceStatus {
-    #[allow(dead_code)]
-    Starting,
     Active,
     Connected,
     Disabled,
@@ -37,8 +34,6 @@ pub enum ServiceStatus {
 #[derive(Debug, Clone)]
 pub struct StatusEntry {
     pub status: ServiceStatus,
-    #[allow(dead_code)]
-    pub updated_at: Instant,
 }
 
 /// Thread-safe registry for services to self-report their health status.
@@ -55,19 +50,7 @@ impl ServiceStatusRegistry {
 
     /// Inserts or updates the status for a named service.
     pub fn set(&self, name: &str, status: ServiceStatus) {
-        self.inner.insert(
-            name.to_owned(),
-            StatusEntry {
-                status,
-                updated_at: Instant::now(),
-            },
-        );
-    }
-
-    /// Returns the current status of a named service, if present.
-    #[allow(dead_code)]
-    pub fn get(&self, name: &str) -> Option<ServiceStatus> {
-        self.inner.get(name).map(|entry| entry.status.clone())
+        self.inner.insert(name.to_owned(), StatusEntry { status });
     }
 
     /// Returns a snapshot of all service statuses.

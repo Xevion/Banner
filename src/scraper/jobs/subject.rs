@@ -54,11 +54,4 @@ impl Job for SubjectJob {
         let counts = db.courses().batch_upsert(&courses).await?;
         Ok(counts)
     }
-
-    fn description(&self) -> String {
-        match &self.term {
-            Some(t) => format!("Scrape subject: {} (term {})", self.subject, t),
-            None => format!("Scrape subject: {} (current term)", self.subject),
-        }
-    }
 }

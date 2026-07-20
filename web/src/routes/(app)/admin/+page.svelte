@@ -31,7 +31,6 @@ async function syncBlueBook() {
 const STATUS_COLORS: Record<ServiceStatus, string> = {
   active: "var(--status-green)",
   connected: "var(--status-green)",
-  starting: "var(--status-orange)",
   disabled: "var(--status-gray)",
   error: "var(--status-red)",
 };
