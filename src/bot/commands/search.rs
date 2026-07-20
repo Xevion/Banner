@@ -1,15 +1,26 @@
 //! Course search command implementation.
 
-use crate::banner::{SearchQuery, Term};
+use crate::banner::{Course, SearchQuery, Term};
 use crate::bot::autocomplete::{autocomplete_subject, autocomplete_term};
+use crate::bot::pagination::{self, PageInfo};
 use crate::bot::{Context, Error};
 use anyhow::anyhow;
 use regex::Regex;
+use serenity::all::CreateEmbed;
 use std::sync::LazyLock;
 use tracing::info;
 
 static RANGE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d{1,4})-(\d{1,4})?").unwrap());
 static WILDCARD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)(x+)").unwrap());
+
+/// Courses rendered per embed page.
+const RESULTS_PER_PAGE: usize = 5;
+
+/// Results fetched up front, then paged through client-side.
+const MAX_FETCHED_RESULTS: i32 = 50;
+
+/// UTSA blue, used for the search result embeds.
+const EMBED_COLOR: u32 = 0x0C_2340;
 
 /// Search for courses with various filters
 #[poise::command(slash_command, prefix_command)]
@@ -25,7 +36,6 @@ pub async fn search(
     #[description = "Course code (e.g. 3743, 3000-3999, 3xxx, 3000-)"] code: Option<String>,
     #[description = "Maximum number of results"] max: Option<i32>,
     #[description = "Keywords in title or description (space separated)"] keywords: Option<String>,
-    // #[description = "Instructor name"] instructor: Option<String>,
 ) -> Result<(), Error> {
     // Defer the response since this might take a while
     ctx.defer().await?;
@@ -52,9 +62,10 @@ pub async fn search(
         query = query.keywords(keyword_list);
     }
 
-    if let Some(max_results) = max {
-        query = query.max_results(max_results.min(25)); // Cap at 25
-    }
+    query = query.max_results(
+        max.unwrap_or(MAX_FETCHED_RESULTS)
+            .clamp(1, MAX_FETCHED_RESULTS),
+    );
 
     let term = term.unwrap_or_else(|| Term::get_current().inner().to_string());
     let search_result = ctx
@@ -64,30 +75,86 @@ pub async fn search(
         .search(&term, &query, "subjectDescription", false)
         .await?;
 
-    let response = if let Some(courses) = search_result.data {
-        if courses.is_empty() {
-            "No courses found with the specified criteria.".to_string()
-        } else {
-            courses
-                .iter()
-                .map(|course| {
-                    format!(
-                        "**{}**: {} ({})",
-                        course.display_title(),
-                        course.primary_instructor_name(),
-                        course.course_reference_number
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        }
-    } else {
-        "No courses found with the specified criteria.".to_string()
-    };
+    let courses = search_result.data.unwrap_or_default();
+    if courses.is_empty() {
+        ctx.say("No courses found with the specified criteria.")
+            .await?;
+        return Ok(());
+    }
 
-    ctx.say(response).await?;
+    // total_count is the server-side match count, which can exceed what was fetched.
+    let total_results = search_result.total_count.max(courses.len() as i32) as usize;
+
+    pagination::paginate(
+        ctx,
+        &courses,
+        RESULTS_PER_PAGE,
+        total_results,
+        build_page_embed,
+    )
+    .await?;
+
     info!("search command completed");
     Ok(())
+}
+
+/// Render one page of courses as a single embed with a field per course.
+fn build_page_embed(courses: &[Course], _info: PageInfo) -> CreateEmbed {
+    courses.iter().fold(
+        CreateEmbed::new().title("Course Search").color(EMBED_COLOR),
+        |embed, course| embed.field(course.display_title(), course_summary(course), false),
+    )
+}
+
+/// Multi-line field body describing a single section.
+fn course_summary(course: &Course) -> String {
+    format!(
+        "{} | CRN `{}`\n{} | {}\n{}",
+        course.primary_instructor_name(),
+        course.course_reference_number,
+        format_enrollment(course.enrollment, course.maximum_enrollment),
+        format_waitlist(course.wait_count, course.wait_capacity),
+        format_meetings(course),
+    )
+}
+
+/// Seat usage, e.g. "12/30 seats".
+fn format_enrollment(enrollment: i32, maximum: i32) -> String {
+    if maximum <= 0 {
+        return format!("{enrollment} enrolled");
+    }
+    format!("{enrollment}/{maximum} seats")
+}
+
+/// Waitlist usage, falling back when Banner omits the counts (older terms).
+fn format_waitlist(count: Option<i32>, capacity: Option<i32>) -> String {
+    match (count, capacity) {
+        (Some(count), Some(capacity)) if capacity > 0 => format!("Waitlist {count}/{capacity}"),
+        (Some(count), _) if count > 0 => format!("Waitlist {count}"),
+        _ => "No waitlist".to_string(),
+    }
+}
+
+/// Meeting days and times, joined when a section meets on several schedules.
+fn format_meetings(course: &Course) -> String {
+    let entries: Vec<String> = course
+        .meetings_faculty
+        .iter()
+        .map(|meeting| {
+            let info = meeting.schedule_info();
+            let days = info.days_string().unwrap_or_else(|| "TBA".to_string());
+            match &info.time_range {
+                Some(range) => format!("{days} {}", range.format_12hr()),
+                None => days,
+            }
+        })
+        .collect();
+
+    if entries.is_empty() {
+        "Meeting times TBA".to_string()
+    } else {
+        entries.join(" / ")
+    }
 }
 
 /// Parse course code input (e.g, "3743", "3000-3999", "3xxx", "3000-")
@@ -154,6 +221,7 @@ fn parse_course_code(input: &str) -> Result<(i32, i32), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert2::check;
 
     #[test]
     fn test_parse_single_code() {
@@ -249,5 +317,31 @@ mod tests {
     #[test]
     fn test_parse_wildcard_0xxx() {
         assert!(parse_course_code("0xxx").is_err());
+    }
+
+    #[test]
+    fn format_enrollment_shows_seat_usage() {
+        check!(format_enrollment(12, 30) == "12/30 seats");
+        check!(format_enrollment(0, 30) == "0/30 seats");
+        check!(format_enrollment(30, 30) == "30/30 seats");
+    }
+
+    #[test]
+    fn format_enrollment_without_a_capacity() {
+        check!(format_enrollment(7, 0) == "7 enrolled");
+    }
+
+    #[test]
+    fn format_waitlist_shows_usage() {
+        check!(format_waitlist(Some(3), Some(10)) == "Waitlist 3/10");
+        check!(format_waitlist(Some(0), Some(10)) == "Waitlist 0/10");
+    }
+
+    #[test]
+    fn format_waitlist_without_capacity() {
+        check!(format_waitlist(Some(4), None) == "Waitlist 4");
+        check!(format_waitlist(Some(0), None) == "No waitlist");
+        check!(format_waitlist(None, Some(10)) == "No waitlist");
+        check!(format_waitlist(None, None) == "No waitlist");
     }
 }

@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 pub mod autocomplete;
 pub mod commands;
+pub mod pagination;
 pub mod utils;
 
 pub struct Data {

@@ -70,6 +70,7 @@ nanoid = "0.4.0"
 html_scraper = { version = "0.25.0", package = "scraper" }
 
 [dev-dependencies]
+assert2 = "0.4.0"
 
 # A 'release mode' profile that compiles quickly, but still 'appears' like a release build, useful for debugging
 [profile.dev-release]
