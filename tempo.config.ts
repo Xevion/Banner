@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { defineConfig, presets, runners } from "@xevion/tempo";
 import { newestMtime } from "@xevion/tempo/preflight";
@@ -465,14 +465,15 @@ export default defineConfig({
           );
           if (proc.exitCode !== 0) process.exit(proc.exitCode);
 
-          // Clean slate + copy
+          // Clean slate + copy. ts-rs nests some types (serde_json/JsonValue.ts),
+          // so recurse and recreate subdirectories instead of reading a directory.
           rmSync(BINDINGS_DIR, { recursive: true, force: true });
           mkdirSync(BINDINGS_DIR, { recursive: true });
-          for (const file of readdirSync(tmpDir)) {
-            writeFileSync(
-              join(BINDINGS_DIR, file),
-              readFileSync(join(tmpDir, file)),
-            );
+          for (const entry of readdirSync(tmpDir, { recursive: true }) as string[]) {
+            if (!entry.endsWith(".ts")) continue;
+            const dest = join(BINDINGS_DIR, entry);
+            mkdirSync(dirname(dest), { recursive: true });
+            writeFileSync(dest, readFileSync(join(tmpDir, entry)));
           }
           generateBarrel();
 
