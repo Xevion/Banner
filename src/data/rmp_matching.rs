@@ -1,6 +1,7 @@
 //! Confidence scoring and candidate generation for RMP instructor matching.
 
 use crate::data::names::{KeyOrigin, matching_keys, parse_banner_name, parse_rmp_name};
+use crate::rmp::RmpCourseCode;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -370,7 +371,14 @@ pub struct MatchingStats {
 }
 
 /// Candidate row tuple: (instructor_id, rmp_legacy_id, score, breakdown, review_subjects, review_years).
-type CandidateRow = (i32, i32, f32, serde_json::Value, Vec<String>, Vec<i16>);
+type CandidateRow = (
+    i32,
+    i32,
+    f32,
+    sqlx::types::Json<ScoreBreakdown>,
+    Vec<String>,
+    Vec<i16>,
+);
 
 /// Raw row fetched from `rmp_professors` for the matching pipeline.
 #[derive(sqlx::FromRow)]
@@ -380,7 +388,7 @@ struct RmpProfRow {
     last_name: String,
     department: Option<String>,
     num_ratings: i32,
-    course_codes: Option<serde_json::Value>,
+    course_codes: Option<sqlx::types::Json<Vec<RmpCourseCode>>>,
 }
 
 /// Lightweight row for building the in-memory RMP name index.
@@ -394,23 +402,25 @@ struct RmpProfForMatching {
     key_origin: KeyOrigin,
 }
 
-/// Extract unique subject prefixes from RMP `course_codes` JSONB.
+/// Extract unique subject prefixes from RMP course codes.
 ///
 /// Course codes are formatted as `"SPN1014"`, `"WRC1013"`, etc.
 /// Extracts the alphabetic prefix (e.g., `"SPN"`, `"WRC"`).
-fn extract_review_subjects(course_codes: Option<&serde_json::Value>) -> Vec<String> {
-    let Some(arr) = course_codes.and_then(|v| v.as_array()) else {
+fn extract_review_subjects(course_codes: Option<&[RmpCourseCode]>) -> Vec<String> {
+    let Some(codes) = course_codes else {
         return Vec::new();
     };
 
     let mut subjects: HashSet<String> = HashSet::new();
-    for entry in arr {
-        if let Some(name) = entry.get("courseName").and_then(|v| v.as_str()) {
-            // Extract alphabetic prefix: "WRC1013" -> "WRC"
-            let prefix: String = name.chars().take_while(|c| c.is_alphabetic()).collect();
-            if !prefix.is_empty() {
-                subjects.insert(prefix.to_uppercase());
-            }
+    for entry in codes {
+        // Extract alphabetic prefix: "WRC1013" -> "WRC"
+        let prefix: String = entry
+            .course_name
+            .chars()
+            .take_while(|c| c.is_alphabetic())
+            .collect();
+        if !prefix.is_empty() {
+            subjects.insert(prefix.to_uppercase());
         }
     }
 
@@ -565,7 +575,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
                 let review_subjects = if let Some(subjs) = review_subjects_map.get(&row.legacy_id) {
                     subjs.iter().cloned().collect()
                 } else {
-                    extract_review_subjects(row.course_codes.as_ref())
+                    extract_review_subjects(row.course_codes.as_deref().map(|c| c.as_slice()))
                 };
                 let keys = matching_keys(&parts);
                 for key in keys {
@@ -693,9 +703,6 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
                 continue;
             }
 
-            let breakdown_json =
-                serde_json::to_value(&ms.breakdown).unwrap_or_else(|_| serde_json::json!({}));
-
             // Collect review subjects and years for this professor from rmp_reviews.
             let prof_review_subjects: Vec<String> = review_subjects_map
                 .get(&prof.legacy_id)
@@ -718,7 +725,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
                 *instructor_id,
                 prof.legacy_id,
                 ms.score,
-                breakdown_json,
+                sqlx::types::Json(ms.breakdown),
                 prof_review_subjects,
                 prof_review_years,
             ));
@@ -747,8 +754,9 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         let c_scores: Vec<f32> = new_candidates.iter().map(|(_, _, s, _, _, _)| *s).collect();
         let c_breakdowns: Vec<serde_json::Value> = new_candidates
             .iter()
-            .map(|(_, _, _, b, _, _)| b.clone())
-            .collect();
+            .map(|(_, _, _, b, _, _)| serde_json::to_value(&b.0))
+            .collect::<Result<_, _>>()
+            .context("failed to serialize match score breakdowns")?;
         // Encode review arrays as JSONB for bulk binding (SQLx can't bind Vec<Vec<T>>).
         let c_review_subjects_json: Vec<serde_json::Value> = new_candidates
             .iter()
@@ -1145,12 +1153,13 @@ mod tests {
 
     #[test]
     fn test_extract_review_subjects() {
-        let json = serde_json::json!([
+        let codes: Vec<RmpCourseCode> = serde_json::from_value(serde_json::json!([
             {"courseName": "WRC1013", "courseCount": 230},
             {"courseName": "WRC2013", "courseCount": 50},
             {"courseName": "HIS1053", "courseCount": 10}
-        ]);
-        let subjects = extract_review_subjects(Some(&json));
+        ]))
+        .unwrap();
+        let subjects = extract_review_subjects(Some(&codes));
         assert!(subjects.contains(&"WRC".to_string()));
         assert!(subjects.contains(&"HIS".to_string()));
         assert_eq!(subjects.len(), 2); // deduplicated WRC
@@ -1159,6 +1168,6 @@ mod tests {
     #[test]
     fn test_extract_review_subjects_empty() {
         assert!(extract_review_subjects(None).is_empty());
-        assert!(extract_review_subjects(Some(&serde_json::json!([]))).is_empty());
+        assert!(extract_review_subjects(Some(&[])).is_empty());
     }
 }

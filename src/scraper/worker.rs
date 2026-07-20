@@ -63,7 +63,7 @@ impl Worker {
             let retry_count = job.retry_count;
             let max_retries = job.max_retries;
             let target_type = job.target_type;
-            let payload = job.target_payload.clone();
+            let payload = job.target_payload.0.clone();
             let priority = job.priority;
             let queued_at = job.queued_at;
             let started_at = Utc::now();
@@ -120,8 +120,9 @@ impl Worker {
 
     async fn process_job(&self, job: ScrapeJob) -> Result<UpsertCounts, JobError> {
         // Convert the database job to our job type
-        let job_type = JobType::from_target_type_and_payload(job.target_type, job.target_payload)
-            .map_err(|e| JobError::Unrecoverable(anyhow::anyhow!(e)))?; // Parse errors are unrecoverable
+        let job_type =
+            JobType::from_target_type_and_payload(job.target_type, job.target_payload.0.clone())
+                .map_err(|e| JobError::Unrecoverable(anyhow::anyhow!(e)))?; // Parse errors are unrecoverable
 
         // Get the job implementation
         let job_impl = job_type.boxed();
@@ -177,7 +178,7 @@ impl Worker {
         result: Result<UpsertCounts, JobError>,
         duration: std::time::Duration,
         target_type: crate::data::models::TargetType,
-        payload: serde_json::Value,
+        payload: crate::data::models::TargetPayload,
         priority: crate::data::models::ScrapePriority,
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,
@@ -221,10 +222,7 @@ impl Worker {
                 }
 
                 // Extract term code before payload is moved into insert_result
-                let term_code = payload
-                    .get("term")
-                    .and_then(|v| v.as_str())
-                    .map(String::from);
+                let term_code = payload.term().map(String::from);
 
                 // Log the result
                 if let Err(e) = self
@@ -321,7 +319,7 @@ impl Worker {
         e: anyhow::Error,
         duration: std::time::Duration,
         target_type: crate::data::models::TargetType,
-        payload: serde_json::Value,
+        payload: crate::data::models::TargetPayload,
         priority: crate::data::models::ScrapePriority,
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,

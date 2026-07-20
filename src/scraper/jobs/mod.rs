@@ -2,7 +2,7 @@ pub mod subject;
 
 use crate::banner::BannerApi;
 use crate::data::DbContext;
-use crate::data::models::{TargetType, UpsertCounts};
+use crate::data::models::{TargetPayload, TargetType, UpsertCounts};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -10,8 +10,8 @@ use thiserror::Error;
 /// Errors that can occur during job parsing
 #[derive(Debug, Error)]
 pub enum JobParseError {
-    #[error("Invalid JSON in job payload: {0}")]
-    InvalidJson(#[from] serde_json::Error),
+    #[error("Payload shape does not match target type: {0:?}")]
+    PayloadMismatch(TargetType),
     #[error("Unsupported target type: {0:?}")]
     UnsupportedTargetType(TargetType),
 }
@@ -43,15 +43,12 @@ impl JobType {
     /// Create a job from the target type and payload
     pub fn from_target_type_and_payload(
         target_type: TargetType,
-        payload: serde_json::Value,
+        payload: TargetPayload,
     ) -> Result<Self, JobParseError> {
-        match target_type {
-            TargetType::Subject => {
-                let subject_job: subject::SubjectJob =
-                    serde_json::from_value(payload).map_err(JobParseError::InvalidJson)?;
-                Ok(JobType::Subject(subject_job))
-            }
-            _ => Err(JobParseError::UnsupportedTargetType(target_type)),
+        match (target_type, payload) {
+            (TargetType::Subject, TargetPayload::Subject(job)) => Ok(JobType::Subject(job)),
+            (TargetType::Subject, _) => Err(JobParseError::PayloadMismatch(TargetType::Subject)),
+            (other, _) => Err(JobParseError::UnsupportedTargetType(other)),
         }
     }
 
@@ -66,39 +63,60 @@ impl JobType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::models::{SingleCrnTarget, SubjectTarget};
     use serde_json::json;
+
+    fn subject_payload(subject: &str) -> TargetPayload {
+        TargetPayload::Subject(SubjectTarget {
+            subject: subject.to_string(),
+            term: Some("202620".to_string()),
+        })
+    }
 
     #[test]
     fn test_from_target_subject_valid() {
         let result =
-            JobType::from_target_type_and_payload(TargetType::Subject, json!({"subject": "CS"}));
+            JobType::from_target_type_and_payload(TargetType::Subject, subject_payload("CS"));
         assert!(matches!(result, Ok(JobType::Subject(_))));
     }
 
     #[test]
     fn test_from_target_subject_empty_string() {
         let result =
-            JobType::from_target_type_and_payload(TargetType::Subject, json!({"subject": ""}));
+            JobType::from_target_type_and_payload(TargetType::Subject, subject_payload(""));
         assert!(matches!(result, Ok(JobType::Subject(_))));
     }
 
     #[test]
-    fn test_from_target_subject_missing_field() {
-        let result = JobType::from_target_type_and_payload(TargetType::Subject, json!({}));
-        assert!(matches!(result, Err(JobParseError::InvalidJson(_))));
+    fn test_from_target_subject_rejects_other_payload_shape() {
+        let payload = TargetPayload::SingleCrn(SingleCrnTarget {
+            crn: "12345".to_string(),
+            term: None,
+        });
+        let result = JobType::from_target_type_and_payload(TargetType::Subject, payload);
+        assert!(matches!(result, Err(JobParseError::PayloadMismatch(_))));
     }
 
     #[test]
-    fn test_from_target_subject_wrong_type() {
-        let result =
-            JobType::from_target_type_and_payload(TargetType::Subject, json!({"subject": 123}));
-        assert!(matches!(result, Err(JobParseError::InvalidJson(_))));
+    fn test_payload_missing_required_field_fails_to_parse() {
+        assert!(serde_json::from_value::<TargetPayload>(json!({})).is_err());
+        assert!(serde_json::from_value::<TargetPayload>(json!(null)).is_err());
+        assert!(serde_json::from_value::<TargetPayload>(json!({"subject": 123})).is_err());
     }
 
     #[test]
-    fn test_from_target_subject_null_payload() {
-        let result = JobType::from_target_type_and_payload(TargetType::Subject, json!(null));
-        assert!(matches!(result, Err(JobParseError::InvalidJson(_))));
+    fn test_payload_shapes_round_trip() {
+        let payload: TargetPayload =
+            serde_json::from_value(json!({"subject": "CS", "term": "202620"})).unwrap();
+        assert_eq!(payload.subject(), Some("CS"));
+        assert_eq!(payload.term(), Some("202620"));
+
+        let payload: TargetPayload = serde_json::from_value(json!({"crn": "12345"})).unwrap();
+        assert!(matches!(payload, TargetPayload::SingleCrn(_)));
+
+        let payload: TargetPayload =
+            serde_json::from_value(json!({"subject": "CS", "low": 1000, "high": 1999})).unwrap();
+        assert!(matches!(payload, TargetPayload::CourseRange(_)));
     }
 
     #[test]
@@ -109,8 +127,7 @@ mod tests {
             TargetType::SingleCrn,
         ];
         for target_type in unsupported {
-            let result =
-                JobType::from_target_type_and_payload(target_type, json!({"subject": "CS"}));
+            let result = JobType::from_target_type_and_payload(target_type, subject_payload("CS"));
             assert!(
                 matches!(result, Err(JobParseError::UnsupportedTargetType(_))),
                 "expected UnsupportedTargetType for {target_type:?}"
@@ -120,13 +137,23 @@ mod tests {
 
     #[test]
     fn test_job_parse_error_display() {
-        let invalid_json_err =
-            JobType::from_target_type_and_payload(TargetType::Subject, json!(null)).unwrap_err();
-        let display = invalid_json_err.to_string();
-        assert!(display.contains("Invalid JSON"), "got: {display}");
+        let mismatch_err = JobType::from_target_type_and_payload(
+            TargetType::Subject,
+            TargetPayload::SingleCrn(SingleCrnTarget {
+                crn: "12345".to_string(),
+                term: None,
+            }),
+        )
+        .unwrap_err();
+        let display = mismatch_err.to_string();
+        assert!(
+            display.contains("does not match target type"),
+            "got: {display}"
+        );
 
         let unsupported_err =
-            JobType::from_target_type_and_payload(TargetType::CrnList, json!({})).unwrap_err();
+            JobType::from_target_type_and_payload(TargetType::CrnList, subject_payload("CS"))
+                .unwrap_err();
         let display = unsupported_err.to_string();
         assert!(
             display.contains("Unsupported target type"),

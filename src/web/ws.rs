@@ -3,7 +3,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::data::models::{ScrapeJob, ScrapeJobStatus, ScrapePriority, TargetType};
+use crate::data::models::{ScrapeJob, ScrapeJobStatus, ScrapePriority, TargetPayload, TargetType};
 use crate::data::unsigned::Count;
 
 /// A serializable DTO for `ScrapeJob` with computed `status`.
@@ -13,7 +13,7 @@ use crate::data::unsigned::Count;
 pub struct ScrapeJobDto {
     pub id: i32,
     pub target_type: TargetType,
-    pub target_payload: serde_json::Value,
+    pub target_payload: TargetPayload,
     pub priority: ScrapePriority,
     pub execute_at: String,
     pub created_at: String,
@@ -29,7 +29,7 @@ impl From<&ScrapeJob> for ScrapeJobDto {
         Self {
             id: job.id,
             target_type: job.target_type,
-            target_payload: job.target_payload.clone(),
+            target_payload: job.target_payload.0.clone(),
             priority: job.priority,
             execute_at: job.execute_at.to_rfc3339(),
             created_at: job.created_at.to_rfc3339(),

@@ -1,7 +1,7 @@
 use crate::banner::{BannerApi, Term};
 use crate::bluebook::BlueBookClient;
 use crate::data::DbContext;
-use crate::data::models::{ReferenceData, ScrapePriority, TargetType};
+use crate::data::models::{ReferenceData, ScrapePriority, TargetPayload, TargetType};
 use crate::data::unsigned::Count;
 use crate::data::{kv, term_subjects, terms};
 use crate::rmp::RmpClient;
@@ -13,7 +13,6 @@ use crate::state::ReferenceCache;
 use crate::utils::fmt_duration;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -552,9 +551,11 @@ impl Scheduler {
         );
 
         // Create payloads with term field for eligible subjects
-        let subject_payloads: Vec<_> = eligible_subjects
+        let subject_payloads: Vec<TargetPayload> = eligible_subjects
             .iter()
-            .map(|code| json!({ "subject": code, "term": term_code }))
+            .map(|code| {
+                TargetPayload::Subject(SubjectJob::new(code.clone(), term_code.to_string()))
+            })
             .collect();
 
         // Query existing jobs for eligible subjects only
@@ -575,10 +576,9 @@ impl Scheduler {
         let mut skipped_count = 0;
         let new_jobs: Vec<_> = eligible_subjects
             .into_iter()
-            .filter_map(|subject_code| {
-                let job = SubjectJob::new(subject_code.clone(), term_code.to_string());
-                let payload = serde_json::to_value(&job).unwrap();
-                let payload_str = payload.to_string();
+            .zip(subject_payloads)
+            .filter_map(|(subject_code, payload)| {
+                let payload_str = serde_json::to_value(&payload).ok()?.to_string();
 
                 if existing_payloads.contains(&payload_str) {
                     skipped_count += 1;

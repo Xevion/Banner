@@ -186,6 +186,9 @@ pub async fn list_links(
         format!("WHERE {}", conditions.join(" AND "))
     };
 
+    let limit_idx = bind_idx + 1;
+    let offset_idx = bind_idx + 2;
+
     let query_str = format!(
         r#"
         SELECT
@@ -206,7 +209,7 @@ pub async fn list_links(
         ORDER BY
             CASE bl.status WHEN 'pending' THEN 0 WHEN 'auto' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END,
             bl.instructor_name ASC
-        LIMIT {per_page} OFFSET {offset}
+        LIMIT ${limit_idx} OFFSET ${offset_idx}
         "#
     );
 
@@ -217,6 +220,7 @@ pub async fn list_links(
     if let Some(ref search) = filter.search {
         query = query.bind(format!("%{}%", escape_like(search)));
     }
+    query = query.bind(per_page).bind(offset);
 
     let rows = query
         .fetch_all(pool)

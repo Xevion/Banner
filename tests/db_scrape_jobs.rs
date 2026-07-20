@@ -2,7 +2,7 @@ mod helpers;
 
 use banner::data::DbContext;
 use banner::data::events::EventBuffer;
-use banner::data::models::{ScrapePriority, TargetType};
+use banner::data::models::{ScrapePriority, SubjectTarget, TargetPayload, TargetType};
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -10,6 +10,18 @@ use std::sync::Arc;
 fn make_ctx(pool: PgPool) -> DbContext {
     let events = Arc::new(EventBuffer::new(100));
     DbContext::new(pool, events)
+}
+
+fn subject_payload(subject: &str) -> TargetPayload {
+    TargetPayload::Subject(SubjectTarget {
+        subject: subject.to_string(),
+        term: None,
+    })
+}
+
+/// The exact JSON a typed payload is stored as, for direct SQL inserts and dedup assertions.
+fn payload_json(payload: &TargetPayload) -> serde_json::Value {
+    serde_json::to_value(payload).unwrap()
 }
 
 #[sqlx::test]
@@ -42,7 +54,7 @@ async fn lock_next_returns_job_and_sets_locked_at(pool: PgPool) {
 
     assert_eq!(job.id, id);
     assert!(matches!(job.target_type, TargetType::Subject));
-    assert_eq!(job.target_payload, json!({"subject": "CS"}));
+    assert_eq!(job.target_payload.subject(), Some("CS"));
 
     // Verify locked_at was set in the database
     let (locked_at,): (Option<chrono::DateTime<chrono::Utc>>,) =
@@ -122,8 +134,8 @@ async fn lock_next_priority_desc_ordering(pool: PgPool) {
         .expect("should return a job");
 
     assert_eq!(
-        job.target_payload,
-        json!({"subject": "CRIT"}),
+        job.target_payload.subject(),
+        Some("CRIT"),
         "Critical priority should be fetched before Low"
     );
 }
@@ -156,8 +168,8 @@ async fn lock_next_execute_at_asc_ordering(pool: PgPool) {
         .expect("should return a job");
 
     assert_eq!(
-        job.target_payload,
-        json!({"subject": "OLDER"}),
+        job.target_payload.subject(),
+        Some("OLDER"),
         "Older execute_at should be fetched first"
     );
 }
@@ -219,15 +231,15 @@ async fn unlock_clears_locked_at(pool: PgPool) {
 
 #[sqlx::test]
 async fn find_existing_payloads_returns_matching(pool: PgPool) {
-    let payload_a = json!({"subject": "CS"});
-    let payload_b = json!({"subject": "MAT"});
-    let payload_c = json!({"subject": "ENG"});
+    let payload_a = subject_payload("CS");
+    let payload_b = subject_payload("MAT");
+    let payload_c = subject_payload("ENG");
 
     // Insert A and B as Subject jobs
     helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
-        payload_a.clone(),
+        payload_json(&payload_a),
         ScrapePriority::Medium,
         false,
         0,
@@ -237,7 +249,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
     helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
-        payload_b.clone(),
+        payload_json(&payload_b),
         ScrapePriority::Medium,
         false,
         0,
@@ -248,7 +260,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
     helpers::insert_scrape_job(
         &pool,
         TargetType::SingleCrn,
-        payload_c.clone(),
+        payload_json(&payload_c),
         ScrapePriority::Medium,
         false,
         0,
@@ -264,20 +276,20 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(existing.contains(&payload_a.to_string()));
-    assert!(existing.contains(&payload_b.to_string()));
+    assert!(existing.contains(&payload_json(&payload_a).to_string()));
+    assert!(existing.contains(&payload_json(&payload_b).to_string()));
     // payload_c is SingleCrn, not Subject -- should not match
-    assert!(!existing.contains(&payload_c.to_string()));
+    assert!(!existing.contains(&payload_json(&payload_c).to_string()));
 }
 
 #[sqlx::test]
 async fn find_existing_payloads_includes_locked(pool: PgPool) {
-    let payload = json!({"subject": "CS"});
+    let payload = subject_payload("CS");
 
     helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
-        payload.clone(),
+        payload_json(&payload),
         ScrapePriority::Medium,
         true, // locked
         0,
@@ -294,7 +306,7 @@ async fn find_existing_payloads_includes_locked(pool: PgPool) {
         .unwrap();
 
     assert!(
-        existing.contains(&payload.to_string()),
+        existing.contains(&payload_json(&payload).to_string()),
         "locked jobs should be included in deduplication"
     );
 }
@@ -330,17 +342,20 @@ async fn find_existing_payloads_empty_candidates(pool: PgPool) {
 async fn batch_insert_inserts_multiple(pool: PgPool) {
     let jobs = vec![
         (
-            json!({"subject": "CS"}),
+            subject_payload("CS"),
             TargetType::Subject,
             ScrapePriority::High,
         ),
         (
-            json!({"subject": "MAT"}),
+            subject_payload("MAT"),
             TargetType::Subject,
             ScrapePriority::Medium,
         ),
         (
-            json!({"crn": "12345"}),
+            TargetPayload::SingleCrn(banner::data::models::SingleCrnTarget {
+                crn: "12345".to_string(),
+                term: None,
+            }),
             TargetType::SingleCrn,
             ScrapePriority::Low,
         ),

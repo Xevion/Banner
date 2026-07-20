@@ -3,20 +3,13 @@ use crate::banner::{BannerApi, SearchQuery, Term};
 use crate::data::DbContext;
 use crate::data::models::UpsertCounts;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 /// Job implementation for scraping subject data.
 ///
-/// The `term` field is optional for backward compatibility with legacy jobs
-/// that don't include it. Legacy jobs fall back to `Term::get_current()`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubjectJob {
-    pub subject: String,
-    /// Term code (e.g., "202510"). If absent, falls back to current term.
-    #[serde(default)]
-    pub term: Option<String>,
-}
+/// The job is the stored payload itself; legacy rows without a `term` fall back
+/// to `Term::get_current()`.
+pub use crate::data::models::SubjectTarget as SubjectJob;
 
 impl SubjectJob {
     /// Create a new subject job for a specific term.

@@ -45,8 +45,7 @@ async fn load_calendar_course(
         .or(instructors.first())
         .map(|i| i.display_name.clone());
 
-    let meeting_times: Vec<DbMeetingTime> =
-        serde_json::from_value(course.meeting_times.clone()).unwrap_or_default();
+    let meeting_times: Vec<DbMeetingTime> = course.meeting_times.0.clone();
 
     let cal_course = CalendarCourse {
         crn: course.crn.clone(),

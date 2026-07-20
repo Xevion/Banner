@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use sqlx::types::Json;
 use ts_rs::TS;
 
 use crate::banner::models::meetings::TimeRange;
@@ -280,8 +280,9 @@ pub struct Course {
     pub link_identifier: Option<String>,
     pub is_section_linked: Option<bool>,
     // JSONB fields
-    pub meeting_times: Value,
-    pub attributes: Value,
+    pub meeting_times: Json<Vec<DbMeetingTime>>,
+    /// Raw Banner attribute codes, mapped to typed `Attribute` values at the API edge.
+    pub attributes: Json<Vec<String>>,
 }
 
 #[allow(dead_code)]
@@ -446,6 +447,84 @@ pub enum TargetType {
     SingleCrn,
 }
 
+/// Scrape target for [`TargetType::Subject`]: every section of one subject in one term.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SubjectTarget {
+    pub subject: String,
+    /// Term code (e.g. "202510"). Legacy jobs omit it and fall back to the current term.
+    #[serde(default)]
+    pub term: Option<String>,
+}
+
+/// Scrape target for [`TargetType::CourseRange`]: a numeric course-number span within a subject.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CourseRangeTarget {
+    pub subject: String,
+    pub low: i32,
+    pub high: i32,
+    #[serde(default)]
+    pub term: Option<String>,
+}
+
+/// Scrape target for [`TargetType::CrnList`]: an explicit set of CRNs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CrnListTarget {
+    pub crns: Vec<String>,
+    #[serde(default)]
+    pub term: Option<String>,
+}
+
+/// Scrape target for [`TargetType::SingleCrn`]: one section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SingleCrnTarget {
+    pub crn: String,
+    #[serde(default)]
+    pub term: Option<String>,
+}
+
+/// The payload of a scrape job, discriminated by the row's [`TargetType`].
+///
+/// The stored JSON carries no tag, so variants are ordered most-specific first:
+/// deserialization picks the first shape whose required fields are all present.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export)]
+pub enum TargetPayload {
+    CourseRange(CourseRangeTarget),
+    CrnList(CrnListTarget),
+    SingleCrn(SingleCrnTarget),
+    Subject(SubjectTarget),
+}
+
+impl TargetPayload {
+    /// Term code the job targets, when the payload carries one.
+    pub fn term(&self) -> Option<&str> {
+        match self {
+            Self::CourseRange(t) => t.term.as_deref(),
+            Self::CrnList(t) => t.term.as_deref(),
+            Self::SingleCrn(t) => t.term.as_deref(),
+            Self::Subject(t) => t.term.as_deref(),
+        }
+    }
+
+    /// Subject code the job targets, when the payload carries one.
+    pub fn subject(&self) -> Option<&str> {
+        match self {
+            Self::CourseRange(t) => Some(&t.subject),
+            Self::Subject(t) => Some(&t.subject),
+            Self::CrnList(_) | Self::SingleCrn(_) => None,
+        }
+    }
+}
+
 /// Computed status for a scrape job, derived from existing fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -467,7 +546,7 @@ const LOCK_EXPIRY_SECS: i64 = 10 * 60;
 pub struct ScrapeJob {
     pub id: i32,
     pub target_type: TargetType,
-    pub target_payload: Value,
+    pub target_payload: Json<TargetPayload>,
     pub priority: ScrapePriority,
     pub execute_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,

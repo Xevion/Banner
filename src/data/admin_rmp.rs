@@ -184,7 +184,7 @@ struct InstructorRow {
     rmp_link_count: Option<i64>,
     top_candidate_rmp_id: Option<i32>,
     top_candidate_score: Option<f32>,
-    top_candidate_breakdown: Option<serde_json::Value>,
+    top_candidate_breakdown: Option<sqlx::types::Json<ScoreBreakdown>>,
     tc_first_name: Option<String>,
     tc_last_name: Option<String>,
     tc_department: Option<String>,
@@ -248,6 +248,9 @@ pub async fn list_instructors(
         format!("WHERE {}", conditions.join(" AND "))
     };
 
+    let limit_idx = bind_idx + 1;
+    let offset_idx = bind_idx + 2;
+
     let query_str = format!(
         r#"
         SELECT
@@ -276,7 +279,7 @@ pub async fn list_instructors(
         LEFT JOIN rmp_professors rp ON rp.legacy_id = tc.rmp_legacy_id
         {where_clause}
         ORDER BY {sort_clause}
-        LIMIT {per_page} OFFSET {offset}
+        LIMIT ${limit_idx} OFFSET ${offset_idx}
         "#
     );
 
@@ -287,6 +290,7 @@ pub async fn list_instructors(
     if let Some(ref search) = filter.search {
         query = query.bind(format!("%{search}%"));
     }
+    query = query.bind(per_page).bind(offset);
 
     let rows = query
         .fetch_all(pool)
@@ -351,10 +355,7 @@ pub async fn list_instructors(
             let top_candidate = r.top_candidate_rmp_id.map(|rmp_id| TopCandidateResponse {
                 rmp_legacy_id: rmp_id,
                 score: r.top_candidate_score,
-                score_breakdown: r
-                    .top_candidate_breakdown
-                    .as_ref()
-                    .and_then(|v| serde_json::from_value(v.clone()).ok()),
+                score_breakdown: r.top_candidate_breakdown.as_ref().map(|b| b.0.clone()),
                 first_name: r.tc_first_name.clone(),
                 last_name: r.tc_last_name.clone(),
                 department: r.tc_department.clone(),

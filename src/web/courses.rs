@@ -240,36 +240,13 @@ pub fn build_course_response(
         .or(instructors.first())
         .map(|i| i.instructor_id);
 
-    let meeting_times: Vec<models::DbMeetingTime> =
-        serde_json::from_value(course.meeting_times.clone())
-            .map_err(|e| {
-                error!(
-                    course_id = course.id,
-                    crn = %course.crn,
-                    term = %course.term_code,
-                    %e,
-                    "Failed to deserialize meeting_times JSONB"
-                );
-                e
-            })
-            .unwrap_or_default();
+    let meeting_times: Vec<models::DbMeetingTime> = course.meeting_times.0.clone();
 
-    let attributes: Vec<Attribute> =
-        serde_json::from_value::<Vec<String>>(course.attributes.clone())
-            .map_err(|e| {
-                error!(
-                    course_id = course.id,
-                    crn = %course.crn,
-                    term = %course.term_code,
-                    %e,
-                    "Failed to deserialize attributes JSONB"
-                );
-                e
-            })
-            .unwrap_or_default()
-            .into_iter()
-            .map(|code| Attribute::from_code(&code, None))
-            .collect();
+    let attributes: Vec<Attribute> = course
+        .attributes
+        .iter()
+        .map(|code| Attribute::from_code(code, None))
+        .collect();
 
     let (instructional_method, instructional_method_code) = match &course.instructional_method {
         Some(code) => match InstructionalMethod::from_code(code) {

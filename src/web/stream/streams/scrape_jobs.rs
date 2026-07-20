@@ -109,20 +109,11 @@ pub async fn event_matches(
 }
 
 fn payload_term_subject(job: &ScrapeJobDto) -> (Option<String>, Option<String>) {
-    let Some(obj) = job.target_payload.as_object() else {
-        return (None, None);
-    };
-
-    let term = obj
-        .get("term")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let subject = obj
-        .get("subject")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    (term, subject)
+    let payload = &job.target_payload;
+    (
+        payload.term().map(str::to_string),
+        payload.subject().map(str::to_string),
+    )
 }
 
 async fn fetch_by_id(db_pool: &PgPool, id: i32) -> Result<ScrapeJobDto, sqlx::Error> {

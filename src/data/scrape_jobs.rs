@@ -9,11 +9,20 @@ use tracing::debug;
 use super::context::DbContext;
 use super::events::DomainEvent;
 use crate::data::models::{
-    ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetType, UpsertCounts,
+    ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetPayload, TargetType,
+    UpsertCounts,
 };
 use crate::data::unsigned::{Count, DurationMs};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 use anyhow::{Context, Result};
+
+/// Serialize typed payloads for binding as a `jsonb[]` query parameter.
+fn payloads_as_json(payloads: &[TargetPayload]) -> Result<Vec<serde_json::Value>> {
+    payloads
+        .iter()
+        .map(|p| serde_json::to_value(p).context("failed to serialize scrape job payload"))
+        .collect()
+}
 
 /// A single row from scrape_job_results for a given subject.
 #[derive(sqlx::FromRow, Debug)]
@@ -275,7 +284,7 @@ impl<'a> ScrapeJobOps<'a> {
     pub async fn insert_result(
         &self,
         target_type: TargetType,
-        payload: serde_json::Value,
+        payload: TargetPayload,
         priority: ScrapePriority,
         queued_at: DateTime<Utc>,
         started_at: DateTime<Utc>,
@@ -297,7 +306,7 @@ impl<'a> ScrapeJobOps<'a> {
             "#,
         )
         .bind(target_type)
-        .bind(&payload)
+        .bind(sqlx::types::Json(&payload))
         .bind(priority)
         .bind(queued_at)
         .bind(started_at)
@@ -324,14 +333,15 @@ impl<'a> ScrapeJobOps<'a> {
     pub async fn find_existing_payloads(
         &self,
         target_type: TargetType,
-        candidate_payloads: &[serde_json::Value],
+        candidate_payloads: &[TargetPayload],
     ) -> Result<HashSet<String>> {
+        let candidates = payloads_as_json(candidate_payloads)?;
         let existing_jobs: Vec<(serde_json::Value,)> = sqlx::query_as(
             "SELECT target_payload FROM scrape_jobs
              WHERE target_type = $1 AND target_payload = ANY($2)",
         )
         .bind(target_type)
-        .bind(candidate_payloads)
+        .bind(&candidates)
         .fetch_all(self.ctx.pool())
         .await
         .context("failed to find existing scrape job payloads")?;
@@ -398,7 +408,7 @@ impl<'a> ScrapeJobOps<'a> {
     /// Emits a `ScrapeJobEvent::Created` event for each inserted job.
     pub async fn batch_insert(
         &self,
-        jobs: &[(serde_json::Value, TargetType, ScrapePriority)],
+        jobs: &[(TargetPayload, TargetType, ScrapePriority)],
     ) -> Result<Vec<ScrapeJob>> {
         if jobs.is_empty() {
             return Ok(Vec::new());
@@ -410,7 +420,9 @@ impl<'a> ScrapeJobOps<'a> {
 
         for (payload, target_type, priority) in jobs {
             target_types.push(format!("{target_type:?}"));
-            payloads.push(payload.clone());
+            payloads.push(
+                serde_json::to_value(payload).context("failed to serialize scrape job payload")?,
+            );
             priorities.push(format!("{priority:?}"));
         }
 
