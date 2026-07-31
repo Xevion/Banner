@@ -399,14 +399,13 @@ pub async fn get_subjects_by_enrollment(
 ) -> Result<Vec<(String, String, i64)>> {
     let rows: Vec<(String, String, i64)> = sqlx::query_as(
         r#"
-        SELECT c.subject,
-               COALESCE(rd.description, c.subject),
-               COALESCE(SUM(c.enrollment), 0) as total_enrollment
-        FROM courses c
-        LEFT JOIN reference_data rd ON rd.category = 'subject' AND rd.code = c.subject
-        WHERE c.term_code = $1
-        GROUP BY c.subject, rd.description
-        ORDER BY total_enrollment DESC
+        SELECT s.subject,
+               COALESCE(rd.description, s.subject),
+               s.total_enrollment
+        FROM term_subject_summary s
+        LEFT JOIN reference_data rd ON rd.category = 'subject' AND rd.code = s.subject
+        WHERE s.term_code = $1
+        ORDER BY s.total_enrollment DESC, s.subject
         "#,
     )
     .bind(term_code)
@@ -476,23 +475,21 @@ type RangeRow = (
 
 /// Get aggregate filter ranges for a term (course number, credit hours, waitlist).
 pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<FilterRanges> {
+    // An unknown term produces no row here, whereas the aggregate this replaced
+    // returned a single all-NULL row. Both funnel into the same defaults below.
     let row: RangeRow = sqlx::query_as(
         r#"
-        SELECT
-            MIN(course_number::int),
-            MAX(course_number::int),
-            MIN(COALESCE(credit_hours, credit_hour_low, 0)),
-            MAX(COALESCE(credit_hours, credit_hour_high, 0)),
-            MAX(wait_count)
-        FROM courses
+        SELECT course_number_min, course_number_max,
+               credit_hour_min, credit_hour_max, wait_count_max
+        FROM term_summary
         WHERE term_code = $1
-          AND course_number ~ '^\d+$'
         "#,
     )
     .bind(term_code)
-    .fetch_one(db_pool)
+    .fetch_optional(db_pool)
     .await
-    .context("failed to fetch filter ranges for term")?;
+    .context("failed to fetch filter ranges for term")?
+    .unwrap_or((None, None, None, None, None));
 
     let cn_max = row.1.unwrap_or(9000);
     let ch_min = row.2.unwrap_or(0.0);
@@ -703,12 +700,26 @@ impl<'a> CourseOps<'a> {
     }
 }
 
+/// Recompute the cached per-term aggregates backing the search-options endpoint.
+///
+/// Terms other than the one being scraped are untouched, so past terms keep the
+/// values computed when they were last active.
+pub async fn refresh_term_summary(pool: &PgPool, term_code: &str) -> Result<()> {
+    sqlx::query("SELECT refresh_term_summary($1)")
+        .bind(term_code)
+        .execute(pool)
+        .await
+        .context("failed to refresh term summary")?;
+    Ok(())
+}
+
 /// Count all courses in the database.
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
-        .fetch_one(pool)
-        .await
-        .context("failed to count all courses")?;
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COALESCE(SUM(course_count), 0)::bigint FROM term_summary")
+            .fetch_one(pool)
+            .await
+            .context("failed to count all courses")?;
     Ok(count)
 }
 

@@ -521,6 +521,16 @@ pub async fn batch_upsert_courses(
         .await
         .context("failed to commit batch upsert transaction")?;
 
+    // Refresh the precomputed aggregates for every term this batch touched, after
+    // commit so they observe the new rows. A stale summary only means the search
+    // filters lag until the next scrape, so this must not fail the upsert.
+    let touched_terms: HashSet<&str> = courses.iter().map(|c| c.term.as_str()).collect();
+    for term in touched_terms {
+        if let Err(error) = crate::data::courses::refresh_term_summary(db_pool, term).await {
+            warn!(term = term, error = %error, "failed to refresh term summary");
+        }
+    }
+
     let audit_entries = if !audit_ids.is_empty() {
         fetch_audit_entries_by_ids(db_pool, &audit_ids)
             .await

@@ -11,7 +11,7 @@ use crate::scraper::adaptive::{
 use crate::scraper::jobs::subject::SubjectJob;
 use crate::state::ReferenceCache;
 use crate::utils::fmt_duration;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -44,6 +44,9 @@ const RMP_REVIEW_SCRAPE_INTERVAL: Duration = Duration::from_secs(15 * 60);
 /// Max professors to scrape reviews for per cycle.
 const RMP_REVIEW_SCRAPE_BATCH_SIZE: i64 = 50;
 
+/// How often the courses table is re-clustered on term_code (30 days).
+const CLUSTER_COURSES_INTERVAL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
 
 // app_kv keys for persisting scheduler timestamps across restarts.
@@ -52,6 +55,7 @@ pub const KV_RMP_SYNC: &str = "scheduler.rmp_sync";
 pub const KV_TERM_SYNC: &str = "scheduler.term_sync";
 pub const KV_BLUEBOOK_SYNC: &str = "scheduler.bluebook_sync";
 pub const KV_RMP_REVIEW_SCRAPE: &str = "scheduler.rmp_review_scrape";
+pub const KV_CLUSTER_COURSES: &str = "scheduler.cluster_courses";
 
 /// Convert a persisted UTC timestamp to an `Instant`, preserving remaining cooldown.
 ///
@@ -131,6 +135,9 @@ impl Scheduler {
         let persisted_rmp_reviews = kv::get_timestamp(pool, KV_RMP_REVIEW_SCRAPE)
             .await
             .unwrap_or(None);
+        let persisted_cluster = kv::get_timestamp(pool, KV_CLUSTER_COURSES)
+            .await
+            .unwrap_or(None);
 
         if persisted_ref.is_some()
             || persisted_rmp.is_some()
@@ -154,6 +161,8 @@ impl Scheduler {
         let mut last_bluebook_sync = persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL);
         let mut last_rmp_review_scrape =
             persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL);
+        let mut last_cluster_courses =
+            persisted_to_instant(persisted_cluster, CLUSTER_COURSES_INTERVAL);
         let mut bluebook_notified = false;
 
         loop {
@@ -184,6 +193,8 @@ impl Scheduler {
                         || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL;
                     let should_scrape_rmp_reviews =
                         last_rmp_review_scrape.elapsed() >= RMP_REVIEW_SCRAPE_INTERVAL;
+                    let should_cluster_courses =
+                        last_cluster_courses.elapsed() >= CLUSTER_COURSES_INTERVAL;
                     bluebook_notified = false;
 
                     // Read and clear the force flag before spawning so the flag
@@ -284,6 +295,20 @@ impl Scheduler {
                                             if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
                                                 error!(error = ?e, "Failed to schedule jobs");
                                             }
+
+                                            // Runs last: the rewrite holds an exclusive lock on
+                                            // courses, so nothing else in this cycle should be
+                                            // waiting behind it for a pool connection.
+                                            if should_cluster_courses {
+                                                match Self::cluster_courses(db.pool()).await {
+                                                    Ok(()) => {
+                                                        if let Err(e) = kv::set_timestamp(db.pool(), KV_CLUSTER_COURSES, Utc::now()).await {
+                                                            warn!(error = ?e, "Failed to persist cluster timestamp");
+                                                        }
+                                                    }
+                                                    Err(e) => error!(error = ?e, "Failed to cluster courses"),
+                                                }
+                                            }
                                         } => {}
                                         _ = cancel_token.cancelled() => {
                                             trace!("Scheduling work cancelled gracefully");
@@ -309,6 +334,9 @@ impl Scheduler {
                     }
                     if should_scrape_rmp_reviews {
                         last_rmp_review_scrape = Instant::now();
+                    }
+                    if should_cluster_courses {
+                        last_cluster_courses = Instant::now();
                     }
 
                     current_work = Some((work_handle, cancel_token));
@@ -616,6 +644,34 @@ impl Scheduler {
             }
         }
 
+        Ok(())
+    }
+
+    /// Restore physical ordering of `courses` by term code.
+    ///
+    /// Ordering decays because the scraper rewrites `enrollment`, which is
+    /// indexed and therefore rules out heap-only tuple updates. The rewrite
+    /// takes an exclusive lock, so queries against `courses` fail until it
+    /// completes.
+    #[tracing::instrument(skip_all)]
+    async fn cluster_courses(db_pool: &PgPool) -> Result<()> {
+        let start = Instant::now();
+        info!("Re-clustering courses on term_code");
+
+        sqlx::query("CLUSTER courses USING idx_courses_term_code")
+            .execute(db_pool)
+            .await
+            .context("failed to cluster courses")?;
+
+        sqlx::query("ANALYZE courses")
+            .execute(db_pool)
+            .await
+            .context("failed to analyze courses after clustering")?;
+
+        info!(
+            duration = fmt_duration(start.elapsed()),
+            "Re-clustered courses"
+        );
         Ok(())
     }
 
