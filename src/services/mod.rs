@@ -6,6 +6,7 @@ pub mod bot;
 pub mod manager;
 pub mod notifications;
 pub mod signals;
+pub mod ssr;
 pub mod web;
 
 #[derive(Debug)]

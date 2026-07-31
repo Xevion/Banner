@@ -77,8 +77,8 @@ RUN cargo build --release --bin banner
 # Strip the binary to reduce size
 RUN strip target/release/banner
 
-# Bun runtime needed for SSR server
-FROM oven/bun:1-slim
+# Node runtime for the SvelteKit SSR server
+FROM node:24-slim
 
 ARG APP=/app
 ARG APP_USER=appuser
@@ -107,11 +107,11 @@ RUN chmod +x ${APP}/banner
 # Copy SvelteKit SSR build output
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
 
-# Copy entrypoint script and console logger preload
-COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/entrypoint.ts ${APP}/web/entrypoint.ts
+# Console logger preload, normalizing SSR output to the JSON log format
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/console-logger.js ${APP}/web/console-logger.js
 
-# Copy runtime node_modules (SvelteKit SSR needs these)
+# adapter-node leaves dependencies as bare imports rather than bundling them,
+# so the SSR server still resolves packages from node_modules at runtime.
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/node_modules ${APP}/web/node_modules
 
 USER $APP_USER
@@ -121,7 +121,11 @@ WORKDIR ${APP}
 ARG PORT=8000
 # Runtime environment var for PORT, default to build-time arg
 ENV PORT=${PORT}
-ENV RUST_BINARY=${APP}/banner
+
+# Presence of this variable is what makes the Rust process supervise SSR; it is
+# deliberately unset in development, where Vite serves SSR instead.
+ENV SSR_COMMAND="node --import ${APP}/web/console-logger.js ${APP}/web/build/index.js"
+
 EXPOSE ${PORT}
 
 # Health check hits Rust (public-facing server)
@@ -131,5 +135,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 # Can be explicitly overriden with different hosts & ports
 ENV HOSTS=0.0.0.0,[::]
 
-# Entrypoint orchestrates Rust + Bun SSR
-ENTRYPOINT ["bun", "run", "/app/web/entrypoint.ts"]
+# Rust runs as PID 1 and supervises the SSR child process
+ENTRYPOINT ["/app/banner"]

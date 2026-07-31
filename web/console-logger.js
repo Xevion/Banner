@@ -18,7 +18,7 @@ function formatLog(level, args) {
       timestamp: new Date().toISOString(),
       level: level,
       message: message,
-      target: "bun",
+      target: "ssr",
     };
     originalConsole.log(JSON.stringify(logEntry));
   } else {
@@ -34,7 +34,7 @@ function formatLog(level, args) {
     const gray = "\x1b[90m";
 
     originalConsole.log(
-      `${gray}${timestamp}${reset} ${color}${level.toUpperCase().padEnd(5)}${reset} ${gray}bun${reset}: ${message}`
+      `${gray}${timestamp}${reset} ${color}${level.toUpperCase().padEnd(5)}${reset} ${gray}ssr${reset}: ${message}`
     );
   }
 }

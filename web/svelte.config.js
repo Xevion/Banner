@@ -1,5 +1,5 @@
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
-import adapter from "@xevion/svelte-adapter-bun";
+import adapter from "@sveltejs/adapter-node";
 
 const posthogHost = process.env.PUBLIC_POSTHOG_HOST || "https://us.posthog.com";
 
@@ -7,10 +7,11 @@ const posthogHost = process.env.PUBLIC_POSTHOG_HOST || "https://us.posthog.com";
 const config = {
   preprocess: vitePreprocess(),
   kit: {
+    // Rust serves /_app/* from the embedded binary and pre-compresses assets at
+    // build time, so the adapter does neither.
     adapter: adapter({
       out: "build",
       precompress: false,
-      serveAssets: false,
     }),
     csp: {
       mode: "auto",

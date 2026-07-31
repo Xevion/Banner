@@ -6,6 +6,7 @@ use crate::scraper::scheduler::KV_TERM_SYNC;
 use crate::services::bot::BotService;
 use crate::services::manager::ServiceManager;
 use crate::services::notifications::NotificationService;
+use crate::services::ssr::SsrService;
 use crate::services::web::WebService;
 use crate::state::AppState;
 use crate::utils::fmt_duration;
@@ -214,6 +215,21 @@ impl App {
             ));
             self.service_manager
                 .register_service(ServiceName::Web.as_str(), web_service);
+        }
+
+        // Only present in the production image; Vite serves SSR in development.
+        if let Some(command) = self.config.ssr_command.clone() {
+            let ssr_port = url::Url::parse(&self.config.ssr_downstream)
+                .ok()
+                .and_then(|u| u.port())
+                .context("ssr_downstream must include an explicit port to host SSR")?;
+
+            let ssr_service = Box::new(SsrService::new(
+                command,
+                ssr_port,
+                format!("http://localhost:{}", self.config.port),
+            ));
+            self.service_manager.register_service("ssr", ssr_service);
         }
 
         if services.contains(&ServiceName::Scraper) {

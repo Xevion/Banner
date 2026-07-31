@@ -61,10 +61,16 @@ pub struct Config {
     #[serde(default)]
     pub admin_discord_id: Option<u64>,
 
-    /// URL of the SvelteKit SSR server (Vite in dev, Bun in production).
+    /// URL of the SvelteKit SSR server (Vite in dev, Node in production).
     /// Default: http://localhost:3001
     #[serde(default = "default_ssr_downstream")]
     pub ssr_downstream: String,
+
+    /// Command that starts the SSR server, e.g. "node /app/web/build/index.js".
+    /// When unset the process is not managed here, which is the case in
+    /// development where Vite already serves SSR.
+    #[serde(default)]
+    pub ssr_command: Option<String>,
 
     /// Public origin for absolute URLs in sitemaps (e.g. "https://banner.xevion.dev").
     /// When unset, sitemap endpoints return 404.
