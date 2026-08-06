@@ -232,18 +232,18 @@ export function formatLocationTooltip(course: CourseResponse): string | null {
 
 /** Text color class for seat availability: purple (overenrolled), red (full), yellow (low), green (open) */
 export function seatsColor(openSeats: number): string {
-  if (openSeats < 0) return "text-purple-500";
-  if (openSeats === 0) return "text-status-red";
-  if (openSeats <= 5) return "text-yellow-500";
-  return "text-status-green";
+  if (openSeats < 0) return "text-seat-over";
+  if (openSeats === 0) return "text-seat-full";
+  if (openSeats <= 5) return "text-seat-low";
+  return "text-seat-open";
 }
 
 /** Background dot color class for seat availability */
 export function seatsDotColor(openSeats: number): string {
-  if (openSeats < 0) return "bg-purple-500";
-  if (openSeats === 0) return "bg-red-500";
-  if (openSeats <= 5) return "bg-yellow-500";
-  return "bg-green-500";
+  if (openSeats < 0) return "bg-seat-over";
+  if (openSeats === 0) return "bg-seat-full";
+  if (openSeats <= 5) return "bg-seat-low";
+  return "bg-seat-open";
 }
 
 /** RMP professor page URL from legacy ID */
