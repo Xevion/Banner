@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2](https://github.com/Xevion/Banner/compare/v0.7.1...v0.7.2) (2026-06-20)
+
+
+### Features
+
+* **backend:** Add multi-layer per-IP rate limiting middleware ([a106025](https://github.com/Xevion/Banner/commit/a106025cfa6518b6882af441d0e42b0fc9fe3e7d))
+* **backend:** Implement rate limit error handling with client-side retry ([84bb179](https://github.com/Xevion/Banner/commit/84bb17908f31b70a6bbb3b54d5da835c6bddc24e))
+* **bot:** Add course watch notifications via Discord DMs ([dfd30a1](https://github.com/Xevion/Banner/commit/dfd30a161740db054022a06f6a48afee2002c038))
+
+
+### Bug Fixes
+
+* Add package overrides for minimatch and cookie vulnerabilities ([9bbc97f](https://github.com/Xevion/Banner/commit/9bbc97f6a433cd19f7cad08b33837c625ba9d571))
+* **backend:** Exempt static assets from rate limiting ([b34df19](https://github.com/Xevion/Banner/commit/b34df1909a011bb46b1da386575ac97c50825fbe))
+* **ci:** Remove deleted scripts/ dependency from security job ([cbccebc](https://github.com/Xevion/Banner/commit/cbccebc00c9913cb0245207cffd382c528626f7f))
+* **deps:** Patch quinn-proto DoS and devalue prototype pollution ([3faa801](https://github.com/Xevion/Banner/commit/3faa801faff379ddfe1f85209fc16c07d8e7e2ca))
+* **deps:** Suppress transitive advisories and pin trivy-action ([0d49c69](https://github.com/Xevion/Banner/commit/0d49c6969b6589486e8e49d4e5fa595e722d903d))
+* **security:** Update svelte to 5.53.5 to patch XSS vulnerabilities ([a5f163c](https://github.com/Xevion/Banner/commit/a5f163c189d2e24019bc3f3622560c0ca30baf5a))
+* **stories:** Stop addon-svelte-csf rendering bare components without props ([f04bcef](https://github.com/Xevion/Banner/commit/f04bcefaf65f67eb1aa6e2bad89a34a3b573cc93))
+
+
+### Performance Improvements
+
+* **backend:** Deferred sync bot client init, non-blocking schedule cache load ([f607403](https://github.com/Xevion/Banner/commit/f6074038af85dcfb36cfecf680b0623d74a9c9c9))
+* **backup:** Replace in-memory dump+compress with streaming multipart upload ([3b62a51](https://github.com/Xevion/Banner/commit/3b62a519b3f385e8ae320f691021b0c5c894a2d2))
+* **data:** Add course_meetings table, eliminate JSONB schedule parsing ([145d5f9](https://github.com/Xevion/Banner/commit/145d5f9c4b248ef20d1dda9ed638283f2f256bd3))
+
+
+### Code Refactoring
+
+* Add error context to uncovered db operations and harden stream subscription lookup ([4ae1409](https://github.com/Xevion/Banner/commit/4ae14093046481f3e136e647d2c37851e813e8cb))
+* **backend:** Cleanup AppState, parallelize startup, move bg tasks, fix layering ([708ab81](https://github.com/Xevion/Banner/commit/708ab8197dd996dc40a87fec20abee312d8b7ec8))
+* **data:** Replace fixed-parameter search functions with SearchFilter struct ([7d31d0c](https://github.com/Xevion/Banner/commit/7d31d0c2715f62637994efdd2f03b0c5ee83b641))
+* Decompose routes.rs into focused handler modules ([e3bd22c](https://github.com/Xevion/Banner/commit/e3bd22c5d9ffcb8f3a90e5bef73e46e6c2ca89d1))
+* Extract database query functions into data layer ([a6b00fd](https://github.com/Xevion/Banner/commit/a6b00fd82f1a0b3ec408b0b366f933ed62ea2658))
+* Extract reusable table components and deduplicate slow-op logging ([8b5d052](https://github.com/Xevion/Banner/commit/8b5d05214949d052e98e1c37425fd5ee2a818c6c))
+* **scraper:** Replace immediate retry with jittered backoff, bound SSR client ([5907466](https://github.com/Xevion/Banner/commit/590746620dbf1d5e699b38ccbccd5bb30a9e017b))
+* **scripts:** Replace bun script suite with tempo CLI ([81a6a6b](https://github.com/Xevion/Banner/commit/81a6a6be36821cfd5144f051362e7ecf972c64b4))
+* Standardize data layer signatures to pool-first, use anyhow::Context ([a4566cc](https://github.com/Xevion/Banner/commit/a4566ccdd369eed9fbf6c0b1cde4e514df7ed39c))
+* **web:** Use get_all_terms in search options ([6e5e924](https://github.com/Xevion/Banner/commit/6e5e924644fac749567b5d68cddfb82c88bcba96))
+
+
+### Miscellaneous
+
+* **deps:** Update rust crate chrono to v0.4.45 ([#11](https://github.com/Xevion/Banner/issues/11)) ([291f1fb](https://github.com/Xevion/Banner/commit/291f1fbd98735aa0856e0463fe766df1e26a01a3))
+* **deps:** Update rust crate extension-traits to v2.0.2 ([#12](https://github.com/Xevion/Banner/issues/12)) ([44961f3](https://github.com/Xevion/Banner/commit/44961f35ac552b8016e968fcbb485a929f4320c2))
+
 ## [0.7.1](https://github.com/Xevion/Banner/compare/v0.7.0...v0.7.1) (2026-02-26)
 
 
