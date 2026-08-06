@@ -48,16 +48,19 @@ FROM chef AS builder
 ARG RAILWAY_GIT_COMMIT_SHA
 ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 
-# Copy recipe from planner and build dependencies only
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json --bin banner
-
-# Install build dependencies for final compilation
+# mold + clang for faster linking (matches .cargo/config.toml's linker override)
 RUN apt-get update && apt-get install -y \
+    mold \
+    clang \
     pkg-config \
     libssl-dev \
     git \
     && rm -rf /var/lib/apt/lists/*
+COPY .cargo ./.cargo
+
+# Copy recipe from planner and build dependencies only
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json --bin banner
 
 # Copy source code
 COPY Cargo.toml Cargo.lock ./
