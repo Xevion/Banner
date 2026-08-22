@@ -1,0 +1,104 @@
+{{- if .Values.backup.enabled }}
+{{- $excludes := "" }}
+{{- range .Values.backup.excludeTableData }}
+  {{- $excludes = printf "%s --exclude-table-data=%s" $excludes . }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-backup
+  labels:
+    app: {{ .Release.Name }}-backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  timeZone: Etc/UTC
+  # A dump that overruns its window must not stack a second one on top: two concurrent pg_dumps
+  # would double the I/O and each hold a transaction snapshot open against the same tables.
+  concurrencyPolicy: Forbid
+  # The controller only starts a missed run inside this window. Without it a node that was down
+  # for days would fire every backlogged run at once on recovery.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          volumes:
+            - name: dump
+              emptyDir:
+                sizeLimit: {{ .Values.backup.scratchSize }}
+          initContainers:
+            # Dump and verify in one step, so a truncated or unreadable archive fails the job here
+            # rather than being uploaded and only discovered during a restore.
+            - name: dump
+              image: {{ .Values.postgres.image }}
+              env:
+                - name: PGHOST
+                  value: {{ .Release.Name }}-postgres
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: POSTGRES_USER
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: POSTGRES_PASSWORD
+                - name: PGDATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: POSTGRES_DB
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  pg_dump --format=custom --compress={{ .Values.backup.compression }}{{ $excludes }} --file=/dump/db.dump
+                  pg_restore --list /dump/db.dump > /dev/null
+                  ls -lh /dump/db.dump
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+              resources: {{ toYaml .Values.backup.resources | nindent 16 }}
+          containers:
+            - name: upload
+              image: {{ .Values.backup.mcImage }}
+              env:
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: S3_ENDPOINT
+                - name: S3_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: S3_ACCESS_KEY
+                - name: S3_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: S3_SECRET_KEY
+                - name: BACKUP_BUCKET
+                  value: {{ .Values.backup.bucket | quote }}
+                - name: RETENTION_DAYS
+                  value: {{ .Values.backup.retentionDays | quote }}
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  mc alias set r2 "$S3_ENDPOINT" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" --api S3v4
+                  mc cp /dump/db.dump "r2/$BACKUP_BUCKET/banner-$(date -u +%Y%m%dT%H%M%SZ).dump"
+                  # Retention runs after a confirmed upload, never before: a failed dump then
+                  # leaves the existing history untouched instead of expiring it with nothing to
+                  # replace it.
+                  mc rm --recursive --force --older-than "${RETENTION_DAYS}d" "r2/$BACKUP_BUCKET/"
+                  mc ls "r2/$BACKUP_BUCKET/"
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                  readOnly: true
+              resources: {{ toYaml .Values.backup.resources | nindent 16 }}
+{{- end }}

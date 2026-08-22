@@ -67,6 +67,20 @@ storybook-test: (bun "storybook:test")
 sql *ARGS:
 	lazysql ${DATABASE_URL}
 
+# Sync secrets + source, build+push the ARM64 image, and roll out k3s. Needs DEPLOY_HOST in .env.
+deploy:
+    tempo deploy
+
+# Push the allowlisted .env secrets into the cluster Secret, without a full deploy.
+sync-secrets:
+    tempo sync-secrets
+
+# Lint and render the Helm chart without touching the cluster
+chart-check:
+    helm lint charts/banner
+    helm template banner charts/banner > /dev/null
+    @echo "(ok) chart renders"
+
 # Install git pre-commit hooks
 install-hooks:
     #!/usr/bin/env bash

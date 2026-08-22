@@ -1,6 +1,6 @@
 # Build arguments
 ARG RUST_VERSION=1.89.0
-ARG RAILWAY_GIT_COMMIT_SHA
+ARG GIT_COMMIT_SHA
 
 # Frontend Build Stage
 FROM oven/bun:1 AS frontend-builder
@@ -44,9 +44,9 @@ RUN cargo chef prepare --recipe-path recipe.json --bin banner
 # Rust Build Stage
 FROM chef AS builder
 
-# Set build-time environment variable for Railway Git commit SHA
-ARG RAILWAY_GIT_COMMIT_SHA
-ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
+# Stamped into the binary by build.rs and surfaced at /api/status.
+ARG GIT_COMMIT_SHA
+ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
 # mold + clang for faster linking (matches .cargo/config.toml's linker override)
 RUN apt-get update && apt-get install -y \

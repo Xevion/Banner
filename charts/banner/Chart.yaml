@@ -1,0 +1,6 @@
+apiVersion: v2
+name: banner
+description: Banner course registry (Axum + SvelteKit SSR + Discord bot) and its Postgres store
+type: application
+version: 0.1.0
+appVersion: "dev-test"

@@ -1,0 +1,23 @@
+# Bounds the shared docker-container builder's cache. Two Rust projects now build here, and they
+# land in different budgets: bf4-emblems mounts cargo registry/git/target as cache mounts
+# (exec.cachemount), while banner relies entirely on cargo-chef layer caching (regular).
+#
+# Measured on 2026-08-21 with 7.19GB resident: exec.cachemount held 469MB against a 24GB budget
+# while regular layers held 6.72GB against 16GB. The original split was backwards for the actual
+# workload, and banner lands entirely in the tighter half. Rebalanced so the layer budget carries
+# the projects that actually use it, with the cachemount budget still 20x its current draw.
+#
+# Combined ceiling is ~40GB against 80GB free on /mnt/data, unchanged from before.
+[worker.oci]
+  gc = true
+
+  [[worker.oci.gcpolicy]]
+    keepDuration = "168h"
+    reservedSpace = "8GB"
+    maxUsedSpace = "12GB"
+    filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+
+  [[worker.oci.gcpolicy]]
+    all = true
+    reservedSpace = "16GB"
+    maxUsedSpace = "28GB"

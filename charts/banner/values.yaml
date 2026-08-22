@@ -1,0 +1,134 @@
+image:
+  repository: ghcr.io/xevion/banner
+  # `tempo deploy` always overrides this with the commit it built (--set image.tag). The default
+  # only matters for a bare `helm upgrade`, which would otherwise pin whatever is written here.
+  tag: dev-test
+  # Tags are immutable per-commit, so a changed tag is itself the signal to pull; re-pulling an
+  # already-resolved tag would only cost a registry round-trip on every pod start.
+  pullPolicy: IfNotPresent
+
+# Created out-of-band, never templated, so real credentials stay out of this chart. Must contain
+# DATABASE_URL, BOT_TOKEN, BOT_TARGET_GUILD, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, the
+# POSTGRES_USER/PASSWORD/DB the StatefulSet reads, and the S3_* keys the backup job uses.
+#
+# ADMIN_DISCORD_ID is optional but is the only way a fresh deployment gets an operator, and
+# missing Discord OAuth credentials fail config extraction outright rather than degrading.
+existingSecret: banner-secrets
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      # Measured at ~415Mi on Railway for the Rust binary plus its Node SSR child. Requested above
+      # that rather than at it: the kubelet ranks eviction by usage above request, so a request
+      # under real usage nominates this pod first.
+      memory: 768Mi
+    limits:
+      # Headroom for an SSR render burst on top of steady state, without letting a leak in the
+      # Node child take the node down. bf4-emblems and its Postgres already hold ~9Gi of the 24Gi.
+      memory: 1536Mi
+  # The Rust binary is the public listener and proxies non-API routes to the SSR child it
+  # supervises, so unlike bf4-emblems there is one externally reachable port, not two.
+  port: 8080
+  # The supervisor parses this port and hands it to the Node child as PORT, so the child cannot
+  # inherit the outer PORT and collide with the Rust listener. It must carry an explicit port.
+  ssrDownstream: http://localhost:3001
+  # Serves two separate purposes and is required for both: it is the CORS allowlist, and sitemap
+  # endpoints return 404 without it rather than emitting relative URLs.
+  publicOrigin: https://banner.xevion.dev
+  # Must match a redirect URI registered on the Discord application. Left unset, the redirect is
+  # derived from request headers, which a proxy in front of the pod can rewrite.
+  discordRedirectUri: https://banner.xevion.dev/api/auth/callback
+  service:
+    # 30080 and 30081 belong to bf4-emblems on this node.
+    nodePort: 30082
+
+postgres:
+  # Matches the local docker-compose image, so dev and production run the same server version and
+  # the backup job's pg_dump is never older than the server it dumps.
+  image: postgres:17-alpine
+  storage: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      # shared_buffers is committed at startup, so requesting less than it understates the floor
+      # and lets the scheduler overcommit the node against memory Postgres always holds.
+      memory: 768Mi
+    limits:
+      # Covers shared_buffers (512MB), the 256Mi /dev/shm tmpfs which counts against this limit,
+      # and per-backend work_mem across the pool.
+      memory: 1536Mi
+  args:
+    - -c
+    # Railway capped this instance at 512MB total and Postgres sat at 99.2% of it, so the whole
+    # working set was competing with the page cache inside one container. 512MB of buffers alone
+    # is more than the entire previous ceiling, and the database is only 910MB.
+    - shared_buffers=512MB
+    - -c
+    # The node holds far more in page cache than this pod will ever claim; the default of 4GB
+    # would be a fiction on a box shared with bf4-emblems, and understating it biases the planner
+    # toward sequential scans.
+    - effective_cache_size=2GB
+    - -c
+    - work_mem=16MB
+    - -c
+    - maintenance_work_mem=256MB
+    - -c
+    - random_page_cost=1.1
+    - -c
+    # The data volume is network-attached NVMe and serves many reads concurrently; the default of
+    # 1 leaves bitmap heap scans issuing them one at a time.
+    - effective_io_concurrency=200
+    - -c
+    # Compilation costs more than it saves on the short indexed reads this workload issues.
+    - jit=off
+    - -c
+    # Scraper writes arrive in bursts against a small database, so the default 5-minute window
+    # would full-page-image the same pages repeatedly. Widening it is what shrinks WAL volume.
+    - checkpoint_timeout=15min
+    - -c
+    - max_wal_size=2GB
+    - -c
+    - wal_compression=zstd
+    - -c
+    # Full-table churn from scrape runs leaves dead tuples faster than the 0.2 default reacts to,
+    # and a stale visibility map turns index-only scans into per-row heap fetches.
+    - autovacuum_vacuum_scale_factor=0.05
+    - -c
+    - autovacuum_vacuum_cost_limit=2000
+    - -c
+    # Both ship in the image but only load at startup, so they are set here rather than reached
+    # for during an incident.
+    - shared_preload_libraries=pg_stat_statements
+    - -c
+    - pg_stat_statements.max=5000
+    - -c
+    - track_io_timing=on
+    - -c
+    - log_min_duration_statement=500
+
+backup:
+  enabled: true
+  # Daily, off-peak. Replaces Railway's managed backups, which do not survive the migration.
+  schedule: "0 4 * * *"
+  retentionDays: 30
+  # Already provisioned in the same R2 account the Railway backup service used, so the existing
+  # key pair reaches it and no new bucket or credentials are needed.
+  bucket: banner-backup
+  # Long-range matching at max level. The database is small enough that even level 19 finishes
+  # in seconds. The bare `zstd:19,long` spelling is rejected; detail must be keyword=value.
+  compression: "zstd:level=19,long=1"
+  # Empty on purpose. Every table migrates and backs up as-is; course_audits and
+  # scrape_job_results are half the database but pruning them is a separate decision, and an
+  # exclusion here would quietly make that decision for the restore path.
+  excludeTableData: []
+  scratchSize: 4Gi
+  # Pinned by digest: this image publishes only a moving `latest`, which would otherwise change
+  # the backup path silently between runs.
+  mcImage: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

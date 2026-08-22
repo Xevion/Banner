@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: 1
+  # Never run two pods at once. A rolling update would surge a second pod alongside the old one,
+  # and the Discord gateway connection and the scrape job scheduler both assume a single owner:
+  # two bots on one token race every interaction, and two schedulers double every scrape.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            - name: PORT
+              value: {{ .Values.app.port | quote }}
+            {{- /* The supervisor parses the port out of this and passes it to the Node child as
+                   PORT, so a value without one leaves the child inheriting the outer PORT and
+                   binding the same socket as the Rust listener. */}}
+            {{- if not (regexMatch "^https?://[^/]+:[0-9]+$" .Values.app.ssrDownstream) }}
+              {{- fail (printf "app.ssrDownstream %q must include an explicit port, e.g. http://localhost:3001" .Values.app.ssrDownstream) }}
+            {{- end }}
+            - name: SSR_DOWNSTREAM
+              value: {{ .Values.app.ssrDownstream | quote }}
+            {{- if not .Values.app.publicOrigin }}
+              {{- fail "app.publicOrigin must be set: it is the CORS allowlist, and the sitemap endpoints 404 without it" }}
+            {{- end }}
+            {{- /* CORS compares the Origin header verbatim, so a path or trailing slash matches
+                   nothing. Rejected at render time, which aborts the upgrade before pods roll. */}}
+            {{- if not (regexMatch "^https?://[^/]+$" .Values.app.publicOrigin) }}
+              {{- fail (printf "CORS origin %q must be a bare scheme://host, with no path or trailing slash" .Values.app.publicOrigin) }}
+            {{- end }}
+            - name: PUBLIC_ORIGIN
+              value: {{ .Values.app.publicOrigin | quote }}
+            {{- with .Values.app.discordRedirectUri }}
+            - name: DISCORD_REDIRECT_URI
+              value: {{ . | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.app.port }}
+              name: http
+          # sqlx migrations run at boot before the server binds, so startup is bounded by the
+          # slowest migration rather than by process launch. This holds liveness off for up to 5
+          # minutes; without it liveness kills the pod mid-migration and the next start replays
+          # the same work from the beginning, never finishing.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          # Readiness tracks the Rust listener, which only answers once the SSR child is reachable
+          # behind it, so a pod that is up but cannot render is kept out of the Service.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+          # The default 1s timeout cannot distinguish a dead process from a busy one: a scrape
+          # pass that saturates the runtime can delay a trivial handler past it, and three misses
+          # is a kill. Widened so only a sustained stall restarts the pod.
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources: {{ toYaml .Values.app.resources | nindent 12 }}

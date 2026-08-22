@@ -9,9 +9,10 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=web/build/client");
 
-    // Try to get Git commit hash from Railway environment variable first
-    let git_hash = std::env::var("RAILWAY_GIT_COMMIT_SHA").unwrap_or_else(|_| {
-        // Fallback to git command if not on Railway
+    // Prefer an explicitly supplied commit: the deploy rsyncs without .git, so the git fallback
+    // below has no repository to read and would otherwise report "unknown" in /api/status.
+    let git_hash = std::env::var("GIT_COMMIT_SHA").unwrap_or_else(|_| {
+        // Fallback for local builds, where the repository is present.
         let output = Command::new("git").args(["rev-parse", "HEAD"]).output();
         match output {
             Ok(output) => {
