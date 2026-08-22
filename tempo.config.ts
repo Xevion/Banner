@@ -1,82 +1,113 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { defineConfig, presets, runners } from "@xevion/tempo";
-import { newestMtime } from "@xevion/tempo/preflight";
-import { ProcessGroup, run as tempoRun, runPiped } from "@xevion/tempo/proc";
-import { resolveTargets } from "@xevion/tempo/targets";
-import { BackendWatcher } from "@xevion/tempo/watch";
+import type { RunContext } from "@xevion/tempo";
+import { defineConfig, presets, task } from "@xevion/tempo";
 
 const BINDINGS_DIR = "web/src/lib/bindings";
+const RUST_SOURCES = ["src/**/*.rs", "Cargo.toml", "Cargo.lock"];
 
-// Shared: newest mtime across Rust sources + Cargo files
-function rustSrcMtime(): number {
-  return Math.max(
-    newestMtime("src", "**/*.rs"),
-    ...["Cargo.toml", "Cargo.lock"]
-      .filter(existsSync)
-      .map((f) => statSync(f).mtimeMs),
-  );
-}
-
-// Generate barrel index.ts for TypeScript bindings
-function generateBarrel(): void {
-  const types = readdirSync(BINDINGS_DIR)
+/** Rewrite the bindings barrel from the generated per-type files. */
+function generateBarrel(root: string): number {
+  const dir = join(root, BINDINGS_DIR);
+  const types = readdirSync(dir)
     .filter((f) => f.endsWith(".ts") && f !== "index.ts")
     .map((f) => f.replace(/\.ts$/, ""))
     .sort();
-
   writeFileSync(
-    join(BINDINGS_DIR, "index.ts"),
-    types.map((t) => `export type { ${t} } from "./${t}";`).join("\n") + "\n",
+    join(dir, "index.ts"),
+    `${types.map((t) => `export type { ${t} } from "./${t}";`).join("\n")}\n`,
   );
+  return types.length;
 }
 
-// bun audit advisory ignores (transitive/no-fix/not-applicable). Single source of truth,
-// shared with CI -- .github/workflows/ci.yml derives the same --ignore flags via jq.
-const IGNORED_ADVISORIES: { id: string; reason: string }[] = JSON.parse(
-  readFileSync("audit-ignore.json", "utf8"),
-);
+/**
+ * Export ts-rs bindings via a temp dir, then diff-copy into the tree.
+ *
+ * Unchanged files keep their contents untouched and types deleted from Rust
+ * lose their `.ts`, so the barrel always matches what Rust actually exports.
+ */
+async function regenerateBindings(ctx: RunContext): Promise<number> {
+  const build = await ctx.run(["cargo", "test", "--lib", "--no-run", "--quiet"]);
+  if (build !== 0) return build;
 
-const bunAuditCmd = [
-  "bun", "audit", "--audit-level=moderate",
-  ...IGNORED_ADVISORIES.map(({ id }) => `--ignore=${id}`),
-].join(" ");
-
-// Database constants
-const DB_USER = "banner";
-const DB_PASS = "banner";
-const DB_NAME = "banner";
-const DB_PORT = "59489";
-
-async function updateEnv(): Promise<void> {
-  const url = `postgresql://${DB_USER}:${DB_PASS}@localhost:${DB_PORT}/${DB_NAME}`;
-  const envFile = ".env";
+  const tmp = mkdtempSync(join(tmpdir(), "banner-bindings-"));
   try {
-    let content = await readFile(envFile, "utf8");
-    content = content.includes("DATABASE_URL=")
-      ? content.replace(/DATABASE_URL=.*$/m, `DATABASE_URL=${url}`)
-      : content.trim() + `\nDATABASE_URL=${url}\n`;
-    await writeFile(envFile, content);
-  } catch {
-    await writeFile(envFile, `DATABASE_URL=${url}\n`);
+    const exported = await ctx.run(
+      ["cargo", "test", "--lib", "export_bindings", "--quiet"],
+      { env: { TS_RS_EXPORT_DIR: tmp } },
+    );
+    if (exported !== 0) return exported;
+
+    const dir = join(ctx.cwd, BINDINGS_DIR);
+    mkdirSync(dir, { recursive: true });
+
+    // ts-rs nests some types (serde_json/JsonValue.ts), so recurse.
+    const fresh = new Set(
+      (readdirSync(tmp, { recursive: true }) as string[]).filter((f) =>
+        f.endsWith(".ts"),
+      ),
+    );
+    let changed = 0;
+    for (const entry of fresh) {
+      const next = readFileSync(join(tmp, entry));
+      const dest = join(dir, entry);
+      if (existsSync(dest) && Buffer.compare(next, readFileSync(dest)) === 0) {
+        continue;
+      }
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, next);
+      changed++;
+    }
+    for (const stale of readdirSync(dir)) {
+      if (!stale.endsWith(".ts") || stale === "index.ts") continue;
+      if (!fresh.has(stale)) {
+        rmSync(join(dir, stale));
+        changed++;
+      }
+    }
+
+    ctx.log(`${generateBarrel(ctx.cwd)} types, ${changed} changed`);
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-// Words for generating random confirmation tokens (db reset safety)
+const DB_URL = "postgresql://banner:banner@localhost:59489/banner";
+
+async function updateEnv(root: string): Promise<void> {
+  const envFile = join(root, ".env");
+  try {
+    const current = await readFile(envFile, "utf8");
+    const next = current.includes("DATABASE_URL=")
+      ? current.replace(/DATABASE_URL=.*$/m, `DATABASE_URL=${DB_URL}`)
+      : `${current.trim()}\nDATABASE_URL=${DB_URL}\n`;
+    await writeFile(envFile, next);
+  } catch {
+    await writeFile(envFile, `DATABASE_URL=${DB_URL}\n`);
+  }
+}
+
 const WORDS = [
   "apple", "beach", "blend", "camel", "cedar", "coral", "crane", "creek",
   "dance", "depot", "drift", "eagle", "ember", "exile", "fence", "flint",
   "flood", "frost", "giant", "grail", "grain", "grove", "hatch", "haven",
   "horse", "image", "inlet", "ivory", "jewel", "joker", "joust", "knife",
-  "kudos", "lance", "lemur", "lodge", "mango", "maple", "merit", "navel",
-  "noble", "north", "ocean", "olive", "orbit", "perch", "petal", "plank",
-  "polar", "prism", "quest", "quill", "raven", "ridge", "royal", "scone",
-  "shelf", "shell", "stark", "straw", "stone", "swift", "taste", "tiger",
-  "toast", "tower", "trunk", "ultra", "under", "unify", "valve", "vapor",
-  "vinyl", "whale", "winch", "xenon", "yacht", "yearn", "zebra", "amber",
+  "lance", "lemur", "lodge", "mango", "maple", "merit", "navel", "noble",
+  "ocean", "olive", "orbit", "perch", "petal", "plank", "polar", "prism",
+  "quest", "quill", "raven", "ridge", "royal", "shelf", "shell", "stark",
+  "stone", "swift", "tiger", "toast", "tower", "trunk", "valve", "vapor",
 ] as const;
 
 function randomToken(): string {
@@ -94,451 +125,398 @@ function readLine(prompt: string): Promise<string> {
   });
 }
 
-const rustPreset = presets.rust({ allFeatures: true, bin: "banner" });
+// bun audit advisory ignores, shared with CI: .github/workflows/ci.yml derives
+// the same --ignore flags from this file via jq.
+const IGNORED_ADVISORIES: { id: string; reason: string }[] = JSON.parse(
+  readFileSync(join(import.meta.dirname, "audit-ignore.json"), "utf8"),
+);
+
+// Deploy target. Kept out of tracked config since this repo is public; set these
+// in .env rather than hardcoding a real host.
+const DEPLOY_HOST = process.env.DEPLOY_HOST;
+const DEPLOY_PATH = process.env.DEPLOY_PATH ?? "~/banner-src";
+const DEPLOY_IMAGE = process.env.DEPLOY_IMAGE ?? "ghcr.io/xevion/banner";
+const DEPLOY_RELEASE = process.env.DEPLOY_RELEASE ?? "banner";
+// Read at frontend build time to widen the CSP, so it is a Dockerfile ARG rather
+// than a runtime variable: changing it needs a rebuild, not a restart.
+const PUBLIC_POSTHOG_HOST = process.env.PUBLIC_POSTHOG_HOST;
+
+// Allowlist, never "everything in .env": DATABASE_URL points at the local
+// compose Postgres, and POSTGRES_*/S3_* are managed out of band.
+const SYNCED_SECRET_KEYS = [
+  "BOT_TOKEN",
+  "BOT_TARGET_GUILD",
+  "DISCORD_CLIENT_ID",
+  "DISCORD_CLIENT_SECRET",
+] as const;
+
+// Synced only when .env has them; the deployment runs without any of them.
+const OPTIONAL_SECRET_KEYS = [
+  "ADMIN_DISCORD_ID",
+  "BANNER_BASE_URL",
+  "POSTHOG_KEY",
+  "POSTHOG_HOST",
+  "POSTHOG_PROJECT_ID",
+  "POSTHOG_PERSONAL_API_KEY",
+  "PUBLIC_POSTHOG_KEY",
+] as const;
+
+const ssh = (ctx: RunContext, command: string) =>
+  ctx.run(["ssh", DEPLOY_HOST as string, command]);
+
+/**
+ * Merge the allowlisted .env values into the cluster Secret.
+ *
+ * A merge patch, so keys managed out of band survive untouched. The patch would
+ * reach the remote process list on argv, so it travels on stdin instead.
+ */
+async function syncSecrets(ctx: RunContext): Promise<number> {
+  const missing = SYNCED_SECRET_KEYS.filter(
+    (k) => !(process.env[k] ?? "").trim(),
+  );
+  if (missing.length > 0) ctx.fail(`missing in .env: ${missing.join(", ")}`);
+
+  const keys = [
+    ...SYNCED_SECRET_KEYS,
+    ...OPTIONAL_SECRET_KEYS.filter((k) => (process.env[k] ?? "").trim()),
+  ];
+  const stringData = Object.fromEntries(
+    keys.map((k) => [k, process.env[k] as string]),
+  );
+  const patch = await Bun.spawn(
+    [
+      "ssh",
+      DEPLOY_HOST as string,
+      `sudo k3s kubectl patch secret ${DEPLOY_RELEASE}-secrets --type=merge --patch-file=/dev/stdin`,
+    ],
+    { stdin: new TextEncoder().encode(JSON.stringify({ stringData })) },
+  ).exited;
+  if (patch !== 0) return patch;
+
+  ctx.log(`synced ${keys.length} secrets: ${keys.join(", ")}`);
+  return 0;
+}
+
+/**
+ * Report the CORS origin the rolled-out deployment actually received.
+ *
+ * A wrong-but-valid origin is invisible from outside: the site keeps working
+ * while every cross-origin caller is refused. Printing it makes it noticeable.
+ */
+async function reportPublicOrigin(ctx: RunContext): Promise<number> {
+  const jsonpath = `{.spec.template.spec.containers[0].env[?(@.name=="PUBLIC_ORIGIN")].value}`;
+  const { stdout } = await ctx.capture([
+    "ssh",
+    DEPLOY_HOST as string,
+    `sudo k3s kubectl get deployment/${DEPLOY_RELEASE} -o jsonpath='${jsonpath}'`,
+  ]);
+  const origin = stdout.trim();
+  if (!origin) {
+    ctx.fail(
+      "PUBLIC_ORIGIN missing from the rolled-out deployment: CORS admits local dev origins only",
+    );
+  }
+  ctx.log(`CORS origin: ${origin}`);
+  return 0;
+}
 
 export default defineConfig({
   runtime: "bun",
-  subsystems: {
-    frontend: {
-      aliases: ["f", "front", "web"],
+  tasks: [
+    task({
+      name: "web:deps",
       cwd: "web",
-      commands: {
-        "format-check": "bun run format:check",
-        "format-apply": "bun run format",
-        lint: "bun run lint",
-        "type-check": "bun run check",
-        test: "bun run test",
-        build: "bun run build",
+      body: (ctx) => {
+        if (!existsSync(join(ctx.cwd, "node_modules"))) {
+          ctx.fail("web/node_modules not found -- run `bun install --cwd web` first");
+        }
       },
-      autoFix: {
-        "format-check": "format-apply",
+    }),
+
+    // Rust types to frontend TypeScript. The frontend imports the barrel, so
+    // every frontend check orders behind it.
+    task({
+      name: "backend:bindings",
+      body: regenerateBindings,
+      inputs: RUST_SOURCES,
+      outputs: [`${BINDINGS_DIR}/index.ts`],
+    }),
+
+    // Offline query metadata for sqlx's compile-time checking.
+    task({
+      name: "backend:sqlx",
+      body: async (ctx) => {
+        if ((await ctx.run(["cargo", "sqlx", "prepare"])) !== 0) {
+          ctx.log("sqlx prepare failed -- is the database running?");
+        }
       },
-    },
-    backend: {
-      ...rustPreset,
-      aliases: ["b", "back", "rust"],
-      commands: {
-        ...rustPreset.commands,
-        "format-check": "cargo fmt --all -- --check",
-        "format-apply": "cargo fmt --all",
+      tags: ["check"],
+      inputs: [...RUST_SOURCES, "migrations/*.sql"],
+      outputs: [".sqlx/*.json"],
+      requires: [{ tool: "cargo-sqlx", hint: "cargo install sqlx-cli" }],
+    }),
+
+    task({
+      name: "web:format",
+      cwd: "web",
+      body: "bun run format:check",
+      tags: ["check"],
+      needs: ["web:deps"],
+    }),
+    task({
+      name: "web:format-fix",
+      cwd: "web",
+      body: "bun run format",
+      tags: ["format"],
+      needs: ["web:deps"],
+    }),
+    task({
+      name: "web:lint",
+      cwd: "web",
+      body: "bun run lint",
+      tags: ["check", "lint"],
+      needs: ["web:deps"],
+    }),
+    task({
+      name: "web:type-check",
+      cwd: "web",
+      body: "bun run check",
+      tags: ["check"],
+      needs: ["web:deps", "backend:bindings"],
+    }),
+    task({
+      name: "web:test",
+      cwd: "web",
+      body: "bun run test",
+      tags: ["check", "test"],
+      needs: ["web:deps", "backend:bindings"],
+    }),
+    task({
+      name: "web:build",
+      cwd: "web",
+      body: "bun run build",
+      tags: ["build"],
+      needs: ["web:deps", "backend:bindings"],
+    }),
+
+    ...presets.rust({
+      name: "backend",
+      allFeatures: true,
+      bin: "banner",
+      override: {
+        format: "cargo fmt --all -- --check",
+        "format-fix": "cargo fmt --all",
         lint: "cargo clippy --all-features --all-targets -- -D warnings",
-        "type-check": "cargo check --all-features",
         test: "cargo nextest run -E 'not test(export_bindings)'",
       },
-    },
-    security: {
-      alwaysRun: true,
-      aliases: ["sec", "audit"],
-      commands: {
-        "cargo-audit": {
-          cmd: "cargo audit",
-          requires: ["cargo-audit"],
-        },
-        "bun-audit": {
-          cmd: bunAuditCmd,
-          cwd: "web",
-        },
-        actionlint: {
-          cmd: "actionlint",
-          requires: ["actionlint"],
-        },
-      },
-    },
-  },
-  preflights: [
-    // Ensure frontend dependencies are installed
-    (ctx) => {
-      if (!existsSync("web/node_modules")) {
-        ctx.fail("web/node_modules not found -- run `bun install --cwd web` first");
-      }
-    },
+    }),
+    task({
+      name: "backend:type-check",
+      body: "cargo check --all-features",
+      tags: ["check"],
+      // Ordering only: .sqlx is checked in, so a missing sqlx-cli must not
+      // block the compile that reads it.
+      after: ["backend:sqlx"],
+    }),
 
-    // TS bindings: Rust types -> frontend TypeScript (diff-copy + barrel)
-    async (ctx) => {
-      const srcMtime = rustSrcMtime();
-      const artifactMtime = newestMtime(BINDINGS_DIR, "**/*");
+    task({
+      name: "security:cargo-audit",
+      body: "cargo audit",
+      tags: ["check"],
+      requires: [{ tool: "cargo-audit", hint: "cargo install cargo-audit" }],
+    }),
+    task({
+      name: "security:bun-audit",
+      cwd: "web",
+      body: [
+        "bun", "audit", "--audit-level=moderate",
+        ...IGNORED_ADVISORIES.map(({ id }) => `--ignore=${id}`),
+      ],
+      tags: ["check"],
+      needs: ["web:deps"],
+    }),
+    task({
+      name: "security:actionlint",
+      body: "actionlint",
+      tags: ["check"],
+      requires: [{ tool: "actionlint" }],
+    }),
 
-      if (artifactMtime >= srcMtime) return;
-
-      ctx.logger.info("Regenerating TypeScript bindings (Rust sources changed)...");
-      const tmpDir = mkdtempSync(join(tmpdir(), "banner-bindings-"));
-
-      try {
-        const { spawnSync } = await import("node:child_process");
-
-        // Build test binary first
-        const build = spawnSync("cargo", ["test", "--lib", "--no-run", "--quiet"], {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        if (build.status !== 0) {
-          if (build.stderr?.length) process.stderr.write(build.stderr);
-          ctx.fail("Failed to build bindings test binary");
-          return;
-        }
-
-        // Export bindings to temp dir
-        const exp = spawnSync("cargo", ["test", "--lib", "export_bindings", "--quiet"], {
-          stdio: ["ignore", "pipe", "pipe"],
-          env: { ...process.env, TS_RS_EXPORT_DIR: tmpDir },
-        });
-        if (exp.status !== 0) {
-          if (exp.stdout?.length) process.stdout.write(exp.stdout);
-          if (exp.stderr?.length) process.stderr.write(exp.stderr);
-          ctx.fail("Failed to export bindings");
-          return;
-        }
-
-        if (!existsSync(BINDINGS_DIR)) {
-          mkdirSync(BINDINGS_DIR, { recursive: true });
-        }
-
-        const newFiles = new Set(readdirSync(tmpDir).filter((f) => f.endsWith(".ts")));
-        const oldFiles = new Set(
-          readdirSync(BINDINGS_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts"),
-        );
-
-        let changed = 0;
-        for (const file of newFiles) {
-          const newContent = readFileSync(join(tmpDir, file));
-          const oldPath = join(BINDINGS_DIR, file);
-          if (existsSync(oldPath)) {
-            const oldContent = readFileSync(oldPath);
-            if (Buffer.compare(newContent, oldContent) === 0) continue;
-          }
-          writeFileSync(oldPath, newContent);
-          changed++;
-        }
-
-        for (const file of oldFiles) {
-          if (!newFiles.has(file)) {
-            rmSync(join(BINDINGS_DIR, file));
-            changed++;
-          }
-        }
-
-        generateBarrel();
-
-        ctx.logger.info(`Bindings: ${newFiles.size} types, ${changed} changed`);
-      } finally {
-        rmSync(tmpDir, { recursive: true, force: true });
-      }
-    },
-
-    // SQLx query metadata: Rust + migrations -> .sqlx/
-    async (ctx) => {
-      const srcMtime = Math.max(rustSrcMtime(), newestMtime("migrations", "*.sql"));
-      const artifactMtime = newestMtime(".sqlx", "*.json");
-
-      if (artifactMtime >= srcMtime) return;
-
-      ctx.logger.info("Regenerating SQLx metadata (sources changed)...");
-      const { spawnSync } = await import("node:child_process");
-      const result = spawnSync("cargo", ["sqlx", "prepare"], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      if (result.status !== 0) {
-        ctx.logger.warn("sqlx prepare failed (is the database running?)");
-        return;
-      }
-      const count = existsSync(".sqlx")
-        ? readdirSync(".sqlx").filter((f) => f.endsWith(".json")).length
-        : 0;
-      ctx.logger.info(`SQLx: ${count} queries`);
-    },
-  ],
-  hooks: {
-    "before:dev": (ctx) => {
-      if (ctx.targets.has("frontend") && !existsSync("web/node_modules")) {
-        ctx.fail("web/node_modules not found -- run `bun install --cwd web` first");
-      }
-      if (!existsSync(".env")) {
-        ctx.logger.warn(".env not found -- copy .env.example or create one with DATABASE_URL");
-      }
-    },
-  },
-  dev: {
-    exitBehavior: "first-exits",
-    processes: {
-      frontend: {
-        type: "unmanaged",
-        cmd: ["bun", "run", "dev"],
-        cwd: "web",
-      },
-      backend: {
-        type: "managed",
-        watch: {
-          dirs: ["src", "migrations", ".sqlx", ".cargo"],
-          exts: [".rs", ".sql", ".json", ".toml"],
-          extraPaths: ["Cargo.toml", "Cargo.lock"],
-          debounce: 200,
-        },
-        build: {
-          cmd: ["cargo", "build", "--bin", "banner", "--no-default-features"],
-        },
-        run: {
-          cmd: ["./target/debug/banner", "--tracing", "pretty"],
-          passthrough: true,
-        },
+    task({
+      name: "web:dev",
+      cwd: "web",
+      body: ["bun", "run", "dev"],
+      tags: ["dev"],
+      persistent: true,
+      needs: ["web:deps"],
+    }),
+    // Rust proxies non-API requests to the Vite dev server.
+    task({
+      name: "backend:dev",
+      body: ["./target/debug/banner", "--tracing", "pretty"],
+      tags: ["dev"],
+      persistent: true,
+      passthrough: true,
+      env: { SSR_DOWNSTREAM: "http://localhost:3001" },
+      needs: ["backend:dev-build"],
+      // interrupt: cargo rewrites target/debug/banner while it is executing.
+      watch: {
+        paths: ["src", "migrations", ".sqlx", ".cargo", "Cargo.toml", "Cargo.lock"],
+        exts: [".rs", ".sql", ".json", ".toml"],
+        debounce: 200,
         interrupt: true,
       },
-    },
-  },
+    }),
+    task({
+      name: "backend:dev-build",
+      body: ["cargo", "build", "--bin", "banner", "--no-default-features"],
+    }),
+
+    task({
+      name: "backend:search",
+      body: ["cargo", "run", "-q", "--bin", "search", "--"],
+      passthrough: true,
+    }),
+
+    task({
+      name: "db",
+      passthrough: true,
+      body: async (ctx) => {
+        const sub = ctx.args[0] ?? "start";
+        if (sub === "rm") {
+          const code = await ctx.run(["docker", "compose", "down"]);
+          ctx.log("removed");
+          return code;
+        }
+        if (sub === "start") {
+          const code = await ctx.run(["docker", "compose", "up", "-d"]);
+          await updateEnv(ctx.cwd);
+          ctx.log("started");
+          return code;
+        }
+        if (sub !== "reset") ctx.fail(`unknown db command "${sub}" (start, reset, rm)`);
+
+        // Deliberately non-automatable: a human has to type the token.
+        if (!process.stdin.isTTY) {
+          ctx.fail("db reset requires an interactive terminal");
+        }
+        const token = randomToken();
+        process.stderr.write(
+          "\nDATABASE RESET -- permanently drops and recreates the banner database.\n" +
+            "All scraped data, user accounts, and sessions will be lost. No undo.\n\n" +
+            `Confirm by typing: ${token}\n`,
+        );
+        if ((await readLine("> ")).trim() !== token) {
+          ctx.fail("aborted -- database was not modified");
+        }
+
+        await ctx.run(["docker", "compose", "up", "-d"]);
+        await new Promise((r) => setTimeout(r, 2000));
+        const psql = (sql: string) =>
+          ctx.run([
+            "docker", "compose", "exec", "postgres",
+            "psql", "-U", "banner", "-d", "postgres", "-c", sql,
+          ]);
+        await psql("DROP DATABASE IF EXISTS banner");
+        await psql("CREATE DATABASE banner");
+        await updateEnv(ctx.cwd);
+        ctx.log("reset");
+        return 0;
+      },
+    }),
+
+    task({
+      name: "sync-secrets",
+      body: async (ctx) => {
+        if (!DEPLOY_HOST) ctx.fail("DEPLOY_HOST not set -- add it to .env");
+        return syncSecrets(ctx);
+      },
+    }),
+
+    task({
+      name: "deploy",
+      body: async (ctx) => {
+        if (!DEPLOY_HOST) ctx.fail("DEPLOY_HOST not set -- add it to .env");
+        if (!PUBLIC_POSTHOG_HOST) {
+          ctx.fail("PUBLIC_POSTHOG_HOST not set -- baked into the CSP at build time");
+        }
+
+        // Before the rollout, so the new pod starts with the credentials this
+        // deploy needs. A Secret edit alone restarts nothing; the tag does.
+        const secrets = await syncSecrets(ctx);
+        if (secrets !== 0) return secrets;
+
+        await ctx.run([
+          "rsync", "-az", "--delete",
+          "--exclude", ".git", "--exclude", "target",
+          "--exclude", "node_modules", "--exclude", ".svelte-kit",
+          "--exclude", "build", "--exclude", "sim", "--exclude", "*.dump",
+          "./", `${DEPLOY_HOST}:${DEPLOY_PATH}/`,
+        ]);
+
+        // The default buildx driver builds inside the local daemon, so every
+        // uniquely-tagged build stays in the image store forever with no GC.
+        await ssh(
+          ctx,
+          `docker buildx inspect ci >/dev/null 2>&1 || docker buildx create --name ci --driver docker-container --config ${DEPLOY_PATH}/deploy/buildkitd.toml --bootstrap`,
+        );
+        await ssh(ctx, "docker buildx use ci");
+
+        const sha = (await ctx.capture(["git", "rev-parse", "HEAD"])).stdout.trim();
+        const short = (await ctx.capture(["git", "rev-parse", "--short=12", "HEAD"])).stdout.trim();
+        const dirty = (await ctx.capture(["git", "status", "--porcelain"])).stdout.trim() !== "";
+        // A changing tag is what makes the pod spec change, which is what
+        // triggers the rollout; a dirty tree still gets a distinct tag.
+        const tag = dirty ? `${short}-dirty.${Math.floor(Date.now() / 1000)}` : short;
+        ctx.log(`deploying ${DEPLOY_IMAGE}:${tag}`);
+
+        // The host is aarch64, so --platform keeps a developer on x86 from
+        // pushing an amd64 image the node cannot run.
+        await ssh(
+          ctx,
+          `cd ${DEPLOY_PATH} && docker buildx build --platform linux/arm64 --build-arg PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST} --build-arg GIT_COMMIT_SHA=${sha} -t ${DEPLOY_IMAGE}:${tag} --push .`,
+        );
+        await ssh(
+          ctx,
+          `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install ${DEPLOY_RELEASE} ./charts/banner --set image.tag=${tag}`,
+        );
+        // Migrations run at boot behind a startupProbe allowing 5 minutes, so
+        // the rollout deadline has to clear that.
+        await ssh(ctx, `sudo k3s kubectl rollout status deployment/${DEPLOY_RELEASE} --timeout=360s`);
+
+        return reportPublicOrigin(ctx);
+      },
+    }),
+  ],
+
   commands: {
-    check: runners.check({
-      autoFixStrategy: "fix-first",
-      exclude: ["frontend:build", "backend:build"],
-    }),
-    fmt: runners.sequential("format-apply", {
-      description: "Sequential per-subsystem formatting",
-      alias: "format",
-      autoFixFallback: true,
-    }),
-    lint: runners.sequential("lint", {
-      description: "Sequential per-subsystem linting",
-    }),
+    check: { description: "Run every check", tags: ["check"] },
+    fmt: { description: "Apply every formatter", tags: ["format"], concurrency: 1 },
+    lint: { description: "Lint every subsystem", tags: ["lint"] },
+    test: { description: "Run every test suite", tags: ["test"] },
+    build: { description: "Production build", tags: ["build"] },
     dev: {
-      description: "Dev server with watch + reload",
-      parameters: ["[targets...]", "--", "[passthrough...]"],
-      flags: {
-        "frontend-only": { type: Boolean, alias: "f", description: "Frontend only" },
-        "backend-only": { type: Boolean, alias: "b", description: "Backend only" },
-        "no-watch": { type: Boolean, alias: "W", description: "Build once + run (no watch)" },
-        "no-build": { type: Boolean, alias: "n", description: "Run last compiled binary (no rebuild)" },
-        release: { type: Boolean, alias: "r", description: "Use release profile" },
-        embed: { type: Boolean, alias: "e", description: "Embed frontend assets (implies -b)" },
-        "dev-build": { type: Boolean, alias: "d", description: "Dev build for frontend (faster, no minification)" },
-        "no-interrupt": { type: Boolean, alias: "I", description: "Don't kill compiler on new changes" },
-        "verbose-build": { type: Boolean, alias: "V", description: "Stream compilation output inline" },
-        tracing: { type: String, description: "Tracing format", default: "pretty" },
-      },
-      run: async (ctx) => {
-        let frontendOnly = ctx.flags["frontend-only"] as boolean;
-        let backendOnly = ctx.flags["backend-only"] as boolean;
-        let noWatch = ctx.flags["no-watch"] as boolean;
-        const noBuild = ctx.flags["no-build"] as boolean;
-        const release = ctx.flags.release as boolean;
-        const embed = ctx.flags.embed as boolean;
-        const devBuild = ctx.flags["dev-build"] as boolean;
-        const tracing = (ctx.flags.tracing as string) || "pretty";
-
-        // -e implies -b, -n implies -W
-        if (embed) backendOnly = true;
-        if (noBuild) noWatch = true;
-
-        if (frontendOnly && backendOnly) {
-          console.error("Cannot use -f and -b together (or -e implies -b)");
-          return 1;
-        }
-
-        const runFrontend = !backendOnly;
-        const runBackend = !frontendOnly;
-        const profileDir = release ? "release" : "debug";
-        const group = new ProcessGroup({ signal: "natural" });
-
-        // Rust proxies non-API requests to the Vite/Bun SSR server
-        const SSR_PORT = "3001";
-        process.env.SSR_DOWNSTREAM = `http://localhost:${SSR_PORT}`;
-
-        // Build frontend first when embedding assets
-        if (embed && !noBuild) {
-          const buildMode = devBuild ? "development" : "production";
-          console.log(`Building frontend (${buildMode}, for embedding)...`);
-          const buildArgs = ["bun", "run", "--cwd", "web", "build"];
-          if (devBuild) buildArgs.push("--", "--mode", "development");
-          tempoRun(buildArgs);
-        }
-
-        // Frontend: Vite dev server
-        if (runFrontend) {
-          group.spawn(["bun", "run", "--cwd", "web", "dev"]);
-        }
-
-        // Backend
-        if (runBackend) {
-          const backendArgs = ["--tracing", tracing, ...ctx.passthrough];
-          const bin = `target/${profileDir}/banner`;
-          const cargoExtra: string[] = [];
-          if (!embed) cargoExtra.push("--no-default-features");
-
-          if (noWatch) {
-            if (!noBuild) {
-              console.log(`Building backend (${release ? "release" : "dev"})...`);
-              const cargoArgs = ["cargo", "build", "--bin", "banner", ...cargoExtra];
-              if (release) cargoArgs.push("--release");
-              tempoRun(cargoArgs);
-            }
-
-            if (!existsSync(bin)) {
-              console.error(`Binary not found: ${bin}`);
-              console.error(`Run 'just build${release ? "" : " -d"}' first, or remove -n.`);
-              await group.killAll();
-              return 1;
-            }
-
-            console.log(`Running ${bin} (no watch)`);
-            group.spawn([bin, ...backendArgs]);
-          } else {
-            console.log("Starting backend dev server (watch mode)...");
-            const watcher = new BackendWatcher({
-              watchDirs: ["src"],
-              watchExts: [".rs"],
-              extraPaths: ["Cargo.toml", "Cargo.lock"],
-              debounce: 200,
-              buildCmd: ["cargo", "build", "--bin", "banner", ...cargoExtra, ...(release ? ["--release"] : [])],
-              runCmd: [bin, ...backendArgs],
-              interrupt: !ctx.flags["no-interrupt"],
-              verboseBuild: ctx.flags["verbose-build"] as boolean,
-            });
-            group.onCleanup(() => watcher.killSync());
-            group.onAsyncCleanup(() => watcher.shutdown());
-            group.waitOn(watcher.done);
-            watcher.start();
-          }
-        }
-
-        const code = await group.waitForFirst();
-        // 130 = SIGINT (128 + 2), normal dev server shutdown
-        return code === 130 ? 0 : code;
-      },
-    },
-    "pre-commit": runners.preCommit(),
-    test: {
-      description: "Run tests",
-      parameters: ["[args...]"],
-      run: async (ctx) => {
-        const input = ctx.args.join(" ").trim();
-        if (input === "web") {
-          tempoRun(["bun", "run", "--cwd", "web", "test"]);
-        } else if (input === "rust") {
-          tempoRun(["cargo", "nextest", "run", "-E", "not test(export_bindings)"]);
-        } else if (input === "") {
-          tempoRun(["cargo", "nextest", "run", "-E", "not test(export_bindings)"]);
-          tempoRun(["bun", "run", "--cwd", "web", "test"]);
-        } else {
-          tempoRun(["cargo", "nextest", "run", ...input.split(/\s+/)]);
-        }
-        return 0;
-      },
-    },
-    build: {
-      description: "Production build",
-      parameters: ["[args...]"],
-      flags: {
-        debug: { type: Boolean, alias: "d", description: "Debug build instead of release" },
-        "frontend-only": { type: Boolean, alias: "f", description: "Frontend only" },
-        "backend-only": { type: Boolean, alias: "b", description: "Backend only" },
-      },
-      run: async (ctx) => {
-        if (ctx.flags["frontend-only"] && ctx.flags["backend-only"]) {
-          console.error("Cannot use -f and -b together");
-          return 1;
-        }
-        const buildFrontend = !ctx.flags["backend-only"];
-        const buildBackend = !ctx.flags["frontend-only"];
-
-        if (buildFrontend) {
-          console.log("Building frontend...");
-          tempoRun(["bun", "run", "--cwd", "web", "build"]);
-        }
-        if (buildBackend) {
-          const profile = ctx.flags.debug ? "debug" : "release";
-          console.log(`Building backend (${profile})...`);
-          const cmd = ["cargo", "build", "--bin", "banner"];
-          if (!ctx.flags.debug) cmd.push("--release");
-          tempoRun(cmd);
-        }
-        return 0;
-      },
+      description: "Dev servers with watch and reload",
+      tags: ["dev"],
+      exitBehavior: "first-exits",
     },
     bindings: {
-      description: "Force-regenerate TypeScript bindings",
-      run: async () => {
-        const tmpDir = mkdtempSync(join(tmpdir(), "banner-bindings-"));
-        try {
-          tempoRun(["cargo", "test", "--lib", "--no-run", "--quiet"]);
-          const proc = Bun.spawnSync(
-            ["cargo", "test", "--lib", "export_bindings", "--quiet"],
-            {
-              stdio: ["ignore", "inherit", "inherit"],
-              env: { ...process.env, TS_RS_EXPORT_DIR: tmpDir },
-            },
-          );
-          if (proc.exitCode !== 0) process.exit(proc.exitCode);
-
-          // Clean slate + copy. ts-rs nests some types (serde_json/JsonValue.ts),
-          // so recurse and recreate subdirectories instead of reading a directory.
-          rmSync(BINDINGS_DIR, { recursive: true, force: true });
-          mkdirSync(BINDINGS_DIR, { recursive: true });
-          for (const entry of readdirSync(tmpDir, { recursive: true }) as string[]) {
-            if (!entry.endsWith(".ts")) continue;
-            const dest = join(BINDINGS_DIR, entry);
-            mkdirSync(dirname(dest), { recursive: true });
-            writeFileSync(dest, readFileSync(join(tmpDir, entry)));
-          }
-          generateBarrel();
-
-          const count = readdirSync(BINDINGS_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts").length;
-          console.log(`Generated ${BINDINGS_DIR}/index.ts (${count} types)`);
-        } finally {
-          rmSync(tmpDir, { recursive: true, force: true });
-        }
-        return 0;
-      },
-    },
-    db: {
-      description: "PostgreSQL Docker Compose management",
-      parameters: ["[subcommand]"],
-      run: async (ctx) => {
-        const subcmd = ctx.args[0] || "start";
-        switch (subcmd) {
-          case "start":
-            tempoRun(["docker", "compose", "up", "-d"]);
-            await updateEnv();
-            console.log("started");
-            break;
-          case "reset": {
-            // Interactive confirmation -- intentionally non-automatable
-            if (!process.stdin.isTTY) {
-              process.stderr.write("ERROR: `just db reset` requires an interactive terminal.\n");
-              process.stderr.write("Cannot run non-interactively -- must be confirmed by a human.\n");
-              return 1;
-            }
-            const token = randomToken();
-            process.stderr.write("\nDATABASE RESET -- permanently drops and recreates the banner database.\n");
-            process.stderr.write("All scraped data, user accounts, and sessions will be lost. No undo.\n\n");
-            process.stderr.write(`Confirm by typing: ${token}\n`);
-            const response = await readLine("> ");
-            if (response.trim() !== token) {
-              process.stderr.write("Aborted. Database was not modified.\n");
-              return 1;
-            }
-            process.stderr.write("Resetting...\n");
-            tempoRun(["docker", "compose", "up", "-d"]);
-            await new Promise((r) => setTimeout(r, 2000));
-            tempoRun(["docker", "compose", "exec", "postgres", "psql", "-U", DB_USER, "-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${DB_NAME}`]);
-            tempoRun(["docker", "compose", "exec", "postgres", "psql", "-U", DB_USER, "-d", "postgres", "-c", `CREATE DATABASE ${DB_NAME}`]);
-            await updateEnv();
-            console.log("reset");
-            break;
-          }
-          case "rm":
-            tempoRun(["docker", "compose", "down"]);
-            console.log("removed");
-            break;
-          default:
-            console.error(`Unknown db command: "${subcmd}"\nValid: start, reset, rm`);
-            return 1;
-        }
-        return 0;
-      },
+      description: "Regenerate TypeScript bindings from Rust types",
+      tasks: ["backend:bindings"],
     },
     search: {
-      description: "Run Banner API search demo (hits live UTSA API)",
-      parameters: ["[args...]"],
-      run: async (ctx) => {
-        tempoRun(["cargo", "run", "-q", "--bin", "search", "--", ...ctx.args]);
-        return 0;
-      },
+      description: "Run the Banner API search demo against the live UTSA API",
+      tasks: ["backend:search"],
+      passthrough: true,
+    },
+    db: { description: "PostgreSQL compose management", tasks: ["db"], passthrough: true },
+    "sync-secrets": {
+      description: "Push allowlisted .env secrets into the cluster Secret",
+      tasks: ["sync-secrets"],
+    },
+    deploy: {
+      description: "Sync, build+push the ARM64 image, and roll out k3s",
+      tasks: ["deploy"],
     },
   },
 });
