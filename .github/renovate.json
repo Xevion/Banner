@@ -7,6 +7,13 @@
   ],
   "dependencyDashboard": false,
   "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null
+  },
+  "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
       "description": "SvelteKit ecosystem — update together",

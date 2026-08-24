@@ -16,6 +16,10 @@ image:
 existingSecret: banner-secrets
 
 app:
+  # One, always, in normal operation: the Discord gateway and the scrape scheduler each assume a
+  # single owner. Exposed only so a maintenance window can park the app at zero while the
+  # database is repointed, without a later upgrade quietly starting it again.
+  replicas: 1
   resources:
     requests:
       cpu: 100m
@@ -36,9 +40,10 @@ app:
   # Serves two separate purposes and is required for both: it is the CORS allowlist, and sitemap
   # endpoints return 404 without it rather than emitting relative URLs.
   publicOrigin: https://banner.xevion.dev
-  # Must match a redirect URI registered on the Discord application. Left unset, the redirect is
-  # derived from request headers, which a proxy in front of the pod can rewrite.
-  discordRedirectUri: https://banner.xevion.dev/api/auth/callback
+  # Origin only. The callback path is appended to this, so a value carrying the path produces a
+  # doubled one and Discord rejects the authorize request. Left unset, the redirect is derived
+  # from request headers, which a proxy in front of the pod can rewrite.
+  discordRedirectBase: https://banner.xevion.dev
   service:
     # 30080 and 30081 belong to bf4-emblems on this node.
     nodePort: 30082

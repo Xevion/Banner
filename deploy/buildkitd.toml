@@ -2,12 +2,13 @@
 # land in different budgets: bf4-emblems mounts cargo registry/git/target as cache mounts
 # (exec.cachemount), while banner relies entirely on cargo-chef layer caching (regular).
 #
-# Measured on 2026-08-21 with 7.19GB resident: exec.cachemount held 469MB against a 24GB budget
-# while regular layers held 6.72GB against 16GB. The original split was backwards for the actual
-# workload, and banner lands entirely in the tighter half. Rebalanced so the layer budget carries
-# the projects that actually use it, with the cachemount budget still 20x its current draw.
+# The stock split was backwards for that workload. Measured with bf4 alone at 7.19GB resident,
+# exec.cachemount held 469MB against a 24GB budget while regular layers held 6.72GB against 16GB.
+# Banner's first build then added ~7.1GB, all of it regular, taking the total to 14.33GB and
+# leaving the tighter budget nearly full while the larger one sat almost untouched. Without this
+# rebalance the two projects evict each other's layers on alternating builds.
 #
-# Combined ceiling is ~40GB against 80GB free on /mnt/data, unchanged from before.
+# Combined ceiling is ~40GB against 64GB free on /mnt/data.
 [worker.oci]
   gc = true
 

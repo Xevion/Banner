@@ -1,3 +1,6 @@
+{{- if gt (int .Values.app.replicas) 1 }}
+  {{- fail (printf "app.replicas is %v: a second pod means two Discord gateways racing one token and two schedulers doubling every scrape" .Values.app.replicas) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -5,7 +8,7 @@ metadata:
   labels:
     app: {{ .Release.Name }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.app.replicas }}
   # Never run two pods at once. A rolling update would surge a second pod alongside the old one,
   # and the Discord gateway connection and the scrape job scheduler both assume a single owner:
   # two bots on one token race every interaction, and two schedulers double every scrape.
@@ -19,6 +22,17 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
+      # The app panics rather than retries when the pool cannot be built, so on a first
+      # install it loses a race against the StatefulSet's DNS and burns a restart before
+      # Postgres resolves. Waiting here keeps that race out of the crash-loop backoff,
+      # which otherwise widens the gap on every redeploy.
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image }}
+          command:
+            - sh
+            - -c
+            - until pg_isready -h {{ .Release.Name }}-postgres -p 5432; do sleep 2; done
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -47,7 +61,12 @@ spec:
             {{- end }}
             - name: PUBLIC_ORIGIN
               value: {{ .Values.app.publicOrigin | quote }}
-            {{- with .Values.app.discordRedirectUri }}
+            {{- with .Values.app.discordRedirectBase }}
+            {{- /* The app appends its own callback path, so a value that already carries one
+                   builds .../api/auth/callback/api/auth/callback and Discord rejects it. */}}
+            {{- if not (regexMatch "^https?://[^/]+$" .) }}
+              {{- fail (printf "app.discordRedirectBase %q must be a bare scheme://host: the callback path is appended, not supplied" .) }}
+            {{- end }}
             - name: DISCORD_REDIRECT_URI
               value: {{ . | quote }}
             {{- end }}

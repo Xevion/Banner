@@ -167,6 +167,10 @@ const ssh = (ctx: RunContext, command: string) =>
 /**
  * Merge the allowlisted .env values into the cluster Secret.
  *
+ * .env holds development credentials, including a Discord application distinct from
+ * the production one, so this overwrites the running bot's identity. Run it only when
+ * the local values are meant to become the deployed ones; deploys do not call it.
+ *
  * A merge patch, so keys managed out of band survive untouched. The patch would
  * reach the remote process list on argv, so it travels on stdin instead.
  */
@@ -441,10 +445,11 @@ export default defineConfig({
           ctx.fail("PUBLIC_POSTHOG_HOST not set -- baked into the CSP at build time");
         }
 
-        // Before the rollout, so the new pod starts with the credentials this
-        // deploy needs. A Secret edit alone restarts nothing; the tag does.
-        const secrets = await syncSecrets(ctx);
-        if (secrets !== 0) return secrets;
+        // Deliberately does not sync secrets. .env is a development environment -- its
+        // Discord token, client id and guild belong to a separate test application -- so
+        // pushing it at deploy time silently swaps production onto the wrong bot. The
+        // cluster Secret is the source of truth; `sync-secrets` pushes local values only
+        // when asked for explicitly.
 
         await ctx.run([
           "rsync", "-az", "--delete",
@@ -511,7 +516,7 @@ export default defineConfig({
     },
     db: { description: "PostgreSQL compose management", tasks: ["db"], passthrough: true },
     "sync-secrets": {
-      description: "Push allowlisted .env secrets into the cluster Secret",
+      description: "Push allowlisted .env (development) secrets into the cluster Secret",
       tasks: ["sync-secrets"],
     },
     deploy: {
