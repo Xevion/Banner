@@ -1,3 +1,4 @@
 [tools]
 bun = "latest"
 helm = "3"
+kubectl = "latest"
