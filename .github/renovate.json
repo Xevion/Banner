@@ -30,18 +30,22 @@
     },
     {
       "description": "Storybook suite — update together",
-      "matchPackagePatterns": ["^@storybook/", "^storybook$", "^@chromatic-com/"],
-      "matchPackageNames": ["eslint-plugin-storybook"],
+      "matchPackageNames": [
+        "/^@storybook//",
+        "/^storybook$/",
+        "/^@chromatic-com//",
+        "eslint-plugin-storybook"
+      ],
       "groupName": "Storybook"
     },
     {
       "description": "TypeScript ESLint toolchain — update together",
-      "matchPackagePatterns": ["^@typescript-eslint/", "^typescript-eslint$"],
+      "matchPackageNames": ["/^@typescript-eslint//", "/^typescript-eslint$/"],
       "groupName": "typescript-eslint"
     },
     {
       "description": "Vitest + browser testing suite — update together",
-      "matchPackagePatterns": ["^@vitest/", "^vitest$"],
+      "matchPackageNames": ["/^@vitest//", "/^vitest$/"],
       "groupName": "Vitest"
     },
     {
@@ -51,7 +55,7 @@
     },
     {
       "description": "D3 libraries + types — update together",
-      "matchPackagePatterns": ["^d3-", "^@types/d3-"],
+      "matchPackageNames": ["/^d3-/", "/^@types/d3-/"],
       "groupName": "D3"
     },
     {
@@ -80,7 +84,7 @@
     },
     {
       "description": "Fontsource — update together",
-      "matchPackagePatterns": ["^@fontsource"],
+      "matchPackageNames": ["/^@fontsource/"],
       "groupName": "Fontsource"
     },
     {
