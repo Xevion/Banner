@@ -22,7 +22,9 @@ app:
   replicas: 1
   resources:
     requests:
-      cpu: 100m
+      # CFS weights a contended core by request, so this is the app's priority against batch jobs,
+      # not just a scheduling hint. At 100m it lost to both backups. Steady state is ~30m.
+      cpu: 500m
       # Measured at ~415Mi on Railway for the Rust binary plus its Node SSR child. Requested above
       # that rather than at it: the kubelet ranks eviction by usage above request, so a request
       # under real usage nominates this pod first.
@@ -114,15 +116,15 @@ postgres:
 
 backup:
   enabled: true
-  # Daily, off-peak. Replaces Railway's managed backups, which do not survive the migration.
-  schedule: "0 4 * * *"
+  # 03:00 America/Chicago. Off-peak, and clear of the bf4-emblems backup that shares this node.
+  schedule: "0 8 * * *"
   retentionDays: 30
   # Already provisioned in the same R2 account the Railway backup service used, so the existing
   # key pair reaches it and no new bucket or credentials are needed.
   bucket: banner-backup
-  # Long-range matching at max level. The database is small enough that even level 19 finishes
-  # in seconds. The bare `zstd:19,long` spelling is rejected; detail must be keyword=value.
-  compression: "zstd:level=19,long=1"
+  # Measured here: level 9 gives 60.3MiB in 16s, level 19 47.4MiB in 463s. The 13MiB is worth
+  # nothing nightly; the 29x CPU is what starved the app pod. Detail must be keyword=value.
+  compression: "zstd:level=9,long=1"
   # Empty on purpose. Every table migrates and backs up as-is; course_audits and
   # scrape_job_results are half the database but pruning them is a separate decision, and an
   # exclusion here would quietly make that decision for the restore path.
@@ -136,4 +138,7 @@ backup:
       cpu: 250m
       memory: 256Mi
     limits:
+      # The only CPU limit in the chart: a deadline-free batch job can be capped safely, where the
+      # latency-sensitive app cannot. Bounds the next heavy job, not just this one.
+      cpu: "1"
       memory: 1Gi

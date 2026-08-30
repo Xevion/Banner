@@ -1,14 +1,17 @@
 //! Health, status, and metrics handlers.
 
 use axum::extract::{Query, State};
-use axum::response::Json;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Json, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use tracing::trace;
+use std::time::Instant;
+use tracing::{trace, warn};
 use ts_rs::TS;
 
 use crate::state::{AppState, ServiceStatus};
+use crate::utils::fmt_duration;
 use crate::web::error::{ApiError, ApiErrorCode, db_error};
 
 fn default_metrics_limit() -> i32 {
@@ -68,13 +71,51 @@ pub struct MetricsParams {
     pub limit: i32,
 }
 
-/// Health check endpoint
+/// Liveness probe: asserts nothing beyond the process running.
+///
+/// Must not touch the database. A restart cannot fix an unreachable Postgres, it only drops the
+/// requests this pod was still serving correctly.
 pub(super) async fn health() -> Json<Value> {
     trace!("health check requested");
     Json(json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))
+}
+
+/// Readiness probe: asserts the path every real request needs, a pooled connection to Postgres.
+///
+/// Returns a bare 503 rather than an `ApiError` so a monitor can read the status line alone.
+pub(super) async fn ready(State(state): State<AppState>) -> Response {
+    let started = Instant::now();
+    match crate::data::health::ping(&state.db_pool).await {
+        Ok(()) => {
+            let latency = started.elapsed();
+            trace!(latency = fmt_duration(latency), "readiness check passed");
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "status": "ready",
+                    "database": "connected",
+                    "latencyMs": latency.as_millis(),
+                    "timestamp": chrono::Utc::now().to_rfc3339()
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            warn!(error = %e, latency = fmt_duration(started.elapsed()), "readiness check failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "status": "unavailable",
+                    "database": "unreachable",
+                    "timestamp": chrono::Utc::now().to_rfc3339()
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Status endpoint showing bot and system status

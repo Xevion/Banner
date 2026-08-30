@@ -103,12 +103,14 @@ where
                 match &result {
                     Ok(response) => {
                         let status = response.status();
+                        // Routine responses go to the `access` target so muting them does not also
+                        // mute application INFO. Failures stay on the application target.
                         match status.as_u16() {
                             200..=399 => {
-                                tracing::debug!(method = %method, path = %path, status = status.as_u16(), duration_ms, "Response");
+                                tracing::info!(target: "access", method = %method, path = %path, status = status.as_u16(), duration_ms, "Response");
                             }
                             401 => {
-                                tracing::debug!(method = %method, path = %path, status = 401u16, duration_ms, "Response");
+                                tracing::info!(target: "access", method = %method, path = %path, status = 401u16, duration_ms, "Response");
                             }
                             400 | 402..=499 => {
                                 tracing::info!(method = %method, path = %path, status = status.as_u16(), duration_ms, "Response");

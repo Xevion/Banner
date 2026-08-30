@@ -48,7 +48,10 @@ enum TrackedEndpoint {
 fn classify_route(path: &str) -> RouteGroup {
     if path.starts_with("/api/admin/") {
         RouteGroup::Admin
-    } else if path.starts_with("/api/health") || path.starts_with("/api/metrics") {
+    } else if path.starts_with("/api/health")
+        || path.starts_with("/api/ready")
+        || path.starts_with("/api/metrics")
+    {
         RouteGroup::Internal
     } else if path.starts_with("/api/") {
         RouteGroup::Api

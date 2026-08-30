@@ -24,6 +24,16 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tracing::{error, info, warn};
 
+/// Shared by the web handlers, the scraper worker, and the Discord bot, so a low ceiling starves
+/// two of the three whenever Postgres slows down.
+const DB_MAX_CONNECTIONS: u32 = 12;
+
+/// Backstop against pool exhaustion, not a latency budget: brief waiting beats a 500.
+const DB_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+
+const DB_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 2);
+const DB_MAX_LIFETIME: Duration = Duration::from_secs(60 * 30);
+
 /// Main application struct containing all necessary components
 pub struct App {
     config: Config,
@@ -60,11 +70,11 @@ impl App {
 
         let db_pool = PgPoolOptions::new()
             .min_connections(0)
-            .max_connections(4)
+            .max_connections(DB_MAX_CONNECTIONS)
             .acquire_slow_threshold(slow_threshold)
-            .acquire_timeout(Duration::from_secs(4))
-            .idle_timeout(Duration::from_secs(60 * 2))
-            .max_lifetime(Duration::from_secs(60 * 30))
+            .acquire_timeout(DB_ACQUIRE_TIMEOUT)
+            .idle_timeout(DB_IDLE_TIMEOUT)
+            .max_lifetime(DB_MAX_LIFETIME)
             .connect_with(connect_options)
             .await
             .context("Failed to create database pool")?;
@@ -72,10 +82,10 @@ impl App {
         info!(
             is_private = is_private,
             min_connections = 0,
-            max_connections = 4,
-            acquire_timeout = "4s",
-            idle_timeout = "2m",
-            max_lifetime = "30m",
+            max_connections = DB_MAX_CONNECTIONS,
+            acquire_timeout = fmt_duration(DB_ACQUIRE_TIMEOUT),
+            idle_timeout = fmt_duration(DB_IDLE_TIMEOUT),
+            max_lifetime = fmt_duration(DB_MAX_LIFETIME),
             acquire_slow_threshold = fmt_duration(slow_threshold),
             "database pool established"
         );

@@ -58,6 +58,7 @@ pub fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -
 pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
     let api_router = Router::new()
         .route("/health", get(status::health))
+        .route("/ready", get(status::ready))
         .route("/status", get(status::status))
         .route("/metrics", get(status::metrics))
         .route("/courses/search", get(courses::search_courses))

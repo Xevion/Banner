@@ -85,6 +85,8 @@ spec:
             failureThreshold: 60
           # Readiness tracks the Rust listener, which only answers once the SSR child is reachable
           # behind it, so a pod that is up but cannot render is kept out of the Service.
+          # Deliberately not /api/ready: at one replica a DB-dependent probe removes the only
+          # backend from the Service, turning slow Postgres into a hard outage. Revisit above one.
           readinessProbe:
             httpGet:
               path: /api/health
