@@ -209,7 +209,10 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         // Per-IP rate limiting (burst + sustained + long-term, multi-layer).
         // Inside compression so 429 responses get compressed too.
         RateLimitLayer::new(rate_limit_state),
-        TimeoutLayer::new(Duration::from_secs(60)),
+        TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(60),
+        ),
     ))
 }
 
