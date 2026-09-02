@@ -28,7 +28,8 @@ const termDescription = $derived(
 
 setCourseDetailContext({ navigateToSection: null });
 
-let columnVisibility = $state({ course_code: false });
+// The Course cell now carries the section number and CRN, which vary per row here.
+let columnVisibility = $state({});
 
 // Collect unique instructors across all sections
 const uniqueInstructors = $derived.by(() => {

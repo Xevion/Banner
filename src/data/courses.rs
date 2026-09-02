@@ -18,6 +18,7 @@ pub enum SortColumn {
     CourseCode,
     Title,
     Instructor,
+    Rating,
     Time,
     Seats,
 }
@@ -196,6 +197,9 @@ fn push_search_conditions<'args>(
     }
 }
 
+/// Catalog order, and the tiebreaker for sorts whose key is widely shared.
+const DEFAULT_ORDER: &str = "subject ASC, course_number ASC, sequence_number ASC";
+
 /// Build a safe ORDER BY clause from typed sort parameters.
 ///
 /// All column names are hardcoded string literals -- no caller input is interpolated.
@@ -210,12 +214,25 @@ fn sort_clause(column: Option<SortColumn>, direction: Option<SortDirection>) -> 
             format!("subject {dir}, course_number {dir}, sequence_number {dir}")
         }
         Some(SortColumn::Title) => format!("title {dir}"),
+        // display_name is stored "Last, First", so this already orders by last name
+        // then first. The tiebreaker keeps paging stable across an instructor's sections.
         Some(SortColumn::Instructor) => {
             format!(
                 "(SELECT i.display_name FROM course_instructors ci \
                  JOIN instructors i ON i.id = ci.instructor_id \
                  WHERE ci.course_id = courses.id AND ci.is_primary = true \
-                 LIMIT 1) {dir} NULLS LAST"
+                 LIMIT 1) {dir} NULLS LAST, {DEFAULT_ORDER}"
+            )
+        }
+        // sort_score is the CI lower bound, which is what ratings are ranked on.
+        // Unrated sections sink in both directions, and the tiebreaker keeps
+        // paging stable across the large block of them that shares a NULL.
+        Some(SortColumn::Rating) => {
+            format!(
+                "(SELECT s.sort_score FROM course_instructors ci \
+                 JOIN instructor_scores s ON s.instructor_id = ci.instructor_id \
+                 WHERE ci.course_id = courses.id AND ci.is_primary = true \
+                 LIMIT 1) {dir} NULLS LAST, {DEFAULT_ORDER}"
             )
         }
         Some(SortColumn::Time) => {
@@ -224,7 +241,7 @@ fn sort_clause(column: Option<SortColumn>, direction: Option<SortDirection>) -> 
         Some(SortColumn::Seats) => {
             format!("(max_enrollment - enrollment) {dir}")
         }
-        None => "subject ASC, course_number ASC, sequence_number ASC".to_string(),
+        None => DEFAULT_ORDER.to_string(),
     }
 }
 

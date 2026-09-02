@@ -4,6 +4,7 @@ import {
   fullCourse,
   lowSeatsCourse,
   overenrolledCourse,
+  overenrolledWaitlistedCourse,
 } from "$lib/stories/fixtures/courses";
 import TableRowDecorator from "$lib/stories/TableRowDecorator.svelte";
 import { defineMeta } from "@storybook/addon-svelte-csf";
@@ -29,3 +30,5 @@ const { Story } = defineMeta({
 <Story name="Low Availability" args={{ course: lowSeatsCourse }} />
 
 <Story name="Overenrolled" args={{ course: overenrolledCourse }} />
+
+<Story name="Overenrolled and Waitlisted" args={{ course: overenrolledWaitlistedCourse }} />

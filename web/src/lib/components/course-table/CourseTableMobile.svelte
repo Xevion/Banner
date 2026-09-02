@@ -7,12 +7,14 @@ import { buildCardSkeletonHtml } from "./skeletons";
 let {
   courses,
   loading,
+  stale,
   skeletonRowCount,
   expandedCrn,
   onToggle,
 }: {
   courses: CourseResponse[];
   loading: boolean;
+  stale: boolean;
   skeletonRowCount: number;
   expandedCrn: string | null;
   onToggle: (crn: string) => void;
@@ -27,7 +29,7 @@ let {
     <EmptyState />
   {:else}
     {#each courses as course (course.crn)}
-      <div class="transition-opacity duration-200 {loading ? 'opacity-45 pointer-events-none' : ''}">
+      <div class="transition-opacity duration-200 {stale ? 'opacity-45 pointer-events-none' : ''}">
         <CourseCard
           {course}
           expanded={expandedCrn === course.crn}

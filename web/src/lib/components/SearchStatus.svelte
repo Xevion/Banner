@@ -1,5 +1,6 @@
 <script lang="ts">
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
+import { useDelayedFlag } from "$lib/composables/useDelayedFlag.svelte";
 import { relativeTime } from "$lib/time";
 import { formatNumber } from "$lib/utils";
 import { onMount } from "svelte";
@@ -12,6 +13,8 @@ export interface SearchMeta {
 }
 
 let { meta, loading = false }: { meta: SearchMeta | null; loading?: boolean } = $props();
+
+const stale = useDelayedFlag(() => loading);
 
 let now = $state(new Date());
 
@@ -59,7 +62,7 @@ onMount(() => {
         sideOffset={0}
     >
         <span
-            class="pl-1 text-xs transition-opacity duration-200 select-none {loading
+            class="pl-1 text-xs transition-opacity duration-200 select-none {stale.current
                 ? 'opacity-40'
                 : ''}"
             in:fade={{ duration: 300 }}

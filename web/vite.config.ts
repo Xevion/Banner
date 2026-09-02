@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import posthogPlugin from "@posthog/rollup-plugin";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { sveltekit } from "@sveltejs/kit/vite";
@@ -10,8 +9,7 @@ import { playwright } from "@vitest/browser-playwright";
 import devtoolsJson from "vite-plugin-devtools-json";
 import { type Plugin, defineConfig } from "vitest/config";
 
-const dirname =
-  typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+const dirname = import.meta.dirname;
 
 function getVersion() {
   const filename = "Cargo.toml";

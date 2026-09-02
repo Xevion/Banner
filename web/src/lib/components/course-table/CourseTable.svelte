@@ -27,7 +27,8 @@ let {
 
 const state = useCourseTableState(
   () => courses,
-  () => limit
+  () => limit,
+  () => loading
 );
 
 export function navigateToSection(crn: string) {
@@ -38,6 +39,7 @@ export function navigateToSection(crn: string) {
 <CourseTableMobile
   {courses}
   {loading}
+  stale={state.stale}
   skeletonRowCount={state.skeletonRowCount}
   expandedCrn={state.expandedCrn}
   onToggle={state.toggleRow}
@@ -46,6 +48,7 @@ export function navigateToSection(crn: string) {
 <CourseTableDesktop
   {courses}
   {loading}
+  stale={state.stale}
   {sorting}
   {onSortingChange}
   {manualSorting}

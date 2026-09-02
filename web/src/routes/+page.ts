@@ -8,12 +8,13 @@ export const load: PageLoad = async ({ url, fetch }) => {
 
   const optionsResult = await client.getSearchOptions(urlTerm ?? undefined);
   if (optionsResult.isErr) {
-    console.error("Failed to load search options:", optionsResult.error);
+    const { code, message } = optionsResult.error;
+    console.error(`Failed to load search options [${code}]: ${message}`);
     return {
       searchOptions: null,
       resolvedInstructors: {},
       searchResult: null,
-      searchError: "Failed to load search options",
+      searchError: `Failed to load search options: ${message}`,
       searchMeta: null,
       urlSearch: url.search,
     };

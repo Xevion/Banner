@@ -3,4 +3,4 @@
 /**
  * Column to sort search results by.
  */
-export type SortColumn = "course_code" | "title" | "instructor" | "time" | "seats";
+export type SortColumn = "course_code" | "title" | "instructor" | "rating" | "time" | "seats";

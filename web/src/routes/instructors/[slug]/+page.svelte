@@ -47,6 +47,8 @@ const subjectMap = $derived(
 );
 setCourseDetailContext({ navigateToSection: null });
 
+// Every row is this instructor, so the column is redundant here. Location rides
+// along in the same cell and stays reachable by expanding a row.
 let columnVisibility = $state({ instructor: false });
 
 async function onTermChange() {

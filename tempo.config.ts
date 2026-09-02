@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -85,6 +86,22 @@ async function regenerateBindings(ctx: RunContext): Promise<number> {
 }
 
 const DB_URL = "postgresql://banner:banner@localhost:59489/banner";
+
+/** Bare TCP probe, so an unreachable database fails before a build pays for it. */
+function tcpReachable(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host, port });
+    const finish = (ok: boolean) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
 
 async function updateEnv(root: string): Promise<void> {
   const envFile = join(root, ".env");
@@ -330,13 +347,15 @@ export default defineConfig({
       requires: [{ tool: "actionlint" }],
     }),
 
+    // Ordered behind the backend: SSR loads fetch /api through hooks.server.ts,
+    // so a Vite that boots first serves a first paint of nothing but errors.
     task({
       name: "web:dev",
       cwd: "web",
       body: ["bun", "run", "dev"],
       tags: ["dev"],
       persistent: true,
-      needs: ["web:deps"],
+      needs: ["web:deps", "backend:dev"],
     }),
     // Rust proxies non-API requests to the Vite dev server.
     task({
@@ -354,10 +373,33 @@ export default defineConfig({
         debounce: 200,
         interrupt: true,
       },
+      // Bound to spawning, readiness would race the listener; /api/health is
+      // static, so it answers as soon as axum is actually serving.
+      readyWhen: async () => {
+        try {
+          const res = await fetch(`http://127.0.0.1:${process.env.PORT ?? 8080}/api/health`, {
+            signal: AbortSignal.timeout(1000),
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      },
+      readyPollMs: 150,
+    }),
+    task({
+      name: "db:reachable",
+      body: async (ctx) => {
+        const { hostname, port } = new URL(DB_URL);
+        if (!(await tcpReachable(hostname, Number(port)))) {
+          ctx.fail(`postgres unreachable at ${hostname}:${port} -- run \`just db\``);
+        }
+      },
     }),
     task({
       name: "backend:dev-build",
       body: ["cargo", "build", "--bin", "banner", "--no-default-features"],
+      needs: ["db:reachable"],
     }),
 
     task({

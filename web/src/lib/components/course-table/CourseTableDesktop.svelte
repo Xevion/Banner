@@ -20,12 +20,14 @@ import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import EmptyState from "./EmptyState.svelte";
 import { CELL_COMPONENTS, COLUMN_DEFS } from "./columns";
+import { instructorSortLabel, instructorSortStep, nextInstructorSorting } from "./instructorSort";
 import { setTableContext } from "./context";
 import { buildSkeletonHtml } from "./skeletons";
 
 let {
   courses,
   loading,
+  stale,
   sorting = [],
   onSortingChange,
   manualSorting = false,
@@ -40,6 +42,7 @@ let {
 }: {
   courses: CourseResponse[];
   loading: boolean;
+  stale: boolean;
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
   manualSorting?: boolean;
@@ -112,6 +115,21 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
+/**
+ * The instructor header cycles name and rating together, so it drives a sort key
+ * that is not its own column and cannot use TanStack's per-column toggle.
+ */
+function courseHeaderOverride(headerId: string) {
+  if (headerId !== "instructor") return null;
+  const step = instructorSortStep(sorting);
+  return {
+    suffix: instructorSortLabel(sorting),
+    indicator: step.indicator,
+    title: step.next,
+    onclick: () => onSortingChange?.(nextInstructorSorting(sorting)),
+  };
+}
+
 const table = createSvelteTable({
   get data() {
     return courses;
@@ -158,6 +176,7 @@ const table = createSvelteTable({
           thClass="py-2 px-2 font-medium select-none"
           checkVisibility={true}
           headerClass={(id) => id === "seats" ? "text-right" : ""}
+          headerOverride={courseHeaderOverride}
         />
         {#if loading && courses.length === 0}
           <tbody>
@@ -178,8 +197,12 @@ const table = createSvelteTable({
         {:else}
           {#each table.getRowModel().rows as row (row.id)}
             {@const course = row.original}
+            <!-- No entry animation: the scoped view transition on [data-search-results]
+                 already crossfades the whole table, and a per-row fade layered inside it
+                 reads as a double flash -- including on first paint, over SSR rows that
+                 were never absent. -->
             <tbody
-              class="transition-opacity duration-200 animate-fade-in {loading ? 'opacity-45 pointer-events-none' : ''}"
+              class="transition-opacity duration-200 {stale ? 'opacity-45 pointer-events-none' : ''}"
               animate:flip={{ duration: hadResults ? 300 : 0 }}
             >
               <tr

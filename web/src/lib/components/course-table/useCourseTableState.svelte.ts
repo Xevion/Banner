@@ -1,7 +1,12 @@
 // useCourseTableState.svelte.ts
 import type { CourseResponse } from "$lib/bindings";
+import { useDelayedFlag } from "$lib/composables/useDelayedFlag.svelte";
 
-export function useCourseTableState(getCourses: () => CourseResponse[], getLimit: () => number) {
+export function useCourseTableState(
+  getCourses: () => CourseResponse[],
+  getLimit: () => number,
+  getLoading: () => boolean
+) {
   let expandedCrn: string | null = $state(null);
   let previousRowCount = $state(0);
   let hadResults = $state(false);
@@ -16,6 +21,9 @@ export function useCourseTableState(getCourses: () => CourseResponse[], getLimit
   });
 
   const skeletonRowCount = $derived(previousRowCount > 0 ? previousRowCount : getLimit());
+
+  // Only a navigation slow enough to notice dims the rows we already have.
+  const stale = useDelayedFlag(getLoading);
 
   // Collapse expanded row when dataset changes
   $effect(() => {
@@ -50,6 +58,9 @@ export function useCourseTableState(getCourses: () => CourseResponse[], getLimit
     },
     get hadResults() {
       return hadResults;
+    },
+    get stale() {
+      return stale.current;
     },
     get contentHeight() {
       return contentHeight;

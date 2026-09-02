@@ -8,8 +8,9 @@ let { course }: { course: CourseResponse } = $props();
 let open = $derived(course.enrollment.max - course.enrollment.current);
 let waitlisted = $derived(course.enrollment.waitCount);
 
-// A section with a waitlist has no truly free seats, whatever the open count says.
-let countColor = $derived(waitlisted > 0 ? "text-seat-full" : seatsColor(open));
+// A section with a waitlist has no truly free seats, whatever the open count says --
+// but overenrollment outranks that, since only it says how far past full the section is.
+let countColor = $derived(open >= 0 && waitlisted > 0 ? "text-seat-full" : seatsColor(open));
 
 let seatsTip = $derived(
   open < 0
@@ -26,7 +27,7 @@ let seatsTip = $derived(
     data-tooltip-delay="200"
   >
     <span class="text-xl leading-[1.05] font-bold tracking-[-0.02em] tabular-nums {countColor}">
-      {#if open < 0}!{:else}{formatNumber(open)}{/if}
+      {formatNumber(open)}
     </span>
     <span class="text-[10px] text-muted-foreground tabular-nums"
       >of {formatNumber(course.enrollment.max)}</span

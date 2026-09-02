@@ -264,6 +264,24 @@ export const overenrolledCourse: CourseResponse = {
 };
 
 /**
+ * Overenrolled and waitlisted at once -- the two "no seats" signals in conflict,
+ * where the seat count has to resolve which one it reports.
+ */
+export const overenrolledWaitlistedCourse: CourseResponse = {
+  ...courseWithSeats,
+  crn: "12361",
+  subject: "CS",
+  courseNumber: "3743",
+  title: "Database Systems",
+  enrollment: {
+    current: 23,
+    max: 20,
+    waitCount: 21,
+    waitCapacity: 25,
+  },
+};
+
+/**
  * Every section of courseWithSeats' course, as getRelatedSections returns them.
  * The requested section is included; consumers filter it out by CRN.
  */
@@ -350,4 +368,5 @@ export const mockCourses: CourseResponse[] = [
   staffInstructorCourse,
   multiMeetingCourse,
   overenrolledCourse,
+  overenrolledWaitlistedCourse,
 ];

@@ -1,4 +1,5 @@
 import { env } from "$env/dynamic/private";
+import type { ApiError } from "$lib/bindings";
 import type { Handle, HandleServerError } from "@sveltejs/kit";
 import { PostHog } from "posthog-node";
 
@@ -48,8 +49,17 @@ export const handle: Handle = async ({ event, resolve }) => {
           });
         }
       }
-    } catch {
-      return new Response(JSON.stringify({ error: "Backend unavailable" }), {
+    } catch (e) {
+      // Shaped as an ApiError, else the client reads back an all-undefined error.
+      // Node buries the syscall failure (ECONNREFUSED) one level down in `cause`.
+      const cause = e instanceof Error ? e.cause : undefined;
+      const reason = cause instanceof Error ? cause.message : (e as Error).message;
+      const body = {
+        code: "INTERNAL_ERROR",
+        message: `Backend unreachable at ${backendUrl}: ${reason}`,
+        details: { backendUrl, path: pathname },
+      } satisfies ApiError;
+      return new Response(JSON.stringify(body), {
         status: 502,
         headers: { "content-type": "application/json" },
       });

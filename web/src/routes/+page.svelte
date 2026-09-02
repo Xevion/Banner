@@ -121,14 +121,11 @@ $effect(() => {
 });
 
 const columns = new ColumnVisibilityController({
-  autoHideColumns: ["crn", "location"],
+  autoHideColumns: ["instructor"],
   columns: [
-    { id: "crn", label: "CRN" },
+    { id: "time", label: "Schedule" },
     { id: "course_code", label: "Course" },
-    { id: "title", label: "Title" },
     { id: "instructor", label: "Instructor" },
-    { id: "time", label: "Time" },
-    { id: "location", label: "Location" },
     { id: "seats", label: "Seats" },
   ],
 });

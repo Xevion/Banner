@@ -138,6 +138,30 @@ export class ApiErrorClass extends Error {
   }
 }
 
+/**
+ * Read a structured ApiError body, or undefined when the response carries
+ * anything else -- a proxy's own error page, HTML, or an unrelated JSON shape.
+ * Trusting an unvalidated body yields an error with every field undefined.
+ */
+async function parseApiError(response: Response): Promise<ApiError | undefined> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return undefined;
+  }
+  if (typeof body !== "object" || body === null) return undefined;
+  const { code, message } = body as Record<string, unknown>;
+  if (typeof code !== "string" || typeof message !== "string") return undefined;
+  return body as ApiError;
+}
+
+/** Node's fetch reports "fetch failed" and hides the syscall error in `cause`. */
+function describeNetworkError(e: unknown): string {
+  if (!(e instanceof Error)) return "Network request failed";
+  return e.cause instanceof Error ? `${e.message}: ${e.cause.message}` : e.message;
+}
+
 /** Module-level cache shared by all BannerApiClient instances. */
 const _searchOptionsCache = new Map<string, { data: SearchOptionsResponse; fetchedAt: number }>();
 const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
@@ -197,8 +221,8 @@ export class BannerApiClient {
         return err(
           new ApiErrorClass({
             code: "INTERNAL_ERROR",
-            message: e instanceof Error ? e.message : "Network request failed",
-            details: null,
+            message: describeNetworkError(e),
+            details: { url },
           })
         );
       }
@@ -243,13 +267,7 @@ export class BannerApiClient {
 
     const response = result.value;
     if (!response.ok) {
-      let apiError: ApiError | undefined;
-      try {
-        apiError = (await response.json()) as ApiError;
-      } catch {
-        // Fall through -- responseToErr uses a default
-      }
-      return this.responseToErr(response, apiError);
+      return this.responseToErr(response, await parseApiError(response));
     }
 
     return ok((await response.json()) as T);
@@ -265,13 +283,7 @@ export class BannerApiClient {
 
     const response = result.value;
     if (!response.ok) {
-      let apiError: ApiError | undefined;
-      try {
-        apiError = (await response.json()) as ApiError;
-      } catch {
-        // Fall through -- responseToErr uses a default
-      }
-      return this.responseToErr(response, apiError);
+      return this.responseToErr(response, await parseApiError(response));
     }
 
     return ok(undefined as unknown as void);
@@ -403,8 +415,8 @@ export class BannerApiClient {
       return err(
         new ApiErrorClass({
           code: "INTERNAL_ERROR",
-          message: e instanceof Error ? e.message : "Network request failed",
-          details: null,
+          message: describeNetworkError(e),
+          details: { url: `${this.baseUrl}/admin/audit-log` },
         })
       );
     }
@@ -414,13 +426,7 @@ export class BannerApiClient {
     }
 
     if (!response.ok) {
-      let apiError: ApiError | undefined;
-      try {
-        apiError = (await response.json()) as ApiError;
-      } catch {
-        // Fall through -- responseToErr uses a default
-      }
-      return this.responseToErr(response, apiError);
+      return this.responseToErr(response, await parseApiError(response));
     }
 
     const lastMod = response.headers.get("Last-Modified");
