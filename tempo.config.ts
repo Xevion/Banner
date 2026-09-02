@@ -125,12 +125,6 @@ function readLine(prompt: string): Promise<string> {
   });
 }
 
-// bun audit advisory ignores, shared with CI: .github/workflows/ci.yml derives
-// the same --ignore flags from this file via jq.
-const IGNORED_ADVISORIES: { id: string; reason: string }[] = JSON.parse(
-  readFileSync(join(import.meta.dirname, "audit-ignore.json"), "utf8"),
-);
-
 // Deploy target. Kept out of tracked config since this repo is public; set these
 // in .env rather than hardcoding a real host.
 const DEPLOY_HOST = process.env.DEPLOY_HOST;
@@ -324,18 +318,8 @@ export default defineConfig({
     }),
 
     task({
-      name: "security:cargo-audit",
-      body: "cargo audit",
-      tags: ["check"],
-      requires: [{ tool: "cargo-audit", hint: "cargo install cargo-audit" }],
-    }),
-    task({
-      name: "security:bun-audit",
-      cwd: "web",
-      body: [
-        "bun", "audit", "--audit-level=moderate",
-        ...IGNORED_ADVISORIES.map(({ id }) => `--ignore=${id}`),
-      ],
+      name: "security:advisories",
+      body: "bunx github:Xevion/advisory-action#v1.1.0 --no-base",
       tags: ["check"],
       needs: ["web:deps"],
     }),

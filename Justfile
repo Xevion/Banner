@@ -27,6 +27,10 @@ format *targets:
 lint *targets:
     tempo lint {{targets}}
 
+# Dependency advisories, the same scan CI runs
+audit *args:
+    bunx github:Xevion/advisory-action#v1.1.0 {{args}}
+
 # Run tests. Usage: just test [rust|web|<nextest filter args>]
 test *args:
     tempo test {{args}}

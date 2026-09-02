@@ -177,28 +177,10 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
-
-      - name: Rust security audit
-        run: cargo audit
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          fetch-depth: 0 # the baseline is scanned from a worktree
 
-      - name: Install frontend dependencies
-        working-directory: web
-        run: bun ci --frozen-lockfile
-
-      - name: Frontend security audit
-        working-directory: web
-        # Ignore list lives in audit-ignore.json (shared with tempo.config.ts) -- derive --ignore flags from it.
-        run: |
-          mapfile -t ignores < <(jq -r 'map("--ignore=" + .id)[]' ../audit-ignore.json)
-          bun audit --audit-level=moderate "${ignores[@]}"
+      - uses: Xevion/advisory-action@v1
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.35.0
