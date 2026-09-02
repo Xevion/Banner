@@ -314,7 +314,7 @@ dependencies = [
  "nanoid",
  "num-format",
  "poise",
- "rand 0.9.5",
+ "rand 0.10.2",
  "rapidhash",
  "regex",
  "reqwest",
