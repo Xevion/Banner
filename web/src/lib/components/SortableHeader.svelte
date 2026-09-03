@@ -8,12 +8,15 @@ import type { HeaderGroup } from "@tanstack/table-core";
  * longer cycle or a different key than its own. Returning null keeps the default.
  */
 export interface HeaderOverride {
+  /** Replaces the column's own label, e.g. when two columns read as one. */
+  label?: string;
   /** Appended after the header label, e.g. the active key in a multi-key cycle. */
-  suffix: string | null;
-  indicator: "asc" | "desc" | "none";
+  suffix?: string | null;
+  indicator?: "asc" | "desc" | "none";
   /** Native tooltip, describing what the next click does. */
-  title: string;
-  onclick: () => void;
+  title?: string;
+  /** Replaces the column's own sort toggle. Omitted, the column keeps it. */
+  onclick?: () => void;
 }
 
 let {
@@ -39,19 +42,21 @@ let {
     <tr class="border-b border-border text-left text-muted-foreground">
       {#each headerGroup.headers as header (header.id)}
         {@const override = headerOverride?.(header.id) ?? null}
-        {@const interactive = override !== null || header.column.getCanSort()}
+        {@const interactive = override?.onclick !== undefined || header.column.getCanSort()}
         {#if !checkVisibility || header.column.getIsVisible()}
           <th
             class="{thClass} {headerClass?.(header.id) ?? ''}"
             class:cursor-pointer={interactive}
             class:select-none={interactive}
             title={override?.title}
-            onclick={override ? override.onclick : header.column.getToggleSortingHandler()}
+            onclick={override?.onclick ?? header.column.getToggleSortingHandler()}
           >
             {#if interactive}
               {@const sorted = override?.indicator ?? header.column.getIsSorted()}
               <span class={sortSpanClass}>
-                {#if typeof header.column.columnDef.header === "string"}
+                {#if override?.label !== undefined}
+                  {override.label}
+                {:else if typeof header.column.columnDef.header === "string"}
                   {header.column.columnDef.header}
                 {:else}
                   <FlexRender
@@ -72,6 +77,8 @@ let {
                   >
                 {/if}
               </span>
+            {:else if override?.label !== undefined}
+              {override.label}
             {:else if typeof header.column.columnDef.header === "string"}
               {header.column.columnDef.header}
             {:else}

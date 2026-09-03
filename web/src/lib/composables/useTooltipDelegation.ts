@@ -8,12 +8,10 @@
  *  - `data-tooltip-side`  -- placement (default "top")
  *  - `data-tooltip-delay` -- show delay in ms (default 150)
  */
+import { TOOLTIP_SURFACE } from "$lib/tooltipClass";
 import { type Placement, computePosition, flip, offset, shift } from "@floating-ui/dom";
 
-const TOOLTIP_CLASS =
-  "fixed z-50 bg-card text-card-foreground text-xs border border-border " +
-  "rounded-md px-2.5 py-1.5 shadow-sm whitespace-pre-line max-w-max text-left " +
-  "pointer-events-none transition-opacity duration-100";
+const TOOLTIP_CLASS = `fixed pointer-events-none transition-opacity duration-100 ${TOOLTIP_SURFACE}`;
 
 const DEFAULT_DELAY = 150;
 const HIDE_DELAY = 60;

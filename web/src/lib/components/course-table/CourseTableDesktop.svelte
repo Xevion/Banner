@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
-import SortableHeader from "$lib/components/SortableHeader.svelte";
+import SortableHeader, { type HeaderOverride } from "$lib/components/SortableHeader.svelte";
 import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
@@ -19,7 +19,7 @@ import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import EmptyState from "./EmptyState.svelte";
-import { CELL_COMPONENTS, COLUMN_DEFS } from "./columns";
+import { CELL_COMPONENTS, COLUMN_DEFS, COLUMN_WIDTHS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { instructorSortLabel, instructorSortStep, nextInstructorSorting } from "./instructorSort";
 import { setTableContext } from "./context";
 import { buildSkeletonHtml } from "./skeletons";
@@ -33,6 +33,7 @@ let {
   manualSorting = false,
   subjectMap = {},
   columnVisibility = $bindable({}),
+  defaultVisibility = {},
   expandedCrn,
   onToggle,
   skeletonRowCount,
@@ -48,6 +49,7 @@ let {
   manualSorting?: boolean;
   subjectMap?: Record<string, string>;
   columnVisibility?: VisibilityState;
+  defaultVisibility?: VisibilityState;
   expandedCrn: string | null;
   onToggle: (crn: string) => void;
   skeletonRowCount: number;
@@ -69,6 +71,7 @@ setTableContext({
   get maxSubjectLength() {
     return maxSubjectLength;
   },
+  isColumnVisible: (id: string) => columnVisibility[id] !== false,
 });
 
 useOverlayScrollbars(() => tableWrapper, {
@@ -97,10 +100,25 @@ let visibleColumnIds = $derived(
   COLUMN_DEFS.map((c) => c.id!).filter((id) => columnVisibility[id] !== false)
 );
 
-let hasCustomVisibility = $derived(Object.values(columnVisibility).some((v) => v === false));
+// Measured against the default, not against "nothing hidden": a column that
+// starts hidden must not make the table look permanently customised.
+let hiddenColumnIds = $derived(
+  Object.entries(columnVisibility)
+    .filter(([, visible]) => visible === false)
+    .map(([id]) => id)
+);
+let defaultHiddenIds = $derived(
+  Object.entries(defaultVisibility)
+    .filter(([, visible]) => visible === false)
+    .map(([id]) => id)
+);
+let hasCustomVisibility = $derived(
+  hiddenColumnIds.length !== defaultHiddenIds.length ||
+    defaultHiddenIds.some((id) => !hiddenColumnIds.includes(id))
+);
 
 function resetColumnVisibility() {
-  columnVisibility = {};
+  columnVisibility = { ...defaultVisibility };
 }
 
 function handleVisibilityChange(updater: Updater<VisibilityState>) {
@@ -119,15 +137,21 @@ const handleSortingChange = createSortingHandler(
  * The instructor header cycles name and rating together, so it drives a sort key
  * that is not its own column and cannot use TanStack's per-column toggle.
  */
-function courseHeaderOverride(headerId: string) {
-  if (headerId !== "instructor") return null;
-  const step = instructorSortStep(sorting);
-  return {
-    suffix: instructorSortLabel(sorting),
-    indicator: step.indicator,
-    title: step.next,
-    onclick: () => onSortingChange?.(nextInstructorSorting(sorting)),
-  };
+function courseHeaderOverride(headerId: string): HeaderOverride | null {
+  if (headerId === "instructor") {
+    const step = instructorSortStep(sorting);
+    return {
+      suffix: instructorSortLabel(sorting),
+      indicator: step.indicator,
+      title: step.next,
+      onclick: () => onSortingChange?.(nextInstructorSorting(sorting)),
+    };
+  }
+  // Shown together the two columns are one range, so they carry one label over
+  // the pair rather than naming halves the reader can already see.
+  if (headerId === "time" && columnVisibility.time_end !== false) return { label: "Time" };
+  if (headerId === "time_end" && columnVisibility.time !== false) return { label: "" };
+  return null;
 }
 
 const table = createSvelteTable({
@@ -170,12 +194,26 @@ const table = createSvelteTable({
 >
   <ContextMenu.Root>
     <ContextMenu.Trigger class="contents">
-      <table bind:this={tableElement} class="w-full min-w-120 md:min-w-160 border-collapse text-sm">
+      <table
+        bind:this={tableElement}
+        class="w-full table-fixed border-collapse text-sm"
+        style:min-width="{tableMinWidth(visibleColumnIds)}px"
+      >
+        <colgroup>
+          {#each visibleColumnIds as colId (colId)}
+            <!-- The flex column stays unsized so surplus width collects there
+                 rather than being shared out across every track. -->
+            <col
+              style:width={colId === FLEX_COLUMN ? undefined : `${COLUMN_WIDTHS[colId]}px`}
+            />
+          {/each}
+        </colgroup>
         <SortableHeader
           headerGroups={table.getHeaderGroups()}
-          thClass="py-2 px-2 font-medium select-none"
+          thClass="px-2 pb-1.5 text-[10px] font-semibold tracking-[0.09em] uppercase text-muted-foreground select-none"
           checkVisibility={true}
-          headerClass={(id) => id === "seats" ? "text-right" : ""}
+          headerClass={(id) =>
+            id === "time" || id === "duration" || id === "time_end" ? "text-right" : ""}
           headerOverride={courseHeaderOverride}
         />
         {#if loading && courses.length === 0}
@@ -206,16 +244,12 @@ const table = createSvelteTable({
               animate:flip={{ duration: hadResults ? 300 : 0 }}
             >
               <tr
-                class="border-b border-border hover:bg-muted/50 transition-colors whitespace-nowrap {expandedCrn === course.crn ? 'bg-muted/30' : ''}"
+                class="h-10 border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer {expandedCrn === course.crn ? 'bg-muted/30' : ''}"
                 onclick={(e) => { if (!(e.target as HTMLElement).closest('a')) onToggle(course.crn); }}
               >
                 {#each visibleColumnIds as colId (colId)}
                   {@const CellComponent = CELL_COMPONENTS[colId]}
-                  {#if CellComponent}
-                    <CellComponent {course} />
-                  {:else}
-                    <td class="py-2 px-2 text-muted-foreground">&mdash;</td>
-                  {/if}
+                  <CellComponent {course} />
                 {/each}
               </tr>
               {#if expandedCrn === course.crn}

@@ -280,7 +280,7 @@ describe("formatMeetingTimeTooltip", () => {
       location: { building: null, buildingDescription: "Main Hall", room: "2.206", campus: null },
     });
     expect(formatMeetingTimeTooltip(mt)).toBe(
-      "Tuesdays & Thursdays, 4:15-5:30 PM\nMain Hall 2.206, Aug 26, 2024 - Dec 12, 2024"
+      "Tuesdays & Thursdays, 4:15-5:30 PM\nMain Hall 2.206\nAug 26, 2024 - Dec 12, 2024"
     );
   });
   it("handles TBA days and times", () => {

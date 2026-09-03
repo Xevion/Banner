@@ -12,6 +12,8 @@ export interface UseColumnVisibilityOptions {
   autoHideColumns?: string[];
   /** Media query string for compact mode (default: "(min-width: 640px) and (max-width: 767px)") */
   compactQuery?: string;
+  /** Column IDs hidden until the user opts in, at every breakpoint */
+  defaultHidden?: string[];
   /** All available column definitions */
   columns: ColumnDef[];
 }
@@ -35,15 +37,24 @@ export class ColumnVisibilityController {
 
   #isCompact = $state(false);
   readonly #autoHideColumns: string[];
+  readonly #defaultHidden: string[];
 
-  /** Whether any columns have been hidden */
-  readonly hasCustomVisibility: boolean = $derived(
-    Object.values(this.visibility).some((v) => v === false)
-  );
+  /** Whether visibility differs from the default, rather than merely hiding something. */
+  readonly hasCustomVisibility: boolean = $derived.by(() => {
+    const hidden = Object.entries(this.visibility)
+      .filter(([, visible]) => visible === false)
+      .map(([id]) => id);
+    return (
+      hidden.length !== this.#defaultHidden.length ||
+      this.#defaultHidden.some((id) => !hidden.includes(id))
+    );
+  });
 
   constructor(options: UseColumnVisibilityOptions) {
     this.columns = options.columns;
     this.#autoHideColumns = options.autoHideColumns ?? [];
+    this.#defaultHidden = options.defaultHidden ?? [];
+    this.visibility = this.#defaultVisibility();
     const compactQuery = options.compactQuery ?? "(min-width: 640px) and (max-width: 767px)";
 
     // Media query listener for responsive column hiding
@@ -87,7 +98,16 @@ export class ColumnVisibilityController {
 
   /** Reset all columns to default visibility */
   reset = (): void => {
-    this.visibility = {};
+    this.visibility = this.#defaultVisibility();
     this.#userToggledColumns = new SvelteSet();
   };
+
+  /** What `reset` restores, for consumers that render their own reset control. */
+  get defaultVisibility(): VisibilityState {
+    return this.#defaultVisibility();
+  }
+
+  #defaultVisibility(): VisibilityState {
+    return Object.fromEntries(this.#defaultHidden.map((id) => [id, false]));
+  }
 }

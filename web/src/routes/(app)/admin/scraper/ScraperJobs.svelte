@@ -8,6 +8,7 @@ import { createSortingHandler } from "$lib/composables/sorting";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration } from "$lib/time";
+import { TOOLTIP_SURFACE } from "$lib/tooltipClass";
 import { TriangleAlert } from "@lucide/svelte";
 import {
   type ColumnDef,
@@ -531,7 +532,7 @@ function getTimingDisplay(
 
   {#if tooltipText !== null}
     <div
-      class="pointer-events-none fixed z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-sm whitespace-pre-line max-w-max text-left"
+      class="pointer-events-none fixed {TOOLTIP_SURFACE}"
       style="left: {tooltipX + 12}px; top: {tooltipY + 12}px;"
     >
       {tooltipText}

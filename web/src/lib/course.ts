@@ -126,16 +126,28 @@ export function formatMeetingDaysVerbose(mt: DbMeetingTime): string {
   return formatDayVerbose(mt.days);
 }
 
+/** A single clock time, e.g. "10:00 AM". */
+export function formatTime(time: string | null): string {
+  if (!time) return "";
+  const parts = time.split(":");
+  if (parts.length < 2) return "";
+  const hours = parseInt(parts[0], 10);
+  if (Number.isNaN(hours)) return "";
+  const period = hours >= 12 ? "PM" : "AM";
+  const display = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+  return `${display}:${parts[1]} ${period}`;
+}
+
 /**
  * Full verbose tooltip for a single meeting time:
  * "Tuesdays & Thursdays, 4:15-5:30 PM\nMain Hall 2.206 * Aug 26 - Dec 12, 2024"
  */
-export function formatMeetingTimeTooltip(mt: DbMeetingTime): string {
+export function formatMeetingTimeTooltip(mt: DbMeetingTime, untimedLabel = "TBA"): string {
   const days = formatMeetingDaysVerbose(mt);
   const range = formatTimeRange(mt.timeRange?.start ?? null, mt.timeRange?.end ?? null);
   let line1: string;
   if (!days && range === "TBA") {
-    line1 = "TBA";
+    line1 = untimedLabel;
   } else if (!days) {
     line1 = range;
   } else if (range === "TBA") {
@@ -144,26 +156,29 @@ export function formatMeetingTimeTooltip(mt: DbMeetingTime): string {
     line1 = `${days}, ${range}`;
   }
 
+  // One fact per line. Joined, a long building name pushes the date past the
+  // tooltip's max width and wraps it to an orphan; alone, each line fits.
   const parts = [line1];
 
   const loc = formatLocationLong(mt);
-  const dateRange = `${formatDateShort(mt.dateRange.start)} - ${formatDateShort(mt.dateRange.end)}`;
-
-  if (loc && dateRange) {
-    parts.push(`${loc}, ${dateRange}`);
-  } else if (loc) {
-    parts.push(loc);
-  } else if (dateRange) {
-    parts.push(dateRange);
-  }
+  if (loc) parts.push(loc);
+  parts.push(`${formatDateShort(mt.dateRange.start)} - ${formatDateShort(mt.dateRange.end)}`);
 
   return parts.join("\n");
 }
 
-/** Full verbose tooltip for all meeting times on a course, newline-separated. */
-export function formatMeetingTimesTooltip(meetingTimes: DbMeetingTime[]): string {
-  if (meetingTimes.length === 0) return "TBA";
-  return meetingTimes.map(formatMeetingTimeTooltip).join("\n\n");
+/**
+ * Full verbose tooltip for all meeting times on a course, newline-separated.
+ *
+ * A meeting carries no record of why it has no time, so `untimedLabel` lets the
+ * caller name the reason: an asynchronous section is not merely unscheduled.
+ */
+export function formatMeetingTimesTooltip(
+  meetingTimes: DbMeetingTime[],
+  untimedLabel = "TBA"
+): string {
+  if (meetingTimes.length === 0) return untimedLabel;
+  return meetingTimes.map((mt) => formatMeetingTimeTooltip(mt, untimedLabel)).join("\n\n");
 }
 
 /** Border accent class based on instructional method and campus. */

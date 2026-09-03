@@ -9,7 +9,7 @@ let { course }: { course: CourseResponse } = $props();
 
 const { isColumnVisible } = getTableContext();
 
-/** The meeting whose start drives the label, when a section meets more than once. */
+/** Matches TimeCell's choice of meeting, so both halves describe the same one. */
 function earliestTimedMeeting(meetingTimes: DbMeetingTime[]): DbMeetingTime | null {
   let earliest: DbMeetingTime | null = null;
   let earliestStart = Number.POSITIVE_INFINITY;
@@ -24,22 +24,27 @@ function earliestTimedMeeting(meetingTimes: DbMeetingTime[]): DbMeetingTime | nu
 
 let copy = $derived(scheduleCopy(scheduleState(course)));
 let lead = $derived(earliestTimedMeeting(course.meetingTimes));
-// Only two real times form a range worth closing the gap for. An untimed row
-// keeps its padding, or the phrase collides with whatever the end cell shows.
-let joined = $derived(!copy && isColumnVisible("time_end"));
+// Beside a visible start the two columns read as one, so this cell is the back
+// half of a range and never states anything on its own: an untimed row is
+// already fully described by the phrase in the start cell.
+let paired = $derived(isColumnVisible("time"));
 </script>
 
 <td
-  class="truncate py-0 pl-2 text-right align-middle {joined ? 'pr-0' : 'pr-2'}"
+  class="truncate py-0 pr-2 align-middle {paired && !copy ? 'pl-0 text-left' : 'pl-2 text-right'}"
   data-tooltip={copy?.detail ?? formatMeetingTimesTooltip(course.meetingTimes)}
 >
-  <!-- The phrase says why there is no time, in place of a glyph that only says
-       there isn't one. Sans and muted, so it never reads as a clock value. -->
   {#if copy}
-    <span class="text-[11.5px] text-muted-foreground/80 select-none">{copy.phrase}</span>
+    {#if !paired}
+      <span class="font-mono text-[11px] text-muted-foreground/40 tabular-nums select-none"
+        >N/A</span
+      >
+    {/if}
   {:else}
     <span class="font-mono text-[11.5px] font-medium tabular-nums select-none"
-      >{formatTime(lead?.timeRange?.start ?? null)}</span
+      >{#if paired}<span class="px-[3px] text-muted-foreground">&ndash;</span>{/if}{formatTime(
+        lead?.timeRange?.end ?? null
+      )}</span
     >
   {/if}
 </td>

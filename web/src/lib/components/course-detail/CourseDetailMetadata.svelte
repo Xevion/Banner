@@ -2,15 +2,45 @@
 import type { CourseResponse } from "$lib/bindings";
 import { formatCreditHours } from "$lib/course";
 import { getAttributeLabel, getCampusLabel, getInstructionalMethodLabel } from "$lib/labels";
+import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { formatNumber } from "$lib/utils";
-import { Info } from "@lucide/svelte";
+import { Check, ClipboardCopy, Info } from "@lucide/svelte";
 import SimpleTooltip from "../SimpleTooltip.svelte";
 
 let { course }: { course: CourseResponse } = $props();
+
+const clipboard = useClipboard(1000);
 </script>
 
 <div class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+    <span class="inline-flex items-center gap-1.5">
+      <span class="text-muted-foreground text-xs">CRN</span>
+      <span class="font-mono text-foreground tabular-nums">{course.crn}</span>
+      <button
+        class="inline-flex cursor-copy items-center text-muted-foreground/50 transition-colors duration-150 select-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+        onclick={(e) => clipboard.copy(course.crn, e)}
+        aria-label="Copy CRN {course.crn} to clipboard"
+      >
+        {#if clipboard.copiedValue === course.crn}
+          <Check class="size-3 text-status-green" />
+        {:else}
+          <ClipboardCopy class="size-3" />
+        {/if}
+      </button>
+    </span>
+
+    <span class="text-border">|</span>
+
+    {#if course.primaryLocation}
+      <span class="inline-flex items-center gap-1.5">
+        <span class="text-muted-foreground text-xs">Room</span>
+        <span class="text-foreground">{course.primaryLocation}</span>
+      </span>
+
+      <span class="text-border">|</span>
+    {/if}
+
     <span class="inline-flex items-center gap-1.5">
       <span class="text-muted-foreground text-xs">Delivery</span>
       <span class="text-foreground">

@@ -19,23 +19,22 @@ let seatsTip = $derived(
 );
 </script>
 
-<td class="py-2 px-2 text-right whitespace-nowrap">
+<td class="px-2 align-middle whitespace-nowrap">
   <span
-    class="inline-flex flex-col items-end select-none"
+    class="grid grid-cols-[1.5rem_2.25rem_minmax(0,1fr)] items-baseline gap-x-[5px] select-none"
     data-tooltip={seatsTip}
     data-tooltip-side="left"
     data-tooltip-delay="200"
   >
-    <span class="text-xl leading-[1.05] font-bold tracking-[-0.02em] tabular-nums {countColor}">
-      {formatNumber(open)}
-    </span>
-    <span class="text-[10px] text-muted-foreground tabular-nums"
+    <span
+      class="text-right text-sm leading-none font-bold tracking-[-0.01em] tabular-nums {countColor}"
+      >{formatNumber(open)}</span
+    >
+    <span class="text-[11px] text-muted-foreground tabular-nums"
       >of {formatNumber(course.enrollment.max)}</span
     >
-    {#if waitlisted > 0}
-      <span class="text-[10px] font-medium text-seat-over tabular-nums"
-        >{formatNumber(waitlisted)} waitlisted</span
-      >
-    {/if}
+    <span class="font-mono text-[10px] text-seat-over tabular-nums">
+      {#if waitlisted > 0}wl {formatNumber(waitlisted)}{/if}
+    </span>
   </span>
 </td>

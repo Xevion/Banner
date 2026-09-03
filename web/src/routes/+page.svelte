@@ -121,10 +121,17 @@ $effect(() => {
 });
 
 const columns = new ColumnVisibilityController({
-  autoHideColumns: ["instructor"],
+  autoHideColumns: ["instructor", "days", "duration"],
+  // The end time is opt-in: the start plus the duration already pins a meeting,
+  // and shown together the two halves render as one aligned range.
+  defaultHidden: ["time_end"],
   columns: [
-    { id: "time", label: "Schedule" },
+    { id: "days", label: "Days" },
+    { id: "time", label: "Start Time" },
+    { id: "time_end", label: "End Time" },
+    { id: "duration", label: "Duration" },
     { id: "course_code", label: "Course" },
+    { id: "title", label: "Title" },
     { id: "instructor", label: "Instructor" },
     { id: "seats", label: "Seats" },
   ],
@@ -222,6 +229,7 @@ function handlePageChange(newOffset: number) {
         {subjectMap}
         {limit}
         bind:columnVisibility={columns.visibility}
+        defaultVisibility={columns.defaultVisibility}
       />
 
       {#if searchResult}

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { TOOLTIP_SURFACE } from "$lib/tooltipClass";
 import { cn } from "$lib/utils";
 import { Tooltip } from "bits-ui";
 import type { Snippet } from "svelte";
@@ -46,7 +47,7 @@ let {
                 {avoidCollisions}
                 {collisionPadding}
                 class={cn(
-                    "z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-sm whitespace-pre-line max-w-max text-left",
+                    "z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-sm whitespace-pre-line max-w-xs text-left",
                     contentClass,
                 )}
             >
@@ -60,7 +61,7 @@ let {
             {avoidCollisions}
             {collisionPadding}
             class={cn(
-                "z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-sm whitespace-pre-line max-w-max text-left",
+                TOOLTIP_SURFACE,
                 contentClass,
             )}
         >

@@ -1,23 +1,26 @@
 /**
- * Every column is a stack now, so each skeleton mirrors its cell's line count.
- * A single bar would collapse the row height and make loading jump.
+ * One bar per cell, matching the single-line row. Widths approximate each column's
+ * typical content so the placeholder does not read as a uniform block.
  */
 const CELL_SKELETONS: Record<string, string> = {
-  time: `<div class="flex w-31 flex-col gap-[5px] animate-pulse"><div class="h-4 w-full rounded bg-muted"></div><div class="h-[9px] w-full rounded-[2px] bg-muted"></div><div class="h-3 w-16 rounded bg-muted"></div></div>`,
-  course_code: `<div class="flex flex-col gap-1 animate-pulse"><div class="h-4 w-24 rounded bg-muted"></div><div class="h-3 w-40 rounded bg-muted"></div><div class="h-3 w-12 rounded bg-muted"></div></div>`,
-  instructor: `<div class="flex flex-col gap-1 animate-pulse"><div class="h-4 w-20 rounded bg-muted"></div><div class="h-3 w-16 rounded bg-muted"></div></div>`,
-  seats: `<div class="flex flex-col items-end gap-1 animate-pulse"><div class="h-5 w-8 rounded bg-muted"></div><div class="h-2.5 w-10 rounded bg-muted"></div></div>`,
+  days: `<div class="h-4 w-[110px] rounded-[3px] bg-muted animate-pulse"></div>`,
+  time: `<div class="ml-auto h-3.5 w-[118px] rounded bg-muted animate-pulse"></div>`,
+  duration: `<div class="ml-auto h-3.5 w-[46px] rounded bg-muted animate-pulse"></div>`,
+  course_code: `<div class="h-3.5 w-[88px] rounded bg-muted animate-pulse"></div>`,
+  title: `<div class="h-3.5 w-4/5 rounded bg-muted animate-pulse"></div>`,
+  instructor: `<div class="h-3.5 w-[120px] rounded bg-muted animate-pulse"></div>`,
+  seats: `<div class="h-3.5 w-[70px] rounded bg-muted animate-pulse"></div>`,
 };
 
 export function buildSkeletonHtml(colIds: string[], rowCount: number): string {
   const cells = colIds
     .map((id) => {
       const skeleton =
-        CELL_SKELETONS[id] ?? `<div class="h-4 w-20 rounded bg-muted animate-pulse"></div>`;
-      return `<td class="py-2 px-2">${skeleton}</td>`;
+        CELL_SKELETONS[id] ?? `<div class="h-3.5 w-20 rounded bg-muted animate-pulse"></div>`;
+      return `<td class="px-2">${skeleton}</td>`;
     })
     .join("");
-  const row = `<tr class="border-b border-border">${cells}</tr>`;
+  const row = `<tr class="h-10 border-b border-border">${cells}</tr>`;
   return row.repeat(rowCount);
 }
 

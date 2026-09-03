@@ -14,6 +14,7 @@ let {
   subjectMap = {},
   limit = 25,
   columnVisibility = $bindable({}),
+  defaultVisibility = {},
 }: {
   courses: CourseResponse[];
   loading: boolean;
@@ -23,6 +24,8 @@ let {
   subjectMap?: Record<string, string>;
   limit?: number;
   columnVisibility?: VisibilityState;
+  /** What "reset to default" restores, for columns hidden until opted into. */
+  defaultVisibility?: VisibilityState;
 } = $props();
 
 const state = useCourseTableState(
@@ -54,6 +57,7 @@ export function navigateToSection(crn: string) {
   {manualSorting}
   {subjectMap}
   bind:columnVisibility
+  {defaultVisibility}
   expandedCrn={state.expandedCrn}
   onToggle={state.toggleRow}
   skeletonRowCount={state.skeletonRowCount}
