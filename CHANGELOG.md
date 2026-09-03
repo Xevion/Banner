@@ -4,6 +4,91 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2](https://github.com/Xevion/Banner/compare/v0.7.1...v0.7.2) (2026-09-03)
+
+
+### Features
+
+* **backend:** Add multi-layer per-IP rate limiting middleware ([a106025](https://github.com/Xevion/Banner/commit/a106025cfa6518b6882af441d0e42b0fc9fe3e7d))
+* **backend:** Implement rate limit error handling with client-side retry ([84bb179](https://github.com/Xevion/Banner/commit/84bb17908f31b70a6bbb3b54d5da835c6bddc24e))
+* **bot:** Add course watch notifications via Discord DMs ([dfd30a1](https://github.com/Xevion/Banner/commit/dfd30a161740db054022a06f6a48afee2002c038))
+* **bot:** Paginate /search results with embeds and buttons ([2523c38](https://github.com/Xevion/Banner/commit/2523c38ece2bdb6636c9c3c656bc642071e430d8))
+* **course-table:** Add a menu for building multi-key sorts ([3d70274](https://github.com/Xevion/Banner/commit/3d70274e16bcaa6f33756f58e1c764c07deb34e3))
+* **course-table:** Add end-time sort, span untimed rows, align clock parts ([b338cec](https://github.com/Xevion/Banner/commit/b338cec788cd7272e8c86dd97dcff8164ab84430))
+* **course-table:** Redesign columns and add instructor sort cycle ([d21e338](https://github.com/Xevion/Banner/commit/d21e338ee7e5600b1c4c41b0b1becacb4e126edd))
+* **deploy:** Add Helm chart for k3s deployment, drop Railway coupling ([a3b2643](https://github.com/Xevion/Banner/commit/a3b264391276c8435c88dd9c118efd8bb3ac4e14))
+* **search:** Order results by indexed columns instead of JSONB text ([d479da0](https://github.com/Xevion/Banner/commit/d479da004c971d7820e2ccc7946827f74157b811))
+* **web:** Add DB-backed readiness probe and access log target ([7ea8dea](https://github.com/Xevion/Banner/commit/7ea8deab790fb556f1acc45e99f961006f3ff682))
+* **web:** Redesign schedule/seats cells with a day-track visualization ([b1d16e7](https://github.com/Xevion/Banner/commit/b1d16e7f442716b40b9730ae6ec6ca367c7ff7e0))
+
+
+### Bug Fixes
+
+* Add package overrides for minimatch and cookie vulnerabilities ([9bbc97f](https://github.com/Xevion/Banner/commit/9bbc97f6a433cd19f7cad08b33837c625ba9d571))
+* **backend:** Exempt static assets from rate limiting ([b34df19](https://github.com/Xevion/Banner/commit/b34df1909a011bb46b1da386575ac97c50825fbe))
+* **ci:** Remove deleted scripts/ dependency from security job ([cbccebc](https://github.com/Xevion/Banner/commit/cbccebc00c9913cb0245207cffd382c528626f7f))
+* **deploy:** Harden Helm chart against replica races and Discord redirect misconfig ([2ea094a](https://github.com/Xevion/Banner/commit/2ea094ae9911251307136f33d842a955316a6d62))
+* **deps:** Patch quinn-proto DoS and devalue prototype pollution ([3faa801](https://github.com/Xevion/Banner/commit/3faa801faff379ddfe1f85209fc16c07d8e7e2ca))
+* **deps:** Suppress transitive advisories and pin trivy-action ([0d49c69](https://github.com/Xevion/Banner/commit/0d49c6969b6589486e8e49d4e5fa595e722d903d))
+* **scraper:** Replace single-page search with paginated search_all in subject job ([0f44a82](https://github.com/Xevion/Banner/commit/0f44a824b9b5b0e812f6bfa62cb3cf40555046a5))
+* **search-autocomplete:** Unwrap microfuzz CJS default under rolldown bundling ([23b1172](https://github.com/Xevion/Banner/commit/23b1172bdf5b4210182c90bf1714b822a8196da9))
+* **security:** Update svelte to 5.53.5 to patch XSS vulnerabilities ([a5f163c](https://github.com/Xevion/Banner/commit/a5f163c189d2e24019bc3f3622560c0ca30baf5a))
+* **stories:** Stop addon-svelte-csf rendering bare components without props ([f04bcef](https://github.com/Xevion/Banner/commit/f04bcefaf65f67eb1aa6e2bad89a34a3b573cc93))
+* **tempo:** Recurse subdirectories when copying ts-rs bindings ([c481aa8](https://github.com/Xevion/Banner/commit/c481aa8313c08eb9f0380f6ff21d0ef0926edc35))
+
+
+### Performance Improvements
+
+* **backend:** Deferred sync bot client init, non-blocking schedule cache load ([f607403](https://github.com/Xevion/Banner/commit/f6074038af85dcfb36cfecf680b0623d74a9c9c9))
+* **backup:** Replace in-memory dump+compress with streaming multipart upload ([3b62a51](https://github.com/Xevion/Banner/commit/3b62a519b3f385e8ae320f691021b0c5c894a2d2))
+* **data:** Add course_meetings table, eliminate JSONB schedule parsing ([145d5f9](https://github.com/Xevion/Banner/commit/145d5f9c4b248ef20d1dda9ed638283f2f256bd3))
+* **data:** Precompute per-term aggregates and add maintenance jobs ([95f9bfd](https://github.com/Xevion/Banner/commit/95f9bfd03e75355122480c467c762ad27840850e))
+
+
+### Code Refactoring
+
+* Add error context to uncovered db operations and harden stream subscription lookup ([4ae1409](https://github.com/Xevion/Banner/commit/4ae14093046481f3e136e647d2c37851e813e8cb))
+* **admin:** Give the scraper tables one cell definition each ([3050359](https://github.com/Xevion/Banner/commit/3050359e293f8cd630fdfdf11c4c68a6cbd2f8ae))
+* **admin:** Share one matching table between bluebook and rmp ([b71a6ea](https://github.com/Xevion/Banner/commit/b71a6ead3336a95074ea107478a3809430a580ba))
+* **backend:** Cleanup AppState, parallelize startup, move bg tasks, fix layering ([708ab81](https://github.com/Xevion/Banner/commit/708ab8197dd996dc40a87fec20abee312d8b7ec8))
+* **course-table:** Key every column table on one ColumnId union ([9a6749d](https://github.com/Xevion/Banner/commit/9a6749d3a0150c9a34a2c8478b370f8250ae894d))
+* **course-table:** Split cell components and extract shared state helpers ([840a5a8](https://github.com/Xevion/Banner/commit/840a5a83103f52816195d7ad85a85d5d42d531aa))
+* **data:** Derive the sort key list instead of writing it out ([288d7b2](https://github.com/Xevion/Banner/commit/288d7b2391998a6a888747edab80eb0040a82478))
+* **data:** Move the sort layer into its own module ([ef5b45f](https://github.com/Xevion/Banner/commit/ef5b45fd7e01cd849c8b70f0cd0bbc42afe55445))
+* **data:** Replace fixed-parameter search functions with SearchFilter struct ([7d31d0c](https://github.com/Xevion/Banner/commit/7d31d0c2715f62637994efdd2f03b0c5ee83b641))
+* **data:** Type JSONB columns and bind pagination parameters ([a70c9ac](https://github.com/Xevion/Banner/commit/a70c9acf70076961b2cac483342456114f968db0))
+* Decompose routes.rs into focused handler modules ([e3bd22c](https://github.com/Xevion/Banner/commit/e3bd22c5d9ffcb8f3a90e5bef73e46e6c2ca89d1))
+* Delete dead code and correct stale RUST.md docs ([2e6189d](https://github.com/Xevion/Banner/commit/2e6189df7fb5880eea2d630a9b93ec84f3687aec))
+* Extract database query functions into data layer ([a6b00fd](https://github.com/Xevion/Banner/commit/a6b00fd82f1a0b3ec408b0b366f933ed62ea2658))
+* Extract reusable table components and deduplicate slow-op logging ([8b5d052](https://github.com/Xevion/Banner/commit/8b5d05214949d052e98e1c37425fd5ee2a818c6c))
+* **scraper:** Replace immediate retry with jittered backoff, bound SSR client ([5907466](https://github.com/Xevion/Banner/commit/590746620dbf1d5e699b38ccbccd5bb30a9e017b))
+* **scripts:** Replace bun script suite with tempo CLI ([81a6a6b](https://github.com/Xevion/Banner/commit/81a6a6be36821cfd5144f051362e7ecf972c64b4))
+* **ssr:** Replace Bun entrypoint script with Rust-supervised Node SSR ([d1df760](https://github.com/Xevion/Banner/commit/d1df760488dcf7c7fb1758a8105cae84bf946328))
+* Standardize data layer signatures to pool-first, use anyhow::Context ([a4566cc](https://github.com/Xevion/Banner/commit/a4566ccdd369eed9fbf6c0b1cde4e514df7ed39c))
+* **tempo:** Switch to 0.2.0 engine, rework bindings generation, add deploy secret sync tasks ([5b2f9b9](https://github.com/Xevion/Banner/commit/5b2f9b959b8615742efcf6db5f8164bdcfada93f))
+* **web:** Drop attributeMap from CourseDetailContext, modernize Storybook stories ([c2b3928](https://github.com/Xevion/Banner/commit/c2b3928ce3b3e4b32014fb9c0561f267dba50652))
+* **web:** Use get_all_terms in search options ([6e5e924](https://github.com/Xevion/Banner/commit/6e5e924644fac749567b5d68cddfb82c88bcba96))
+
+
+### Continuous Integration
+
+* Replace the hand-rolled audits with the advisory scanner ([d3ede7f](https://github.com/Xevion/Banner/commit/d3ede7fbdd0c6edb4140259d6a9a2b27b909e145))
+* Restore gha build cache ([5292112](https://github.com/Xevion/Banner/commit/5292112112fa56d8fdf430ec57573fbe402bac3e))
+* Switch docker build cache to GHCR, add mold/clang for faster builds ([2c6df24](https://github.com/Xevion/Banner/commit/2c6df246ee7df083f6d976ef8c6a1611a6c1a51b))
+
+
+### Miscellaneous
+
+* **deploy:** Pin kubectl for direct k3s cluster access ([60f9f92](https://github.com/Xevion/Banner/commit/60f9f925282b067baebe301edede173980837d37))
+* **deps:** Add undici as web dependency ([5355461](https://github.com/Xevion/Banner/commit/5355461b8ac9c944720e924199639a5b0d78c302))
+* **deps:** Bump quinn-proto to 0.11.16 ([e79ad87](https://github.com/Xevion/Banner/commit/e79ad8743bb7809154c81f199b234016bc5148b1))
+* **deps:** Fix frontend security vulnerabilities in web deps ([eb17de6](https://github.com/Xevion/Banner/commit/eb17de601d69d67d3dea17789d9f965bee3f09aa))
+* **deps:** Refresh dependencies and bound the cookie override ([796ed77](https://github.com/Xevion/Banner/commit/796ed77e281d72208efda864dded37b29fdd5b00))
+* **deps:** Update frontend dependencies ([c53f40e](https://github.com/Xevion/Banner/commit/c53f40e842ebcbaf47beae7c9c20c31bb1c2a23b))
+* **deps:** Update rust crate chrono to v0.4.45 ([#11](https://github.com/Xevion/Banner/issues/11)) ([291f1fb](https://github.com/Xevion/Banner/commit/291f1fbd98735aa0856e0463fe766df1e26a01a3))
+* **deps:** Update rust crate extension-traits to v2.0.2 ([#12](https://github.com/Xevion/Banner/issues/12)) ([44961f3](https://github.com/Xevion/Banner/commit/44961f35ac552b8016e968fcbb485a929f4320c2))
+* **renovate:** Migrate matchPackagePatterns to matchPackageNames ([7fe7870](https://github.com/Xevion/Banner/commit/7fe7870190fdfa4ff068b90394aeefe8f5db3b1a))
+
 ## [0.7.1](https://github.com/Xevion/Banner/compare/v0.7.0...v0.7.1) (2026-02-26)
 
 
