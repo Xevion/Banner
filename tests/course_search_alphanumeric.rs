@@ -3,7 +3,7 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{SearchFilter, search_courses};
+use banner::data::courses::{SearchFilter, SortSpec, search_courses};
 use helpers::make_course;
 
 #[sqlx::test]
@@ -59,7 +59,7 @@ async fn test_search_alphanumeric_course_numbers(pool: sqlx::PgPool) {
         course_number_high: Some(5500),
         ..Default::default()
     };
-    let (results, _total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, _total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("Search failed");
 

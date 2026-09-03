@@ -6,22 +6,16 @@ import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
 import { useTooltipDelegation } from "$lib/composables/useTooltipDelegation";
-import { createSortingHandler } from "$lib/composables/sorting";
 import { Check, RotateCcw } from "@lucide/svelte";
-import {
-  type SortingState,
-  type Updater,
-  type VisibilityState,
-  getCoreRowModel,
-  getSortedRowModel,
-} from "@tanstack/table-core";
+import { type Updater, type VisibilityState, getCoreRowModel } from "@tanstack/table-core";
 import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import EmptyState from "./EmptyState.svelte";
 import { CELL_COMPONENTS, COLUMN_DEFS, COLUMN_WIDTHS, FLEX_COLUMN, tableMinWidth } from "./columns";
-import { instructorSortLabel, instructorSortStep, nextInstructorSorting } from "./instructorSort";
 import { timeSpansPair } from "$lib/scheduleState";
+import type { SortKeyOption } from "$lib/bindings";
+import { type SortTerm, applyHeaderSort, headerSortStep } from "$lib/sort";
 import { setTableContext } from "./context";
 import { buildSkeletonHtml } from "./skeletons";
 
@@ -30,8 +24,8 @@ let {
   loading,
   stale,
   sorting = [],
+  sortOptions = [],
   onSortingChange,
-  manualSorting = false,
   subjectMap = {},
   columnVisibility = $bindable({}),
   defaultVisibility = {},
@@ -45,9 +39,9 @@ let {
   courses: CourseResponse[];
   loading: boolean;
   stale: boolean;
-  sorting?: SortingState;
-  onSortingChange?: (sorting: SortingState) => void;
-  manualSorting?: boolean;
+  sorting?: SortTerm[];
+  sortOptions?: SortKeyOption[];
+  onSortingChange?: (sorting: SortTerm[]) => void;
   subjectMap?: Record<string, string>;
   columnVisibility?: VisibilityState;
   defaultVisibility?: VisibilityState;
@@ -127,36 +121,31 @@ function handleVisibilityChange(updater: Updater<VisibilityState>) {
   columnVisibility = newVisibility;
 }
 
-const handleSortingChange = createSortingHandler(
-  () => sorting,
-  (next) => {
-    onSortingChange?.(next);
-  }
-);
-
 /**
- * The instructor header cycles name and rating together, so it drives a sort key
- * that is not its own column and cannot use TanStack's per-column toggle.
+ * Every sortable header runs the same cycle: each key the column offers, both
+ * ways round, then off. The instructor header's five states are that rule on a
+ * two-key column rather than a mechanism of its own.
  */
+const sortLabels = $derived(new Map(sortOptions.map((option) => [option.key, option])));
+
 function courseHeaderOverride(headerId: string): HeaderOverride | null {
-  if (headerId === "instructor") {
-    const step = instructorSortStep(sorting);
-    return {
-      suffix: instructorSortLabel(sorting),
-      indicator: step.indicator,
-      title: step.next,
-      onclick: () => onSortingChange?.(nextInstructorSorting(sorting)),
-    };
-  }
+  const step = headerSortStep(headerId, sorting, sortLabels);
+  if (!step) return null;
+
   // Shown together the columns are one range under one label, so the titles are
   // left to say which half each sort control orders.
-  if (headerId === "time" && columnVisibility.time_end !== false) {
-    return { label: "Time", title: "Sort by start time" };
-  }
-  if (headerId === "time_end" && columnVisibility.time !== false) {
-    return { label: "", title: "Sort by end time" };
-  }
-  return null;
+  const paired = columnVisibility.time !== false && columnVisibility.time_end !== false;
+  let label: string | undefined;
+  if (paired && headerId === "time") label = "Time";
+  if (paired && headerId === "time_end") label = "";
+
+  return {
+    label,
+    suffix: step.suffix,
+    indicator: step.indicator,
+    title: step.title,
+    onclick: () => onSortingChange?.(applyHeaderSort(step.next)),
+  };
 }
 
 const table = createSvelteTable({
@@ -166,23 +155,12 @@ const table = createSvelteTable({
   getRowId: (row) => String(row.crn),
   columns: COLUMN_DEFS,
   state: {
-    get sorting() {
-      return sorting;
-    },
     get columnVisibility() {
       return columnVisibility;
     },
   },
-  onSortingChange: handleSortingChange,
   onColumnVisibilityChange: handleVisibilityChange,
   getCoreRowModel: getCoreRowModel(),
-  get getSortedRowModel() {
-    return manualSorting ? undefined : getSortedRowModel<CourseResponse>();
-  },
-  get manualSorting() {
-    return manualSorting;
-  },
-  enableSortingRemoval: true,
 });
 </script>
 

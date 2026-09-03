@@ -1,14 +1,14 @@
 import { goto } from "$app/navigation";
 import type { FilterState } from "$lib/filters";
 import { serializeFilters } from "$lib/filters";
-import type { SortingState } from "@tanstack/table-core";
+import { type SortTerm, formatSort } from "$lib/sort";
 
 export interface UseURLSyncOptions {
   filters: FilterState;
   selectedTerm: () => string;
   defaultTermSlug: () => string;
   offset: () => number;
-  sorting: () => SortingState;
+  sorting: () => SortTerm[];
   debounceMs?: number;
 }
 
@@ -51,10 +51,7 @@ export function useURLSync(options: UseURLSyncOptions): URLSyncHandle {
 
     const params = filterParams;
     if (currentOffset > 0) params.set("offset", String(currentOffset));
-    if (currentSorting.length > 0) {
-      params.set("sort_by", currentSorting[0].id);
-      params.set("sort_dir", currentSorting[0].desc ? "desc" : "asc");
-    }
+    if (currentSorting.length > 0) params.set("sort", formatSort(currentSorting));
 
     if (term !== defaultTermSlug) {
       params.set("term", term);

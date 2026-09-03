@@ -18,7 +18,7 @@ import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility
 import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
 import { parseFilters, searchKey } from "$lib/filters";
 import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
-import type { SortingState } from "@tanstack/table-core";
+import { type SortTerm, parseSort } from "$lib/sort";
 import { untrack } from "svelte";
 import type { PageProps } from "./$types";
 
@@ -42,11 +42,7 @@ function resolveState(urlSearch: string, options: SearchOptionsResponse | null) 
     params,
     selectedTerm: urlTerm && terms.some((t) => t.slug === urlTerm) ? urlTerm : defaultTerm,
     offset: Number(params.get("offset")) || 0,
-    sorting: (() => {
-      const sortBy = params.get("sort_by");
-      const sortDir = params.get("sort_dir");
-      return sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
-    })() as SortingState,
+    sorting: parseSort(params.get("sort")),
   };
 }
 
@@ -65,7 +61,7 @@ setFiltersContext(filters);
 
 let selectedTerm = $state(initial.selectedTerm);
 let offset = $state(initial.offset);
-let sorting: SortingState = $state(initial.sorting);
+let sorting: SortTerm[] = $state(initial.sorting);
 
 // Re-sync mutable state on subsequent navigations
 $effect(() => {
@@ -165,7 +161,7 @@ const urlSync: URLSyncHandle = useURLSync({
 
 const limit = 25;
 
-function handleSortingChange(newSorting: SortingState) {
+function handleSortingChange(newSorting: SortTerm[]) {
   sorting = newSorting;
   offset = 0;
   urlSync.navigateNow();
@@ -224,8 +220,8 @@ function handlePageChange(newOffset: number) {
         courses={searchResult?.courses ?? []}
         {loading}
         {sorting}
+        sortOptions={searchOptions?.sorts ?? []}
         onSortingChange={handleSortingChange}
-        manualSorting={true}
         {subjectMap}
         {limit}
         bind:columnVisibility={columns.visibility}

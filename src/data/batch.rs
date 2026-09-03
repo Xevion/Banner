@@ -496,7 +496,7 @@ pub async fn batch_upsert_courses(
         upsert_course_instructors(courses, &crn_term_to_id, &instructor_lookup, &mut tx).await?;
     audits.extend(instructor_audits);
 
-    // Step 6: Sync denormalized course_meetings table for schedule cache
+    // Step 6: Sync denormalized course_meetings table backing schedule cache and sorting
     sync_course_meetings(courses, &crn_term_to_id, &mut tx).await?;
 
     // Count courses that had at least one field change (existing rows only)
@@ -1172,25 +1172,67 @@ async fn sync_course_meetings(
             .context("failed to delete existing course_meetings")?;
     }
 
+    if !course_ids.is_empty() {
+        sqlx::query(
+            r#"
+            INSERT INTO course_meetings (course_id, day_bits, begin_minutes, end_minutes, start_date, end_date)
+            SELECT * FROM UNNEST($1::int4[], $2::int2[], $3::int2[], $4::int2[], $5::date[], $6::date[])
+            "#,
+        )
+        .bind(&course_ids)
+        .bind(&day_bits_vec)
+        .bind(&begin_minutes_vec)
+        .bind(&end_minutes_vec)
+        .bind(&start_dates)
+        .bind(&end_dates)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {}", e))?;
+    }
+
+    refresh_meeting_summary(&mut *conn, &unique_cids).await?;
+
+    Ok(())
+}
+
+/// Recompute the denormalized meeting summary on `courses` for the given ids.
+///
+/// Runs over every affected course, not just those that kept a meeting, so a
+/// section that loses its last one has its summary cleared rather than left
+/// stale. The LEFT JOIN is what produces those NULLs.
+async fn refresh_meeting_summary(
+    conn: &mut sqlx::PgConnection,
+    course_ids: &[i32],
+) -> anyhow::Result<()> {
     if course_ids.is_empty() {
         return Ok(());
     }
 
     sqlx::query(
         r#"
-        INSERT INTO course_meetings (course_id, day_bits, begin_minutes, end_minutes, start_date, end_date)
-        SELECT * FROM UNNEST($1::int4[], $2::int2[], $3::int2[], $4::int2[], $5::date[], $6::date[])
+        UPDATE courses c
+        SET first_begin_minutes = a.first_begin,
+            first_end_minutes   = a.first_end,
+            meeting_minutes     = a.first_end - a.first_begin,
+            weekly_minutes      = a.weekly,
+            day_mask            = a.mask
+        FROM (
+            SELECT ids.id AS course_id,
+                   (array_agg(m.begin_minutes ORDER BY m.begin_minutes))[1] AS first_begin,
+                   (array_agg(m.end_minutes   ORDER BY m.begin_minutes))[1] AS first_end,
+                   sum(m.end_minutes - m.begin_minutes)::smallint           AS weekly,
+                   bit_or(m.day_bits)                                       AS mask
+            FROM UNNEST($1::int4[]) AS ids(id)
+            LEFT JOIN course_meetings m ON m.course_id = ids.id
+            GROUP BY ids.id
+        ) a
+        WHERE c.id = a.course_id
         "#,
     )
-    .bind(&course_ids)
-    .bind(&day_bits_vec)
-    .bind(&begin_minutes_vec)
-    .bind(&end_minutes_vec)
-    .bind(&start_dates)
-    .bind(&end_dates)
-    .execute(&mut *conn)
+    .bind(course_ids)
+    .execute(conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to refresh course meeting summary: {}", e))?;
 
     Ok(())
 }

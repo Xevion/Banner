@@ -22,6 +22,8 @@ pub struct SearchOptionsResponse {
     pub subjects: Vec<CodeDescription>,
     pub reference: SearchOptionsReference,
     pub ranges: data::courses::FilterRanges,
+    /// Sort keys and their labels, defined once in the backend beside the SQL.
+    pub sorts: Vec<data::courses::SortKeyOption>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -173,6 +175,7 @@ pub(super) async fn get_search_options(
         subjects,
         reference,
         ranges,
+        sorts: data::courses::SortKey::catalog(),
     };
 
     state

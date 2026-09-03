@@ -1,6 +1,8 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
-import type { SortingState, VisibilityState } from "@tanstack/table-core";
+import type { SortKeyOption } from "$lib/bindings";
+import type { SortTerm } from "$lib/sort";
+import type { VisibilityState } from "@tanstack/table-core";
 import CourseTableDesktop from "./CourseTableDesktop.svelte";
 import CourseTableMobile from "./CourseTableMobile.svelte";
 import { useCourseTableState } from "./useCourseTableState.svelte";
@@ -9,8 +11,8 @@ let {
   courses,
   loading,
   sorting = [],
+  sortOptions = [],
   onSortingChange,
-  manualSorting = false,
   subjectMap = {},
   limit = 25,
   columnVisibility = $bindable({}),
@@ -18,9 +20,9 @@ let {
 }: {
   courses: CourseResponse[];
   loading: boolean;
-  sorting?: SortingState;
-  onSortingChange?: (sorting: SortingState) => void;
-  manualSorting?: boolean;
+  sorting?: SortTerm[];
+  sortOptions?: SortKeyOption[];
+  onSortingChange?: (sorting: SortTerm[]) => void;
   subjectMap?: Record<string, string>;
   limit?: number;
   columnVisibility?: VisibilityState;
@@ -53,8 +55,8 @@ export function navigateToSection(crn: string) {
   {loading}
   stale={state.stale}
   {sorting}
+  {sortOptions}
   {onSortingChange}
-  {manualSorting}
   {subjectMap}
   bind:columnVisibility
   {defaultVisibility}

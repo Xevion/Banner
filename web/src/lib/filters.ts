@@ -1,7 +1,7 @@
 import type { SearchParams } from "$lib/api";
-import type { CodeDescription, SortColumn, SortDirection } from "$lib/bindings";
+import type { CodeDescription } from "$lib/bindings";
 import { CAMPUS_GROUPS } from "$lib/labels";
-import type { SortingState } from "@tanstack/table-core";
+import { type SortTerm, formatSort } from "$lib/sort";
 
 export { DAY_OPTIONS } from "$lib/days";
 
@@ -264,7 +264,7 @@ export type FilterState = {
 // Compile-time assertion: FilterState must be assignable to the filter-relevant
 // subset of SearchParams (the ts-rs binding). A mismatch here means the registry
 // and the Rust backend have diverged.
-type ApiFilterFields = Omit<SearchParams, "term" | "limit" | "offset" | "sortBy" | "sortDir">;
+type ApiFilterFields = Omit<SearchParams, "term" | "limit" | "offset" | "sort">;
 const _filterStateCheck: ApiFilterFields = {} as FilterState;
 const _reverseCheck: FilterState = {} as ApiFilterFields;
 void _filterStateCheck;
@@ -379,20 +379,14 @@ export function clearFilters(state: FilterState): void {
 /** Convert filter state + metadata to a full SearchParams for the API. */
 export function toAPIParams(
   state: FilterState,
-  meta: { term: string; limit: number; offset: number; sorting: SortingState }
+  meta: { term: string; limit: number; offset: number; sorting: SortTerm[] }
 ): SearchParams {
-  const sortBy: SortColumn | null =
-    meta.sorting.length > 0 ? (meta.sorting[0].id as SortColumn) : null;
-  const sortDir: SortDirection | null =
-    meta.sorting.length > 0 ? (meta.sorting[0].desc ? "desc" : "asc") : null;
-
   return {
     ...state,
     term: meta.term,
     limit: meta.limit,
     offset: meta.offset,
-    sortBy,
-    sortDir,
+    sort: meta.sorting.length > 0 ? formatSort(meta.sorting) : null,
   };
 }
 

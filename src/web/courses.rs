@@ -12,14 +12,14 @@ use tracing::{error, warn};
 use ts_rs::TS;
 
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, SectionLink};
-use crate::data::courses::{SortColumn, SortDirection};
+use crate::data::courses::SortSpec;
 use crate::data::reference_types::{
     Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
 };
 use crate::data::unsigned::Count;
 use crate::data::{self, models};
 use crate::state::AppState;
-use crate::web::error::{ApiError, OptionNotFoundExt, db_error};
+use crate::web::error::{ApiError, ApiErrorCode, OptionNotFoundExt, db_error};
 use crate::web::routes::{cache, with_cache_control};
 
 fn default_limit() -> i32 {
@@ -145,10 +145,13 @@ pub struct SearchParams {
     pub limit: i32,
     #[serde(default)]
     pub offset: i32,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sort_by")]
-    pub sort_by: Option<SortColumn>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sort_dir")]
-    pub sort_dir: Option<SortDirection>,
+    /// Ordered sort keys, comma separated, `-` prefixed for descending.
+    ///
+    /// Taken as a string so a bad key answers with a shaped error rather than
+    /// serde's own rejection, which carries neither a code nor a message the
+    /// client can read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "wait_count_max")]
     pub wait_count_max: Option<i32>,
     #[serde(default)]
@@ -457,16 +460,17 @@ pub(super) async fn search_courses(
         },
     };
 
-    let (courses, total_count) = data::courses::search_courses(
-        &state.db_pool,
-        &filter,
-        limit,
-        offset,
-        params.sort_by,
-        params.sort_dir,
-    )
-    .await
-    .map_err(|e| db_error("Course search", e))?;
+    let sort = match params.sort.as_deref() {
+        Some(raw) => raw
+            .parse::<SortSpec>()
+            .map_err(|e| ApiError::new(ApiErrorCode::BadRequest, e.to_string()))?,
+        None => SortSpec::default(),
+    };
+
+    let (courses, total_count) =
+        data::courses::search_courses(&state.db_pool, &filter, limit, offset, &sort)
+            .await
+            .map_err(|e| db_error("Course search", e))?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
     let mut instructor_map =

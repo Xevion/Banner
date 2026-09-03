@@ -15,6 +15,7 @@ import {
   toggleDay,
   toggleValue,
 } from "$lib/filters";
+import type { SortTerm } from "$lib/sort";
 import { CAMPUS_GROUPS } from "$lib/labels";
 import { describe, expect, it } from "vitest";
 
@@ -365,29 +366,41 @@ describe("toAPIParams", () => {
     state.subject = ["MATH"];
     state.openOnly = true;
 
-    const sorting = [{ id: "course_code", desc: false }];
+    const sorting: SortTerm[] = [{ key: "course_code", desc: false }];
     const apiParams = toAPIParams(state, { term: "202501", limit: 25, offset: 0, sorting });
 
     expect(apiParams.term).toBe("202501");
     expect(apiParams.limit).toBe(25);
     expect(apiParams.offset).toBe(0);
-    expect(apiParams.sortBy).toBe("course_code");
-    expect(apiParams.sortDir).toBe("asc");
+    expect(apiParams.sort).toBe("course_code");
     expect(apiParams.query).toBe("calculus");
     expect(apiParams.subject).toEqual(["MATH"]);
     expect(apiParams.openOnly).toBe(true);
   });
 
   it("handles descending sort", () => {
-    const sorting = [{ id: "seats", desc: true }];
+    const sorting: SortTerm[] = [{ key: "seats_open", desc: true }];
     const apiParams = toAPIParams(defaultFilters(), {
       term: "202501",
       limit: 25,
       offset: 0,
       sorting,
     });
-    expect(apiParams.sortBy).toBe("seats");
-    expect(apiParams.sortDir).toBe("desc");
+    expect(apiParams.sort).toBe("-seats_open");
+  });
+
+  it("sends an ordered sort as one param", () => {
+    const sorting: SortTerm[] = [
+      { key: "days", desc: false },
+      { key: "start_time", desc: true },
+    ];
+    const apiParams = toAPIParams(defaultFilters(), {
+      term: "202501",
+      limit: 25,
+      offset: 0,
+      sorting,
+    });
+    expect(apiParams.sort).toBe("days,-start_time");
   });
 
   it("handles empty sorting", () => {
@@ -397,8 +410,7 @@ describe("toAPIParams", () => {
       offset: 0,
       sorting: [],
     });
-    expect(apiParams.sortBy).toBeNull();
-    expect(apiParams.sortDir).toBeNull();
+    expect(apiParams.sort).toBeNull();
   });
 });
 

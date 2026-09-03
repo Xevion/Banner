@@ -6,7 +6,9 @@ mod helpers;
 
 use banner::banner::models::meetings::FacultyItem;
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{SearchFilter, search_courses, suggest_courses, suggest_instructors};
+use banner::data::courses::{
+    SearchFilter, SortSpec, search_courses, suggest_courses, suggest_instructors,
+};
 use banner::data::instructors::{PublicInstructorListParams, list_public_instructors};
 use helpers::make_course;
 use sqlx::PgPool;
@@ -132,7 +134,7 @@ async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
         query: Some("Introduccion"),
         ..Default::default()
     };
-    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 
@@ -156,7 +158,7 @@ async fn test_search_courses_title_unaccented_finds_umlaut(pool: PgPool) {
         query: Some("Etudes"),
         ..Default::default()
     };
-    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 
@@ -180,7 +182,7 @@ async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
         query: Some("Algebra"),
         ..Default::default()
     };
-    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 
@@ -205,7 +207,7 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
         instructors: Some(&slugs),
         ..Default::default()
     };
-    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 
@@ -230,7 +232,7 @@ async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
         instructors: Some(&slugs),
         ..Default::default()
     };
-    let (results, total) = search_courses(&pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(&pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 

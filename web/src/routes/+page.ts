@@ -1,5 +1,6 @@
 import { BannerApiClient } from "$lib/api";
 import { parseFilters, toAPIParams, uncachedInstructorSlugs } from "$lib/filters";
+import { parseSort } from "$lib/sort";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ url, fetch }) => {
@@ -40,9 +41,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const filters = parseFilters(url.searchParams, validSubjects, resolvedInstructors);
 
   const offset = Number(url.searchParams.get("offset")) || 0;
-  const sortBy = url.searchParams.get("sort_by");
-  const sortDir = url.searchParams.get("sort_dir");
-  const sorting = sortBy ? [{ id: sortBy, desc: sortDir === "desc" }] : [];
+  const sorting = parseSort(url.searchParams.get("sort"));
 
   const apiParams = toAPIParams(filters, {
     term: url.searchParams.get("term") ?? defaultTerm,

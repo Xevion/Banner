@@ -7,7 +7,7 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{SearchFilter, search_courses};
+use banner::data::courses::{SearchFilter, SortSpec, search_courses};
 use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
@@ -134,7 +134,7 @@ async fn search_by_days(pool: &PgPool, days: Option<&[String]>) -> (Vec<String>,
         days,
         ..Default::default()
     };
-    let (results, total) = search_courses(pool, &filter, 100, 0, None, None)
+    let (results, total) = search_courses(pool, &filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 

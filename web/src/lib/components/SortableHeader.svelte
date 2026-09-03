@@ -43,27 +43,40 @@ let {
       {#each headerGroup.headers as header (header.id)}
         {@const override = headerOverride?.(header.id) ?? null}
         {@const interactive = override?.onclick !== undefined || header.column.getCanSort()}
+        {@const sorted = override?.indicator ?? header.column.getIsSorted()}
+        {#snippet label()}
+          {#if override?.label !== undefined}
+            {override.label}
+          {:else if typeof header.column.columnDef.header === "string"}
+            {header.column.columnDef.header}
+          {:else}
+            <FlexRender
+              content={header.column.columnDef.header}
+              context={header.getContext()}
+            />
+          {/if}
+        {/snippet}
         {#if !checkVisibility || header.column.getIsVisible()}
           <th
-            class="{thClass} {headerClass?.(header.id) ?? ''}"
-            class:cursor-pointer={interactive}
-            class:select-none={interactive}
+            class="relative {thClass} {headerClass?.(header.id) ?? ''}"
             title={override?.title}
-            onclick={override?.onclick ?? header.column.getToggleSortingHandler()}
+            aria-sort={interactive
+              ? sorted === "asc"
+                ? "ascending"
+                : sorted === "desc"
+                  ? "descending"
+                  : "none"
+              : undefined}
           >
             {#if interactive}
-              {@const sorted = override?.indicator ?? header.column.getIsSorted()}
-              <span class={sortSpanClass}>
-                {#if override?.label !== undefined}
-                  {override.label}
-                {:else if typeof header.column.columnDef.header === "string"}
-                  {header.column.columnDef.header}
-                {:else}
-                  <FlexRender
-                    content={header.column.columnDef.header}
-                    context={header.getContext()}
-                  />
-                {/if}
+              <!-- The overlay keeps the whole cell clickable while the focus ring
+                   stays on the label, independent of whatever padding thClass sets. -->
+              <button
+                type="button"
+                class="{sortSpanClass} cursor-pointer select-none after:absolute after:inset-0 after:content-['']"
+                onclick={override?.onclick ?? header.column.getToggleSortingHandler()}
+              >
+                {@render label()}
                 {#if sorted === "asc"}
                   <ArrowUp class="size-3.5" />
                 {:else if sorted === "desc"}
@@ -76,16 +89,9 @@ let {
                     >{override.suffix}</span
                   >
                 {/if}
-              </span>
-            {:else if override?.label !== undefined}
-              {override.label}
-            {:else if typeof header.column.columnDef.header === "string"}
-              {header.column.columnDef.header}
+              </button>
             {:else}
-              <FlexRender
-                content={header.column.columnDef.header}
-                context={header.getContext()}
-              />
+              {@render label()}
             {/if}
           </th>
         {/if}

@@ -2,9 +2,14 @@
 import type { CodeDescription } from "./CodeDescription";
 import type { FilterRanges } from "./FilterRanges";
 import type { SearchOptionsReference } from "./SearchOptionsReference";
+import type { SortKeyOption } from "./SortKeyOption";
 import type { TermResponse } from "./TermResponse";
 
 /**
  * Response for the consolidated search-options endpoint.
  */
-export type SearchOptionsResponse = { terms: Array<TermResponse>, subjects: Array<CodeDescription>, reference: SearchOptionsReference, ranges: FilterRanges, };
+export type SearchOptionsResponse = { terms: Array<TermResponse>, subjects: Array<CodeDescription>, reference: SearchOptionsReference, ranges: FilterRanges, 
+/**
+ * Sort keys and their labels, defined once in the backend beside the SQL.
+ */
+sorts: Array<SortKeyOption>, };

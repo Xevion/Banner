@@ -6,13 +6,13 @@
 mod helpers;
 
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{SearchFilter, search_courses};
+use banner::data::courses::{SearchFilter, SortSpec, search_courses};
 use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
 /// Run `search_courses` using a `SearchFilter`, returning (CRNs, total_count).
 async fn search(pool: &PgPool, filter: &SearchFilter<'_>) -> (Vec<String>, i64) {
-    let (results, total) = search_courses(pool, filter, 100, 0, None, None)
+    let (results, total) = search_courses(pool, filter, 100, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
 
@@ -443,7 +443,7 @@ async fn test_pagination_with_filters(pool: PgPool) {
     };
 
     // First page
-    let (results, total1) = search_courses(&pool, &filter, 2, 0, None, None)
+    let (results, total1) = search_courses(&pool, &filter, 2, 0, &SortSpec::default())
         .await
         .expect("search_courses failed");
     let page1_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
@@ -452,7 +452,7 @@ async fn test_pagination_with_filters(pool: PgPool) {
     assert_eq!(page1_crns.len(), 2, "page 1 returns limit=2 results");
 
     // Second page
-    let (results, total2) = search_courses(&pool, &filter, 2, 2, None, None)
+    let (results, total2) = search_courses(&pool, &filter, 2, 2, &SortSpec::default())
         .await
         .expect("search_courses failed");
     let page2_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();
@@ -461,7 +461,7 @@ async fn test_pagination_with_filters(pool: PgPool) {
     assert_eq!(page2_crns.len(), 2, "page 2 returns limit=2 results");
 
     // Third page (remainder)
-    let (results, total3) = search_courses(&pool, &filter, 2, 4, None, None)
+    let (results, total3) = search_courses(&pool, &filter, 2, 4, &SortSpec::default())
         .await
         .expect("search_courses failed");
     let page3_crns: Vec<String> = results.iter().map(|c| c.crn.clone()).collect();

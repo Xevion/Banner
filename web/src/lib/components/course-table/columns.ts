@@ -16,8 +16,10 @@ import TitleCell from "./cells/TitleCell.svelte";
 
 /**
  * One line per section: each column carries a single fact, sized by `COLUMN_WIDTHS`.
- * Column IDs double as the backend's `SortColumn` keys, so `course_code` keeps its
- * name. `days` is presentation only -- the backend has no ordering for it.
+ *
+ * Sorting is not declared here. A column offers whichever sort keys `COLUMN_SORTS`
+ * maps to it, and the header cycle drives the server, so TanStack's own per-column
+ * toggle stays off throughout.
  */
 export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
   {
@@ -27,11 +29,10 @@ export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
     enableSorting: false,
   },
   {
-    // Keeps the id `time` so it still maps to the backend's SortColumn::Time.
     id: "time",
     accessorFn: (row) => row.meetingTimes[0]?.timeRange?.start ?? "",
     header: "Start Time",
-    enableSorting: true,
+    enableSorting: false,
   },
   {
     // Off by default. Shown, it sits flush against the start and reads as one
@@ -39,11 +40,11 @@ export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
     id: "time_end",
     accessorFn: (row) => row.meetingTimes[0]?.timeRange?.end ?? "",
     header: "End Time",
-    enableSorting: true,
+    enableSorting: false,
   },
   {
-    // Its own track so durations align down the page; a sub-column inside the time
-    // cell sizes per row and drifts. The backend has no ordering for it.
+    // Its own track so durations align down the page; a sub-column inside the
+    // time cell sizes per row and drifts.
     id: "duration",
     accessorFn: (row) => {
       const mt = row.meetingTimes[0];
@@ -56,16 +57,15 @@ export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
     id: "course_code",
     accessorFn: (row) => `${row.subject} ${row.courseNumber}`,
     header: "Course",
-    enableSorting: true,
+    enableSorting: false,
   },
   {
     id: "title",
     accessorFn: (row) => row.title,
     header: "Title",
-    enableSorting: true,
+    enableSorting: false,
   },
   {
-    // Sorting is driven by the header's own name/rating cycle, not TanStack's toggle.
     id: "instructor",
     accessorFn: (row) => {
       const primary = getPrimaryInstructor(row.instructors, row.primaryInstructorId);
@@ -78,7 +78,7 @@ export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
     id: "seats",
     accessorFn: (row) => row.enrollment.max - row.enrollment.current,
     header: "Seats",
-    enableSorting: true,
+    enableSorting: false,
   },
 ];
 
@@ -90,8 +90,8 @@ export const COLUMN_WIDTHS: Record<string, number> = {
   // 110px of day chips (7 x 14 + 6 x 2) plus the cell's own padding. Anything
   // narrower makes flex shrink the chips off their own grid.
   days: 126,
-  // Wide enough for the "START TIME" header with its sort arrow, and for the
-  // untimed phrase that stands in for a clock value.
+  // Fits the "START TIME" header with its sort arrow, and the untimed phrase
+  // that stands in for a clock value.
   time: 112,
   time_end: 112,
   duration: 84,
