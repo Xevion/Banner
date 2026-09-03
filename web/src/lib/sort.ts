@@ -1,4 +1,5 @@
 import type { SortKey, SortKeyOption } from "$lib/bindings";
+import { type ColumnId, isColumnId } from "$lib/components/course-table/column-ids";
 
 export interface SortTerm {
   key: SortKey;
@@ -12,7 +13,7 @@ export interface SortTerm {
  * keys can share one header, and a key listed nowhere here is still sortable
  * from a menu. Adding a key to a column extends its cycle with no other change.
  */
-export const COLUMN_SORTS: Partial<Record<string, SortKey[]>> = {
+export const COLUMN_SORTS: Partial<Record<ColumnId, SortKey[]>> = {
   days: ["days"],
   time: ["start_time"],
   time_end: ["end_time"],
@@ -111,7 +112,7 @@ export function headerSortStep(
   terms: SortTerm[],
   labels: Map<SortKey, SortKeyOption>
 ): HeaderSortStep | null {
-  const keys = COLUMN_SORTS[columnId];
+  const keys = isColumnId(columnId) ? COLUMN_SORTS[columnId] : undefined;
   if (!keys || keys.length === 0) return null;
 
   const steps = cycleFor(keys);

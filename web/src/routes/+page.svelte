@@ -1,25 +1,26 @@
 <script lang="ts">
+import { untrack } from "svelte";
 import { invalidateAll } from "$app/navigation";
 import { navigating } from "$app/stores";
 import type { Subject } from "$lib/api";
 import type { SearchOptionsResponse } from "$lib/bindings";
 import ActiveFilterChips from "$lib/components/ActiveFilterChips.svelte";
 import ColumnVisibilityDropdown from "$lib/components/ColumnVisibilityDropdown.svelte";
-import Footer from "$lib/components/Footer.svelte";
-import Pagination from "$lib/components/Pagination.svelte";
-import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
-import SearchStatus from "$lib/components/SearchStatus.svelte";
 import {
   type CourseDetailContext,
   setCourseDetailContext,
 } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
+import { COLUMN_DEFS } from "$lib/components/course-table/columns";
+import Footer from "$lib/components/Footer.svelte";
+import Pagination from "$lib/components/Pagination.svelte";
+import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
+import SearchStatus from "$lib/components/SearchStatus.svelte";
 import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
 import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
 import { parseFilters, searchKey } from "$lib/filters";
+import { parseSort, type SortTerm } from "$lib/sort";
 import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
-import { type SortTerm, parseSort } from "$lib/sort";
-import { untrack } from "svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -121,16 +122,7 @@ const columns = new ColumnVisibilityController({
   // The end time is opt-in: the start plus the duration already pins a meeting,
   // and shown together the two halves render as one aligned range.
   defaultHidden: ["time_end"],
-  columns: [
-    { id: "days", label: "Days" },
-    { id: "time", label: "Start Time" },
-    { id: "time_end", label: "End Time" },
-    { id: "duration", label: "Duration" },
-    { id: "course_code", label: "Course" },
-    { id: "title", label: "Title" },
-    { id: "instructor", label: "Instructor" },
-    { id: "seats", label: "Seats" },
-  ],
+  columns: COLUMN_DEFS.map((c) => ({ id: c.id, label: c.header })),
 });
 
 // Clear part-of-term selections when switching to a summer term

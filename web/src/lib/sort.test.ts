@@ -1,7 +1,6 @@
-import type { SortKey, SortKeyOption } from "$lib/bindings";
-import { COLUMN_DEFS } from "$lib/components/course-table/columns";
 import { describe, expect, it } from "vitest";
-import { COLUMN_SORTS, formatSort, headerSortStep, parseSort } from "./sort";
+import type { SortKey, SortKeyOption } from "$lib/bindings";
+import { formatSort, headerSortStep, parseSort } from "./sort";
 
 const labels = new Map<SortKey, SortKeyOption>([
   [
@@ -109,12 +108,5 @@ describe("header cycle", () => {
 
   it("offers nothing for a column with no keys", () => {
     expect(headerSortStep("unknown", [], labels)).toBeNull();
-  });
-
-  it("maps every COLUMN_SORTS entry to a real column ID", () => {
-    const columnIds = new Set(COLUMN_DEFS.map((column) => column.id));
-    for (const columnId of Object.keys(COLUMN_SORTS)) {
-      expect(columnIds.has(columnId), columnId).toBe(true);
-    }
   });
 });

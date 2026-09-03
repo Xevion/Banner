@@ -1,22 +1,21 @@
 <script lang="ts">
-import type { CourseResponse } from "$lib/bindings";
+import { Check, RotateCcw } from "@lucide/svelte";
+import { getCoreRowModel, type Updater, type VisibilityState } from "@tanstack/table-core";
+import { ContextMenu } from "bits-ui";
+import { flip } from "svelte/animate";
+import { fade, slide } from "svelte/transition";
+import type { CourseResponse, SortKeyOption } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
 import SortableHeader, { type HeaderOverride } from "$lib/components/SortableHeader.svelte";
 import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
 import { useTooltipDelegation } from "$lib/composables/useTooltipDelegation";
-import { Check, RotateCcw } from "@lucide/svelte";
-import { type Updater, type VisibilityState, getCoreRowModel } from "@tanstack/table-core";
-import { ContextMenu } from "bits-ui";
-import { flip } from "svelte/animate";
-import { fade, slide } from "svelte/transition";
-import EmptyState from "./EmptyState.svelte";
-import { CELL_COMPONENTS, COLUMN_DEFS, COLUMN_WIDTHS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { timeSpansPair } from "$lib/scheduleState";
-import type { SortKeyOption } from "$lib/bindings";
-import { type SortTerm, applyHeaderSort, headerSortStep } from "$lib/sort";
+import { applyHeaderSort, headerSortStep, type SortTerm } from "$lib/sort";
+import { COLUMN_DEFS, COLUMNS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { setTableContext } from "./context";
+import EmptyState from "./EmptyState.svelte";
 import { buildSkeletonHtml } from "./skeletons";
 
 let {
@@ -92,7 +91,7 @@ let maxSubjectLength = $derived(
 );
 
 let visibleColumnIds = $derived(
-  COLUMN_DEFS.map((c) => c.id!).filter((id) => columnVisibility[id] !== false)
+  COLUMN_DEFS.map((c) => c.id).filter((id) => columnVisibility[id] !== false)
 );
 
 // Measured against the default, not against "nothing hidden": a column that
@@ -187,7 +186,7 @@ const table = createSvelteTable({
             <!-- The flex column stays unsized so surplus width collects there
                  rather than being shared out across every track. -->
             <col
-              style:width={colId === FLEX_COLUMN ? undefined : `${COLUMN_WIDTHS[colId]}px`}
+              style:width={colId === FLEX_COLUMN ? undefined : `${COLUMNS[colId].width}px`}
             />
           {/each}
         </colgroup>
@@ -233,7 +232,7 @@ const table = createSvelteTable({
               >
                 {#each visibleColumnIds as colId (colId)}
                   {#if !(spansTime && colId === "time_end")}
-                    {@const CellComponent = CELL_COMPONENTS[colId]}
+                    {@const CellComponent = COLUMNS[colId].cell}
                     <CellComponent {course} />
                   {/if}
                 {/each}
@@ -272,8 +271,8 @@ const table = createSvelteTable({
                     Toggle columns
                   </ContextMenu.GroupHeading>
                   {#each COLUMN_DEFS as col (col.id)}
-                    {@const id = col.id!}
-                    {@const label = typeof col.header === "string" ? col.header : id}
+                    {@const id = col.id}
+                    {@const label = col.header}
                     <ContextMenu.CheckboxItem
                       checked={columnVisibility[id] !== false}
                       closeOnSelect={false}
