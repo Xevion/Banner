@@ -5,7 +5,7 @@ import type { CourseSuggestion, InstructorSuggestion, SuggestResponse } from "$l
 import { populateInstructorCache } from "$lib/filters";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
-import createFuzzySearch from "@nozbe/microfuzz";
+import microfuzz from "@nozbe/microfuzz";
 import { Command, Popover } from "bits-ui";
 import { fly } from "svelte/transition";
 
@@ -35,6 +35,12 @@ let fetchId = 0;
 $effect(() => {
   return () => clearTimeout(debounceTimer);
 });
+
+// microfuzz is CJS with an `__esModule` default. Rolldown hands the default
+// import the whole exports object rather than unwrapping it, so reach past it
+// when it is there; a bundler that does unwrap gives the function directly.
+const createFuzzySearch =
+  (microfuzz as unknown as { default?: typeof microfuzz }).default ?? microfuzz;
 
 const fuzzySearch = $derived(
   createFuzzySearch(subjects, {
