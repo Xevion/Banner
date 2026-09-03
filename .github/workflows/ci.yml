@@ -146,6 +146,76 @@ jobs:
         working-directory: web
         run: bun run test
 
+  frontend-stories:
+    name: Frontend Stories
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: web
+        run: bun ci --frozen-lockfile
+
+      - name: Sync SvelteKit
+        working-directory: web
+        run: bunx svelte-kit sync
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+
+      - name: Install Chromium
+        working-directory: web
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run stories
+        working-directory: web
+        run: bun run storybook:test
+
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: web
+        run: bun ci --frozen-lockfile
+
+      - name: Sync SvelteKit
+        working-directory: web
+        run: bunx svelte-kit sync
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+
+      - name: Install Chromium
+        working-directory: web
+        run: bunx playwright install --with-deps chromium
+
+      # Builds the app, serves the adapter-node output and drives it in a real
+      # browser, so bundling faults that only exist in the built output fail here.
+      - name: Run end-to-end tests
+        working-directory: web
+        run: bun run test:e2e
+
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest

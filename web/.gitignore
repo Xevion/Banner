@@ -11,3 +11,6 @@ count.txt
 
 *storybook.log
 storybook-static
+
+test-results
+playwright-report

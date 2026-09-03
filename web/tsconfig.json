@@ -14,8 +14,10 @@
     ".svelte-kit/non-ambient.d.ts",
     ".svelte-kit/types/**/*.d.ts",
     ".storybook/**/*",
+    "e2e/**/*.ts",
     "src/**/*.ts",
     "src/**/*.svelte",
+    "playwright.config.ts",
     "vite.config.ts"
   ]
 }
