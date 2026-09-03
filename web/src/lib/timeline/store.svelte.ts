@@ -105,13 +105,13 @@ async function fetchFromApi(gaps: Range[]): Promise<TimeSlot[]> {
  */
 export function createTimelineStore() {
   // All loaded slots keyed by aligned timestamp (ms).
-  let slotMap = new SvelteMap<number, TimeSlot>();
+  const slotMap = new SvelteMap<number, TimeSlot>();
 
   // Sorted, non-overlapping list of fetched ranges.
   let loadedRanges: Range[] = [];
 
   // All subject codes observed across all fetched data.
-  let knownSubjects = new SvelteSet<string>();
+  const knownSubjects = new SvelteSet<string>();
 
   let throttleTimer: ReturnType<typeof setTimeout> | undefined;
   let pendingStart = 0;
@@ -119,7 +119,7 @@ export function createTimelineStore() {
   let hasFetchedOnce = false;
 
   // Sorted array derived from the map. The O(n log n) sort only runs when
-  // slotMap is reassigned, which happens on fetch completion -- not per frame.
+  // slotMap changes, which happens on fetch completion -- not per frame.
   const data: TimeSlot[] = $derived(
     [...slotMap.values()].sort((a, b) => a.time.getTime() - b.time.getTime())
   );
@@ -139,13 +139,12 @@ export function createTimelineStore() {
       return;
     }
 
-    // Merge results into the slot map.
-    const next = new SvelteMap(slotMap);
-    const nextSubjects = new SvelteSet(knownSubjects);
+    // Merge results into the slot map. SvelteMap/SvelteSet are deeply
+    // reactive, so mutating them in place is what notifies the derivations.
     for (const slot of slots) {
-      next.set(slot.time.getTime(), slot);
+      slotMap.set(slot.time.getTime(), slot);
       for (const subject of Object.keys(slot.subjects)) {
-        nextSubjects.add(subject);
+        knownSubjects.add(subject);
       }
     }
 
@@ -153,10 +152,6 @@ export function createTimelineStore() {
     for (const gap of gaps) {
       loadedRanges = mergeRange(loadedRanges, gap);
     }
-
-    // Single reactive assignments.
-    slotMap = next;
-    knownSubjects = nextSubjects;
   }
 
   /**
