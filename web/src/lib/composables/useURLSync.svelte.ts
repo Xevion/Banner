@@ -8,7 +8,7 @@ export interface UseURLSyncOptions {
   selectedTerm: () => string;
   defaultTermSlug: () => string;
   offset: () => number;
-  sorting: () => SortTerm[];
+  sorting: () => readonly SortTerm[];
   debounceMs?: number;
 }
 

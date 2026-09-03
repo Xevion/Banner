@@ -50,8 +50,11 @@ void _sortKeyExhaustiveCheck;
 
 const VALID_SORT_KEYS: ReadonlySet<SortKey> = new Set(SORT_KEYS);
 
+/** How many ordered terms the backend accepts before it stops reading. */
+export const MAX_SORT_TERMS = 4;
+
 /** Wire format: comma separated, `-` prefixed for descending. Mirrors the backend. */
-export function formatSort(terms: SortTerm[]): string {
+export function formatSort(terms: readonly SortTerm[]): string {
   return terms.map((term) => `${term.desc ? "-" : ""}${term.key}`).join(",");
 }
 
@@ -109,8 +112,8 @@ export interface HeaderSortStep {
  */
 export function headerSortStep(
   columnId: string,
-  terms: SortTerm[],
-  labels: Map<SortKey, SortKeyOption>
+  terms: readonly SortTerm[],
+  labels: ReadonlyMap<SortKey, SortKeyOption>
 ): HeaderSortStep | null {
   const keys = isColumnId(columnId) ? COLUMN_SORTS[columnId] : undefined;
   if (!keys || keys.length === 0) return null;
@@ -142,9 +145,4 @@ export function headerSortStep(
     title: describe(next),
     next,
   };
-}
-
-/** Replace the whole sort with this header's next state. */
-export function applyHeaderSort(next: SortTerm | null): SortTerm[] {
-  return next ? [next] : [];
 }

@@ -1,17 +1,19 @@
 <script lang="ts">
-import type { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
-import { Check, Columns3, RotateCcw } from "@lucide/svelte";
+import { Check, RotateCcw, SlidersHorizontal } from "@lucide/svelte";
 import { DropdownMenu } from "bits-ui";
 import { fly } from "svelte/transition";
+import SortMenuSection from "$lib/components/SortMenuSection.svelte";
+import type { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
+import type { SortController } from "$lib/composables/useSort.svelte";
 
-let { columns }: { columns: ColumnVisibilityController } = $props();
+let { columns, sort }: { columns: ColumnVisibilityController; sort: SortController } = $props();
 </script>
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger
     class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer select-none shrink-0"
   >
-    <Columns3 class="size-3.5" />
+    <SlidersHorizontal class="size-3.5" />
     View
   </DropdownMenu.Trigger>
   <DropdownMenu.Portal>
@@ -31,6 +33,8 @@ let { columns }: { columns: ColumnVisibilityController } = $props();
                 y: -10,
               }}
             >
+              <SortMenuSection {sort} />
+              <DropdownMenu.Separator class="mx-1 my-1 h-px bg-border" />
               <DropdownMenu.Group>
                 <DropdownMenu.GroupHeading
                   class="px-2 py-1.5 text-xs font-medium text-muted-foreground select-none"

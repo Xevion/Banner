@@ -4,15 +4,17 @@ import { getCoreRowModel, type Updater, type VisibilityState } from "@tanstack/t
 import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
-import type { CourseResponse, SortKeyOption } from "$lib/bindings";
+import type { CourseResponse } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
 import SortableHeader, { type HeaderOverride } from "$lib/components/SortableHeader.svelte";
+import SortMenuSection from "$lib/components/SortMenuSection.svelte";
 import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
+import type { SortController } from "$lib/composables/useSort.svelte";
 import { useTooltipDelegation } from "$lib/composables/useTooltipDelegation";
 import { timeSpansPair } from "$lib/scheduleState";
-import { applyHeaderSort, headerSortStep, type SortTerm } from "$lib/sort";
+import { headerSortStep } from "$lib/sort";
 import { COLUMN_DEFS, COLUMNS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { setTableContext } from "./context";
 import EmptyState from "./EmptyState.svelte";
@@ -22,9 +24,7 @@ let {
   courses,
   loading,
   stale,
-  sorting = [],
-  sortOptions = [],
-  onSortingChange,
+  sort,
   subjectMap = {},
   columnVisibility = $bindable({}),
   defaultVisibility = {},
@@ -38,9 +38,8 @@ let {
   courses: CourseResponse[];
   loading: boolean;
   stale: boolean;
-  sorting?: SortTerm[];
-  sortOptions?: SortKeyOption[];
-  onSortingChange?: (sorting: SortTerm[]) => void;
+  /** Omitted where the table is a plain listing, leaving header clicks inert. */
+  sort?: SortController;
   subjectMap?: Record<string, string>;
   columnVisibility?: VisibilityState;
   defaultVisibility?: VisibilityState;
@@ -125,10 +124,10 @@ function handleVisibilityChange(updater: Updater<VisibilityState>) {
  * ways round, then off. The instructor header's five states are that rule on a
  * two-key column rather than a mechanism of its own.
  */
-const sortLabels = $derived(new Map(sortOptions.map((option) => [option.key, option])));
+const sortLabels = $derived(new Map((sort?.catalog ?? []).map((option) => [option.key, option])));
 
 function courseHeaderOverride(headerId: string): HeaderOverride | null {
-  const step = headerSortStep(headerId, sorting, sortLabels);
+  const step = headerSortStep(headerId, sort?.terms ?? [], sortLabels);
   if (!step) return null;
 
   // Shown together the columns are one range under one label, so the titles are
@@ -143,7 +142,7 @@ function courseHeaderOverride(headerId: string): HeaderOverride | null {
     suffix: step.suffix,
     indicator: step.indicator,
     title: step.title,
-    onclick: () => onSortingChange?.(applyHeaderSort(step.next)),
+    onclick: () => sort?.applyHeaderClick(step.next),
   };
 }
 
@@ -264,6 +263,10 @@ const table = createSvelteTable({
                 in:fade={{ duration: 100 }}
                 out:fade={{ duration: 100 }}
               >
+                {#if sort}
+                  <SortMenuSection {sort} />
+                  <ContextMenu.Separator class="mx-1 my-1 h-px bg-border" />
+                {/if}
                 <ContextMenu.Group>
                   <ContextMenu.GroupHeading
                     class="px-2 py-1.5 text-xs font-medium text-muted-foreground select-none"

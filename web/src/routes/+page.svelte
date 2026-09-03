@@ -17,9 +17,10 @@ import Pagination from "$lib/components/Pagination.svelte";
 import SearchFiltersBar from "$lib/components/SearchFilters.svelte";
 import SearchStatus from "$lib/components/SearchStatus.svelte";
 import { ColumnVisibilityController } from "$lib/composables/useColumnVisibility.svelte";
+import { SortController } from "$lib/composables/useSort.svelte";
 import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
 import { parseFilters, searchKey } from "$lib/filters";
-import { parseSort, type SortTerm } from "$lib/sort";
+import { parseSort } from "$lib/sort";
 import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { PageProps } from "./$types";
 
@@ -62,7 +63,15 @@ setFiltersContext(filters);
 
 let selectedTerm = $state(initial.selectedTerm);
 let offset = $state(initial.offset);
-let sorting: SortTerm[] = $state(initial.sorting);
+
+const sort = new SortController({
+  catalog: () => searchOptions?.sorts ?? [],
+  initial: initial.sorting,
+  onChange: () => {
+    offset = 0;
+    urlSync.navigateNow();
+  },
+});
 
 // Re-sync mutable state on subsequent navigations
 $effect(() => {
@@ -77,7 +86,7 @@ $effect(() => {
   // Apply parsed filter state to the reactive object
   Object.assign(filters, parsed);
   offset = resolved.offset;
-  sorting = resolved.sorting;
+  sort.sync(resolved.sorting);
 });
 
 const defaultTermSlug = $derived(searchOptions?.terms[0]?.slug ?? "");
@@ -148,16 +157,10 @@ const urlSync: URLSyncHandle = useURLSync({
   selectedTerm: () => selectedTerm,
   defaultTermSlug: () => defaultTermSlug,
   offset: () => offset,
-  sorting: () => sorting,
+  sorting: () => sort.terms,
 });
 
 const limit = 25;
-
-function handleSortingChange(newSorting: SortTerm[]) {
-  sorting = newSorting;
-  offset = 0;
-  urlSync.navigateNow();
-}
 
 function handlePageChange(newOffset: number) {
   offset = newOffset;
@@ -176,7 +179,7 @@ function handlePageChange(newOffset: number) {
       <SearchStatus meta={searchMeta} {loading} />
       <ActiveFilterChips {filters} />
       <div class="hidden md:block pb-1.5">
-        <ColumnVisibilityDropdown {columns} />
+        <ColumnVisibilityDropdown {columns} {sort} />
       </div>
     </div>
 
@@ -211,9 +214,7 @@ function handlePageChange(newOffset: number) {
         bind:this={courseTableRef}
         courses={searchResult?.courses ?? []}
         {loading}
-        {sorting}
-        sortOptions={searchOptions?.sorts ?? []}
-        onSortingChange={handleSortingChange}
+        {sort}
         {subjectMap}
         {limit}
         bind:columnVisibility={columns.visibility}
