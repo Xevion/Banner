@@ -33,19 +33,25 @@ async function toggleAdmin(user: User) {
   <p class="text-destructive mb-4">{error}</p>
 {/if}
 
-{#if users.length === 0 && !error}
-  <p class="text-muted-foreground">Loading...</p>
-{:else}
-  <div class="bg-card border-border overflow-hidden rounded-lg border">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-border border-b">
-          <th class="px-4 py-3 text-left font-medium">Username</th>
-          <th class="px-4 py-3 text-left font-medium">Discord ID</th>
-          <th class="px-4 py-3 text-left font-medium">Admin</th>
-          <th class="px-4 py-3 text-left font-medium">Actions</th>
+<div class="bg-card border-border overflow-hidden rounded-lg border">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-border border-b">
+        <th class="px-4 py-3 text-left font-medium">Username</th>
+        <th class="px-4 py-3 text-left font-medium">Discord ID</th>
+        <th class="px-4 py-3 text-left font-medium">Admin</th>
+        <th class="px-4 py-3 text-left font-medium">Actions</th>
+      </tr>
+    </thead>
+    {#if users.length === 0}
+      <tbody>
+        <tr>
+          <td colspan="4" class="px-4 py-12 text-center text-muted-foreground">
+            No users found.
+          </td>
         </tr>
-      </thead>
+      </tbody>
+    {:else}
       <tbody>
         {#each users as user (user.discordId)}
           <tr class="border-border border-b last:border-b-0">
@@ -90,6 +96,6 @@ async function toggleAdmin(user: User) {
           </tr>
         {/each}
       </tbody>
-    </table>
-  </div>
-{/if}
+    {/if}
+  </table>
+</div>

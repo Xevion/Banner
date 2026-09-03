@@ -174,6 +174,114 @@ const columnCount = columns.length;
 const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]";
 </script>
 
+{#snippet subjectCell(subject: SubjectSummary)}
+  {@const isExpanded = expandedSubject === subject.subject}
+  <td class="px-3 py-1.5 font-medium">
+    <div class="flex items-center gap-1.5">
+      {#if isExpanded}
+        <ChevronDown size={12} class="shrink-0" />
+      {:else}
+        <ChevronRight size={12} class="shrink-0" />
+      {/if}
+      <span>{subject.subject}</span>
+      {#if subject.subjectDescription}
+        <span
+          class="text-muted-foreground font-normal text-[10px] max-w-[140px] truncate inline-block align-middle"
+          title={subject.subjectDescription}
+        >{subject.subjectDescription}</span>
+      {/if}
+      {#if subject.trackedCourseCount > 0}
+        <span class="text-muted-foreground/60 font-normal text-[10px]">({subject.trackedCourseCount})</span>
+      {/if}
+    </div>
+  </td>
+{/snippet}
+
+{#snippet statusCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    {#if subject.scheduleState === "paused"}
+      <span class="text-orange-600 dark:text-orange-400">paused</span>
+    {:else if subject.scheduleState === "read_only"}
+      <span class="text-muted-foreground">read only</span>
+    {:else if subject.nextEligibleAt}
+      {@const remainingMs = new Date(subject.nextEligibleAt).getTime() - now.getTime()}
+      {#if remainingMs >= 1000}
+        <span class="text-muted-foreground">{formatDuration(remainingMs)}</span>
+      {:else}
+        <span class="text-green-600 dark:text-green-400 font-medium">ready</span>
+      {/if}
+    {:else}
+      <span class="text-green-600 dark:text-green-400 font-medium">ready</span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet intervalCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    <span>{formatInterval(subject.currentIntervalSecs)}</span>
+    {#if subject.timeMultiplier !== 1}
+      <span class="text-muted-foreground ml-0.5">&times;{subject.timeMultiplier}</span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet lastScrapedCell(subject: SubjectSummary)}
+  {@const rel = relativeTime(new Date(subject.lastScraped), now)}
+  <td class="px-3 py-1.5">
+    <SimpleTooltip text={formatAbsoluteDate(subject.lastScraped)} side="top" passthrough>
+      <span class="text-muted-foreground">{rel.text === "now" ? "just now" : rel.text}</span>
+    </SimpleTooltip>
+  </td>
+{/snippet}
+
+{#snippet changeRateCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    <span class={emphasisClass(subject.avgChangeRatio)}>{(subject.avgChangeRatio * 100).toFixed(2)}%</span>
+  </td>
+{/snippet}
+
+{#snippet zerosCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    <span class={emphasisClass(subject.consecutiveZeroChanges)}>{subject.consecutiveZeroChanges}</span>
+  </td>
+{/snippet}
+
+{#snippet runsCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    <span class={emphasisClass(subject.recentRuns)}>{subject.recentRuns}</span>
+  </td>
+{/snippet}
+
+{#snippet failsCell(subject: SubjectSummary)}
+  <td class="px-3 py-1.5">
+    {#if subject.recentFailures > 0}
+      <span class="text-red-600 dark:text-red-400">{subject.recentFailures}</span>
+    {:else}
+      <span class="text-muted-foreground">{subject.recentFailures}</span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet subjectRowCell(colId: string, subject: SubjectSummary)}
+  {#if colId === "subject"}
+    {@render subjectCell(subject)}
+  {:else if colId === "status"}
+    {@render statusCell(subject)}
+  {:else if colId === "interval"}
+    {@render intervalCell(subject)}
+  {:else if colId === "lastScraped"}
+    {@render lastScrapedCell(subject)}
+  {:else if colId === "changeRate"}
+    {@render changeRateCell(subject)}
+  {:else if colId === "zeros"}
+    {@render zerosCell(subject)}
+  {:else if colId === "runs"}
+    {@render runsCell(subject)}
+  {:else if colId === "fails"}
+    {@render failsCell(subject)}
+  {/if}
+{/snippet}
+
 <div class="bg-card border-border rounded-lg border">
   <h2 class="border-border border-b px-3 py-2.5 text-xs font-semibold text-foreground">
     Subjects ({subjects.length})
@@ -199,85 +307,13 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
           {#each table.getRowModel().rows as row (row.id)}
             {@const subject = row.original}
             {@const isExpanded = expandedSubject === subject.subject}
-            {@const rel = relativeTime(new Date(subject.lastScraped), now)}
             <tr
               class="border-border cursor-pointer border-b transition-colors hover:bg-muted/50
                 {isExpanded ? 'bg-muted/30' : ''}"
               onclick={() => toggleSubjectDetail(subject.subject)}
             >
               {#each row.getVisibleCells() as cell (cell.id)}
-                {@const colId = cell.column.id}
-                {#if colId === "subject"}
-                  <td class="px-3 py-1.5 font-medium">
-                    <div class="flex items-center gap-1.5">
-                      {#if isExpanded}
-                        <ChevronDown size={12} class="shrink-0" />
-                      {:else}
-                        <ChevronRight size={12} class="shrink-0" />
-                      {/if}
-                      <span>{subject.subject}</span>
-                      {#if subject.subjectDescription}
-                        <span
-                          class="text-muted-foreground font-normal text-[10px] max-w-[140px] truncate inline-block align-middle"
-                          title={subject.subjectDescription}
-                        >{subject.subjectDescription}</span>
-                      {/if}
-                      {#if subject.trackedCourseCount > 0}
-                        <span class="text-muted-foreground/60 font-normal text-[10px]">({subject.trackedCourseCount})</span>
-                      {/if}
-                    </div>
-                  </td>
-                {:else if colId === "status"}
-                  <td class="px-3 py-1.5">
-                    {#if subject.scheduleState === "paused"}
-                      <span class="text-orange-600 dark:text-orange-400">paused</span>
-                    {:else if subject.scheduleState === "read_only"}
-                      <span class="text-muted-foreground">read only</span>
-                    {:else if subject.nextEligibleAt}
-                      {@const remainingMs = new Date(subject.nextEligibleAt).getTime() - now.getTime()}
-                      {#if remainingMs >= 1000}
-                        <span class="text-muted-foreground">{formatDuration(remainingMs)}</span>
-                      {:else}
-                        <span class="text-green-600 dark:text-green-400 font-medium">ready</span>
-                      {/if}
-                    {:else}
-                      <span class="text-green-600 dark:text-green-400 font-medium">ready</span>
-                    {/if}
-                  </td>
-                {:else if colId === "interval"}
-                  <td class="px-3 py-1.5">
-                    <span>{formatInterval(subject.currentIntervalSecs)}</span>
-                    {#if subject.timeMultiplier !== 1}
-                      <span class="text-muted-foreground ml-0.5">&times;{subject.timeMultiplier}</span>
-                    {/if}
-                  </td>
-                {:else if colId === "lastScraped"}
-                  <td class="px-3 py-1.5">
-                    <SimpleTooltip text={formatAbsoluteDate(subject.lastScraped)} side="top" passthrough>
-                      <span class="text-muted-foreground">{rel.text === "now" ? "just now" : rel.text}</span>
-                    </SimpleTooltip>
-                  </td>
-                {:else if colId === "changeRate"}
-                  <td class="px-3 py-1.5">
-                    <span class={emphasisClass(subject.avgChangeRatio)}>{(subject.avgChangeRatio * 100).toFixed(2)}%</span>
-                  </td>
-                {:else if colId === "zeros"}
-                  <td class="px-3 py-1.5">
-                    <span class={emphasisClass(subject.consecutiveZeroChanges)}>{subject.consecutiveZeroChanges}</span>
-                  </td>
-                {:else if colId === "runs"}
-                  <td class="px-3 py-1.5">
-                    <span class={emphasisClass(subject.recentRuns)}>{subject.recentRuns}</span>
-                  </td>
-                {:else if colId === "fails"}
-                  <td class="px-3 py-1.5">
-                    {#if subject.recentFailures > 0}
-                      <span class="text-red-600 dark:text-red-400">{subject.recentFailures}</span>
-                    {:else}
-                      <span class="text-muted-foreground">{subject.recentFailures}</span>
-                    {/if}
-                  </td>
-                {/if}
+                {@render subjectRowCell(cell.column.id, subject)}
               {/each}
             </tr>
             <!-- Expanded Detail -->

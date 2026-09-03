@@ -410,6 +410,101 @@ function getTimingDisplay(
 }
 </script>
 
+{#snippet idCell(job: ScrapeJobDto)}
+  <td class="px-3 py-2.5 tabular-nums text-muted-foreground/70 w-12">{job.id}</td>
+{/snippet}
+
+{#snippet statusCell(job: ScrapeJobDto)}
+  {@const sc = statusColor(job.status)}
+  <td class="px-3 py-2.5 whitespace-nowrap">
+    <span class="inline-flex items-center gap-1.5">
+      <span class="size-1.5 shrink-0 rounded-full {sc.dot}"></span>
+      <span class="flex flex-col leading-tight">
+        <span class={sc.text}>{formatStatusLabel(job.status)}</span>
+        {#if job.maxRetries > 0}
+          <span class="text-[10px] {retryColor(job.retryCount, job.maxRetries)}">
+            {job.retryCount}/{job.maxRetries} retries
+          </span>
+        {/if}
+      </span>
+    </span>
+  </td>
+{/snippet}
+
+{#snippet targetTypeCell(job: ScrapeJobDto)}
+  <td class="px-3 py-2.5 whitespace-nowrap">
+    <span
+      class="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+    >
+      {formatTargetType(job.targetType)}
+    </span>
+  </td>
+{/snippet}
+
+{#snippet detailsCell(job: ScrapeJobDto)}
+  <td
+    class="px-3 py-2.5 max-w-48 truncate text-muted-foreground"
+    title={formatJobDetails(job, subjectMap)}
+  >
+    {formatJobDetails(job, subjectMap)}
+  </td>
+{/snippet}
+
+{#snippet termCell(job: ScrapeJobDto)}
+  <td class="px-3 py-2.5 whitespace-nowrap">
+    {#if getTermCode(job)}
+      <span class="font-mono text-xs text-muted-foreground">{getTermCode(job)}</span>
+    {:else}
+      <span class="text-xs text-muted-foreground/40">&mdash;</span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet priorityCell(job: ScrapeJobDto)}
+  <td class="px-3 py-2.5 whitespace-nowrap">
+    <span class="font-medium capitalize {priorityColor(job.priority)}">
+      {job.priority}
+    </span>
+  </td>
+{/snippet}
+
+{#snippet timingCell(job: ScrapeJobDto)}
+  {@const timingDisplay = getTimingDisplay(job, tick)}
+  <td class="px-3 py-2.5 whitespace-nowrap">
+    <span
+      class="inline-flex items-center gap-1.5 tabular-nums text-foreground"
+      data-timing-tooltip={timingDisplay.tooltip}
+    >
+      <span
+        class="size-3.5 shrink-0 inline-flex items-center justify-center {timingDisplay.colorClass}"
+      >
+        {#if timingDisplay.icon === "warning"}
+          <TriangleAlert class="size-3.5" />
+        {/if}
+      </span>
+      {timingDisplay.text}
+    </span>
+  </td>
+{/snippet}
+
+{#snippet jobCell(colId: string, job: ScrapeJobDto)}
+  {#if colId === "id"}
+    {@render idCell(job)}
+  {:else if colId === "status"}
+    {@render statusCell(job)}
+  {:else if colId === "targetType"}
+    {@render targetTypeCell(job)}
+  {:else if colId === "details"}
+    {@render detailsCell(job)}
+  {:else if colId === "term"}
+    {@render termCell(job)}
+  {:else if colId === "priority"}
+    {@render priorityCell(job)}
+  {:else if colId === "timing"}
+    {@render timingCell(job)}
+  {/if}
+{/snippet}
+
 {#if error}
   <p class="text-destructive">{error}</p>
 {:else}
@@ -438,90 +533,11 @@ function getTimingDisplay(
         <tbody>
           {#each table.getRowModel().rows as row (row.id)}
             {@const job = row.original}
-            {@const sc = statusColor(job.status)}
-            {@const timingDisplay = getTimingDisplay(job, tick)}
             <tr
               class="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors"
             >
               {#each row.getVisibleCells() as cell (cell.id)}
-                {@const colId = cell.column.id}
-                {#if colId === "id"}
-                  <td
-                    class="px-3 py-2.5 tabular-nums text-muted-foreground/70 w-12"
-                    >{job.id}</td
-                  >
-                {:else if colId === "status"}
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    <span class="inline-flex items-center gap-1.5">
-                      <span class="size-1.5 shrink-0 rounded-full {sc.dot}"
-                      ></span>
-                      <span class="flex flex-col leading-tight">
-                        <span class={sc.text}
-                          >{formatStatusLabel(job.status)}</span
-                        >
-                        {#if job.maxRetries > 0}
-                          <span
-                            class="text-[10px] {retryColor(
-                              job.retryCount,
-                              job.maxRetries,
-                            )}"
-                          >
-                            {job.retryCount}/{job.maxRetries} retries
-                          </span>
-                        {/if}
-                      </span>
-                    </span>
-                  </td>
-                {:else if colId === "targetType"}
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    <span
-                      class="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
-                    >
-                      {formatTargetType(job.targetType)}
-                    </span>
-                  </td>
-                {:else if colId === "details"}
-                  <td
-                    class="px-3 py-2.5 max-w-48 truncate text-muted-foreground"
-                    title={formatJobDetails(job, subjectMap)}
-                  >
-                    {formatJobDetails(job, subjectMap)}
-                  </td>
-                {:else if colId === "term"}
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    {#if getTermCode(job)}
-                      <span class="font-mono text-xs text-muted-foreground">{getTermCode(job)}</span>
-                    {:else}
-                      <span class="text-xs text-muted-foreground/40">&mdash;</span>
-                    {/if}
-                  </td>
-                {:else if colId === "priority"}
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    <span
-                      class="font-medium capitalize {priorityColor(
-                        job.priority,
-                      )}"
-                    >
-                      {job.priority}
-                    </span>
-                  </td>
-                {:else if colId === "timing"}
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    <span
-                      class="inline-flex items-center gap-1.5 tabular-nums text-foreground"
-                      data-timing-tooltip={timingDisplay.tooltip}
-                    >
-                      <span
-                        class="size-3.5 shrink-0 inline-flex items-center justify-center {timingDisplay.colorClass}"
-                      >
-                        {#if timingDisplay.icon === "warning"}
-                          <TriangleAlert class="size-3.5" />
-                        {/if}
-                      </span>
-                      {timingDisplay.text}
-                    </span>
-                  </td>
-                {/if}
+                {@render jobCell(cell.column.id, job)}
               {/each}
             </tr>
           {/each}

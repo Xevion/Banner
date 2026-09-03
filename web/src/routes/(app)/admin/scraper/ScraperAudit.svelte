@@ -194,6 +194,95 @@ const skeletonWidths: Record<string, string> = {
 const columnCount = columns.length;
 </script>
 
+{#snippet timeCell(entry: AuditLogEntry)}
+  {@const rel = relativeTime(new Date(entry.timestamp), now)}
+  <td class="px-4 py-3 whitespace-nowrap">
+    <SimpleTooltip text={formatAbsoluteDate(entry.timestamp)} side="right" passthrough>
+      <span class="font-mono text-xs text-muted-foreground">{rel.text === "now" ? "just now" : `${rel.text} ago`}</span>
+    </SimpleTooltip>
+  </td>
+{/snippet}
+
+{#snippet termCell(entry: AuditLogEntry)}
+  <td class="px-4 py-3 whitespace-nowrap">
+    {#if entry.termCode}
+      <span class="font-mono text-xs text-muted-foreground">{entry.termCode}</span>
+    {:else}
+      <span class="text-xs text-muted-foreground/40">&mdash;</span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet courseCell(entry: AuditLogEntry)}
+  <td class="px-4 py-3 whitespace-nowrap">
+    <SimpleTooltip text={formatCourseTooltip(entry)} side="right" passthrough>
+      <span class="font-mono text-xs text-foreground">{formatCourse(entry)}</span>
+    </SimpleTooltip>
+  </td>
+{/snippet}
+
+{#snippet fieldCell(entry: AuditLogEntry)}
+  <td class="px-4 py-3">
+    <span
+      class="inline-block rounded-full bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
+    >
+      {entry.fieldChanged}
+    </span>
+  </td>
+{/snippet}
+
+{#snippet changeCell(entry: AuditLogEntry, isExpanded: boolean)}
+  {@const change = analyzeChange(entry)}
+  <td class="px-4 py-3">
+    {#if change.kind === "scalar"}
+      <span class="inline-flex items-center gap-1.5 text-sm">
+        {#if change.delta !== null}
+          <span class="text-foreground">{formatNumber(change.delta, { sign: true })}<span class="text-muted-foreground/60">,</span></span>
+        {/if}
+        <span class="text-red-400">{change.oldRaw}</span>
+        <span class="text-muted-foreground/60">&rarr;</span>
+        <span class="text-green-600 dark:text-green-400">{change.newRaw}</span>
+      </span>
+    {:else if change.kind === "json-single"}
+      {#if change.diffs.length === 1}
+        {@const d = change.diffs[0]}
+        <span class="font-mono text-xs">
+          <span class="text-muted-foreground">{formatDiffPath(d.path)}:</span> <span class="text-red-400">{stringify(d.oldVal)}</span>
+          <span class="text-muted-foreground"> &rarr; </span>
+          <span class="text-green-600 dark:text-green-400">{stringify(d.newVal)}</span>
+        </span>
+      {:else}
+        <span class="text-muted-foreground text-xs italic">No changes</span>
+      {/if}
+    {:else if change.kind === "json-multi"}
+      <span class="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        {#if isExpanded}
+          <ChevronDown class="size-3.5 shrink-0" />
+        {:else}
+          <ChevronRight class="size-3.5 shrink-0" />
+        {/if}
+        <span class="underline decoration-dotted underline-offset-2">
+          {formatNumber(change.diffs.length)} fields changed
+        </span>
+      </span>
+    {/if}
+  </td>
+{/snippet}
+
+{#snippet auditRowCell(colId: string, entry: AuditLogEntry, isExpanded: boolean)}
+  {#if colId === "time"}
+    {@render timeCell(entry)}
+  {:else if colId === "term"}
+    {@render termCell(entry)}
+  {:else if colId === "course"}
+    {@render courseCell(entry)}
+  {:else if colId === "field"}
+    {@render fieldCell(entry)}
+  {:else if colId === "change"}
+    {@render changeCell(entry, isExpanded)}
+  {/if}
+{/snippet}
+
 <div class="bg-card border-border overflow-hidden rounded-lg border">
   <table class="w-full text-sm">
     <SortableHeader headerGroups={table.getHeaderGroups()} thClass="px-4 py-3 font-medium" />
@@ -220,72 +309,7 @@ const columnCount = columns.length;
             onclick={clickable ? () => toggleExpanded(entry.id) : undefined}
           >
             {#each row.getVisibleCells() as cell (cell.id)}
-              {@const colId = cell.column.id}
-              {#if colId === "time"}
-                {@const rel = relativeTime(new Date(entry.timestamp), now)}
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <SimpleTooltip text={formatAbsoluteDate(entry.timestamp)} side="right" passthrough>
-                    <span class="font-mono text-xs text-muted-foreground">{rel.text === "now" ? "just now" : `${rel.text} ago`}</span>
-                  </SimpleTooltip>
-                </td>
-              {:else if colId === "term"}
-                <td class="px-4 py-3 whitespace-nowrap">
-                  {#if entry.termCode}
-                    <span class="font-mono text-xs text-muted-foreground">{entry.termCode}</span>
-                  {:else}
-                    <span class="text-xs text-muted-foreground/40">&mdash;</span>
-                  {/if}
-                </td>
-              {:else if colId === "course"}
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <SimpleTooltip text={formatCourseTooltip(entry)} side="right" passthrough>
-                    <span class="font-mono text-xs text-foreground">{formatCourse(entry)}</span>
-                  </SimpleTooltip>
-                </td>
-              {:else if colId === "field"}
-                <td class="px-4 py-3">
-                  <span
-                    class="inline-block rounded-full bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
-                  >
-                    {entry.fieldChanged}
-                  </span>
-                </td>
-              {:else if colId === "change"}
-                <td class="px-4 py-3">
-                  {#if change.kind === "scalar"}
-                    <span class="inline-flex items-center gap-1.5 text-sm">
-                      {#if change.delta !== null}
-                        <span class="text-foreground">{formatNumber(change.delta, { sign: true })}<span class="text-muted-foreground/60">,</span></span>
-                      {/if}
-                      <span class="text-red-400">{change.oldRaw}</span>
-                      <span class="text-muted-foreground/60">&rarr;</span>
-                      <span class="text-green-600 dark:text-green-400">{change.newRaw}</span>
-                    </span>
-                  {:else if change.kind === "json-single"}
-                    {#if change.diffs.length === 1}
-                      {@const d = change.diffs[0]}
-                      <span class="font-mono text-xs">
-                        <span class="text-muted-foreground">{formatDiffPath(d.path)}:</span> <span class="text-red-400">{stringify(d.oldVal)}</span>
-                        <span class="text-muted-foreground"> &rarr; </span>
-                        <span class="text-green-600 dark:text-green-400">{stringify(d.newVal)}</span>
-                      </span>
-                    {:else}
-                      <span class="text-muted-foreground text-xs italic">No changes</span>
-                    {/if}
-                  {:else if change.kind === "json-multi"}
-                    <span class="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                      {#if isExpanded}
-                        <ChevronDown class="size-3.5 shrink-0" />
-                      {:else}
-                        <ChevronRight class="size-3.5 shrink-0" />
-                      {/if}
-                      <span class="underline decoration-dotted underline-offset-2">
-                        {formatNumber(change.diffs.length)} fields changed
-                      </span>
-                    </span>
-                  {/if}
-                </td>
-              {/if}
+              {@render auditRowCell(cell.column.id, entry, isExpanded)}
             {/each}
           </tr>
           <!-- Expandable detail row for multi-path JSON diffs -->
