@@ -7,18 +7,21 @@ import type {
   BluebookMatchResponse,
   InstructorListItem,
 } from "$lib/bindings";
+import ActionResultBanner from "$lib/components/ActionResultBanner.svelte";
 import FilterCards from "$lib/components/FilterCards.svelte";
+import MatchListSkeleton from "$lib/components/MatchListSkeleton.svelte";
+import MatchPageHeader from "$lib/components/MatchPageHeader.svelte";
+import MatchTable from "$lib/components/MatchTable.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
 import ProgressBar from "$lib/components/ProgressBar.svelte";
-import SearchInput from "$lib/components/SearchInput.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
-import { useDebounceSearch, useRowHighlight } from "$lib/composables";
+import { useDebounceSearch, useExpandableDetail, useRowHighlight } from "$lib/composables";
 import { formatInstructorName, formatYearRange } from "$lib/course";
-import type { FilterCard, ProgressSegment, StatusBadge } from "$lib/ui";
+import type { FilterCard, MatchColumn, ProgressSegment, StatusBadge } from "$lib/ui";
 import { getBadge } from "$lib/ui";
-import { Check, ChevronRight, LoaderCircle, RefreshCw, Search, X } from "@lucide/svelte";
+import { Check, LoaderCircle, Search, X } from "@lucide/svelte";
 import { onDestroy, untrack } from "svelte";
-import { fade, slide } from "svelte/transition";
+import { fade } from "svelte/transition";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -34,19 +37,10 @@ let activeFilter = $state<string | undefined>(undefined);
 let error = $state<string | null>(untrack(() => data.error));
 let loading = $state(false);
 
-// Expanded row detail
-let expandedId = $state<number | null>(null);
-let detail = $state<BluebookLinkDetail | null>(null);
-let detailLoading = $state(false);
-let detailError = $state<string | null>(null);
-
 // Action states
 let actionLoading = $state<string | null>(null);
 let matchLoading = $state(false);
 let matchResult = $state<{ message: string; isError: boolean } | null>(null);
-
-// Row highlight tracking
-const highlight = useRowHighlight();
 
 // Instructor search for manual assignment
 let instructorSearchQuery = $state("");
@@ -56,14 +50,36 @@ let instructorSearchTimeout: ReturnType<typeof setTimeout> | undefined;
 // Pending assign confirmation state
 let pendingAssignInstructor = $state<InstructorListItem | null>(null);
 
+// Row highlight tracking
+const highlight = useRowHighlight();
+
+// Expanded row detail
+const expand = useExpandableDetail<BluebookLinkDetail>({
+  fetcher: (id) => client.getAdminBluebookLink(id),
+  beforeLoad: () => {
+    instructorSearchQuery = "";
+    instructorSearchResults = [];
+    pendingAssignInstructor = null;
+  },
+});
+
 // Debounced search
 let searchQuery = $state("");
 const search = useDebounceSearch((q) => {
   searchQuery = q;
   currentPage = 1;
-  expandedId = null;
+  expand.collapse();
   void fetchLinks();
 });
+
+const columns: MatchColumn[] = [
+  { label: "BlueBook Name" },
+  { label: "Subject" },
+  { label: "Evals", class: "text-center" },
+  { label: "Matched To" },
+  { label: "Confidence", class: "text-center" },
+  { label: "Status" },
+];
 
 const filterCards: FilterCard<BluebookLinkStats>[] = [
   {
@@ -132,22 +148,6 @@ async function fetchLinks() {
   loading = false;
 }
 
-async function fetchDetail(id: number) {
-  detailLoading = true;
-  detailError = null;
-  detail = null;
-  instructorSearchQuery = "";
-  instructorSearchResults = [];
-  pendingAssignInstructor = null;
-  const result = await client.getAdminBluebookLink(id);
-  if (result.isErr) {
-    detailError = result.error.message;
-  } else {
-    detail = result.value;
-  }
-  detailLoading = false;
-}
-
 onDestroy(() => {
   clearTimeout(instructorSearchTimeout);
   highlight.clear();
@@ -156,7 +156,7 @@ onDestroy(() => {
 function setFilter(value: string | undefined) {
   activeFilter = value;
   currentPage = 1;
-  expandedId = null;
+  expand.collapse();
   void fetchLinks();
 }
 
@@ -168,25 +168,8 @@ function clearAllFilters() {
 function goToPage(page: number) {
   if (page < 1 || page > totalPages) return;
   currentPage = page;
-  expandedId = null;
+  expand.collapse();
   void fetchLinks();
-}
-
-async function toggleExpand(id: number) {
-  if (expandedId === id) {
-    expandedId = null;
-    detail = null;
-    return;
-  }
-  expandedId = id;
-  await fetchDetail(id);
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape" && expandedId !== null) {
-    expandedId = null;
-    detail = null;
-  }
 }
 
 function updateLocalStatus(linkId: number, newStatus: string) {
@@ -203,11 +186,12 @@ async function handleApprove(linkId: number) {
   actionLoading = `approve-${linkId}`;
   const result = await client.approveBluebookLink(linkId);
   if (result.isErr) {
-    detailError = result.error.message;
+    expand.error = result.error.message;
   } else {
     updateLocalStatus(linkId, "approved");
-    if (detail?.id === linkId) {
-      detail = { ...detail, status: "approved" };
+    const current = expand.detail;
+    if (current?.id === linkId) {
+      expand.detail = { ...current, status: "approved" };
     }
   }
   actionLoading = null;
@@ -217,11 +201,12 @@ async function handleReject(linkId: number) {
   actionLoading = `reject-${linkId}`;
   const result = await client.rejectBluebookLink(linkId);
   if (result.isErr) {
-    detailError = result.error.message;
+    expand.error = result.error.message;
   } else {
     updateLocalStatus(linkId, "rejected");
-    if (detail?.id === linkId) {
-      detail = { ...detail, status: "rejected" };
+    const current = expand.detail;
+    if (current?.id === linkId) {
+      expand.detail = { ...current, status: "rejected" };
     }
   }
   actionLoading = null;
@@ -231,12 +216,9 @@ async function handleAssign(linkId: number, instructorId: number) {
   actionLoading = `assign-${linkId}`;
   const result = await client.assignBluebookLink(linkId, instructorId);
   if (result.isErr) {
-    detailError = result.error.message;
+    expand.error = result.error.message;
   } else {
-    instructorSearchQuery = "";
-    instructorSearchResults = [];
-    pendingAssignInstructor = null;
-    await fetchDetail(linkId);
+    await expand.load(linkId);
     await fetchLinks();
   }
   actionLoading = null;
@@ -316,52 +298,18 @@ function formatConfidence(confidence: number | null): string {
   <title>BlueBook Matching | Banner</title>
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={expand.handleKeydown} />
 
-<!-- Header -->
-<div class="flex items-center gap-3 mb-4">
-  <h1 class="text-lg font-semibold text-foreground">BlueBook Matching</h1>
-  <div class="flex-1"></div>
+<MatchPageHeader
+  title="BlueBook Matching"
+  searchPlaceholder="Search by name..."
+  {search}
+  actionLabel="Run Auto-Match"
+  actionLoading={matchLoading}
+  onAction={handleAutoMatch}
+/>
 
-  <!-- Search -->
-  <SearchInput
-    bind:value={search.input}
-    placeholder="Search by name..."
-    onSearch={search.trigger}
-    onClear={() => search.clear()}
-  />
-
-  <!-- Run Auto-Match -->
-  <button
-    onclick={handleAutoMatch}
-    disabled={matchLoading}
-    class="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-1.5 text-sm font-medium
-           text-foreground hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer"
-  >
-    <RefreshCw size={14} class={matchLoading ? "animate-spin" : ""} />
-    Run Auto-Match
-  </button>
-</div>
-
-<!-- Auto-match result (dismissable) -->
-{#if matchResult}
-  <div
-    class="mb-4 rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2
-           {matchResult.isError
-      ? 'bg-destructive/10 text-destructive'
-      : 'bg-muted text-muted-foreground'}"
-    transition:fade={{ duration: 150 }}
-  >
-    <span>{matchResult.message}</span>
-    <button
-      onclick={() => (matchResult = null)}
-      class="text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
-      aria-label="Dismiss"
-    >
-      <X size={14} />
-    </button>
-  </div>
-{/if}
+<ActionResultBanner result={matchResult} onDismiss={() => (matchResult = null)} />
 
 <!-- Error -->
 {#if error}
@@ -374,33 +322,15 @@ function formatConfidence(confidence: number | null): string {
 {/if}
 
 {#if loading && links.length === 0}
-  <!-- Skeleton stats cards -->
-  <div class="mb-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
-    {#each Array(5) as _stat, i (i)}
-      <div class="bg-card border-border rounded-lg border p-3">
-        <div class="h-3 w-16 animate-pulse rounded bg-muted mb-2"></div>
-        <div class="h-6 w-12 animate-pulse rounded bg-muted"></div>
-      </div>
-    {/each}
-  </div>
-  <div class="bg-muted mb-6 h-2 rounded-full overflow-hidden"></div>
-  <!-- Skeleton table rows -->
-  <div class="bg-card border-border overflow-hidden rounded-lg border">
-    <div>
-      {#each Array(8) as _row, i (i)}
-        <div class="flex items-center gap-4 px-4 py-3{i > 0 ? ' border-t border-border' : ''}">
-          <div class="flex flex-col gap-y-1.5 flex-1">
-            <div class="h-4 w-40 animate-pulse rounded bg-muted"></div>
-            <div class="h-3 w-28 animate-pulse rounded bg-muted"></div>
-          </div>
-          <div class="h-5 w-16 animate-pulse rounded-full bg-muted"></div>
-          <div class="h-4 w-20 animate-pulse rounded bg-muted"></div>
-          <div class="h-4 w-12 animate-pulse rounded bg-muted"></div>
-          <div class="h-6 w-16 animate-pulse rounded bg-muted"></div>
-        </div>
-      {/each}
-    </div>
-  </div>
+  <MatchListSkeleton
+    statCardsClass="grid-cols-2 sm:grid-cols-5"
+    cellClasses={[
+      "h-5 w-16 rounded-full",
+      "h-4 w-20 rounded",
+      "h-4 w-12 rounded",
+      "h-6 w-16 rounded",
+    ]}
+  />
 {:else}
   <div class="relative">
     <!-- Loading overlay for refetching -->
@@ -435,482 +365,21 @@ function formatConfidence(confidence: number | null): string {
         {/if}
       </div>
     {:else}
-      <div class="bg-card border-border overflow-hidden rounded-lg border">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-border border-b text-left text-muted-foreground">
-              <th class="px-4 py-2.5 font-medium">BlueBook Name</th>
-              <th class="px-4 py-2.5 font-medium">Subject</th>
-              <th class="px-4 py-2.5 font-medium text-center">Evals</th>
-              <th class="px-4 py-2.5 font-medium">Matched To</th>
-              <th class="px-4 py-2.5 font-medium text-center">Confidence</th>
-              <th class="px-4 py-2.5 font-medium">Status</th>
-              <th class="px-4 py-2.5 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each links as link (link.id)}
-              {@const badge = getBadge(BADGES, link.status)}
-              {@const isExpanded = expandedId === link.id}
-              {@const isStale = !matchesFilter(link.status)}
-              {@const isHighlighted = highlight.has(link.id)}
-              <tr
-                class="border-border border-b cursor-pointer transition-colors duration-700
-                       {isExpanded ? 'bg-muted/30' : 'hover:bg-muted/50'}
-                       {isHighlighted ? 'bg-primary/10' : ''}
-                       {isStale && !isHighlighted ? 'opacity-60' : ''}"
-                onclick={() => toggleExpand(link.id)}
-              >
-                <td class="px-4 py-2.5">
-                  <div class="font-medium text-foreground">{link.instructorName}</div>
-                </td>
-                <td class="px-4 py-2.5">
-                  {#if link.subject}
-                    <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
-                      >{link.subject}</span
-                    >
-                  {:else}
-                    <SimpleTooltip
-                      text="No subject filter &mdash; this link matches the instructor name across all subjects"
-                      delay={200}
-                    >
-                      <span
-                        class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
-                        >All subjects</span
-                      >
-                    </SimpleTooltip>
-                  {/if}
-                </td>
-                <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
-                  {link.evalCount}
-                </td>
-                <td class="px-4 py-2.5">
-                  {#if link.instructorDisplayName}
-                    <span class="text-foreground"
-                      >{formatInstructorName(link.instructorDisplayName)}</span
-                    >
-                  {:else}
-                    <span class="text-muted-foreground text-xs">Unmatched</span>
-                  {/if}
-                </td>
-                <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
-                  {formatConfidence(link.confidence)}
-                </td>
-                <td class="px-4 py-2.5">
-                  <span
-                    class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-300 {badge.classes}"
-                  >
-                    {badge.label}
-                  </span>
-                </td>
-                <td class="px-4 py-2.5 text-right">
-                  <div class="inline-flex items-center gap-1">
-                    {#if (link.status === "pending" || link.status === "auto") && link.instructorId !== null}
-                      <button
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          void handleApprove(link.id);
-                        }}
-                        disabled={actionLoading !== null}
-                        class="rounded p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30
-                               transition-colors disabled:opacity-50 cursor-pointer"
-                        title="Approve match"
-                      >
-                        {#if actionLoading === `approve-${link.id}`}
-                          <LoaderCircle size={16} class="animate-spin" />
-                        {:else}
-                          <Check size={16} />
-                        {/if}
-                      </button>
-                      <button
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          void handleReject(link.id);
-                        }}
-                        disabled={actionLoading !== null}
-                        class="rounded p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30
-                               transition-colors disabled:opacity-50 cursor-pointer"
-                        title="Reject match"
-                      >
-                        {#if actionLoading === `reject-${link.id}`}
-                          <LoaderCircle size={16} class="animate-spin" />
-                        {:else}
-                          <X size={16} />
-                        {/if}
-                      </button>
-                    {/if}
-                    <button
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        void toggleExpand(link.id);
-                      }}
-                      class="rounded p-1 text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
-                      title={isExpanded ? "Collapse" : "Expand details"}
-                      aria-expanded={isExpanded}
-                    >
-                      <ChevronRight
-                        size={16}
-                        class="transition-transform duration-200 {isExpanded ? 'rotate-90' : ''}"
-                      />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <!-- Expanded detail panel -->
-              {#if isExpanded}
-                <tr class="border-border border-b bg-muted/20">
-                  <td colspan="7" class="p-0 overflow-hidden">
-                    <div transition:slide={{ duration: 200 }} class="p-4">
-                      {#if detailLoading}
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                          <div class="flex flex-col gap-y-3 animate-pulse">
-                            <div class="h-4 w-20 rounded bg-muted"></div>
-                            <div class="flex flex-col gap-y-2">
-                              <div class="h-3 w-36 rounded bg-muted"></div>
-                              <div class="h-3 w-44 rounded bg-muted"></div>
-                              <div class="h-3 w-28 rounded bg-muted"></div>
-                            </div>
-                          </div>
-                          <div class="lg:col-span-2 flex flex-col gap-y-3 animate-pulse">
-                            <div class="h-4 w-32 rounded bg-muted"></div>
-                            <div class="flex flex-col gap-y-2">
-                              <div class="h-20 rounded bg-muted"></div>
-                              <div class="h-20 rounded bg-muted"></div>
-                            </div>
-                          </div>
-                        </div>
-                      {:else if detailError}
-                        <div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                          {detailError}
-                        </div>
-                      {:else if detail}
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                          <!-- Link info -->
-                          <div class="flex flex-col gap-y-3">
-                            <h3 class="font-medium text-foreground text-sm">Link Info</h3>
-                            <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                              <dt class="text-muted-foreground">Name</dt>
-                              <dd class="text-foreground">{detail.instructorName}</dd>
-
-                              <dt class="text-muted-foreground">Subject</dt>
-                              <dd>
-                                {#if detail.subject}
-                                  <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
-                                    >{detail.subject}</span
-                                  >
-                                {:else}
-                                  <SimpleTooltip
-                                    text="No subject filter &mdash; this link matches the instructor name across all subjects"
-                                    delay={200}
-                                  >
-                                    <span
-                                      class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
-                                      >All subjects</span
-                                    >
-                                  </SimpleTooltip>
-                                {/if}
-                              </dd>
-
-                              <dt class="text-muted-foreground">Confidence</dt>
-                              <dd class="text-foreground tabular-nums">
-                                {formatConfidence(detail.confidence)}
-                              </dd>
-
-                              <dt class="text-muted-foreground">Evals</dt>
-                              <dd class="text-foreground tabular-nums">{detail.evalCount}</dd>
-
-                              <dt class="text-muted-foreground">Status</dt>
-                              <dd>
-                                <span
-                                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {getBadge(BADGES, detail.status).classes}"
-                                >
-                                  {getBadge(BADGES, detail.status).label}
-                                </span>
-                              </dd>
-                            </dl>
-
-                            <!-- Proposed match card for auto/pending with a match -->
-                            {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId !== null}
-                              <div class="mt-1 flex flex-col gap-y-2">
-                                <div class="text-xs font-medium text-muted-foreground">
-                                  Proposed Match
-                                </div>
-                                <div
-                                  class="rounded-md border border-l-4 border-l-amber-400 border-border bg-card p-3 flex flex-col gap-y-1.5"
-                                >
-                                  <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0">
-                                      <div class="font-medium text-foreground text-sm">
-                                        {detail.instructorDisplayName
-                                          ? formatInstructorName(detail.instructorDisplayName)
-                                          : "Unknown"}
-                                      </div>
-                                      {#if detail.instructorEmail}
-                                        <div class="text-xs text-muted-foreground mt-0.5 break-all">
-                                          {detail.instructorEmail}
-                                        </div>
-                                      {/if}
-                                    </div>
-                                    <div class="flex gap-1.5 shrink-0">
-                                      <button
-                                        onclick={(e) => {
-                                          e.stopPropagation();
-                                          void handleApprove(detail!.id);
-                                        }}
-                                        disabled={actionLoading !== null}
-                                        class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1
-                                               text-xs font-medium text-green-700 hover:bg-green-200
-                                               dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50
-                                               transition-colors disabled:opacity-50 cursor-pointer"
-                                      >
-                                        {#if actionLoading === `approve-${detail.id}`}
-                                          <LoaderCircle size={11} class="animate-spin" />
-                                        {:else}
-                                          <Check size={11} />
-                                        {/if}
-                                        Approve
-                                      </button>
-                                      <button
-                                        onclick={(e) => {
-                                          e.stopPropagation();
-                                          void handleReject(detail!.id);
-                                        }}
-                                        disabled={actionLoading !== null}
-                                        class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1
-                                               text-xs font-medium text-red-700 hover:bg-red-200
-                                               dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50
-                                               transition-colors disabled:opacity-50 cursor-pointer"
-                                      >
-                                        {#if actionLoading === `reject-${detail.id}`}
-                                          <LoaderCircle size={11} class="animate-spin" />
-                                        {:else}
-                                          <X size={11} />
-                                        {/if}
-                                        Reject
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <!-- Subjects + years + course count -->
-                                  <div class="flex items-center gap-3 text-xs flex-wrap mt-0.5">
-                                    {#if detail.instructorSubjects.length > 0}
-                                      <div class="flex flex-wrap gap-1">
-                                        {#each detail.instructorSubjects.slice(0, 5) as subj (subj)}
-                                          <span
-                                            class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
-                                            >{subj}</span
-                                          >
-                                        {/each}
-                                        {#if detail.instructorSubjects.length > 5}
-                                          <span class="text-muted-foreground"
-                                            >+{detail.instructorSubjects.length - 5}</span
-                                          >
-                                        {/if}
-                                      </div>
-                                    {/if}
-                                    {#if detail.instructorTeachingYears.length > 0}
-                                      <span class="text-muted-foreground tabular-nums">
-                                        {formatYearRange(detail.instructorTeachingYears)}
-                                      </span>
-                                    {/if}
-                                    {#if detail.instructorCourseCount != null}
-                                      <span class="text-muted-foreground tabular-nums">
-                                        {detail.instructorCourseCount} courses
-                                      </span>
-                                    {/if}
-                                  </div>
-                                </div>
-                              </div>
-                            {/if}
-
-                            <!-- Manual instructor search for unmatched auto/pending links -->
-                            {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId === null}
-                              <div class="mt-1 flex flex-col gap-y-2">
-                                <div class="text-xs text-muted-foreground font-medium">
-                                  Assign Instructor
-                                </div>
-
-                                {#if pendingAssignInstructor}
-                                  <!-- Confirmation step -->
-                                  <div
-                                    class="flex items-center gap-2 text-xs"
-                                    in:fade={{ duration: 100 }}
-                                  >
-                                    <span class="text-muted-foreground min-w-0 truncate">
-                                      Assign to <span class="text-foreground font-medium"
-                                        >{formatInstructorName(
-                                          pendingAssignInstructor.displayName
-                                        )}</span
-                                      >?
-                                    </span>
-                                    <button
-                                      onclick={(e) => {
-                                        e.stopPropagation();
-                                        void handleAssign(
-                                          detail!.id,
-                                          pendingAssignInstructor!.id
-                                        );
-                                      }}
-                                      disabled={actionLoading !== null}
-                                      class="font-medium text-green-600 hover:text-green-700
-                                             dark:text-green-400 dark:hover:text-green-300
-                                             cursor-pointer disabled:opacity-50 shrink-0"
-                                    >
-                                      {#if actionLoading === `assign-${detail.id}`}
-                                        <LoaderCircle size={12} class="animate-spin inline" />
-                                      {:else}
-                                        Confirm
-                                      {/if}
-                                    </button>
-                                    <button
-                                      onclick={(e) => {
-                                        e.stopPropagation();
-                                        cancelAssign();
-                                      }}
-                                      class="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                {:else}
-                                  <!-- Search input -->
-                                  <div class="relative">
-                                    <Search
-                                      size={12}
-                                      class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                                    />
-                                    <input
-                                      type="text"
-                                      placeholder="Search instructors..."
-                                      bind:value={instructorSearchQuery}
-                                      oninput={handleInstructorSearch}
-                                      onclick={(e) => e.stopPropagation()}
-                                      class="bg-background border-border rounded-md border pl-7 pr-3 py-1.5 text-xs text-foreground
-                                             placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-full transition-shadow"
-                                    />
-                                    {#if instructorSearchLoading}
-                                      <LoaderCircle
-                                        size={12}
-                                        class="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground"
-                                      />
-                                    {/if}
-                                  </div>
-                                {/if}
-
-                                {#if instructorSearchResults.length > 0}
-                                  <div
-                                    class="bg-card border-border rounded-md border max-h-52 overflow-y-auto"
-                                  >
-                                    {#each instructorSearchResults as instructor (instructor.id)}
-                                      <button
-                                        onclick={(e) => {
-                                          e.stopPropagation();
-                                          requestAssign(instructor);
-                                        }}
-                                        disabled={actionLoading !== null}
-                                        class="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors
-                                               disabled:opacity-50 cursor-pointer border-b border-border last:border-b-0"
-                                      >
-                                        <div class="font-medium text-foreground">
-                                          {formatInstructorName(instructor.displayName)}
-                                        </div>
-                                        <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                                          {#if instructor.email}
-                                            <span class="text-muted-foreground"
-                                              >{instructor.email}</span
-                                            >
-                                          {/if}
-                                          {#if instructor.subjectsTaught.length > 0}
-                                            <div class="flex gap-1 flex-wrap">
-                                              {#each instructor.subjectsTaught.slice(0, 4) as subj (subj)}
-                                                <span
-                                                  class="rounded bg-muted px-1 py-0 text-[10px] font-medium leading-4"
-                                                  >{subj}</span
-                                                >
-                                              {/each}
-                                              {#if instructor.subjectsTaught.length > 4}
-                                                <span class="text-muted-foreground text-[10px]"
-                                                  >+{instructor.subjectsTaught.length - 4}</span
-                                                >
-                                              {/if}
-                                            </div>
-                                          {/if}
-                                          {#if instructor.teachingYears.length > 0}
-                                            <span class="text-muted-foreground tabular-nums">
-                                              {formatYearRange(instructor.teachingYears)}
-                                            </span>
-                                          {/if}
-                                        </div>
-                                      </button>
-                                    {/each}
-                                  </div>
-                                {/if}
-                              </div>
-                            {/if}
-                          </div>
-
-                          <!-- Courses -->
-                          <div class="lg:col-span-2 flex flex-col gap-y-3">
-                            <h3 class="font-medium text-foreground text-sm">
-                              Courses
-                              <span class="text-muted-foreground font-normal"
-                                >({detail.courses.length})</span
-                              >
-                            </h3>
-
-                            {#if detail.courses.length === 0}
-                              <p class="text-muted-foreground text-sm py-2">
-                                No associated courses.
-                              </p>
-                            {:else}
-                              <div class="max-h-60 overflow-y-auto">
-                                <table class="w-full text-xs">
-                                  <thead>
-                                    <tr
-                                      class="border-border border-b text-left text-muted-foreground"
-                                    >
-                                      <th class="px-3 py-1.5 font-medium">Subject</th>
-                                      <th class="px-3 py-1.5 font-medium">Course</th>
-                                      <th class="px-3 py-1.5 font-medium">Term</th>
-                                      <th class="px-3 py-1.5 font-medium text-center"
-                                        >Instructor Rating</th
-                                      >
-                                      <th class="px-3 py-1.5 font-medium text-center"
-                                        >Course Rating</th
-                                      >
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {#each detail.courses as course, i (
-                                      `${course.subject}-${course.courseNumber}-${course.term}-${i}`
-                                    )}
-                                      <tr class="border-border border-b last:border-b-0">
-                                        <td class="px-3 py-1.5">{course.subject}</td>
-                                        <td class="px-3 py-1.5">{course.courseNumber}</td>
-                                        <td class="px-3 py-1.5">{course.term}</td>
-                                        <td class="px-3 py-1.5 text-center tabular-nums">
-                                          {course.instructorRating?.toFixed(1) ?? "\u2014"}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-center tabular-nums">
-                                          {course.courseRating?.toFixed(1) ?? "\u2014"}
-                                        </td>
-                                      </tr>
-                                    {/each}
-                                  </tbody>
-                                </table>
-                              </div>
-                            {/if}
-                          </div>
-                        </div>
-                      {/if}
-                    </div>
-                  </td>
-                </tr>
-              {/if}
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      <MatchTable
+        {columns}
+        rows={links}
+        getId={(link: BluebookLinkListItem) => link.id}
+        expandedId={expand.expandedId}
+        isStale={(link: BluebookLinkListItem) => !matchesFilter(link.status)}
+        isHighlighted={(id) => highlight.has(id)}
+        detail={expand.detail}
+        detailLoading={expand.loading}
+        detailError={expand.error}
+        onToggle={expand.toggle}
+        {cells}
+        {actions}
+        {detailPanel}
+      />
 
       <!-- Pagination -->
       <Pagination
@@ -923,3 +392,373 @@ function formatConfidence(confidence: number | null): string {
     {/if}
   </div>
 {/if}
+
+{#snippet cells(link: BluebookLinkListItem)}
+  {@const badge = getBadge(BADGES, link.status)}
+  <td class="px-4 py-2.5">
+    <div class="font-medium text-foreground">{link.instructorName}</div>
+  </td>
+  <td class="px-4 py-2.5">
+    {#if link.subject}
+      <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{link.subject}</span>
+    {:else}
+      <SimpleTooltip
+        text="No subject filter &mdash; this link matches the instructor name across all subjects"
+        delay={200}
+      >
+        <span
+          class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
+          >All subjects</span
+        >
+      </SimpleTooltip>
+    {/if}
+  </td>
+  <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+    {link.evalCount}
+  </td>
+  <td class="px-4 py-2.5">
+    {#if link.instructorDisplayName}
+      <span class="text-foreground">{formatInstructorName(link.instructorDisplayName)}</span>
+    {:else}
+      <span class="text-muted-foreground text-xs">Unmatched</span>
+    {/if}
+  </td>
+  <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+    {formatConfidence(link.confidence)}
+  </td>
+  <td class="px-4 py-2.5">
+    <span
+      class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-300 {badge.classes}"
+    >
+      {badge.label}
+    </span>
+  </td>
+{/snippet}
+
+{#snippet actions(link: BluebookLinkListItem)}
+  {#if (link.status === "pending" || link.status === "auto") && link.instructorId !== null}
+    <button
+      onclick={(e) => {
+        e.stopPropagation();
+        void handleApprove(link.id);
+      }}
+      disabled={actionLoading !== null}
+      class="rounded p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30
+             transition-colors disabled:opacity-50 cursor-pointer"
+      title="Approve match"
+    >
+      {#if actionLoading === `approve-${link.id}`}
+        <LoaderCircle size={16} class="animate-spin" />
+      {:else}
+        <Check size={16} />
+      {/if}
+    </button>
+    <button
+      onclick={(e) => {
+        e.stopPropagation();
+        void handleReject(link.id);
+      }}
+      disabled={actionLoading !== null}
+      class="rounded p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30
+             transition-colors disabled:opacity-50 cursor-pointer"
+      title="Reject match"
+    >
+      {#if actionLoading === `reject-${link.id}`}
+        <LoaderCircle size={16} class="animate-spin" />
+      {:else}
+        <X size={16} />
+      {/if}
+    </button>
+  {/if}
+{/snippet}
+
+{#snippet detailPanel(detail: BluebookLinkDetail)}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Link info -->
+    <div class="flex flex-col gap-y-3">
+      <h3 class="font-medium text-foreground text-sm">Link Info</h3>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt class="text-muted-foreground">Name</dt>
+        <dd class="text-foreground">{detail.instructorName}</dd>
+
+        <dt class="text-muted-foreground">Subject</dt>
+        <dd>
+          {#if detail.subject}
+            <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{detail.subject}</span>
+          {:else}
+            <SimpleTooltip
+              text="No subject filter &mdash; this link matches the instructor name across all subjects"
+              delay={200}
+            >
+              <span
+                class="text-muted-foreground text-xs border-b border-dashed border-muted-foreground/50 cursor-help"
+                >All subjects</span
+              >
+            </SimpleTooltip>
+          {/if}
+        </dd>
+
+        <dt class="text-muted-foreground">Confidence</dt>
+        <dd class="text-foreground tabular-nums">
+          {formatConfidence(detail.confidence)}
+        </dd>
+
+        <dt class="text-muted-foreground">Evals</dt>
+        <dd class="text-foreground tabular-nums">{detail.evalCount}</dd>
+
+        <dt class="text-muted-foreground">Status</dt>
+        <dd>
+          <span
+            class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {getBadge(
+              BADGES,
+              detail.status
+            ).classes}"
+          >
+            {getBadge(BADGES, detail.status).label}
+          </span>
+        </dd>
+      </dl>
+
+      <!-- Proposed match card for auto/pending with a match -->
+      {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId !== null}
+        <div class="mt-1 flex flex-col gap-y-2">
+          <div class="text-xs font-medium text-muted-foreground">Proposed Match</div>
+          <div
+            class="rounded-md border border-l-4 border-l-amber-400 border-border bg-card p-3 flex flex-col gap-y-1.5"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-medium text-foreground text-sm">
+                  {detail.instructorDisplayName
+                    ? formatInstructorName(detail.instructorDisplayName)
+                    : "Unknown"}
+                </div>
+                {#if detail.instructorEmail}
+                  <div class="text-xs text-muted-foreground mt-0.5 break-all">
+                    {detail.instructorEmail}
+                  </div>
+                {/if}
+              </div>
+              <div class="flex gap-1.5 shrink-0">
+                <button
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    void handleApprove(detail.id);
+                  }}
+                  disabled={actionLoading !== null}
+                  class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1
+                         text-xs font-medium text-green-700 hover:bg-green-200
+                         dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50
+                         transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {#if actionLoading === `approve-${detail.id}`}
+                    <LoaderCircle size={11} class="animate-spin" />
+                  {:else}
+                    <Check size={11} />
+                  {/if}
+                  Approve
+                </button>
+                <button
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    void handleReject(detail.id);
+                  }}
+                  disabled={actionLoading !== null}
+                  class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1
+                         text-xs font-medium text-red-700 hover:bg-red-200
+                         dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50
+                         transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {#if actionLoading === `reject-${detail.id}`}
+                    <LoaderCircle size={11} class="animate-spin" />
+                  {:else}
+                    <X size={11} />
+                  {/if}
+                  Reject
+                </button>
+              </div>
+            </div>
+            <!-- Subjects + years + course count -->
+            <div class="flex items-center gap-3 text-xs flex-wrap mt-0.5">
+              {#if detail.instructorSubjects.length > 0}
+                <div class="flex flex-wrap gap-1">
+                  {#each detail.instructorSubjects.slice(0, 5) as subj (subj)}
+                    <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{subj}</span>
+                  {/each}
+                  {#if detail.instructorSubjects.length > 5}
+                    <span class="text-muted-foreground"
+                      >+{detail.instructorSubjects.length - 5}</span
+                    >
+                  {/if}
+                </div>
+              {/if}
+              {#if detail.instructorTeachingYears.length > 0}
+                <span class="text-muted-foreground tabular-nums">
+                  {formatYearRange(detail.instructorTeachingYears)}
+                </span>
+              {/if}
+              {#if detail.instructorCourseCount != null}
+                <span class="text-muted-foreground tabular-nums">
+                  {detail.instructorCourseCount} courses
+                </span>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Manual instructor search for unmatched auto/pending links -->
+      {#if (detail.status === "pending" || detail.status === "auto") && detail.instructorId === null}
+        <div class="mt-1 flex flex-col gap-y-2">
+          <div class="text-xs text-muted-foreground font-medium">Assign Instructor</div>
+
+          {#if pendingAssignInstructor}
+            <!-- Confirmation step -->
+            <div class="flex items-center gap-2 text-xs" in:fade={{ duration: 100 }}>
+              <span class="text-muted-foreground min-w-0 truncate">
+                Assign to <span class="text-foreground font-medium"
+                  >{formatInstructorName(pendingAssignInstructor.displayName)}</span
+                >?
+              </span>
+              <button
+                onclick={(e) => {
+                  e.stopPropagation();
+                  void handleAssign(detail.id, pendingAssignInstructor!.id);
+                }}
+                disabled={actionLoading !== null}
+                class="font-medium text-green-600 hover:text-green-700
+                       dark:text-green-400 dark:hover:text-green-300
+                       cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {#if actionLoading === `assign-${detail.id}`}
+                  <LoaderCircle size={12} class="animate-spin inline" />
+                {:else}
+                  Confirm
+                {/if}
+              </button>
+              <button
+                onclick={(e) => {
+                  e.stopPropagation();
+                  cancelAssign();
+                }}
+                class="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          {:else}
+            <!-- Search input -->
+            <div class="relative">
+              <Search
+                size={12}
+                class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              />
+              <input
+                type="text"
+                placeholder="Search instructors..."
+                bind:value={instructorSearchQuery}
+                oninput={handleInstructorSearch}
+                onclick={(e) => e.stopPropagation()}
+                class="bg-background border-border rounded-md border pl-7 pr-3 py-1.5 text-xs text-foreground
+                       placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring w-full transition-shadow"
+              />
+              {#if instructorSearchLoading}
+                <LoaderCircle
+                  size={12}
+                  class="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground"
+                />
+              {/if}
+            </div>
+          {/if}
+
+          {#if instructorSearchResults.length > 0}
+            <div class="bg-card border-border rounded-md border max-h-52 overflow-y-auto">
+              {#each instructorSearchResults as instructor (instructor.id)}
+                <button
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    requestAssign(instructor);
+                  }}
+                  disabled={actionLoading !== null}
+                  class="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors
+                         disabled:opacity-50 cursor-pointer border-b border-border last:border-b-0"
+                >
+                  <div class="font-medium text-foreground">
+                    {formatInstructorName(instructor.displayName)}
+                  </div>
+                  <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {#if instructor.email}
+                      <span class="text-muted-foreground">{instructor.email}</span>
+                    {/if}
+                    {#if instructor.subjectsTaught.length > 0}
+                      <div class="flex gap-1 flex-wrap">
+                        {#each instructor.subjectsTaught.slice(0, 4) as subj (subj)}
+                          <span class="rounded bg-muted px-1 py-0 text-[10px] font-medium leading-4"
+                            >{subj}</span
+                          >
+                        {/each}
+                        {#if instructor.subjectsTaught.length > 4}
+                          <span class="text-muted-foreground text-[10px]"
+                            >+{instructor.subjectsTaught.length - 4}</span
+                          >
+                        {/if}
+                      </div>
+                    {/if}
+                    {#if instructor.teachingYears.length > 0}
+                      <span class="text-muted-foreground tabular-nums">
+                        {formatYearRange(instructor.teachingYears)}
+                      </span>
+                    {/if}
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Courses -->
+    <div class="lg:col-span-2 flex flex-col gap-y-3">
+      <h3 class="font-medium text-foreground text-sm">
+        Courses
+        <span class="text-muted-foreground font-normal">({detail.courses.length})</span>
+      </h3>
+
+      {#if detail.courses.length === 0}
+        <p class="text-muted-foreground text-sm py-2">No associated courses.</p>
+      {:else}
+        <div class="max-h-60 overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-border border-b text-left text-muted-foreground">
+                <th class="px-3 py-1.5 font-medium">Subject</th>
+                <th class="px-3 py-1.5 font-medium">Course</th>
+                <th class="px-3 py-1.5 font-medium">Term</th>
+                <th class="px-3 py-1.5 font-medium text-center">Instructor Rating</th>
+                <th class="px-3 py-1.5 font-medium text-center">Course Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each detail.courses as course, i (
+                `${course.subject}-${course.courseNumber}-${course.term}-${i}`
+              )}
+                <tr class="border-border border-b last:border-b-0">
+                  <td class="px-3 py-1.5">{course.subject}</td>
+                  <td class="px-3 py-1.5">{course.courseNumber}</td>
+                  <td class="px-3 py-1.5">{course.term}</td>
+                  <td class="px-3 py-1.5 text-center tabular-nums">
+                    {course.instructorRating?.toFixed(1) ?? "\u2014"}
+                  </td>
+                  <td class="px-3 py-1.5 text-center tabular-nums">
+                    {course.courseRating?.toFixed(1) ?? "\u2014"}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/snippet}

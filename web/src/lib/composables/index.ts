@@ -10,3 +10,5 @@ export { ColumnVisibilityController } from "./useColumnVisibility.svelte";
 export type { UseColumnVisibilityOptions, ColumnDef } from "./useColumnVisibility.svelte";
 export { useRowHighlight } from "./useRowHighlight.svelte";
 export { useDebounceSearch } from "./useDebounceSearch.svelte";
+export { useExpandableDetail } from "./useExpandableDetail.svelte";
+export type { UseExpandableDetailOptions } from "./useExpandableDetail.svelte";

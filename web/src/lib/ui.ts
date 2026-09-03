@@ -11,6 +11,12 @@ export interface FilterCard<S> {
   ringColor: string;
 }
 
+export interface MatchColumn {
+  label: string;
+  /** Extra header cell classes, e.g. text alignment. */
+  class?: string;
+}
+
 export interface ProgressSegment<S> {
   stat: keyof S;
   color: string;
