@@ -24,6 +24,14 @@ export interface ScheduleCopy {
   detail: string;
 }
 
+/**
+ * True when the start cell covers both time columns with a colspan, so the row
+ * must not also render an end cell. Untimed rows have one phrase for the pair.
+ */
+export function timeSpansPair(course: CourseResponse, isVisible: (id: string) => boolean): boolean {
+  return scheduleState(course) !== "timed" && isVisible("time") && isVisible("time_end");
+}
+
 export function scheduleState(course: CourseResponse): ScheduleState {
   if (course.meetingTimes.some((mt) => mt.timeRange !== null)) return "timed";
   if (course.isAsyncOnline) return "async";

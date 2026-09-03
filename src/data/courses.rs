@@ -20,6 +20,7 @@ pub enum SortColumn {
     Instructor,
     Rating,
     Time,
+    TimeEnd,
     Seats,
 }
 
@@ -235,8 +236,14 @@ fn sort_clause(column: Option<SortColumn>, direction: Option<SortDirection>) -> 
                  LIMIT 1) {dir} NULLS LAST, {DEFAULT_ORDER}"
             )
         }
+        // Times are stored zero-padded 24-hour, so text ordering is chronological.
+        // The tiebreaker keeps paging stable across the many sections that share
+        // a start or end time.
         Some(SortColumn::Time) => {
-            format!("(meeting_times->0->'timeRange'->>'start') {dir} NULLS LAST")
+            format!("(meeting_times->0->'timeRange'->>'start') {dir} NULLS LAST, {DEFAULT_ORDER}")
+        }
+        Some(SortColumn::TimeEnd) => {
+            format!("(meeting_times->0->'timeRange'->>'end') {dir} NULLS LAST, {DEFAULT_ORDER}")
         }
         Some(SortColumn::Seats) => {
             format!("(max_enrollment - enrollment) {dir}")

@@ -21,6 +21,7 @@ import { fade, slide } from "svelte/transition";
 import EmptyState from "./EmptyState.svelte";
 import { CELL_COMPONENTS, COLUMN_DEFS, COLUMN_WIDTHS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { instructorSortLabel, instructorSortStep, nextInstructorSorting } from "./instructorSort";
+import { timeSpansPair } from "$lib/scheduleState";
 import { setTableContext } from "./context";
 import { buildSkeletonHtml } from "./skeletons";
 
@@ -147,10 +148,14 @@ function courseHeaderOverride(headerId: string): HeaderOverride | null {
       onclick: () => onSortingChange?.(nextInstructorSorting(sorting)),
     };
   }
-  // Shown together the two columns are one range, so they carry one label over
-  // the pair rather than naming halves the reader can already see.
-  if (headerId === "time" && columnVisibility.time_end !== false) return { label: "Time" };
-  if (headerId === "time_end" && columnVisibility.time !== false) return { label: "" };
+  // Shown together the columns are one range under one label, so the titles are
+  // left to say which half each sort control orders.
+  if (headerId === "time" && columnVisibility.time_end !== false) {
+    return { label: "Time", title: "Sort by start time" };
+  }
+  if (headerId === "time_end" && columnVisibility.time !== false) {
+    return { label: "", title: "Sort by end time" };
+  }
   return null;
 }
 
@@ -235,6 +240,7 @@ const table = createSvelteTable({
         {:else}
           {#each table.getRowModel().rows as row (row.id)}
             {@const course = row.original}
+            {@const spansTime = timeSpansPair(course, (id) => columnVisibility[id] !== false)}
             <!-- No entry animation: the scoped view transition on [data-search-results]
                  already crossfades the whole table, and a per-row fade layered inside it
                  reads as a double flash -- including on first paint, over SSR rows that
@@ -248,8 +254,10 @@ const table = createSvelteTable({
                 onclick={(e) => { if (!(e.target as HTMLElement).closest('a')) onToggle(course.crn); }}
               >
                 {#each visibleColumnIds as colId (colId)}
-                  {@const CellComponent = CELL_COMPONENTS[colId]}
-                  <CellComponent {course} />
+                  {#if !(spansTime && colId === "time_end")}
+                    {@const CellComponent = CELL_COMPONENTS[colId]}
+                    <CellComponent {course} />
+                  {/if}
                 {/each}
               </tr>
               {#if expandedCrn === course.crn}

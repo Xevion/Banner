@@ -126,16 +126,31 @@ export function formatMeetingDaysVerbose(mt: DbMeetingTime): string {
   return formatDayVerbose(mt.days);
 }
 
-/** A single clock time, e.g. "10:00 AM". */
-export function formatTime(time: string | null): string {
-  if (!time) return "";
+export interface ClockParts {
+  /** No leading zero, so it can be right-aligned against a two-digit hour. */
+  hour: string;
+  minute: string;
+  meridiem: string;
+}
+
+/**
+ * Split a clock time into its three alignable pieces.
+ *
+ * Rendered as one string, times cannot line up: `text-align` can only pin one
+ * edge, leaving the colon and the meridiem to drift with the hour's width. Each
+ * piece needs its own fixed track.
+ */
+export function formatTimeParts(time: string | null): ClockParts | null {
+  if (!time) return null;
   const parts = time.split(":");
-  if (parts.length < 2) return "";
+  if (parts.length < 2) return null;
   const hours = parseInt(parts[0], 10);
-  if (Number.isNaN(hours)) return "";
-  const period = hours >= 12 ? "PM" : "AM";
-  const display = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-  return `${display}:${parts[1]} ${period}`;
+  if (Number.isNaN(hours)) return null;
+  return {
+    hour: String(hours > 12 ? hours - 12 : hours === 0 ? 12 : hours),
+    minute: parts[1],
+    meridiem: hours >= 12 ? "PM" : "AM",
+  };
 }
 
 /**

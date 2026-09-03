@@ -39,7 +39,7 @@ export const COLUMN_DEFS: ColumnDef<CourseResponse, unknown>[] = [
     id: "time_end",
     accessorFn: (row) => row.meetingTimes[0]?.timeRange?.end ?? "",
     header: "End Time",
-    enableSorting: false,
+    enableSorting: true,
   },
   {
     // Its own track so durations align down the page; a sub-column inside the time
