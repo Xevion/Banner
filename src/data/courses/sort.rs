@@ -4,13 +4,16 @@
 
 use std::fmt;
 use std::str::FromStr;
+use strum::VariantArray;
 use ts_rs::TS;
 
 /// An orderable quantity.
 ///
 /// Deliberately not a column: several keys may share one column's header, and
 /// some belong to no column at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize, TS)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize, TS, VariantArray,
+)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum SortKey {
@@ -44,20 +47,8 @@ struct KeyDef {
 }
 
 impl SortKey {
-    pub const ALL: &'static [SortKey] = &[
-        Self::CourseCode,
-        Self::Title,
-        Self::InstructorName,
-        Self::InstructorRating,
-        Self::StartTime,
-        Self::EndTime,
-        Self::Duration,
-        Self::WeeklyMinutes,
-        Self::Days,
-        Self::SeatsOpen,
-        Self::FillRatio,
-        Self::WaitCount,
-    ];
+    /// Every variant, derived by strum so a new one cannot be left unreachable.
+    pub const ALL: &'static [SortKey] = Self::VARIANTS;
 
     const fn def(self) -> KeyDef {
         match self {
@@ -340,6 +331,13 @@ mod sort_tests {
             assert_eq!(SortKey::from_name(key.name()), Some(*key));
         }
         assert_eq!(SortKey::from_name("nope"), None);
+    }
+
+    /// Pins the variant count so a new variant is noticed here even though
+    /// strum, not a hand-maintained list, is what keeps ALL exhaustive.
+    #[test]
+    fn all_holds_every_variant() {
+        assert_eq!(SortKey::ALL.len(), 12);
     }
 
     #[test]

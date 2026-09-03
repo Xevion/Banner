@@ -69,6 +69,7 @@ custom_debug_derive = "0.6.2"
 nanoid = "0.4.0"
 html_scraper = { version = "0.25.0", package = "scraper" }
 libc = "0.2.189"
+strum = { version = "0.28.0", features = ["derive"] }
 
 [dev-dependencies]
 assert2 = "0.4.0"
