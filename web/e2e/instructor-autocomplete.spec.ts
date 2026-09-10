@@ -44,6 +44,28 @@ test("the instructor box stays editable after typing", async ({ page }) => {
   await expect(input).toHaveValue("jones");
 });
 
+test.describe("when the instructor request fails", () => {
+  test.use({ allowedFailures: [/\/api\/instructors\/suggest/] });
+
+  test("the failure is reported instead of being shown as no results", async ({ page }) => {
+    await page.route("**/api/instructors/suggest*", (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: '{"message":"boom"}' })
+    );
+    await openMore(page);
+
+    const input = page.locator(INSTRUCTOR_INPUT);
+    await input.click();
+    await input.pressSequentially("smi", { delay: 40 });
+
+    const list = page.locator("#instructor-autocomplete-list");
+    await expect(list).toBeVisible();
+    // This box used to drop the error on the floor and claim the instructor did
+    // not exist, which is a different answer from "we could not look".
+    await expect(list.getByRole("alert")).toBeVisible();
+    await expect(list).not.toContainText("No results found.");
+  });
+});
+
 test("escape closes the instructor suggestions but keeps the query", async ({ page }) => {
   await openMore(page);
 

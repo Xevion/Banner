@@ -3,6 +3,7 @@ import type { Subject } from "$lib/api";
 import { formatNumber } from "$lib/utils";
 import { Check, ChevronsUpDown } from "@lucide/svelte";
 import { Combobox } from "bits-ui";
+import { untrack } from "svelte";
 import { fly } from "svelte/transition";
 
 let {
@@ -49,14 +50,26 @@ function removeSubject(code: string) {
   value = value.filter((v) => v !== code);
 }
 
-// bits-ui sets the input text to the last selected item's label -- clear it
+/**
+ * Empties the box, which is a filter over the list and never a label for what
+ * is chosen.
+ *
+ * Two paths would otherwise leave text behind: a pick, after which bits-ui
+ * writes the chosen subject's name, and a dismissal, which strands an abandoned
+ * query that then silently filters the next open. The input is written directly
+ * because the text bits-ui renders comes from state of its own that only takes
+ * an outside value when that value changes, and the value wanted here is always
+ * the same empty one.
+ */
+function clearSearch() {
+  searchValue = "";
+  const input = containerEl?.querySelector("input");
+  if (input) input.value = "";
+}
+
 $effect(() => {
   void value;
-  const input = containerEl?.querySelector("input");
-  if (input) {
-    input.value = "";
-    searchValue = "";
-  }
+  untrack(clearSearch);
 });
 </script>
 
@@ -65,7 +78,7 @@ $effect(() => {
   bind:value
   bind:open
   onOpenChange={(o: boolean) => {
-    if (!o) searchValue = "";
+    if (!o) clearSearch();
   }}
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -102,7 +115,6 @@ $effect(() => {
       {/if}
     {/if}
     <Combobox.Input
-      
       oninput={(e) => (searchValue = e.currentTarget.value)}
       class="h-full min-w-0 flex-1 bg-transparent text-muted-foreground text-sm
              placeholder:text-muted-foreground outline-none border-none

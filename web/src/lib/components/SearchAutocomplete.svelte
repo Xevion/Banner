@@ -1,11 +1,13 @@
 <script lang="ts">
 import type { Subject } from "$lib/api";
 import { client } from "$lib/api";
-import type { CourseSuggestion, InstructorSuggestion, SuggestResponse } from "$lib/bindings";
+import type { SuggestResponse } from "$lib/bindings";
+import { useSuggestions } from "$lib/composables/useSuggestions.svelte";
 import { populateInstructorCache } from "$lib/filters";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
+import type { Suggestion } from "$lib/suggestions";
+import { createSubjectSearch, mergeSuggestions, suggestionId } from "$lib/suggestions";
 import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
-import microfuzz from "@nozbe/microfuzz";
 import { Command, Popover } from "bits-ui";
 import { fly } from "svelte/transition";
 
@@ -19,145 +21,42 @@ let {
 
 const filters = getFiltersContext();
 
-let searchValue = $state("");
-let open = $state(false);
-let triggerRef = $state<HTMLDivElement>(null!);
-let serverResults = $state<SuggestResponse>({ courses: [], instructors: [] });
-let loading = $state(false);
-let error = $state<string | null>(null);
-/** Whether we've received at least one server response for the current query */
-let hasServerResponse = $state(false);
-let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-/** Monotonic counter to discard stale fetch responses */
-let fetchId = 0;
+let anchorEl = $state<HTMLDivElement>(null!);
 
-// Clean up debounce timer on component destroy
-$effect(() => {
-  return () => clearTimeout(debounceTimer);
+const query = useSuggestions<SuggestResponse>({
+  fetcher: (q) => client.suggest(selectedTerm, q),
+  empty: { courses: [], instructors: [] },
 });
 
-// microfuzz is CJS with an `__esModule` default. Rolldown hands the default
-// import the whole exports object rather than unwrapping it, so reach past it
-// when it is there; a bundler that does unwrap gives the function directly.
-const createFuzzySearch =
-  (microfuzz as unknown as { default?: typeof microfuzz }).default ?? microfuzz;
+const subjectSearch = $derived(createSubjectSearch(subjects));
+const selectedInstructors = $derived(new Set(filters.instructor));
 
-const fuzzySearch = $derived(
-  createFuzzySearch(subjects, {
-    getText: (item: Subject) => [item.code, item.description],
-  })
+const suggestions = $derived(
+  mergeSuggestions(query.text, subjectSearch, query.data, selectedInstructors)
 );
 
-type ScoredSuggestion =
-  | { kind: "subject"; subject: Subject; score: number }
-  | { kind: "course"; course: CourseSuggestion; score: number }
-  | { kind: "instructor"; instructor: InstructorSuggestion; score: number };
+/** A search that came back with nothing, as opposed to one still running. */
+const isEmpty = $derived(
+  query.settled && !query.loading && suggestions.length === 0 && !query.error
+);
 
-const selectedInstructorSlugs = $derived(new Set(filters.instructor));
-
-const mergedSuggestions = $derived.by((): ScoredSuggestion[] => {
-  const q = searchValue.trim();
-  if (q.length < 2) return [];
-
-  const items: ScoredSuggestion[] = [];
-
-  // Client-side fuzzy subject matches (microfuzz scores are 0..1 where higher is better)
-  for (const r of fuzzySearch(q).slice(0, 5)) {
-    // microfuzz doesn't expose a numeric score directly; use match presence as 0.5 baseline
-    items.push({ kind: "subject", subject: r.item, score: 0.5 });
+function addSubject(code: string) {
+  if (!filters.subject.includes(code)) {
+    filters.subject = [...filters.subject, code];
   }
-
-  // Server-side results with trigram similarity scores
-  for (const c of serverResults.courses) {
-    items.push({ kind: "course", course: c, score: c.score });
-  }
-  for (const i of serverResults.instructors) {
-    if (!selectedInstructorSlugs.has(i.slug)) {
-      items.push({ kind: "instructor", instructor: i, score: i.score });
-    }
-  }
-
-  // Sort all items together by score descending
-  items.sort((a, b) => b.score - a.score);
-
-  return items;
-});
-
-const hasSuggestions = $derived(mergedSuggestions.length > 0);
-
-/** True when the server has responded with zero results and local fuzzy also found nothing */
-const isEmpty = $derived(hasServerResponse && !loading && !hasSuggestions && !error);
-
-async function fetchSuggestions() {
-  const currentFetchId = ++fetchId;
-  const q = searchValue.trim();
-  if (q.length < 2) {
-    serverResults = { courses: [], instructors: [] };
-    loading = false;
-    error = null;
-    hasServerResponse = false;
-    return;
-  }
-  const result = await client.suggest(selectedTerm, q);
-  // Discard stale responses -- a newer request has been issued
-  if (currentFetchId !== fetchId) return;
-  result.match({
-    Ok: (data) => {
-      serverResults = data;
-      error = null;
-    },
-    Err: (e) => {
-      serverResults = { courses: [], instructors: [] };
-      error = e.message ?? "Failed to fetch suggestions";
-    },
-  });
-  loading = false;
-  hasServerResponse = true;
 }
 
-function handleInput(value: string) {
-  searchValue = value;
-  clearTimeout(debounceTimer);
-  // Invalidate any in-flight fetch
-  fetchId++;
-
-  if (value.trim().length < 2) {
-    serverResults = { courses: [], instructors: [] };
-    loading = false;
-    error = null;
-    hasServerResponse = false;
-    open = false;
-    return;
-  }
-
-  open = true;
-  loading = true;
-  error = null;
-  hasServerResponse = false;
-  debounceTimer = setTimeout(() => void fetchSuggestions(), 250);
-}
-
-function handleSelect(value: string) {
-  const [type, ...rest] = value.split(":");
-  switch (type) {
-    case "subject": {
-      const code = rest[0];
-      if (!filters.subject.includes(code)) {
-        filters.subject = [...filters.subject, code];
-      }
+function apply(suggestion: Suggestion) {
+  switch (suggestion.kind) {
+    case "subject":
+      addSubject(suggestion.subject.code);
       break;
-    }
-    case "course": {
-      const [subject, , ...titleParts] = rest;
-      if (!filters.subject.includes(subject)) {
-        filters.subject = [...filters.subject, subject];
-      }
-      filters.query = titleParts.join(":");
+    case "course":
+      addSubject(suggestion.course.subject);
+      filters.query = suggestion.course.title;
       break;
-    }
     case "instructor": {
-      const slug = rest[0];
-      const displayName = rest.slice(1).join(":");
+      const { slug, displayName } = suggestion.instructor;
       populateInstructorCache({ [slug]: displayName });
       if (!filters.instructor.includes(slug)) {
         filters.instructor = [...filters.instructor, slug];
@@ -165,197 +64,135 @@ function handleSelect(value: string) {
       break;
     }
   }
-
-  searchValue = "";
-  serverResults = { courses: [], instructors: [] };
-  hasServerResponse = false;
-  open = false;
+  query.reset();
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  // Enter with no open popover submits as free-text search
-  if (e.key === "Enter" && !open) {
+  // With no list showing there is nothing to choose, so Enter searches for
+  // whatever was typed rather than waiting on a suggestion.
+  if (e.key === "Enter" && !query.open) {
     e.preventDefault();
-    filters.query = searchValue.trim() || null;
+    filters.query = query.trimmed || null;
   }
 
-  // Escape closes the popover but keeps text
-  if (e.key === "Escape") {
-    open = false;
-  }
+  if (e.key === "Escape") query.open = false;
 }
 
-const popoverListId = "search-autocomplete-list";
+const listId = "search-autocomplete-list";
 </script>
 
-<Command.Root
-  shouldFilter={false}
-  class="relative flex-1 min-w-0 md:min-w-[200px]"
->
-  <Popover.Root bind:open>
-    <Popover.Trigger bind:ref={triggerRef}>
-      {#snippet child({ props })}
-        <!-- This wrapper only positions the input. Left with the trigger's own
-             button semantics it claims to be a control wrapping a control, and
-             the input beneath it already carries the combobox role. -->
-        {@const {
-          onkeydown: _a,
-          onclick: _b,
-          type: _c,
-          role: _d,
-          "aria-haspopup": _e,
-          "aria-expanded": _f,
-          "aria-controls": _g,
-          ...triggerProps
-        } = props as Record<string, unknown>}
-        <div
-          {...triggerProps}
-          onclick={() => {
-            // Opening is idempotent on purpose. Toggling here fights the focus
-            // handler below, which has already opened on the same click.
-            if (searchValue.trim().length >= 2) open = true;
-          }}
-          class="relative"
-        >
-          {#if loading}
-            <Loader2
-              class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none animate-spin"
-            />
-          {:else}
-            <Search
-              class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
-            />
-          {/if}
-          <Command.Input
-            bind:value={searchValue}
-            oninput={(e: Event & { currentTarget: HTMLInputElement }) => handleInput(e.currentTarget.value)}
-            onkeydown={handleKeydown}
-            onfocus={() => {
-              if (searchValue.trim().length >= 2) open = true;
-            }}
-            placeholder="Search courses, subjects, or instructors..."
-            aria-label="Search courses, subjects, or instructors"
-            aria-expanded={open}
-            aria-haspopup="listbox"
-            aria-controls={popoverListId}
-            role="combobox"
-            autocomplete="off"
-            autocorrect="off"
-            spellcheck={false}
-            class="h-9 w-full border border-border bg-card text-foreground rounded-md pl-9 pr-3 text-sm
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                   transition-colors"
-          />
-        </div>
-      {/snippet}
-    </Popover.Trigger>
-    <Popover.Content
-        class="z-50"
-        sideOffset={4}
-        align="start"
-        trapFocus={false}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
-        onInteractOutside={(e) => {
-          if (triggerRef?.contains(e.target as Node)) e.preventDefault();
+<Command.Root shouldFilter={false} class="relative flex-1 min-w-0 md:min-w-[200px]">
+  <Popover.Root bind:open={query.open}>
+    <div class="relative" bind:this={anchorEl}>
+      {#if query.loading}
+        <Loader2
+          class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none animate-spin"
+        />
+      {:else}
+        <Search
+          class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
+        />
+      {/if}
+      <Command.Input
+        bind:value={() => query.text, (v: string) => query.setQuery(v)}
+        onkeydown={handleKeydown}
+        onfocus={() => {
+          if (query.isLongEnough) query.open = true;
         }}
-        forceMount
-      >
-        {#snippet child({ wrapperProps, props, open: isOpen })}
-          {#if isOpen}
-            <div {...wrapperProps}>
-              <div
-                {...props}
-                transition:fly={{ duration: 150, y: -4 }}
+        placeholder="Search courses, subjects, or instructors..."
+        aria-label="Search courses, subjects, or instructors"
+        aria-expanded={query.open}
+        aria-haspopup="listbox"
+        aria-controls={listId}
+        role="combobox"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck={false}
+        class="h-9 w-full border border-border bg-card text-foreground rounded-md pl-9 pr-3 text-sm
+               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
+               transition-colors"
+      />
+    </div>
+    <Popover.Content
+      class="z-50"
+      customAnchor={anchorEl}
+      sideOffset={4}
+      align="start"
+      trapFocus={false}
+      onOpenAutoFocus={(e) => e.preventDefault()}
+      onCloseAutoFocus={(e) => e.preventDefault()}
+      forceMount
+    >
+      {#snippet child({ wrapperProps, props, open: isOpen })}
+        {#if isOpen}
+          <div {...wrapperProps}>
+            <div {...props} transition:fly={{ duration: 150, y: -4 }}>
+              <Command.List
+                id={listId}
+                class="border border-border bg-card shadow-md rounded-md
+                       w-[var(--bits-popover-anchor-width)] min-w-[280px] max-w-[480px]
+                       max-h-72 overflow-y-auto scrollbar-none p-1"
               >
-                <Command.List
-                  id={popoverListId}
-                  class="border border-border bg-card shadow-md rounded-md
-                         w-[var(--bits-popover-anchor-width)] min-w-[280px] max-w-[480px]
-                         max-h-72 overflow-y-auto scrollbar-none p-1"
-                >
-                  {#if error}
-                    <div class="flex items-center gap-1.5 px-2 py-2 text-sm text-destructive">
-                      <TriangleAlert class="size-3.5 shrink-0" />
-                      {error}
-                    </div>
-                  {:else if loading && !hasSuggestions}
-                    <div class="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
-                      <Loader2 class="size-3.5 animate-spin shrink-0" />
-                      Searching...
-                    </div>
-                  {:else if isEmpty}
-                    <div class="px-2 py-2 text-sm text-muted-foreground">
-                      No results found.
-                    </div>
-                  {/if}
+                {#if query.error}
+                  <div role="alert" class="flex items-center gap-1.5 px-2 py-2 text-sm text-destructive">
+                    <TriangleAlert class="size-3.5 shrink-0" />
+                    {query.error}
+                  </div>
+                {:else if query.loading && suggestions.length === 0}
+                  <div class="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
+                    <Loader2 class="size-3.5 animate-spin shrink-0" />
+                    Searching...
+                  </div>
+                {:else if isEmpty}
+                  <div class="px-2 py-2 text-sm text-muted-foreground">No results found.</div>
+                {/if}
 
-                  {#each mergedSuggestions as item (item.kind === "subject" ? `s:${item.subject.code}` : item.kind === "course" ? `c:${item.course.subject}:${item.course.courseNumber}:${item.course.title}` : `i:${item.instructor.id}`)}
+                {#each suggestions as item (suggestionId(item))}
+                  <Command.Item
+                    class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
+                           data-[selected]:bg-accent data-[selected]:text-accent-foreground cursor-pointer"
+                    value={suggestionId(item)}
+                    onSelect={() => apply(item)}
+                  >
                     {#if item.kind === "subject"}
-                      {@const s = item.subject}
-                      <Command.Item
-                        class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
-                               data-[selected]:bg-accent data-[selected]:text-accent-foreground cursor-pointer"
-                        value="subject:{s.code}"
-                        keywords={[s.code, s.description]}
-                        onSelect={() => handleSelect(`subject:${s.code}`)}
+                      <BookOpen class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span
+                        class="inline-flex items-center justify-center rounded bg-muted px-1 py-0.5
+                               text-xs font-mono text-muted-foreground w-10 shrink-0 text-center"
+                        >{item.subject.code}</span
                       >
-                        <BookOpen class="size-3.5 shrink-0 text-muted-foreground" />
-                        <span
-                          class="inline-flex items-center justify-center rounded bg-muted px-1 py-0.5
-                                 text-xs font-mono text-muted-foreground w-10 shrink-0 text-center"
-                          >{s.code}</span
-                        >
-                        <span class="flex-1 truncate">{s.description}</span>
-                      </Command.Item>
+                      <span class="flex-1 truncate">{item.subject.description}</span>
                     {:else if item.kind === "course"}
-                      {@const c = item.course}
-                      <Command.Item
-                        class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
-                               data-[selected]:bg-accent data-[selected]:text-accent-foreground cursor-pointer"
-                        value="course:{c.subject}:{c.courseNumber}:{c.title}"
-                        keywords={[c.subject, c.courseNumber, c.title]}
-                        onSelect={() => handleSelect(`course:${c.subject}:${c.courseNumber}:${c.title}`)}
+                      <GraduationCap class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span
+                        class="inline-flex items-center justify-center rounded bg-muted px-1 py-0.5
+                               text-xs font-mono text-muted-foreground shrink-0 text-center"
+                        >{item.course.subject} {item.course.courseNumber}</span
                       >
-                        <GraduationCap class="size-3.5 shrink-0 text-muted-foreground" />
-                        <span
-                          class="inline-flex items-center justify-center rounded bg-muted px-1 py-0.5
-                                 text-xs font-mono text-muted-foreground shrink-0 text-center"
-                          >{c.subject} {c.courseNumber}</span
-                        >
-                        <span class="flex-1 truncate">{c.title}</span>
-                        <span class="text-xs text-muted-foreground shrink-0"
-                          >{c.sectionCount} {c.sectionCount === 1 ? 'section' : 'sections'}</span
-                        >
-                      </Command.Item>
+                      <span class="flex-1 truncate">{item.course.title}</span>
+                      <span class="text-xs text-muted-foreground shrink-0"
+                        >{item.course.sectionCount}
+                        {item.course.sectionCount === 1 ? "section" : "sections"}</span
+                      >
                     {:else if item.kind === "instructor"}
-                      {@const i = item.instructor}
-                      <Command.Item
-                        class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
-                               data-[selected]:bg-accent data-[selected]:text-accent-foreground cursor-pointer"
-                        value="instructor:{i.slug}:{i.displayName}"
-                        keywords={[i.displayName]}
-                        onSelect={() => handleSelect(`instructor:${i.slug}:${i.displayName}`)}
+                      <User class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span class="flex-1 truncate">{item.instructor.displayName}</span>
+                      <span class="text-xs text-muted-foreground shrink-0"
+                        >{item.instructor.sectionCount}
+                        {item.instructor.sectionCount === 1 ? "section" : "sections"}</span
                       >
-                        <User class="size-3.5 shrink-0 text-muted-foreground" />
-                        <span class="flex-1 truncate">{i.displayName}</span>
-                        <span class="text-xs text-muted-foreground shrink-0"
-                          >{i.sectionCount} {i.sectionCount === 1 ? 'section' : 'sections'}</span
-                        >
-                      </Command.Item>
                     {/if}
-                  {/each}
+                  </Command.Item>
+                {/each}
 
-                  {#if loading && hasSuggestions}
-                    <div class="px-2 py-1.5 text-xs text-muted-foreground italic">
-                      Updating...
-                    </div>
-                  {/if}
-                </Command.List>
-              </div>
+                {#if query.loading && suggestions.length > 0}
+                  <div class="px-2 py-1.5 text-xs text-muted-foreground italic">Updating...</div>
+                {/if}
+              </Command.List>
             </div>
-          {/if}
-        {/snippet}
-      </Popover.Content>
+          </div>
+        {/if}
+      {/snippet}
+    </Popover.Content>
   </Popover.Root>
 </Command.Root>

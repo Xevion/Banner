@@ -13,16 +13,24 @@ const IGNORED_URLS = [/\/api\/csp-report$/];
 /** Aborts are routine: hovering a link starts a preload the router then drops. */
 const IGNORED_FAILURES = ["net::ERR_ABORTED"];
 
-function isIgnored(url: string): boolean {
-  return IGNORED_URLS.some((pattern) => pattern.test(url));
-}
+export const test = base.extend<{
+  /** Routes a test breaks on purpose, to check how the app reports the failure. */
+  allowedFailures: RegExp[];
+}>({
+  allowedFailures: [[], { option: true }],
 
-export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page, allowedFailures }, use) => {
+    const isIgnored = (url: string) =>
+      [...IGNORED_URLS, ...allowedFailures].some((pattern) => pattern.test(url));
+
     const problems: string[] = [];
 
     page.on("console", (message) => {
-      if (message.type() === "error") problems.push(`console error: ${message.text()}`);
+      if (message.type() !== "error") return;
+      // A route a test broke on purpose also makes the browser log the failed
+      // load, which says nothing beyond what the test already arranged.
+      if (isIgnored(message.location().url)) return;
+      problems.push(`console error: ${message.text()}`);
     });
 
     page.on("pageerror", (error) => {
