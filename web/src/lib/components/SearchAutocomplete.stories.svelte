@@ -59,8 +59,8 @@ const { Story } = defineMeta({
     await userEvent.click(input);
     await userEvent.type(input, "comp");
 
-    // The popover is portalled, so it lands outside the story canvas. It flies
-    // in over 150ms, so assert presence rather than racing the transition.
+    // The rows fly in over 150ms, so findBy* retries until the transition has
+    // put them in the DOM.
     const popover = within(document.body);
     await expect(await popover.findByText("Computer Science")).toBeInTheDocument();
     await expect(await popover.findByText("Application Programming")).toBeInTheDocument();

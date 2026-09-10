@@ -1,4 +1,5 @@
 import { BannerApiClient } from "$lib/api";
+import { error } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 
 export const prerender = false;
@@ -8,17 +9,25 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
 
   const termParam = url.searchParams.get("term") ?? undefined;
 
-  const searchOptionsResult = await client.getSearchOptions(termParam);
-  const searchOptions = searchOptionsResult.isOk ? searchOptionsResult.value : null;
+  // Unscoped on purpose: the term-scoped subject list omits subjects with no
+  // sections that term, so a name looked up there vanishes for the terms a
+  // subject sat out.
+  const searchOptionsResult = await client.getSearchOptions();
+  if (!searchOptionsResult.isOk) {
+    error(503, "Course data is unavailable right now. Please try again shortly.");
+  }
+  const searchOptions = searchOptionsResult.value;
 
-  // Resolve subject description
-  const subjectDescription =
-    searchOptions?.subjects.find((s) => s.code === params.subject)?.description ?? null;
+  const subject = searchOptions.subjects.find((s) => s.code === params.subject);
+  if (!subject) {
+    error(404, `There is no subject with the code "${params.subject}".`);
+  }
 
-  // Use the first term (most recent) if no term specified
-  const effectiveTerm = termParam ?? searchOptions?.terms[0]?.slug;
+  // Falling back to the newest term keeps a bare /subjects/ISC useful.
+  const effectiveTerm = termParam ?? searchOptions.terms[0]?.slug;
 
   let searchResult = null;
+  let searchError: string | null = null;
   if (effectiveTerm) {
     const result = await client.searchCourses({
       term: effectiveTerm,
@@ -27,14 +36,19 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
     });
     if (result.isOk) {
       searchResult = result.value;
+    } else {
+      // Kept out of `error()` on purpose: the subject and term picker are still
+      // usable, and a failed lookup must not read as a term with no sections.
+      searchError = result.error.message ?? "Could not load sections for this term.";
     }
   }
 
   return {
     searchOptions,
     searchResult,
+    searchError,
     subject: params.subject,
-    subjectDescription,
+    subjectDescription: subject.description,
     term: effectiveTerm ?? null,
   };
 };

@@ -1,7 +1,31 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const appPort = 4173;
-const stubPort = 8788;
+function randomPort(): number {
+  return 30000 + Math.floor(Math.random() * 20000);
+}
+
+/**
+ * Ports are drawn fresh per run, above the range a dev server or the backend
+ * would sit on. Fixed ports meant one leaked server from an aborted run made
+ * every later run fail to start, and two runs could never overlap. Two runs at
+ * once can still collide, just rarely enough not to plan around.
+ *
+ * They go through the environment because the runner re-imports this file in
+ * every worker process. Drawing on each import would hand each worker a
+ * different port from the one the server actually started on. The pair is
+ * drawn together for the same reason: setting only one leaves the other redrawn
+ * per worker.
+ */
+if (!process.env.E2E_APP_PORT || !process.env.E2E_STUB_PORT) {
+  const appDraw = randomPort();
+  let stubDraw = randomPort();
+  while (stubDraw === appDraw) stubDraw = randomPort();
+  process.env.E2E_APP_PORT = String(appDraw);
+  process.env.E2E_STUB_PORT = String(stubDraw);
+}
+
+const appPort = Number(process.env.E2E_APP_PORT);
+const stubPort = Number(process.env.E2E_STUB_PORT);
 const baseURL = `http://localhost:${appPort}`;
 
 export default defineConfig({
@@ -18,6 +42,7 @@ export default defineConfig({
       command: "bun e2e/stub-api.ts",
       port: stubPort,
       reuseExistingServer: false,
+      env: { E2E_STUB_PORT: String(stubPort) },
     },
     {
       // adapter-node output, started the way the container starts it. Nothing

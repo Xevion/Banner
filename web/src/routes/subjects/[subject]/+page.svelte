@@ -12,6 +12,7 @@ import { untrack } from "svelte";
 interface PageData {
   searchOptions: SearchOptionsResponse | null;
   searchResult: SearchResponse | null;
+  searchError: string | null;
   subject: string;
   subjectDescription: string | null;
   term: string | null;
@@ -22,6 +23,7 @@ let { data }: { data: PageData } = $props();
 let selectedTerm = $state(untrack(() => data.term ?? ""));
 let courses = $state(untrack(() => data.searchResult?.courses ?? []));
 let loading = $state(false);
+let searchError = $state(untrack(() => data.searchError));
 
 const terms = $derived(data.searchOptions?.terms ?? []);
 setCourseDetailContext({ navigateToSection: null });
@@ -48,6 +50,11 @@ async function onTermChange() {
   });
   if (result.isOk) {
     courses = result.value.courses;
+    searchError = null;
+  } else {
+    // Drop the stale rows, or they read as this term's sections.
+    courses = [];
+    searchError = result.error.message ?? "Could not load sections for this term.";
   }
   loading = false;
 
@@ -117,6 +124,21 @@ $effect(() => {
             </div>
           {/each}
         </div>
+      </div>
+    {:else if searchError}
+      <div
+        class="flex flex-col items-center gap-2 text-center py-8 text-sm border border-destructive/40 bg-destructive/5 rounded-lg"
+        role="alert"
+      >
+        <span class="text-destructive font-medium">Could not load sections</span>
+        <span class="text-muted-foreground">{searchError}</span>
+        <button
+          onclick={() => void onTermChange()}
+          class="mt-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium
+                 text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+        >
+          Try again
+        </button>
       </div>
     {:else if courses.length > 0}
       <CourseTable

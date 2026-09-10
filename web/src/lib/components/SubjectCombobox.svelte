@@ -68,14 +68,19 @@ $effect(() => {
     if (!o) searchValue = "";
   }}
 >
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="relative h-9 rounded-md border border-border bg-card
            flex flex-nowrap items-center gap-1 w-full md:w-56 pr-9 overflow-hidden cursor-pointer
            has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background"
     bind:this={containerEl}
-    onclick={() => { containerEl?.querySelector('input')?.focus(); }}
+    onpointerdown={() => {
+      // The single place this opens, and on the earliest event in the sequence.
+      // Opening on the input's focus instead reopens the list that an outside
+      // click just dismissed, because closing hands focus back to the input.
+      containerEl?.querySelector('input')?.focus();
+      open = true;
+    }}
   >
     {#if value.length > 0}
       {#each (open ? value : visibleChips) as code (code)}
@@ -99,7 +104,6 @@ $effect(() => {
     <Combobox.Input
       
       oninput={(e) => (searchValue = e.currentTarget.value)}
-      onfocus={() => { open = true; }}
       class="h-full min-w-0 flex-1 bg-transparent text-muted-foreground text-sm
              placeholder:text-muted-foreground outline-none border-none
              {value.length > 0 ? 'pl-1' : 'pl-3'}"

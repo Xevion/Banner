@@ -35,3 +35,37 @@ test("opens autocomplete suggestions once the query is long enough", async ({ pa
   await expect(suggestions.getByText("Computer Science")).toBeVisible();
   await expect(suggestions.getByText("Application Programming")).toBeVisible();
 });
+
+test("every suggestion takes the pointer instead of the table under it", async ({ page }) => {
+  await page.goto("/");
+
+  const search = page.locator("input[placeholder^='Search courses']:visible");
+  await search.click();
+  await search.pressSequentially("comp", { delay: 40 });
+
+  const suggestions = page.locator("#search-autocomplete-list");
+  // Only the fuzzy subject row is there immediately. The server rows arrive
+  // after the debounce and are what make the list tall enough to reach the
+  // table, so there is nothing worth hit-testing until they render.
+  await expect(suggestions.getByText("Application Programming")).toBeVisible();
+
+  // Guard the guard: with no overlap the checks below would pass on anything.
+  const overlapsTable = await page.evaluate(() => {
+    const list = document.querySelector("#search-autocomplete-list");
+    const table = document.querySelector("[data-search-results]");
+    if (!list || !table) return false;
+    const a = list.getBoundingClientRect();
+    const b = table.getBoundingClientRect();
+    return a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right;
+  });
+  expect(overlapsTable, "the suggestion list has to cover part of the table").toBe(true);
+
+  // The popover renders inline rather than in a portal, so only its z-index
+  // keeps it above the table. A trial click runs the hit-target check and
+  // fails on whatever paints over the row, without selecting anything.
+  const items = await suggestions.locator("[data-command-item]").all();
+  expect(items.length).toBeGreaterThan(1);
+  for (const item of items) {
+    await item.click({ trial: true, timeout: 2000 });
+  }
+});

@@ -199,7 +199,9 @@ const popoverListId = "search-autocomplete-list";
         <div
           {...triggerProps}
           onclick={() => {
-            if (searchValue.trim().length >= 2) open = !open;
+            // Opening is idempotent on purpose. Toggling here fights the focus
+            // handler below, which has already opened on the same click.
+            if (searchValue.trim().length >= 2) open = true;
           }}
           class="relative"
         >
@@ -219,10 +221,6 @@ const popoverListId = "search-autocomplete-list";
             onfocus={() => {
               if (searchValue.trim().length >= 2) open = true;
             }}
-            onblur={() => {
-              // Delay so that clicking a suggestion item fires onSelect before we close
-              setTimeout(() => { open = false; }, 150);
-            }}
             placeholder="Search courses, subjects, or instructors..."
             aria-label="Search courses, subjects, or instructors"
             aria-expanded={open}
@@ -240,8 +238,10 @@ const popoverListId = "search-autocomplete-list";
       {/snippet}
     </Popover.Trigger>
     <Popover.Content
+        class="z-50"
         sideOffset={4}
         align="start"
+        trapFocus={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => {
@@ -251,7 +251,7 @@ const popoverListId = "search-autocomplete-list";
       >
         {#snippet child({ wrapperProps, props, open: isOpen })}
           {#if isOpen}
-            <div {...wrapperProps} class="z-50">
+            <div {...wrapperProps}>
               <div
                 {...props}
                 transition:fly={{ duration: 150, y: -4 }}
