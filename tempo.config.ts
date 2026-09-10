@@ -12,7 +12,7 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import type { RunContext } from "@xevion/tempo";
+import type { RunContext, Task } from "@xevion/tempo";
 import { defineConfig, presets, task } from "@xevion/tempo";
 
 const BINDINGS_DIR = "web/src/lib/bindings";
@@ -235,9 +235,28 @@ async function reportPublicOrigin(ctx: RunContext): Promise<number> {
   return 0;
 }
 
+/** Extra target words each subsystem answers to, beyond its task-name prefix. */
+const SUBSYSTEM_ALIASES: Record<string, string[]> = {
+  web: ["frontend", "f"],
+  backend: ["rust", "b"],
+};
+
+/**
+ * Tags every task with its subsystem's aliases.
+ *
+ * A target selects a task by exact name, by tag, or by the `prefix:` its name
+ * starts with. Only the prefix is free, so an alias has to ride along as a tag.
+ */
+function withSubsystemAliases(tasks: Task[]): Task[] {
+  return tasks.map((t) => {
+    const aliases = SUBSYSTEM_ALIASES[t.name.split(":")[0]];
+    return aliases ? { ...t, tags: [...t.tags, ...aliases] } : t;
+  });
+}
+
 export default defineConfig({
   runtime: "bun",
-  tasks: [
+  tasks: withSubsystemAliases([
     task({
       name: "web:deps",
       cwd: "web",
@@ -518,7 +537,7 @@ export default defineConfig({
         return reportPublicOrigin(ctx);
       },
     }),
-  ],
+  ]),
 
   commands: {
     check: { description: "Run every check", tags: ["check"] },

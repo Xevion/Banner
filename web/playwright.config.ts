@@ -32,10 +32,19 @@ export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // A retry in CI separates a genuine break from a flake without hiding either:
+  // a test that only passes on the second attempt is reported as flaky.
+  retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
-  use: { baseURL, trace: "on-first-retry" },
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }], ["list"]] : [["list"]],
+  use: {
+    baseURL,
+    // Keyed to failure rather than to a retry. Paired with retries: 0 locally,
+    // "on-first-retry" captured nothing at all, which left every failure to be
+    // re-run by hand to find out what happened.
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
