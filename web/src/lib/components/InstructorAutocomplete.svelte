@@ -77,6 +77,8 @@ function select(instructor: InstructorSuggestion) {
 function remove(slug: string) {
   filters.instructor = filters.instructor.filter((i) => i !== slug);
 }
+
+const listId = "instructor-autocomplete-list";
 </script>
 
 <div class="flex flex-col gap-1.5">
@@ -90,7 +92,15 @@ function remove(slug: string) {
     </div>
   {/if}
 
-  <Command.Root shouldFilter={false} class="relative">
+  <Command.Root
+    shouldFilter={false}
+    class="relative"
+    onfocusout={(e: FocusEvent & { currentTarget: HTMLElement }) => {
+      // Replaces a 150ms close timer that fired even when focus came straight
+      // back, and that only worked because clicks happened to beat it.
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) open = false;
+    }}
+  >
     <div class="relative">
       {#if loading}
         <Loader2
@@ -105,11 +115,20 @@ function remove(slug: string) {
         bind:value={inputValue}
         oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
           handleInput(e.currentTarget.value)}
-        onblur={() =>
-          setTimeout(() => {
+        onkeydown={(e: KeyboardEvent) => {
+          // Dismiss the suggestions first and keep the surrounding popover open;
+          // a second Escape, with no list showing, closes that instead.
+          if (e.key === "Escape" && open) {
+            e.stopPropagation();
             open = false;
-          }, 150)}
+          }
+        }}
         placeholder="Search instructors..."
+        aria-label="Search instructors"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={listId}
+        role="combobox"
         autocomplete="off"
         class="h-8 w-full border border-border bg-card text-foreground rounded-md pl-8 pr-2 text-sm
                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -117,6 +136,8 @@ function remove(slug: string) {
     </div>
     {#if open}
       <Command.List
+        id={listId}
+        onmousedown={(e: MouseEvent) => e.preventDefault()}
         class="absolute top-full left-0 right-0 z-10 mt-1 border border-border bg-card shadow-md rounded-md
                max-h-40 overflow-y-auto scrollbar-none p-1"
       >

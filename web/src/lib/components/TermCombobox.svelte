@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Term } from "$lib/api";
-import { Check, ChevronsUpDown } from "@lucide/svelte";
+import { ChevronsUpDown } from "@lucide/svelte";
 import { Combobox } from "bits-ui";
 import { fly } from "svelte/transition";
 
@@ -25,6 +25,15 @@ const currentTermSlug = $derived(terms[0]?.slug ?? "");
 // term, rather than the placeholder being patched away after hydration.
 const selectedLabel = $derived(terms.find((t) => t.slug === value)?.description ?? "");
 
+/**
+ * Clicking the active item makes bits-ui write an empty value, which drops the
+ * selection while the term in effect stays exactly as it was. There is no state
+ * this widget can express with no term chosen, so that write is ignored.
+ */
+function selectTerm(next: string) {
+  if (next) value = next;
+}
+
 const filteredTerms = $derived.by(() => {
   const query = searchValue.toLowerCase();
   const matched =
@@ -38,7 +47,7 @@ const filteredTerms = $derived.by(() => {
 
 <Combobox.Root
   type="single"
-  bind:value
+  bind:value={() => value, selectTerm}
   bind:open
   {inputValue}
   onOpenChangeComplete={(o) => {
@@ -97,22 +106,19 @@ const filteredTerms = $derived.by(() => {
                   <Combobox.Item
                     class="rounded-sm outline-hidden flex h-8 w-full select-none items-center px-2 text-sm
                            data-highlighted:bg-accent data-highlighted:text-accent-foreground
-                           {term.slug === value ? 'cursor-default' : 'cursor-pointer'}
+                           {term.slug === value
+                      ? 'bg-muted font-semibold text-foreground cursor-default'
+                      : 'cursor-pointer'}
                            {term.slug === currentTermSlug ? 'font-medium text-foreground' : 'text-foreground'}"
                     value={term.slug}
                     label={term.description}
                   >
-                    {#snippet children({ selected })}
-                      <span class="flex-1 truncate">
-                        {term.description}
-                        {#if term.slug === currentTermSlug}
-                          <span class="ml-1.5 text-xs text-muted-foreground font-normal">current</span>
-                        {/if}
-                      </span>
-                      {#if selected}
-                        <Check class="ml-2 size-4 shrink-0" />
+                    <span class="flex-1 truncate">
+                      {term.description}
+                      {#if term.slug === currentTermSlug}
+                        <span class="ml-1.5 text-xs text-muted-foreground font-normal">current</span>
                       {/if}
-                    {/snippet}
+                    </span>
                   </Combobox.Item>
                 {:else}
                   <span class="block px-2 py-2 text-sm text-muted-foreground">

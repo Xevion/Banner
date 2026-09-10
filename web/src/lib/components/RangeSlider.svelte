@@ -57,6 +57,12 @@ let {
 // Use formatPip for pips if provided, otherwise fall back to formatValue
 const pipFormatter = $derived(formatPip ?? formatValue);
 
+// The wrapper's group label does not reach the handles, which are what a screen
+// reader lands on. Without these they announce only as "slider".
+const handleLabels = $derived(
+  dual ? [`${label} minimum`, `${label} maximum`] : [`${label} maximum`]
+);
+
 // svelte-ignore state_referenced_locally
 let internalValues = $state<number[]>([min, max]);
 // svelte-ignore state_referenced_locally
@@ -128,6 +134,7 @@ function handleSingleChange(event: CustomEvent<{ value: number }>) {
         {hoverable}
         {springValues}
         range
+        ariaLabels={handleLabels}
         formatter={pipFormatter}
         {...libProps}
         on:change={handleDualChange}
@@ -140,6 +147,7 @@ function handleSingleChange(event: CustomEvent<{ value: number }>) {
         {float}
         {hoverable}
         {springValues}
+        ariaLabels={handleLabels}
         formatter={pipFormatter}
         {...libProps}
         on:change={handleSingleChange}

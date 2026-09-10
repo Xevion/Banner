@@ -195,7 +195,19 @@ const popoverListId = "search-autocomplete-list";
   <Popover.Root bind:open>
     <Popover.Trigger bind:ref={triggerRef}>
       {#snippet child({ props })}
-        {@const { onkeydown: _a, onclick: _b, ...triggerProps } = props as Record<string, unknown>}
+        <!-- This wrapper only positions the input. Left with the trigger's own
+             button semantics it claims to be a control wrapping a control, and
+             the input beneath it already carries the combobox role. -->
+        {@const {
+          onkeydown: _a,
+          onclick: _b,
+          type: _c,
+          role: _d,
+          "aria-haspopup": _e,
+          "aria-expanded": _f,
+          "aria-controls": _g,
+          ...triggerProps
+        } = props as Record<string, unknown>}
         <div
           {...triggerProps}
           onclick={() => {

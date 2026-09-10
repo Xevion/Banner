@@ -100,6 +100,8 @@ const server = createServer((req, res) => {
       return json(res, { courses: mockCourses, totalCount: mockCourses.length });
     case "/api/suggest":
       return json(res, suggestions);
+    case "/api/instructors/suggest":
+      return json(res, suggestions.instructors);
     case "/api/instructors/resolve":
       return json(res, {});
     case "/api/csp-report":

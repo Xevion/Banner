@@ -26,6 +26,7 @@ let hasCalendar = $derived(course.meetingTimes.length > 0);
     {#if hasCalendar}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
+          aria-label="Add this schedule to a calendar"
           class="inline-flex items-center justify-center size-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
         >
           <Calendar class="size-3.5" />

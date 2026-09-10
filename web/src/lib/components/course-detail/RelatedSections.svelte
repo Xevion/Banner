@@ -90,17 +90,27 @@ function handleNavigate(crn: string) {
                     section.instructors,
                     section.primaryInstructorId,
                 )}
-                <button
-                    class="w-full text-left border rounded-md px-2.5 py-1.5 transition-colors cursor-pointer
+                <!-- The card is a plain container with the section link stretched
+                     over it, so the instructor link beside it stays reachable
+                     without one control sitting inside another. -->
+                <div
+                    class="relative w-full text-left border rounded-md px-2.5 py-1.5 transition-colors
             border-border bg-card hover:bg-muted/50 shrink-0"
-                    onclick={() => handleNavigate(section.crn)}
                 >
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0">
                             <a
                                 href="/courses/{course.termSlug}/{section.crn}"
-                                class="text-xs font-mono text-muted-foreground hover:underline hover:text-foreground transition-colors"
-                                onclick={(e) => e.stopPropagation()}
+                                class="text-xs font-mono text-muted-foreground hover:underline hover:text-foreground transition-colors
+                                       after:absolute after:inset-0 after:content-['']"
+                                onclick={(e) => {
+                                    // Stay in the drawer when it can navigate itself; the
+                                    // href carries the click everywhere else.
+                                    if (ctx?.navigateToSection) {
+                                        e.preventDefault();
+                                        handleNavigate(section.crn);
+                                    }
+                                }}
                                 >{section.crn}</a
                             >
                             {#if section.instructionalMethod}
@@ -136,8 +146,7 @@ function handleNavigate(crn: string) {
                             {#if primary?.slug}
                                 <a
                                     href="/instructors/{primary.slug}"
-                                    class="hover:underline hover:text-foreground transition-colors"
-                                    onclick={(e) => e.stopPropagation()}
+                                    class="relative z-10 hover:underline hover:text-foreground transition-colors"
                                 >
                                     {abbreviateInstructor(primary.displayName)}
                                 </a>
@@ -184,7 +193,7 @@ function handleNavigate(crn: string) {
                             {/if}
                         </div>
                     {/if}
-                </button>
+                </div>
             {/each}
         </div>
     {/if}

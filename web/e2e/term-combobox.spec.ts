@@ -154,3 +154,32 @@ test("re-picking the term already in effect leaves it in effect", async ({ page 
   // selected", which empties the box and re-applies the term as a fresh pick.
   await expect(input).toHaveValue(before);
 });
+
+test("clicking the term already in effect cannot deselect it", async ({ page }) => {
+  await page.goto("/");
+
+  const input = page.locator(TERM_INPUT);
+  await input.click();
+
+  const current = page.getByRole("option", { name: /current/ });
+  await expect(current).toHaveAttribute("aria-selected", "true");
+
+  // Picking the active term is a no-op, never a toggle back to nothing chosen.
+  // The selection has to survive in place, not just be restored on reopen.
+  await current.click();
+  await page.waitForTimeout(SETTLE_MS);
+  await expect(current).toHaveAttribute("aria-selected", "true");
+  await expect(input).toHaveValue(
+    await current.textContent().then((t) => (t ?? "").replace("current", "").trim())
+  );
+});
+
+test("the term list marks its selection without a toggle affordance", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator(TERM_INPUT).click();
+
+  // A checkbox-like tick invites clicking it off again. Selection is shown by
+  // the row itself, so there is nothing in the row suggesting it can be undone.
+  await expect(page.getByRole("option", { name: /current/ }).locator("svg")).toHaveCount(0);
+});
