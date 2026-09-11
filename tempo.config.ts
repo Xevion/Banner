@@ -528,11 +528,11 @@ export default defineConfig({
         );
         await ssh(
           ctx,
-          `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install ${DEPLOY_RELEASE} ./charts/banner --set image.tag=${tag}`,
+          // Recreate leaves nothing serving when a pod cannot start, so --atomic waits and
+          // rolls back rather than wait to be noticed. Migrations run at boot behind a
+          // startupProbe allowing 5 minutes, so the deadline has to clear that.
+          `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install --atomic --timeout 360s ${DEPLOY_RELEASE} ./charts/banner --set image.tag=${tag}`,
         );
-        // Migrations run at boot behind a startupProbe allowing 5 minutes, so
-        // the rollout deadline has to clear that.
-        await ssh(ctx, `sudo k3s kubectl rollout status deployment/${DEPLOY_RELEASE} --timeout=360s`);
 
         return reportPublicOrigin(ctx);
       },

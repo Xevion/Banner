@@ -111,6 +111,10 @@ RUN groupadd --gid $GID $APP_USER \
 COPY --from=builder --chown=$APP_USER:$APP_USER /app/target/release/banner ${APP}/banner
 RUN chmod +x ${APP}/banner
 
+# The loader resolves every symbol before main, so a runtime whose glibc is older
+# than the builder's fails here; --version exits before config, database or socket.
+RUN ${APP}/banner --version
+
 # Copy SvelteKit SSR build output
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
 
