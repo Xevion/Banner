@@ -53,7 +53,7 @@ app:
 postgres:
   # Matches the local docker-compose image, so dev and production run the same server version and
   # the backup job's pg_dump is never older than the server it dumps.
-  image: postgres:17-alpine
+  image: postgres:18-alpine
   storage: 10Gi
   resources:
     requests:
