@@ -30,7 +30,9 @@ ENV PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST}
 RUN bun run build && bun run scripts/compress-assets.ts
 
 # Chef Base Stage
-FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION} AS chef
+# Both this stage and the runtime pin the Debian codename: the binary links
+# against the builder's glibc, so an unpinned base can drift ahead of the runtime.
+FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-trixie AS chef
 WORKDIR /app
 
 # Planner Stage
@@ -83,7 +85,7 @@ RUN cargo build --release --bin banner
 RUN strip target/release/banner
 
 # Node runtime for the SvelteKit SSR server
-FROM node:24-slim
+FROM node:24-trixie-slim
 
 ARG APP=/app
 ARG APP_USER=appuser
