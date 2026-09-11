@@ -1,14 +1,6 @@
 use std::process::Command;
 
 fn main() {
-    // rust-embed requires the folder to exist at compile time, even when empty.
-    // Create it so the backend compiles without a prior frontend build.
-    let embed_dir = std::path::Path::new("web/build/client");
-    if !embed_dir.exists() {
-        std::fs::create_dir_all(embed_dir).expect("failed to create web/build/client");
-    }
-    println!("cargo:rerun-if-changed=web/build/client");
-
     // The other rerun-if directives opt out of the default "rerun on any change", so without this
     // a cached target dir reuses the previous deploy's hash and /api/status reports the wrong one.
     println!("cargo:rerun-if-env-changed=GIT_COMMIT_SHA");

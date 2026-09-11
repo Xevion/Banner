@@ -7,8 +7,8 @@ const posthogHost = process.env.PUBLIC_POSTHOG_HOST || "https://us.posthog.com";
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    // Rust serves /_app/* from the embedded binary and pre-compresses assets at
-    // build time, so the adapter does neither.
+    // Rust serves /_app/* off disk and compress-assets.ts writes the encoded
+    // variants it negotiates, so the adapter does neither.
     adapter: adapter({
       out: "build",
       precompress: false,

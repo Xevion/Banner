@@ -88,9 +88,6 @@ COPY src ./src
 COPY migrations ./migrations
 COPY .sqlx ./.sqlx
 
-# Copy SSR client assets for embedding (Rust serves /_app/* from binary)
-COPY --from=frontend-builder /app/build/client ./web/build/client
-
 # Stamped into the binary by build.rs and surfaced at /api/status. It changes on every commit, so
 # it sits below the dependency cook: any layer beneath it is re-run on every deploy. build.rs
 # declares rerun-if-env-changed for it, so the crate still picks up a new value here.

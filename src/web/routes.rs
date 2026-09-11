@@ -10,7 +10,7 @@ use axum::{
 
 use std::time::Duration;
 
-#[cfg(feature = "embed-assets")]
+#[cfg(feature = "serve-assets")]
 use axum::http::StatusCode;
 use axum::response::Json;
 
@@ -26,8 +26,8 @@ use crate::web::{
 };
 use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
 
-#[cfg(feature = "embed-assets")]
-use crate::web::assets::try_serve_asset_with_encoding;
+#[cfg(feature = "serve-assets")]
+use crate::web::assets::try_serve_asset;
 
 /// Cache-Control presets for public endpoints.
 ///
@@ -56,6 +56,15 @@ pub fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -
 
 /// Creates the web server router
 pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
+    // Without it every asset falls through to the SSR server, which serves them uncompressed.
+    #[cfg(feature = "serve-assets")]
+    if !crate::web::assets::assets_dir().is_dir() {
+        tracing::warn!(
+            dir = %crate::web::assets::assets_dir().display(),
+            "client build directory missing"
+        );
+    }
+
     let api_router = Router::new()
         .route("/health", get(status::health))
         .route("/ready", get(status::ready))
@@ -250,10 +259,10 @@ async fn ssr_fallback(
         headers.insert("x-internal-token", value);
     }
 
-    // Try serving embedded static assets (production only)
-    #[cfg(feature = "embed-assets")]
+    // Try serving static assets from the client build (production only)
+    #[cfg(feature = "serve-assets")]
     {
-        if let Some(response) = try_serve_asset_with_encoding(path, &headers) {
+        if let Some(response) = try_serve_asset(&method, &uri, request.headers()).await {
             return response;
         }
 

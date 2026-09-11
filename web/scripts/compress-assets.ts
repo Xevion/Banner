@@ -7,15 +7,14 @@ import { $ } from "bun";
  * Run after `bun run build`.
  *
  * Generates .gz, .br, .zst variants for compressible files >= MIN_SIZE bytes.
- * These are embedded alongside originals by rust-embed and served via
- * content negotiation in src/web/assets.rs.
+ * ServeDir picks one per request against Accept-Encoding; see src/web/assets.rs.
  */
 import { readFile, readdir, stat, writeFile } from "fs/promises";
 
-// Must match COMPRESSION_MIN_SIZE in src/web/encoding.rs
+// Below this, a compressed variant rarely beats the original.
 const MIN_SIZE = 512;
 
-// No .map: rust-embed excludes them, so a compressed variant is never served.
+// No .map: the production image deletes sourcemaps, so a variant is never served.
 const COMPRESSIBLE_EXTENSIONS = new Set([".js", ".css", ".html", ".json", ".svg", ".txt", ".xml"]);
 
 // Check if zstd CLI is available

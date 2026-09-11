@@ -15,7 +15,7 @@ The application consists of three modular services that can be run independently
 - Web Server ([`web`][src-web])
 
   - [Axum][axum]-based server with Vite/React-based frontend
-  - [Embeds static assets][rust-embed] at compile time with E-Tags & Cache-Control headers
+  - Serves the client build from disk via [`ServeDir`][tower-http], negotiating pre-compressed variants
 
 - Scraper ([`scraper`][src-scraper])
 
@@ -30,9 +30,9 @@ bun install --cwd web  # Install frontend dependencies
 cargo build  # Build the backend
 
 just dev # Runs auto-reloading dev build with all services
-just dev-build # Development build with release characteristics (frontend is embedded, non-auto-reloading)
+just dev-build # Development build with release characteristics (non-auto-reloading)
 
-just build # Production build that embeds assets
+just build # Production build
 ```
 
 ## Documentation
@@ -46,5 +46,5 @@ Comprehensive documentation is available in the [`docs/`][documentation] folder.
 [serenity]: https://github.com/serenity-rs/serenity
 [poise]: https://github.com/serenity-rs/poise
 [axum]: https://github.com/tokio-rs/axum
-[rust-embed]: https://lib.rs/crates/rust-embed
+[tower-http]: https://lib.rs/crates/tower-http
 [sqlx]: https://github.com/launchbadge/sqlx
