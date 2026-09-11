@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.2](https://github.com/Xevion/Banner/compare/v0.8.1...v0.8.2) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deploy:** Harden pipeline against silent failures and stale caches ([e8e568c](https://github.com/Xevion/Banner/commit/e8e568c59046c05e86c83b450930c61b8269c1b8))
+
+
+### Performance Improvements
+
+* **build:** Build for the native CPU, keep CI portable ([bce4ceb](https://github.com/Xevion/Banner/commit/bce4cebbc6cc93e777f3a1624117a5803c16ac15))
+
+
+### Code Refactoring
+
+* **sort:** Rename multi-key headers to the active sort key ([b7e540b](https://github.com/Xevion/Banner/commit/b7e540ba32135927e5a8dc22fff51c2a5f765c36))
+
+
+### Miscellaneous
+
+* **deps:** Migrate frontend to TanStack Table v9 and layerchart v2 ([7a7e4bc](https://github.com/Xevion/Banner/commit/7a7e4bcdfb8c12d0437426e19321db3d670dadf6))
+* **deps:** Update poise to 0.7.0 and tower-http to 0.7.0 ([102b959](https://github.com/Xevion/Banner/commit/102b9591e31466fab75ef142ea10f885b6db26b1))
+
 ## [0.8.1](https://github.com/Xevion/Banner/compare/v0.8.0...v0.8.1) (2026-09-11)
 
 
