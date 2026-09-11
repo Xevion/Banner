@@ -36,6 +36,8 @@ app:
   # The Rust binary is the public listener and proxies non-API routes to the SSR child it
   # supervises, so unlike bf4-emblems there is one externally reachable port, not two.
   port: 8080
+  # Prometheus exposition. Absent from the Service, which is what keeps it off the public NodePort.
+  metricsPort: 9090
   # The supervisor parses this port and hands it to the Node child as PORT, so the child cannot
   # inherit the outer PORT and collide with the Rust listener. It must carry an explicit port.
   ssrDownstream: http://localhost:3001

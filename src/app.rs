@@ -5,6 +5,7 @@ use crate::scraper::ScraperService;
 use crate::scraper::scheduler::KV_TERM_SYNC;
 use crate::services::bot::BotService;
 use crate::services::manager::ServiceManager;
+use crate::services::metrics::MetricsService;
 use crate::services::notifications::NotificationService;
 use crate::services::ssr::SsrService;
 use crate::services::web::WebService;
@@ -46,6 +47,10 @@ pub struct App {
 impl App {
     /// Create a new App instance with all necessary components initialized
     pub async fn new() -> Result<Self, anyhow::Error> {
+        // Before anything can emit: recording against an uninstalled recorder is a silent no-op,
+        // so a later install would drop every startup and migration-path metric.
+        crate::telemetry::recorder();
+
         // Load configuration
         let config: Config = Figment::new()
             .merge(Env::raw().map(|k| {
@@ -254,6 +259,17 @@ impl App {
             ));
             self.service_manager
                 .register_service(ServiceName::Scraper.as_str(), scraper_service);
+        }
+
+        // Any service set, not just web: a scraper-only or bot-only process still has pool and
+        // process metrics worth scraping. Bot is registered after this runs, so check the request.
+        if self.service_manager.has_services() || services.contains(&ServiceName::Bot) {
+            let metrics_service = Box::new(MetricsService::new(
+                self.config.metrics_port,
+                self.db_pool.clone(),
+            ));
+            self.service_manager
+                .register_service("metrics", metrics_service);
         }
 
         // Check if any services are enabled

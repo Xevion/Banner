@@ -4,6 +4,7 @@ use crate::data::models::{ScrapeJob, UpsertCounts};
 use crate::data::terms;
 use crate::data::unsigned::{Count, DurationMs};
 use crate::scraper::jobs::{JobError, JobType};
+use crate::telemetry;
 use crate::utils::fmt_duration;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -51,6 +52,7 @@ impl Worker {
                             continue;
                         }
                         Err(e) => {
+                            telemetry::record_db_failure(&e);
                             warn!(worker_id = self.id, error = ?e, "Failed to fetch job, waiting");
                             time::sleep(Duration::from_secs(10)).await;
                             continue;
@@ -155,6 +157,7 @@ impl Worker {
         );
 
         if let Err(e) = self.unlock_job(job_id).await {
+            telemetry::record_db_failure(&e);
             warn!(
                 worker_id = self.id,
                 job_id,
@@ -197,6 +200,13 @@ impl Worker {
 
         match result {
             Ok(counts) => {
+                telemetry::record_scrape_job("success");
+                telemetry::record_upsert_counts(
+                    u64::from(counts.courses_fetched.get()),
+                    u64::from(counts.courses_changed.get()),
+                    u64::from(counts.courses_unchanged.get()),
+                );
+
                 // Log at INFO if data changed, DEBUG if no changes
                 let has_changes = counts.courses_changed > Count::default();
                 if has_changes {
@@ -242,21 +252,27 @@ impl Worker {
                     )
                     .await
                 {
+                    telemetry::record_db_failure(&e);
                     error!(worker_id = self.id, job_id, error = ?e, "Failed to insert job result");
                 }
 
                 // Mark job as completed (deletes it and emits Completed event)
                 if let Err(e) = self.db.scrape_jobs().complete(job_id).await {
+                    telemetry::record_db_failure(&e);
                     error!(worker_id = self.id, job_id, error = ?e, "Failed to complete job");
                 }
 
                 // Update last_scraped_at for the term if this job has a term code
                 if let Some(code) = term_code {
                     let _ = terms::update_last_scraped_at(self.db.pool(), &code).await
-                        .map_err(|e| warn!(worker_id = self.id, job_id, term_code = code.as_str(), error = ?e, "Failed to update last_scraped_at"));
+                        .map_err(|e| {
+                            telemetry::record_db_failure(&e);
+                            warn!(worker_id = self.id, job_id, term_code = code.as_str(), error = ?e, "Failed to update last_scraped_at");
+                        });
                 }
             }
             Err(JobError::Recoverable(e)) => {
+                telemetry::record_scrape_job("recoverable_error");
                 self.handle_recoverable_error(
                     job_id,
                     retry_count,
@@ -272,6 +288,8 @@ impl Worker {
                 .await;
             }
             Err(JobError::Unrecoverable(e)) => {
+                telemetry::record_scrape_job("unrecoverable_error");
+
                 // Log the failed result
                 let err_msg = format!("{e:#}");
                 if let Err(log_err) = self
@@ -291,6 +309,7 @@ impl Worker {
                     )
                     .await
                 {
+                    telemetry::record_db_failure(&log_err);
                     error!(worker_id = self.id, job_id, error = ?log_err, "Failed to insert job result");
                 }
 
@@ -303,6 +322,7 @@ impl Worker {
                 );
                 // Delete job (emits Deleted event automatically)
                 if let Err(e) = self.db.scrape_jobs().delete(job_id).await {
+                    telemetry::record_db_failure(&e);
                     error!(worker_id = self.id, job_id, error = ?e, "Failed to delete corrupted job");
                 }
             }
@@ -396,6 +416,7 @@ impl Worker {
                     // Retried event emitted automatically by retry()
                 }
                 Err(e) => {
+                    telemetry::record_db_failure(&e);
                     error!(worker_id = self.id, job_id, error = ?e, "Failed to unlock job for retry");
                 }
             }
@@ -421,6 +442,7 @@ impl Worker {
                 )
                 .await
             {
+                telemetry::record_db_failure(&log_err);
                 error!(worker_id = self.id, job_id, error = ?log_err, "Failed to insert job result");
             }
 
@@ -433,8 +455,12 @@ impl Worker {
                 error = ?e,
                 "Job failed permanently (max retries exceeded), deleting"
             );
+            // Separate from `recoverable_error`: an abandoned job is silent data loss.
+            telemetry::record_scrape_job("exhausted");
+
             // Mark as exhausted (emits Exhausted + Deleted events automatically)
             if let Err(e) = self.db.scrape_jobs().exhaust(job_id).await {
+                telemetry::record_db_failure(&e);
                 error!(worker_id = self.id, job_id, error = ?e, "Failed to exhaust job");
             }
         }

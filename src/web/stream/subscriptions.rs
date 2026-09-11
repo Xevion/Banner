@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::telemetry::WS_SUBSCRIPTIONS;
 use crate::web::stream::filters::{
     AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter,
     parse_audit_log_filter, parse_scrape_jobs_filter, parse_scraper_stats_filter,
@@ -71,11 +72,18 @@ impl SubscriptionRegistry {
     }
 
     pub fn insert(&mut self, id: String, subscription: Subscription) {
-        self.subscriptions.insert(id, subscription);
+        metrics::gauge!(WS_SUBSCRIPTIONS, "stream" => subscription.kind().label()).increment(1.0);
+        if let Some(old) = self.subscriptions.insert(id, subscription) {
+            metrics::gauge!(WS_SUBSCRIPTIONS, "stream" => old.kind().label()).decrement(1.0);
+        }
     }
 
     pub fn remove(&mut self, id: &str) -> Option<Subscription> {
-        self.subscriptions.remove(id)
+        let removed = self.subscriptions.remove(id);
+        if let Some(sub) = &removed {
+            metrics::gauge!(WS_SUBSCRIPTIONS, "stream" => sub.kind().label()).decrement(1.0);
+        }
+        removed
     }
 
     pub fn get(&self, id: &str) -> Option<&Subscription> {
@@ -108,6 +116,15 @@ impl SubscriptionRegistry {
     }
 }
 
+impl Drop for SubscriptionRegistry {
+    /// Covers connection close/error/cancellation, where no explicit `remove` runs per entry.
+    fn drop(&mut self) {
+        for sub in self.subscriptions.values() {
+            metrics::gauge!(WS_SUBSCRIPTIONS, "stream" => sub.kind().label()).decrement(1.0);
+        }
+    }
+}
+
 pub fn build_subscription(
     kind: StreamKind,
     filter: Option<StreamFilter>,
@@ -133,5 +150,68 @@ pub fn build_subscription(
             Ok(Subscription::ScraperTimeseries { filter })
         }
         StreamKind::ScraperSubjects => Ok(Subscription::ScraperSubjects),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    use super::*;
+
+    fn gauge_value(snapshot: metrics_util::debugging::Snapshot, stream: &str) -> Option<f64> {
+        snapshot
+            .into_vec()
+            .into_iter()
+            .find_map(|(ck, _, _, value)| {
+                let matches = ck.key().name() == WS_SUBSCRIPTIONS
+                    && ck
+                        .key()
+                        .labels()
+                        .any(|l| l.key() == "stream" && l.value() == stream);
+                match (matches, value) {
+                    (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
+                    _ => None,
+                }
+            })
+    }
+
+    #[test]
+    fn test_registry_insert_increments_subscription_gauge() {
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+        metrics::with_local_recorder(&recorder, || {
+            let mut registry = SubscriptionRegistry::new();
+            registry.insert("1".to_string(), Subscription::ScraperSubjects);
+            let snapshot = snapshotter.snapshot();
+            assert_eq!(gauge_value(snapshot, "scraper_subjects"), Some(1.0));
+        });
+    }
+
+    #[test]
+    fn test_registry_remove_decrements_subscription_gauge() {
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+        metrics::with_local_recorder(&recorder, || {
+            let mut registry = SubscriptionRegistry::new();
+            registry.insert("1".to_string(), Subscription::ScraperSubjects);
+            registry.remove("1");
+            let snapshot = snapshotter.snapshot();
+            assert_eq!(gauge_value(snapshot, "scraper_subjects"), Some(0.0));
+        });
+    }
+
+    #[test]
+    fn test_registry_drop_decrements_remaining_subscriptions_gauge() {
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+        metrics::with_local_recorder(&recorder, || {
+            let mut registry = SubscriptionRegistry::new();
+            registry.insert("1".to_string(), Subscription::ScraperSubjects);
+            registry.insert("2".to_string(), Subscription::ScraperSubjects);
+            drop(registry);
+            let snapshot = snapshotter.snapshot();
+            assert_eq!(gauge_value(snapshot, "scraper_subjects"), Some(0.0));
+        });
     }
 }

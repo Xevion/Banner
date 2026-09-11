@@ -9,6 +9,7 @@ use crate::data::events::EventBuffer;
 use crate::services::Service;
 use crate::state::ReferenceCache;
 use crate::state::{ServiceStatus, ServiceStatusRegistry};
+use crate::telemetry;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -72,7 +73,10 @@ impl ScraperService {
         match db.scrape_jobs().force_unlock_all().await {
             Ok(0) => {}
             Ok(count) => warn!(count, "Force-unlocked stale jobs from previous run"),
-            Err(e) => warn!(error = ?e, "Failed to force-unlock stale jobs"),
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                warn!(error = ?e, "Failed to force-unlock stale jobs");
+            }
         }
 
         info!("ScraperService starting");

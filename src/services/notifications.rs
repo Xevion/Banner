@@ -3,6 +3,7 @@
 
 use crate::data::events::{AuditLogEvent, DomainEvent, EventBuffer};
 use crate::data::watches::{self, TriggeredWatch};
+use crate::telemetry;
 use serenity::all::{Color, CreateEmbed, CreateMessage, UserId};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -72,6 +73,7 @@ impl NotificationService {
         {
             Ok(w) => w,
             Err(e) => {
+                telemetry::record_db_failure(&e);
                 warn!(error = ?e, "failed to query triggered watches");
                 return;
             }
@@ -90,6 +92,7 @@ impl NotificationService {
             match self.send_notification(watch).await {
                 Ok(()) => {
                     if let Err(e) = watches::mark_notified(&self.pool, watch.watch_id).await {
+                        telemetry::record_db_failure(&e);
                         warn!(watch_id = watch.watch_id, error = ?e, "failed to mark watch notified");
                     }
                 }

@@ -124,6 +124,7 @@ impl From<(StatusCode, String)> for ApiError {
 /// Helper for converting database errors to ApiError
 pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
     tracing::error!(error = %error, context = context, "Database error");
+    crate::telemetry::record_db_failure(&error);
     ApiError::internal_error(format!("{} failed", context))
 }
 

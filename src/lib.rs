@@ -11,5 +11,6 @@ pub mod rmp;
 pub mod scraper;
 pub mod services;
 pub mod state;
+pub mod telemetry;
 pub mod utils;
 pub mod web;

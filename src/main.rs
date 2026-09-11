@@ -18,6 +18,7 @@ mod rmp;
 mod scraper;
 mod services;
 mod state;
+mod telemetry;
 mod utils;
 mod web;
 

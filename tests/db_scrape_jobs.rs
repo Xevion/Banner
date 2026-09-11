@@ -382,3 +382,60 @@ async fn batch_insert_empty_slice(pool: PgPool) {
         .unwrap();
     assert_eq!(count, 0);
 }
+
+#[sqlx::test]
+async fn test_queue_depth_empty_queue_returns_zero(pool: PgPool) {
+    let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
+    assert_eq!(depth.count, 0);
+    assert_eq!(depth.oldest_seconds, None);
+}
+
+#[sqlx::test]
+async fn test_queue_depth_counts_ready_job_and_ages_it(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at, queued_at)
+         VALUES ('Subject', '{\"subject\": \"CS\"}', 'Medium', NOW(), NOW() - INTERVAL '90 seconds')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
+    assert_eq!(depth.count, 1);
+    let oldest_seconds = depth.oldest_seconds.expect("expected an oldest queued job");
+    assert!(
+        oldest_seconds >= 89.0,
+        "expected age near 90s, got {oldest_seconds}"
+    );
+}
+
+#[sqlx::test]
+async fn test_queue_depth_excludes_locked_job(pool: PgPool) {
+    helpers::insert_scrape_job(
+        &pool,
+        TargetType::Subject,
+        json!({"subject": "CS"}),
+        ScrapePriority::Medium,
+        true, // locked
+        0,
+        3,
+    )
+    .await;
+
+    let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
+    assert_eq!(depth.count, 0, "actively locked jobs are not backlog");
+}
+
+#[sqlx::test]
+async fn test_queue_depth_excludes_future_execute_at(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at)
+         VALUES ('Subject', '{\"subject\": \"CS\"}', 'Medium', NOW() + INTERVAL '1 hour')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
+    assert_eq!(depth.count, 0, "not-yet-due jobs are not backlog");
+}

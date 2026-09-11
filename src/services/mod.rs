@@ -4,6 +4,7 @@ use tracing::{error, info, warn};
 
 pub mod bot;
 pub mod manager;
+pub mod metrics;
 pub mod notifications;
 pub mod signals;
 pub mod ssr;

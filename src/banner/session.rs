@@ -401,6 +401,7 @@ impl SessionPool {
         let terms: Vec<BannerTerm> = response
             .json()
             .await
+            .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))
             .context("Failed to parse terms response")?;
 
         Ok(terms)
@@ -446,7 +447,10 @@ impl SessionPool {
             fwd_url: String,
         }
 
-        let redirect: RedirectResponse = response.json().await?;
+        let redirect: RedirectResponse = response
+            .json()
+            .await
+            .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))?;
 
         let base_url_path = self
             .base_url

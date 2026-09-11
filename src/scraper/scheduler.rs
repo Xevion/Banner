@@ -10,6 +10,7 @@ use crate::scraper::adaptive::{
 };
 use crate::scraper::jobs::subject::SubjectJob;
 use crate::state::ReferenceCache;
+use crate::telemetry;
 use crate::utils::fmt_duration;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -56,6 +57,42 @@ pub const KV_TERM_SYNC: &str = "scheduler.term_sync";
 pub const KV_BLUEBOOK_SYNC: &str = "scheduler.bluebook_sync";
 pub const KV_RMP_REVIEW_SCRAPE: &str = "scheduler.rmp_review_scrape";
 pub const KV_CLUSTER_COURSES: &str = "scheduler.cluster_courses";
+
+pub const SCRAPE_QUEUE_DEPTH: &str = "scrape_queue_depth";
+pub const SCRAPE_QUEUE_OLDEST_SECONDS: &str = "scrape_queue_oldest_seconds";
+
+/// Reads a persisted scheduler timestamp, treating a read failure as "never ran".
+///
+/// That fallback is load-bearing: an unreachable database makes every interval look expired, so
+/// the scheduler answers a database problem by stampeding it with six catch-up jobs at once.
+async fn persisted_timestamp(pool: &PgPool, key: &str) -> Option<DateTime<Utc>> {
+    match kv::get_timestamp(pool, key).await {
+        Ok(timestamp) => timestamp,
+        Err(e) => {
+            telemetry::record_db_failure(&e);
+            warn!(key, error = ?e, "Failed to read persisted timestamp, treating as never run");
+            None
+        }
+    }
+}
+
+/// Samples the backlog and publishes it as gauges. Spawned so a starved pool
+/// blocks only this task, not the scheduler's shutdown-select loop.
+fn sample_queue_depth(pool: PgPool) {
+    tokio::spawn(async move {
+        match crate::data::scrape_jobs::queue_depth(&pool).await {
+            Ok(depth) => {
+                metrics::gauge!(SCRAPE_QUEUE_DEPTH).set(depth.count as f64);
+                metrics::gauge!(SCRAPE_QUEUE_OLDEST_SECONDS)
+                    .set(depth.oldest_seconds.unwrap_or(0.0));
+            }
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                warn!(error = ?e, "Failed to sample scrape queue depth");
+            }
+        }
+    });
+}
 
 /// Convert a persisted UTC timestamp to an `Instant`, preserving remaining cooldown.
 ///
@@ -126,18 +163,12 @@ impl Scheduler {
 
         // Load persisted timestamps so we don't redo work that completed recently.
         let pool = self.db.pool();
-        let persisted_ref = kv::get_timestamp(pool, KV_REF_SCRAPE).await.unwrap_or(None);
-        let persisted_rmp = kv::get_timestamp(pool, KV_RMP_SYNC).await.unwrap_or(None);
-        let persisted_term = kv::get_timestamp(pool, KV_TERM_SYNC).await.unwrap_or(None);
-        let persisted_bb = kv::get_timestamp(pool, KV_BLUEBOOK_SYNC)
-            .await
-            .unwrap_or(None);
-        let persisted_rmp_reviews = kv::get_timestamp(pool, KV_RMP_REVIEW_SCRAPE)
-            .await
-            .unwrap_or(None);
-        let persisted_cluster = kv::get_timestamp(pool, KV_CLUSTER_COURSES)
-            .await
-            .unwrap_or(None);
+        let persisted_ref = persisted_timestamp(pool, KV_REF_SCRAPE).await;
+        let persisted_rmp = persisted_timestamp(pool, KV_RMP_SYNC).await;
+        let persisted_term = persisted_timestamp(pool, KV_TERM_SYNC).await;
+        let persisted_bb = persisted_timestamp(pool, KV_BLUEBOOK_SYNC).await;
+        let persisted_rmp_reviews = persisted_timestamp(pool, KV_RMP_REVIEW_SCRAPE).await;
+        let persisted_cluster = persisted_timestamp(pool, KV_CLUSTER_COURSES).await;
 
         if persisted_ref.is_some()
             || persisted_rmp.is_some()
@@ -175,6 +206,8 @@ impl Scheduler {
                     continue;
                 }
                 _ = time::sleep_until(next_run) => {
+                    sample_queue_depth(self.db.pool().clone());
+
                     // Skip this cycle if the previous one is still running.
                     if let Some((ref handle, _)) = current_work
                         && !handle.is_finished()
@@ -222,6 +255,7 @@ impl Scheduler {
                                                     match Self::sync_terms(db.pool(), &banner_api).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_TERM_SYNC, Utc::now()).await {
+                                                                telemetry::record_db_failure(&e);
                                                                 warn!(error = ?e, "Failed to persist term sync timestamp");
                                                             }
                                                         }
@@ -235,6 +269,7 @@ impl Scheduler {
                                                     match Self::sync_rmp_data(db.pool()).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_SYNC, Utc::now()).await {
+                                                                telemetry::record_db_failure(&e);
                                                                 warn!(error = ?e, "Failed to persist RMP sync timestamp");
                                                             }
                                                         }
@@ -248,10 +283,14 @@ impl Scheduler {
                                                     match Self::scrape_reference_data(db.pool(), &banner_api, &reference_cache).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_REF_SCRAPE, Utc::now()).await {
+                                                                telemetry::record_db_failure(&e);
                                                                 warn!(error = ?e, "Failed to persist ref scrape timestamp");
                                                             }
                                                         }
-                                                        Err(e) => error!(error = ?e, "Failed to scrape reference data"),
+                                                        Err(e) => {
+                                                            telemetry::record_db_failure(&e);
+                                                            error!(error = ?e, "Failed to scrape reference data");
+                                                        }
                                                     }
                                                 }
                                             };
@@ -261,6 +300,7 @@ impl Scheduler {
                                                     match Self::sync_bluebook(db.pool(), bluebook_force).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_BLUEBOOK_SYNC, Utc::now()).await {
+                                                                telemetry::record_db_failure(&e);
                                                                 warn!(error = ?e, "Failed to persist BlueBook sync timestamp");
                                                             }
                                                         }
@@ -274,10 +314,14 @@ impl Scheduler {
                                                     match Self::sync_rmp_reviews(db.pool()).await {
                                                         Ok(()) => {
                                                             if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_REVIEW_SCRAPE, Utc::now()).await {
+                                                                telemetry::record_db_failure(&e);
                                                                 warn!(error = ?e, "Failed to persist RMP review scrape timestamp");
                                                             }
                                                         }
-                                                        Err(e) => error!(error = ?e, "Failed to sync RMP reviews"),
+                                                        Err(e) => {
+                                                            telemetry::record_db_failure(&e);
+                                                            error!(error = ?e, "Failed to sync RMP reviews");
+                                                        }
                                                     }
                                                 }
                                             };
@@ -288,11 +332,15 @@ impl Scheduler {
                                             if should_sync_rmp || should_sync_bluebook || should_scrape_rmp_reviews {
                                                 match crate::data::scoring::recompute_all_scores(db.pool()).await {
                                                     Ok(n) => info!(count = n, "Recomputed instructor scores after sync"),
-                                                    Err(e) => error!(error = ?e, "Failed to recompute instructor scores after sync"),
+                                                    Err(e) => {
+                                                        telemetry::record_db_failure(&e);
+                                                        error!(error = ?e, "Failed to recompute instructor scores after sync");
+                                                    }
                                                 }
                                             }
 
                                             if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
+                                                telemetry::record_db_failure(&e);
                                                 error!(error = ?e, "Failed to schedule jobs");
                                             }
 
@@ -303,10 +351,14 @@ impl Scheduler {
                                                 match Self::cluster_courses(db.pool()).await {
                                                     Ok(()) => {
                                                         if let Err(e) = kv::set_timestamp(db.pool(), KV_CLUSTER_COURSES, Utc::now()).await {
+                                                            telemetry::record_db_failure(&e);
                                                             warn!(error = ?e, "Failed to persist cluster timestamp");
                                                         }
                                                     }
-                                                    Err(e) => error!(error = ?e, "Failed to cluster courses"),
+                                                    Err(e) => {
+                                                        telemetry::record_db_failure(&e);
+                                                        error!(error = ?e, "Failed to cluster courses");
+                                                    }
                                                 }
                                             }
                                         } => {}
@@ -781,6 +833,7 @@ impl Scheduler {
                     if let Err(e) =
                         crate::data::rmp::upsert_professor_detail(db_pool, &detail).await
                     {
+                        telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to upsert professor detail");
                         continue;
                     }
@@ -789,6 +842,7 @@ impl Scheduler {
                         crate::data::rmp::replace_professor_reviews(db_pool, *legacy_id, &reviews)
                             .await
                     {
+                        telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to replace professor reviews");
                         continue;
                     }
@@ -800,6 +854,7 @@ impl Scheduler {
                     )
                     .await
                     {
+                        telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to mark professor reviews scraped");
                         continue;
                     }
@@ -870,6 +925,7 @@ impl Scheduler {
             Ok(pairs) => {
                 debug!(count = pairs.len(), "Fetched subjects");
                 if let Err(e) = term_subjects::cache(&term, &pairs, db_pool).await {
+                    telemetry::record_db_failure(&e);
                     warn!(error = ?e, "Failed to cache term subjects");
                 }
                 all_entries.extend(pairs.into_iter().map(|p| ReferenceData {

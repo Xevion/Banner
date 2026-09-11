@@ -14,6 +14,7 @@ use tracing::{debug, trace, warn};
 use crate::data::events::{AuditLogEvent, DomainEvent};
 use crate::data::scraper_stats::{compute_subjects, compute_timeseries, default_bucket_for_period};
 use crate::state::AppState;
+use crate::telemetry::{WS_CONNECTIONS, WS_MESSAGES};
 use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
 use crate::web::auth::extractors::AdminUser;
 use crate::web::stream::computed::{ComputedCacheKey, ComputedUpdate};
@@ -66,6 +67,26 @@ fn subscription_to_cache_key(sub: &Subscription) -> Option<ComputedCacheKey> {
     }
 }
 
+/// Decrements `WS_CONNECTIONS` on drop so every exit path (return, break, panic, task
+/// cancellation) is covered without needing to track each one explicitly.
+struct ConnectionGuard {
+    gauge: metrics::Gauge,
+}
+
+impl ConnectionGuard {
+    fn new() -> Self {
+        let gauge = metrics::gauge!(WS_CONNECTIONS);
+        gauge.increment(1.0);
+        Self { gauge }
+    }
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.gauge.decrement(1.0);
+    }
+}
+
 /// WebSocket endpoint for real-time streams.
 pub async fn stream_ws(
     ws: WebSocketUpgrade,
@@ -79,10 +100,22 @@ async fn send_message(
     sink: &mut futures::stream::SplitSink<WebSocket, Message>,
     message: &StreamServerMessage,
 ) -> bool {
+    let kind = message.kind_label();
+
+    // Serializing our own message cannot fail for any input the client controls, so this keeps the
+    // connection rather than tearing it down; counting it is what stops it being silent.
     let Ok(json) = serde_json::to_string(message) else {
+        metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => "encode_failed")
+            .increment(1);
         return true;
     };
-    sink.send(Message::Text(json.into())).await.is_ok()
+
+    let sent = sink.send(Message::Text(json.into())).await.is_ok();
+    let outcome = if sent { "sent" } else { "failed" };
+    metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => outcome)
+        .increment(1);
+
+    sent
 }
 
 async fn send_error(
@@ -100,6 +133,7 @@ async fn send_error(
 }
 
 async fn handle_stream_ws(socket: WebSocket, state: AppState) {
+    let _connection_guard = ConnectionGuard::new();
     trace!("stream WebSocket connected");
 
     let (mut sink, mut stream) = socket.split();
@@ -188,6 +222,8 @@ async fn handle_client_message(
     let parsed = match serde_json::from_str::<StreamClientMessage>(text) {
         Ok(msg) => msg,
         Err(_) => {
+            metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => "invalid", "outcome" => "received")
+                .increment(1);
             let sent = send_error(
                 sink,
                 None,
@@ -198,6 +234,8 @@ async fn handle_client_message(
             return ClientMessageResult::from_error_send(sent);
         }
     };
+    metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => parsed.kind_label(), "outcome" => "received")
+        .increment(1);
 
     match parsed {
         StreamClientMessage::Subscribe {
@@ -887,6 +925,34 @@ mod tests {
             } else {
                 panic!("Expected Timeseries cache key");
             }
+        }
+    }
+
+    #[test]
+    fn test_connection_guard_drop_decrements_connection_gauge() {
+        use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+        metrics::with_local_recorder(&recorder, || {
+            let guard = ConnectionGuard::new();
+            drop(guard);
+        });
+
+        // Snapshotting resets gauges to 0 on read, so take a single reading after the
+        // increment and decrement have both landed.
+        assert_eq!(gauge_value(snapshotter.snapshot()), Some(0.0));
+
+        fn gauge_value(snapshot: metrics_util::debugging::Snapshot) -> Option<f64> {
+            snapshot
+                .into_vec()
+                .into_iter()
+                .find_map(
+                    |(ck, _, _, value)| match (ck.key().name() == WS_CONNECTIONS, value) {
+                        (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
+                        _ => None,
+                    },
+                )
         }
     }
 }

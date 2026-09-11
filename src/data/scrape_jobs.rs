@@ -59,6 +59,30 @@ pub async fn count_all(pool: &PgPool) -> Result<i64> {
     Ok(count)
 }
 
+/// Depth of the backlog a worker could pick up right now: unlocked (or
+/// stale-locked) jobs whose `execute_at` has passed. Mirrors `lock_next`'s
+/// eligibility predicate so the two never disagree.
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct QueueDepth {
+    pub count: i64,
+    pub oldest_seconds: Option<f64>,
+}
+
+/// Count eligible jobs and the age in seconds of the oldest one's `queued_at`.
+pub async fn queue_depth(pool: &PgPool) -> Result<QueueDepth> {
+    sqlx::query_as::<_, QueueDepth>(
+        "SELECT COUNT(*)::BIGINT AS count, \
+                EXTRACT(EPOCH FROM (NOW() - MIN(queued_at)))::FLOAT8 AS oldest_seconds \
+         FROM scrape_jobs \
+         WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision)) \
+           AND execute_at <= NOW()",
+    )
+    .bind(LOCK_EXPIRY_SECS)
+    .fetch_one(pool)
+    .await
+    .context("failed to compute scrape queue depth")
+}
+
 /// Fetch a single scrape job by ID.
 pub async fn get_by_id(pool: &PgPool, id: i32) -> Result<Option<ScrapeJob>> {
     sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs WHERE id = $1")

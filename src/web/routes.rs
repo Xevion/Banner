@@ -197,6 +197,9 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
     router.layer((
         // Outermost: per-request ID span + severity-proportional response logging.
         RequestIdLayer,
+        // Sits above the rate limiter and the timeout so their short-circuited responses are
+        // counted; below them, a 429 or a timeout never reaches this and reads as no traffic.
+        axum::middleware::from_fn(crate::web::middleware::metrics::track_metrics),
         // Security headers on every response (HSTS is prod-only).
         SecurityHeadersLayer,
         // Compress API responses (gzip/brotli/zstd). Pre-compressed static

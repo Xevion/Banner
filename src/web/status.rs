@@ -18,6 +18,9 @@ fn default_metrics_limit() -> i32 {
     500
 }
 
+/// Largest response an anonymous caller can request; this endpoint takes no auth.
+const MAX_METRICS_LIMIT: i32 = 1000;
+
 #[derive(Serialize, TS)]
 #[ts(export)]
 pub struct ServiceInfo {
@@ -162,7 +165,7 @@ pub(super) async fn metrics(
     State(state): State<AppState>,
     Query(params): Query<MetricsParams>,
 ) -> Result<Json<MetricsResponse>, ApiError> {
-    let limit = params.limit.clamp(1, 5000);
+    let limit = params.limit.clamp(1, MAX_METRICS_LIMIT);
 
     let range_str = params.range.as_deref().unwrap_or("24h");
     let duration = match range_str {

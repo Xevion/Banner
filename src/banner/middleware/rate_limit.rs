@@ -4,6 +4,9 @@
 //! classifying requests by URL pattern and throttling each type independently.
 
 use crate::config::RateLimitingConfig;
+use crate::telemetry::{
+    BANNER_DECODE_FAILURES, BANNER_DURATION, BANNER_RATE_LIMIT_WAIT, BANNER_REQUESTS,
+};
 use crate::utils::fmt_duration;
 use governor::{
     Quota, RateLimiter,
@@ -33,41 +36,119 @@ pub enum RequestType {
     Search,
 }
 
-/// Static rule table for endpoint classification.
-/// Ordered most-specific first so `/classSearch/getTerms` matches Metadata, not Search.
-const ENDPOINT_RULES: &[(RequestType, &[&str])] = &[
-    (
-        RequestType::Metadata,
-        &[
-            "/getTerms",
-            "/get_subject",
-            "/get_campus",
-            "/get_instructionalMethod",
-            "/get_partOfTerm",
-            "/get_attribute",
-        ],
-    ),
-    (
-        RequestType::Session,
-        &[
-            "/registration",
-            "/selfServiceMenu",
-            "/term/termSelection",
-            "/term/search",
-        ],
-    ),
-    (RequestType::Reset, &["/resetDataForm"]),
-    (RequestType::Search, &["/searchResults", "/classSearch"]),
+/// One row per known endpoint: URL pattern, bounded metrics label, and rate limit category.
+struct EndpointRule {
+    pattern: &'static str,
+    label: &'static str,
+    request_type: RequestType,
+}
+
+/// Ordered most-specific first so `/classSearch/getTerms` matches `terms`, not the
+/// generic `/classSearch` fallback.
+const ENDPOINT_RULES: &[EndpointRule] = &[
+    EndpointRule {
+        pattern: "/getTerms",
+        label: "terms",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/get_subject",
+        label: "subjects",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/get_campus",
+        label: "campuses",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/get_instructionalMethod",
+        label: "instructional_methods",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/get_partOfTerm",
+        label: "parts_of_term",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/get_attribute",
+        label: "attributes",
+        request_type: RequestType::Metadata,
+    },
+    EndpointRule {
+        pattern: "/registration",
+        label: "registration",
+        request_type: RequestType::Session,
+    },
+    EndpointRule {
+        pattern: "/selfServiceMenu",
+        label: "self_service_menu",
+        request_type: RequestType::Session,
+    },
+    EndpointRule {
+        pattern: "/term/termSelection",
+        label: "term_selection",
+        request_type: RequestType::Session,
+    },
+    EndpointRule {
+        pattern: "/term/search",
+        label: "term_search",
+        request_type: RequestType::Session,
+    },
+    EndpointRule {
+        pattern: "/resetDataForm",
+        label: "reset_data_form",
+        request_type: RequestType::Reset,
+    },
+    EndpointRule {
+        pattern: "/getFacultyMeetingTimes",
+        label: "meeting_times",
+        request_type: RequestType::Search,
+    },
+    EndpointRule {
+        pattern: "/searchResults",
+        label: "search",
+        request_type: RequestType::Search,
+    },
+    EndpointRule {
+        pattern: "/classSearch",
+        label: "search",
+        request_type: RequestType::Search,
+    },
 ];
+
+fn lookup_endpoint(path: &str) -> Option<&'static EndpointRule> {
+    ENDPOINT_RULES
+        .iter()
+        .find(|rule| path.contains(rule.pattern))
+}
 
 /// Classifies a URL path into a request type using `ENDPOINT_RULES`.
 fn classify(path: &str) -> RequestType {
-    for (request_type, patterns) in ENDPOINT_RULES {
-        if patterns.iter().any(|p| path.contains(p)) {
-            return *request_type;
-        }
+    lookup_endpoint(path).map_or(RequestType::Search, |rule| rule.request_type)
+}
+
+/// Counts a response that arrived intact but could not be deserialized.
+///
+/// Separate from `banner_api_requests_total`, which already counted this request a success: the
+/// transport did succeed, and re-incrementing it here would double-count the same request.
+pub(crate) fn record_decode_failure(url: &str) {
+    metrics::counter!(BANNER_DECODE_FAILURES, "endpoint" => endpoint_label(url)).increment(1);
+}
+
+/// Bounded metrics label for a URL path; never derived from the path itself.
+fn endpoint_label(path: &str) -> &'static str {
+    lookup_endpoint(path).map_or("other", |rule| rule.label)
+}
+
+/// Bounded outcome label for an upstream HTTP status code.
+fn outcome_for_status(status: u16) -> &'static str {
+    match status {
+        429 => "rate_limited",
+        200..=299 => "success",
+        _ => "http_error",
     }
-    RequestType::Search // fallback for unknown endpoints
 }
 
 /// A rate limiter that manages different request types with different limits.
@@ -160,10 +241,14 @@ impl Middleware for RateLimitMiddleware {
         next: Next<'_>,
     ) -> std::result::Result<Response, reqwest_middleware::Error> {
         let request_type = classify(req.url().path());
+        let endpoint = endpoint_label(req.url().path());
 
-        let start = std::time::Instant::now();
+        let wait_start = std::time::Instant::now();
         self.rate_limiter.wait_for_permission(request_type).await;
-        let wait_duration = start.elapsed();
+        let wait_duration = wait_start.elapsed();
+
+        metrics::histogram!(BANNER_RATE_LIMIT_WAIT, "endpoint" => endpoint)
+            .record(wait_duration.as_secs_f64());
 
         if wait_duration >= Duration::from_secs(5) {
             debug!(
@@ -174,13 +259,28 @@ impl Middleware for RateLimitMiddleware {
             );
         }
 
-        next.run(req, extensions).await
+        let request_start = std::time::Instant::now();
+        let result = next.run(req, extensions).await;
+        let duration = request_start.elapsed();
+
+        let outcome = match &result {
+            Ok(response) => outcome_for_status(response.status().as_u16()),
+            Err(reqwest_middleware::Error::Reqwest(e)) if e.is_timeout() => "timeout",
+            Err(_) => "transport_error",
+        };
+
+        metrics::counter!(BANNER_REQUESTS, "endpoint" => endpoint, "outcome" => outcome)
+            .increment(1);
+        metrics::histogram!(BANNER_DURATION, "endpoint" => endpoint).record(duration.as_secs_f64());
+
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert2::check;
 
     #[test]
     fn test_new_with_default_config() {
@@ -370,5 +470,57 @@ mod tests {
     #[test]
     fn test_classify_unknown_defaults_to_search() {
         assert_eq!(classify("/some/unknown/endpoint"), RequestType::Search);
+    }
+
+    #[test]
+    fn test_endpoint_label_terms_is_distinct_from_search() {
+        check!(endpoint_label("/classSearch/getTerms") == "terms");
+    }
+
+    #[test]
+    fn test_endpoint_label_meeting_times_is_distinct_from_search() {
+        check!(endpoint_label("/searchResults/getFacultyMeetingTimes") == "meeting_times");
+    }
+
+    #[test]
+    fn test_endpoint_label_search_results_is_search() {
+        check!(endpoint_label("/searchResults/searchResults") == "search");
+    }
+
+    #[test]
+    fn test_endpoint_label_unknown_defaults_to_other() {
+        check!(endpoint_label("/some/unknown/endpoint") == "other");
+    }
+
+    #[test]
+    fn test_endpoint_label_all_rules_are_bounded_lowercase_snake_case() {
+        for rule in ENDPOINT_RULES {
+            check!(
+                rule.label
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_')
+            );
+        }
+    }
+
+    #[test]
+    fn test_outcome_for_status_2xx_is_success() {
+        check!(outcome_for_status(200) == "success");
+        check!(outcome_for_status(204) == "success");
+    }
+
+    #[test]
+    fn test_outcome_for_status_429_is_rate_limited() {
+        check!(outcome_for_status(429) == "rate_limited");
+    }
+
+    #[test]
+    fn test_outcome_for_status_5xx_is_http_error() {
+        check!(outcome_for_status(500) == "http_error");
+    }
+
+    #[test]
+    fn test_outcome_for_status_4xx_non_429_is_http_error() {
+        check!(outcome_for_status(404) == "http_error");
     }
 }

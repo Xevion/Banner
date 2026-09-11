@@ -113,6 +113,7 @@ impl BannerApi {
         let data: Vec<T> = response
             .json()
             .await
+            .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))
             .with_context(|| format!("Failed to parse {} response", endpoint))?;
 
         Ok(data)
@@ -187,12 +188,14 @@ impl BannerApi {
             .await
             .with_context(|| format!("Failed to read body (status={status})"))?;
 
-        let search_result: SearchResult =
-            parse_json_with_context(&body).map_err(|source| BannerApiError::ParseFailed {
+        let search_result: SearchResult = parse_json_with_context(&body).map_err(|source| {
+            crate::banner::middleware::rate_limit::record_decode_failure(url.as_str());
+            BannerApiError::ParseFailed {
                 status: status.as_u16(),
                 url: url.to_string(),
                 source,
-            })?;
+            }
+        })?;
 
         // Check for signs of an invalid session
         if search_result.path_mode.is_none() {
@@ -304,8 +307,11 @@ impl BannerApi {
             ));
         }
 
-        let response: MeetingTimesApiResponse =
-            response.json().await.context("Failed to parse response")?;
+        let response: MeetingTimesApiResponse = response
+            .json()
+            .await
+            .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))
+            .context("Failed to parse response")?;
 
         Ok(response
             .fmt

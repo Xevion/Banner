@@ -23,6 +23,9 @@ pub struct Config {
     /// Port for the web server (default: 8080)
     #[serde(default = "default_port")]
     pub port: u16,
+    /// Port for the Prometheus exposition listener (default: 9090)
+    #[serde(default = "default_metrics_port")]
+    pub metrics_port: u16,
     /// Database connection URL
     pub database_url: String,
     /// Graceful shutdown timeout duration
@@ -90,6 +93,10 @@ fn default_log_level() -> String {
 /// Default port of 8080
 fn default_port() -> u16 {
     8080
+}
+
+fn default_metrics_port() -> u16 {
+    9090
 }
 
 /// Default shutdown timeout of 8 seconds
