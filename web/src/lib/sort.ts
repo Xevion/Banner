@@ -24,6 +24,22 @@ export const COLUMN_SORTS: Partial<Record<ColumnId, SortKey[]>> = {
   seats: ["seats_open", "fill_ratio"],
 };
 
+/**
+ * What a header reads as while one of its own keys orders the table.
+ *
+ * The name replaces the column's label rather than joining it, and so must fit
+ * the column's width in `columns.ts`, which is cut to one label and its arrow.
+ * Only a column offering a choice of keys needs entries here.
+ */
+const KEY_HEADERS: Partial<Record<SortKey, string>> = {
+  duration: "Duration",
+  weekly_minutes: "Mins/Wk",
+  instructor_rating: "Instructor Rating",
+  instructor_name: "Instructor Name",
+  seats_open: "Open Seats",
+  fill_ratio: "Fill Ratio",
+};
+
 /** Every key the backend accepts, kept in sync with `SortKey` in both directions below. */
 const SORT_KEYS = [
   "course_code",
@@ -96,8 +112,8 @@ function cycleFor(keys: SortKey[]): (SortTerm | null)[] {
 export interface HeaderSortStep {
   /** The term this header currently contributes, if any. */
   active: SortTerm | null;
-  /** Shown beside the label when a column offers more than one key. */
-  suffix: string | null;
+  /** Replaces the column's label, naming which of its keys is doing the ordering. */
+  label: string | null;
   indicator: "asc" | "desc" | "none";
   /** What clicking does next, phrased as an action. */
   title: string;
@@ -140,7 +156,7 @@ export function headerSortStep(
   return {
     active,
     // Only worth naming the key when the column offers a choice of them.
-    suffix: active && keys.length > 1 ? active.key.replace(/_/g, " ").toUpperCase() : null,
+    label: active && keys.length > 1 ? (KEY_HEADERS[active.key] ?? null) : null,
     indicator: active ? (active.desc ? "desc" : "asc") : "none",
     title: describe(next),
     next,

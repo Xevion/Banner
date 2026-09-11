@@ -133,13 +133,12 @@ function courseHeaderOverride(headerId: string): HeaderOverride | null {
   // Shown together the columns are one range under one label, so the titles are
   // left to say which half each sort control orders.
   const paired = columnVisibility.time !== false && columnVisibility.time_end !== false;
-  let label: string | undefined;
+  let label = step.label ?? undefined;
   if (paired && headerId === "time") label = "Time";
   if (paired && headerId === "time_end") label = "";
 
   return {
     label,
-    suffix: step.suffix,
     indicator: step.indicator,
     title: step.title,
     onclick: () => sort?.applyHeaderClick(step.next),

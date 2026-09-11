@@ -89,9 +89,24 @@ describe("header cycle", () => {
     });
   });
 
-  it("names the key only when the column offers a choice", () => {
-    expect(step("time", "start_time")?.suffix).toBeNull();
-    expect(step("instructor", "instructor_rating")?.suffix).toBe("INSTRUCTOR RATING");
+  it("renames the header to the active key only when the column offers a choice", () => {
+    expect(step("time", "start_time")?.label).toBeNull();
+    expect(step("instructor", "instructor_rating")?.label).toBe("Instructor Rating");
+    expect(step("instructor", "instructor_name")?.label).toBe("Instructor Name");
+  });
+
+  it("leaves the header alone while the column contributes nothing", () => {
+    expect(step("instructor", null)?.label).toBeNull();
+    expect(step("instructor", "start_time")?.label).toBeNull();
+  });
+
+  // The narrowest tracks are the ones whose second key reads least like the
+  // column, so every multi-key column needs a name short enough for its width.
+  it("names every key a multi-key column can reach", () => {
+    expect(step("duration", "duration")?.label).toBe("Duration");
+    expect(step("duration", "weekly_minutes")?.label).toBe("Mins/Wk");
+    expect(step("seats", "seats_open")?.label).toBe("Open Seats");
+    expect(step("seats", "fill_ratio")?.label).toBe("Fill Ratio");
   });
 
   it("phrases the tooltip as the action the click performs", () => {

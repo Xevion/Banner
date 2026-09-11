@@ -9,10 +9,8 @@ import type { HeaderGroup } from "@tanstack/table-core";
  * longer cycle or a different key than its own. Returning null keeps the default.
  */
 export interface HeaderOverride {
-  /** Replaces the column's own label, e.g. when two columns read as one. */
+  /** Replaces the column's own label, with the active sort key or a shared heading. */
   label?: string;
-  /** Appended after the header label, e.g. the active key in a multi-key cycle. */
-  suffix?: string | null;
   indicator?: "asc" | "desc" | "none";
   /** Native tooltip, describing what the next click does. */
   title?: string;
@@ -74,25 +72,22 @@ let {
                    stays on the label, independent of whatever padding thClass sets. -->
               <button
                 type="button"
-                class="{sortSpanClass} cursor-pointer select-none after:absolute after:inset-0 after:content-['']"
+                class="{sortSpanClass} max-w-full cursor-pointer select-none after:absolute after:inset-0 after:content-['']"
                 onclick={override?.onclick ?? header.column.getToggleSortingHandler()}
               >
-                {@render label()}
+                <!-- Only the text may shrink, so a label wider than its track
+                     ellipsizes rather than running into the next column. -->
+                <span class="min-w-0 truncate">{@render label()}</span>
                 {#if sorted === "asc"}
-                  <ArrowUp class="size-3.5" />
+                  <ArrowUp class="size-3.5 shrink-0" />
                 {:else if sorted === "desc"}
-                  <ArrowDown class="size-3.5" />
+                  <ArrowDown class="size-3.5 shrink-0" />
                 {:else}
-                  <ArrowUpDown class="size-3.5 text-muted-foreground/40" />
-                {/if}
-                {#if override?.suffix}
-                  <span class="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground/60"
-                    >{override.suffix}</span
-                  >
+                  <ArrowUpDown class="size-3.5 shrink-0 text-muted-foreground/40" />
                 {/if}
               </button>
             {:else}
-              {@render label()}
+              <span class="block truncate">{@render label()}</span>
             {/if}
           </th>
         {/if}
