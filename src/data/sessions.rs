@@ -1,7 +1,7 @@
 //! Database query functions for user sessions.
 
 use anyhow::Context;
-use rand::Rng;
+use rand::RngExt;
 use sqlx::PgPool;
 
 use super::models::UserSession;

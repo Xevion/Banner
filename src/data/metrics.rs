@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 
 /// A single course metrics snapshot row.
 #[derive(sqlx::FromRow, Debug)]
@@ -25,9 +25,9 @@ pub async fn list_for_course(
     since: DateTime<Utc>,
     limit: i32,
 ) -> Result<Vec<MetricRow>> {
-    sqlx::query_as::<_, MetricRow>(&format!(
+    sqlx::query_as::<_, MetricRow>(AssertSqlSafe(format!(
         "{METRIC_SELECT} WHERE course_id = $1 AND timestamp >= $2 ORDER BY timestamp DESC LIMIT $3"
-    ))
+    )))
     .bind(course_id)
     .bind(since)
     .bind(limit)
@@ -38,9 +38,9 @@ pub async fn list_for_course(
 
 /// Fetch metrics across all courses since a given timestamp.
 pub async fn list_all(pool: &PgPool, since: DateTime<Utc>, limit: i32) -> Result<Vec<MetricRow>> {
-    sqlx::query_as::<_, MetricRow>(&format!(
+    sqlx::query_as::<_, MetricRow>(AssertSqlSafe(format!(
         "{METRIC_SELECT} WHERE timestamp >= $1 ORDER BY timestamp DESC LIMIT $2"
-    ))
+    )))
     .bind(since)
     .bind(limit)
     .fetch_all(pool)

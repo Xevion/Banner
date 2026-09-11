@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 
 use crate::data::models::AuditRow;
 
@@ -13,9 +13,9 @@ const AUDIT_SELECT: &str = "SELECT a.id, a.course_id, a.timestamp, a.field_chang
 
 /// Fetch the most recent audit log entries, newest first.
 pub async fn list_recent(pool: &PgPool, limit: i32) -> Result<Vec<AuditRow>> {
-    let rows = sqlx::query_as::<_, AuditRow>(&format!(
+    let rows = sqlx::query_as::<_, AuditRow>(AssertSqlSafe(format!(
         "{AUDIT_SELECT} ORDER BY a.timestamp DESC LIMIT $1"
-    ))
+    )))
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -33,14 +33,14 @@ pub async fn list_filtered(
     term: Option<&str>,
     limit: i32,
 ) -> Result<Vec<AuditRow>> {
-    let rows: Vec<AuditRow> = sqlx::query_as(&format!(
+    let rows: Vec<AuditRow> = sqlx::query_as(AssertSqlSafe(format!(
         "{AUDIT_SELECT} \
          WHERE ($1::timestamptz IS NULL OR a.timestamp > $1) \
            AND ($2::text[] IS NULL OR a.field_changed = ANY($2)) \
            AND ($3::text[] IS NULL OR c.subject = ANY($3)) \
            AND ($4::text IS NULL OR c.term_code = $4) \
          ORDER BY a.timestamp DESC LIMIT $5"
-    ))
+    )))
     .bind(since_dt)
     .bind(field_changed)
     .bind(subject)

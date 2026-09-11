@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use tracing::warn;
 use ts_rs::TS;
 
@@ -283,7 +283,7 @@ pub async fn list_instructors(
         "#
     );
 
-    let mut query = sqlx::query_as::<_, InstructorRow>(&query_str);
+    let mut query = sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str));
     if let Some(ref status) = filter.status {
         query = query.bind(status);
     }
@@ -299,7 +299,7 @@ pub async fn list_instructors(
 
     // Count total with filters
     let count_query_str = format!("SELECT COUNT(*) FROM instructors i {where_clause}");
-    let mut count_query = sqlx::query_as::<_, (i64,)>(&count_query_str);
+    let mut count_query = sqlx::query_as::<_, (i64,)>(AssertSqlSafe(count_query_str));
     if let Some(ref status) = filter.status {
         count_query = count_query.bind(status);
     }

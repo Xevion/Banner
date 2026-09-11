@@ -6,27 +6,42 @@
       {
         "ordinal": 0,
         "name": "instructor_id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "rmp_rating: f32",
-        "type_info": "Float4"
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "avg_rating"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "rmp_num_ratings!: i32",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": "Expression"
       },
       {
         "ordinal": 3,
         "name": "bb_avg: f32",
-        "type_info": "Float4"
+        "type_info": "Float4",
+        "origin": "Expression"
       },
       {
         "ordinal": 4,
         "name": "bb_responses!: i32",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": "Expression"
       }
     ],
     "parameters": {

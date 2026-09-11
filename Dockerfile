@@ -1,5 +1,5 @@
 # Build arguments
-ARG RUST_VERSION=1.89.0
+ARG RUST_VERSION=1.96.0
 ARG GIT_COMMIT_SHA
 
 # Frontend Build Stage
@@ -48,10 +48,12 @@ FROM chef AS builder
 ARG GIT_COMMIT_SHA
 ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
-# mold + clang for faster linking (matches .cargo/config.toml's linker override)
+# mold + clang for faster linking (matches .cargo/config.toml's linker override);
+# cmake builds aws-lc-sys, reqwest's rustls crypto provider.
 RUN apt-get update && apt-get install -y \
     mold \
     clang \
+    cmake \
     pkg-config \
     libssl-dev \
     git \

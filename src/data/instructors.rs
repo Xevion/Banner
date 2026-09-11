@@ -197,9 +197,9 @@ pub async fn list_public_instructors(
     };
 
     /// Append instructor list WHERE conditions to a QueryBuilder.
-    fn push_instructor_conditions<'args>(
-        builder: &mut QueryBuilder<'args, Postgres>,
-        params: &'args PublicInstructorListParams,
+    fn push_instructor_conditions(
+        builder: &mut QueryBuilder<Postgres>,
+        params: &PublicInstructorListParams,
         extra_condition: &Option<String>,
     ) {
         builder.push(

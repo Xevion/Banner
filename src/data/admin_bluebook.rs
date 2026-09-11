@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use serde::Serialize;
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use tracing::info;
 use ts_rs::TS;
 
@@ -213,7 +213,7 @@ pub async fn list_links(
         "#
     );
 
-    let mut query = sqlx::query_as::<_, LinkListRow>(&query_str);
+    let mut query = sqlx::query_as::<_, LinkListRow>(AssertSqlSafe(query_str));
     if let Some(ref status) = filter.status {
         query = query.bind(status);
     }
@@ -231,7 +231,7 @@ pub async fn list_links(
     let count_query_str = format!(
         "SELECT COUNT(*) FROM instructor_bluebook_links bl LEFT JOIN instructors i ON i.id = bl.instructor_id {where_clause}"
     );
-    let mut count_query = sqlx::query_as::<_, (i64,)>(&count_query_str);
+    let mut count_query = sqlx::query_as::<_, (i64,)>(AssertSqlSafe(count_query_str));
     if let Some(ref status) = filter.status {
         count_query = count_query.bind(status);
     }

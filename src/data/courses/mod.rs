@@ -58,10 +58,7 @@ pub struct SearchFilter<'a> {
 /// Course number filtering extracts the numeric prefix to support alphanumeric
 /// course numbers (e.g., "015X", "399H"). The numeric part is compared against
 /// the range, so "399H" matches a search for courses 300-400.
-fn push_search_conditions<'args>(
-    builder: &mut QueryBuilder<'args, Postgres>,
-    filter: &'args SearchFilter<'_>,
-) {
+fn push_search_conditions(builder: &mut QueryBuilder<Postgres>, filter: &SearchFilter<'_>) {
     builder.push(" WHERE term_code = ");
     builder.push_bind(filter.term_code);
 

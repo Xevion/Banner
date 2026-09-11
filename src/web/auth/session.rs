@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use rand::Rng;
+use rand::RngExt;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
