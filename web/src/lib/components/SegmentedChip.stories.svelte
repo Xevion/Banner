@@ -1,6 +1,6 @@
 <script module>
 import { defineMeta } from "@storybook/addon-svelte-csf";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, mocked, userEvent, within } from "storybook/test";
 import SegmentedChip from "./SegmentedChip.svelte";
 
 const { Story } = defineMeta({
@@ -40,7 +40,6 @@ const { Story } = defineMeta({
 
     await expect(segment).toBeVisible();
     await userEvent.click(segment);
-    // @ts-expect-error - args type not fully inferred
-    await expect(args.onRemoveSegment).toHaveBeenCalledWith("Wed");
+    await expect(mocked(args.onRemoveSegment)).toHaveBeenCalledWith("Wed");
   }}
 />

@@ -86,8 +86,26 @@ function json(res: ServerResponse, body: unknown, status = 200): void {
   res.end(payload);
 }
 
+/**
+ * Names for the slugs asked about, drawn from the same instructors the
+ * autocomplete offers.
+ *
+ * Answering `{}` would make every chip fall back to its slug, which is what a
+ * page looks like when name resolution is broken.
+ */
+function resolveInstructors(url: URL): Record<string, string> {
+  const known = new Map(suggestions.instructors.map((i) => [i.slug, i.displayName]));
+  const resolved: Record<string, string> = {};
+  for (const slug of url.searchParams.getAll("slug")) {
+    const name = known.get(slug);
+    if (name) resolved[slug] = name;
+  }
+  return resolved;
+}
+
 const server = createServer((req, res) => {
-  const path = new URL(req.url ?? "/", `http://localhost:${port}`).pathname;
+  const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+  const path = url.pathname;
 
   switch (path) {
     case "/api/health":
@@ -103,7 +121,9 @@ const server = createServer((req, res) => {
     case "/api/instructors/suggest":
       return json(res, suggestions.instructors);
     case "/api/instructors/resolve":
-      return json(res, {});
+      return json(res, resolveInstructors(url));
+    case "/api/timeline":
+      return json(res, { slots: [], subjects: [] });
     case "/api/csp-report":
       res.writeHead(204);
       return res.end();

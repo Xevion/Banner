@@ -22,8 +22,17 @@ let {
   children?: Snippet;
 } = $props();
 
-let hasRmp = $derived(rmp?.avgRating != null && rmp?.numRatings != null);
-let hasBb = $derived(bluebook != null);
+/**
+ * The RMP row's numbers, or null when it has none to show.
+ *
+ * A boolean flag would leave the markup asserting the fields are there on
+ * every read; carrying the values instead lets the `{#if}` prove it once.
+ */
+let rmpRow = $derived(
+  rmp?.avgRating != null && rmp.numRatings != null
+    ? { avgRating: rmp.avgRating, numRatings: rmp.numRatings }
+    : null
+);
 
 let ciHalf = $derived(((rating.ciUpper - rating.ciLower) / 2).toFixed(1));
 let ciBarLeft = $derived(((rating.ciLower - 1) / 4) * 100);
@@ -78,37 +87,37 @@ let confidencePct = $derived((rating.confidence * 100).toFixed(0));
       </div>
 
       <!-- Stacked source rows -->
-      {#if hasBb || hasRmp}
+      {#if bluebook ?? rmpRow}
         <hr class="border-dashed border-border" />
-        {#if hasBb}
+        {#if bluebook}
           <!-- BlueBook row -->
           <div class="flex items-center gap-1.5">
             <BookOpen class="size-3 text-muted-foreground shrink-0" />
             <span class="flex-1 text-[10px]">BlueBook</span>
             <span
               class="text-[10px] tabular-nums font-medium"
-              style="color: {ratingColor(bluebook!.avgInstructorRating, themeStore.isDark)}"
+              style="color: {ratingColor(bluebook.avgInstructorRating, themeStore.isDark)}"
             >
-              {bluebook!.avgInstructorRating.toFixed(1)}
+              {bluebook.avgInstructorRating.toFixed(1)}
             </span>
             <span class="text-[10px] text-muted-foreground">
-              {formatNumber(bluebook!.totalResponses)}
+              {formatNumber(bluebook.totalResponses)}
             </span>
           </div>
         {/if}
-        {#if hasRmp}
+        {#if rmpRow}
           <!-- RMP row -->
           <div class="flex items-center gap-1.5">
             <Star class="size-3 text-muted-foreground shrink-0" />
             <span class="flex-1 text-[10px]">RateMyProfessors</span>
             <span
               class="text-[10px] tabular-nums font-medium"
-              style="color: {ratingColor(rmp!.avgRating!, themeStore.isDark)}"
+              style="color: {ratingColor(rmpRow.avgRating, themeStore.isDark)}"
             >
-              {rmp!.avgRating!.toFixed(1)}
+              {rmpRow.avgRating.toFixed(1)}
             </span>
             <span class="text-[10px] text-muted-foreground">
-              {formatNumber(rmp!.numRatings!)}
+              {formatNumber(rmpRow.numRatings)}
             </span>
           </div>
         {/if}

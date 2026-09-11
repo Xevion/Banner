@@ -4,11 +4,9 @@ import {
   defaultFilters,
   expandCampusFromParams,
   formatCompactTime,
-  instructorDisplayName,
   isFiltersEmpty,
   parseFilters,
   parseTimeInput,
-  populateInstructorCache,
   searchKey,
   serializeFilters,
   toAPIParams,
@@ -321,8 +319,6 @@ describe("serializeFilters", () => {
 
 describe("parseFilters / serializeFilters roundtrip", () => {
   it("roundtrips all filter types", () => {
-    populateInstructorCache({ "smith-abc": "Smith, John" });
-
     const original = defaultFilters();
     original.subject = ["MATH", "CS"];
     original.query = "calculus";
@@ -345,9 +341,6 @@ describe("parseFilters / serializeFilters roundtrip", () => {
     const restored = parseFilters(params);
 
     expect(restored).toEqual(original);
-
-    // Display name resolves from cache
-    expect(instructorDisplayName("smith-abc")).toBe("Smith, John");
   });
 
   it("roundtrips defaults (empty params)", () => {

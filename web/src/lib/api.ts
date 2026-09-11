@@ -1,10 +1,10 @@
+import { browser } from "$app/environment";
 import { authStore } from "$lib/auth.svelte";
 import type {
   AdminStatusResponse,
   ApiError,
   ApiErrorCode,
   AssignBody,
-  AuditLogResponse,
   BluebookLinkDetail,
   BluebookMatchResponse,
   BluebookOkResponse,
@@ -162,9 +162,22 @@ function describeNetworkError(e: unknown): string {
   return e.cause instanceof Error ? `${e.message}: ${e.cause.message}` : e.message;
 }
 
-/** Module-level cache shared by all BannerApiClient instances. */
+/**
+ * Search options already fetched in this tab, shared by every client instance.
+ *
+ * The browser keeps them so a client navigation does not refetch a list that
+ * changes a few times a semester. The server keeps none: one module instance
+ * serves every request there, and a hit would also skip the fetch SvelteKit
+ * inlines into the HTML, costing the browser a round trip to fetch it again.
+ */
 const _searchOptionsCache = new Map<string, { data: SearchOptionsResponse; fetchedAt: number }>();
 const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
+
+/** What a caller may vary about a request; everything else is fixed. */
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+}
 
 export class BannerApiClient {
   private baseUrl: string;
@@ -175,7 +188,7 @@ export class BannerApiClient {
     this.fetchFn = fetchFn;
   }
 
-  private buildInit(options?: { method?: string; body?: unknown }): RequestInit | undefined {
+  private buildInit(options?: RequestOptions): RequestInit | undefined {
     if (!options) return undefined;
     const init: RequestInit = {};
     if (options.method) {
@@ -191,7 +204,9 @@ export class BannerApiClient {
   }
 
   private responseToErr(response: Response, apiError?: ApiError): Result<never, ApiErrorClass> {
-    if (response.status === 401) {
+    // The store belongs to the tab. On the server it is one object shared by
+    // every request, and the session there is the layout load's to report.
+    if (response.status === 401 && browser) {
       authStore.handleUnauthorized();
     }
     const error =
@@ -257,36 +272,42 @@ export class BannerApiClient {
     return doFetch();
   }
 
-  private async request<T>(
+  /** Sends the request, reporting only transport failures. */
+  private send(
     endpoint: string,
-    options?: { method?: string; body?: unknown }
-  ): Promise<Result<T, ApiErrorClass>> {
-    const init = this.buildInit(options);
-    const result = await this.fetchWithRetry(`${this.baseUrl}${endpoint}`, init);
-    if (result.isErr) return err(result.error);
-
-    const response = result.value;
-    if (!response.ok) {
-      return this.responseToErr(response, await parseApiError(response));
-    }
-
-    return ok((await response.json()) as T);
+    options?: RequestOptions
+  ): Promise<Result<Response, ApiErrorClass>> {
+    return this.fetchWithRetry(`${this.baseUrl}${endpoint}`, this.buildInit(options));
   }
 
-  private async requestVoid(
-    endpoint: string,
-    options?: { method?: string; body?: unknown }
-  ): Promise<Result<void, ApiErrorClass>> {
-    const init = this.buildInit(options);
-    const result = await this.fetchWithRetry(`${this.baseUrl}${endpoint}`, init);
-    if (result.isErr) return err(result.error);
-
-    const response = result.value;
+  /** Narrows a sent request to a successful response, or the error it carries. */
+  private async checked(
+    sent: Result<Response, ApiErrorClass>
+  ): Promise<Result<Response, ApiErrorClass>> {
+    if (sent.isErr) return sent;
+    const response = sent.value;
     if (!response.ok) {
       return this.responseToErr(response, await parseApiError(response));
     }
+    return ok(response);
+  }
 
-    return ok(undefined as unknown as void);
+  private async request<T>(
+    endpoint: string,
+    options?: RequestOptions
+  ): Promise<Result<T, ApiErrorClass>> {
+    const result = await this.checked(await this.send(endpoint, options));
+    if (result.isErr) return err(result.error);
+    return ok((await result.value.json()) as T);
+  }
+
+  /** For endpoints whose success carries no body worth reading. */
+  private async requestVoid(
+    endpoint: string,
+    options?: RequestOptions
+  ): Promise<Result<void, ApiErrorClass>> {
+    const result = await this.checked(await this.send(endpoint, options));
+    return result.isErr ? err(result.error) : ok(undefined);
   }
 
   async getStatus(): Promise<Result<StatusResponse, ApiErrorClass>> {
@@ -330,13 +351,13 @@ export class BannerApiClient {
 
   async getSearchOptions(term?: string): Promise<Result<SearchOptionsResponse, ApiErrorClass>> {
     const cacheKey = term ?? "__default__";
-    const cached = _searchOptionsCache.get(cacheKey);
+    const cached = browser ? _searchOptionsCache.get(cacheKey) : undefined;
     if (cached && Date.now() - cached.fetchedAt < SEARCH_OPTIONS_TTL) {
       return ok(cached.data);
     }
     const url = term ? `/search-options?term=${encodeURIComponent(term)}` : "/search-options";
     const result = await this.request<SearchOptionsResponse>(url);
-    if (result.isOk) {
+    if (browser && result.isOk) {
       _searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
     }
     return result;
@@ -395,50 +416,6 @@ export class BannerApiClient {
   async getAdminScrapeJobs(): Promise<Result<ScrapeJobsResponse, ApiErrorClass>> {
     return this.request<ScrapeJobsResponse>("/admin/scrape-jobs");
   }
-
-  /**
-   * Fetch the audit log with conditional request support.
-   *
-   * Returns `ok(null)` when the server responds 304 (data unchanged).
-   * Stores and sends `Last-Modified` / `If-Modified-Since` automatically.
-   */
-  async getAdminAuditLog(): Promise<Result<AuditLogResponse | null, ApiErrorClass>> {
-    const headers: Record<string, string> = {};
-    if (this._auditLastModified) {
-      headers["If-Modified-Since"] = this._auditLastModified;
-    }
-
-    let response: Response;
-    try {
-      response = await this.fetchFn(`${this.baseUrl}/admin/audit-log`, { headers });
-    } catch (e) {
-      return err(
-        new ApiErrorClass({
-          code: "INTERNAL_ERROR",
-          message: describeNetworkError(e),
-          details: { url: `${this.baseUrl}/admin/audit-log` },
-        })
-      );
-    }
-
-    if (response.status === 304) {
-      return ok(null);
-    }
-
-    if (!response.ok) {
-      return this.responseToErr(response, await parseApiError(response));
-    }
-
-    const lastMod = response.headers.get("Last-Modified");
-    if (lastMod) {
-      this._auditLastModified = lastMod;
-    }
-
-    return ok((await response.json()) as AuditLogResponse);
-  }
-
-  /** Stored `Last-Modified` value for audit log conditional requests. */
-  private _auditLastModified: string | null = null;
 
   async getTimeline(ranges: TimeRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {
     return this.request<TimelineResponse>("/timeline", {

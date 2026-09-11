@@ -3,7 +3,7 @@ import { client } from "$lib/api";
 import type { InstructorSuggestion } from "$lib/bindings";
 import FilterChip from "$lib/components/FilterChip.svelte";
 import { useSuggestions } from "$lib/composables/useSuggestions.svelte";
-import { instructorDisplayName, populateInstructorCache } from "$lib/filters";
+import { getInstructorNames } from "$lib/stores/instructor-names";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import { Loader2, Search, TriangleAlert } from "@lucide/svelte";
 import { Command } from "bits-ui";
@@ -11,6 +11,7 @@ import { Command } from "bits-ui";
 let { selectedTerm }: { selectedTerm: string } = $props();
 
 const filters = getFiltersContext();
+const instructorNames = getInstructorNames();
 
 const query = useSuggestions<InstructorSuggestion[]>({
   fetcher: (q) => client.suggestInstructors(q, selectedTerm),
@@ -22,7 +23,7 @@ const selectedSlugs = $derived(new Set(filters.instructor));
 const results = $derived(query.data.filter((i) => !selectedSlugs.has(i.slug)));
 
 function select(instructor: InstructorSuggestion) {
-  populateInstructorCache({ [instructor.slug]: instructor.displayName });
+  instructorNames.seed({ [instructor.slug]: instructor.displayName });
   if (!filters.instructor.includes(instructor.slug)) {
     filters.instructor = [...filters.instructor, instructor.slug];
   }
@@ -42,7 +43,7 @@ const listId = "instructor-autocomplete-list";
   {#if filters.instructor.length > 0}
     <div class="flex flex-wrap gap-1 mb-0.5">
       {#each filters.instructor as slug (slug)}
-        <FilterChip label={instructorDisplayName(slug)} onRemove={() => remove(slug)} />
+        <FilterChip label={instructorNames.get(slug)} onRemove={() => remove(slug)} />
       {/each}
     </div>
   {/if}

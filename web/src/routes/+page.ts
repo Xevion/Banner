@@ -1,7 +1,46 @@
+import type { SearchResponse } from "$lib/api";
 import { BannerApiClient } from "$lib/api";
-import { parseFilters, toAPIParams, uncachedInstructorSlugs } from "$lib/filters";
+import type { SearchOptionsResponse } from "$lib/bindings";
+import { parseFilters, toAPIParams } from "$lib/filters";
 import { parseSort } from "$lib/sort";
+import { unresolvedSlugs } from "$lib/stores/instructor-names";
 import type { PageLoad } from "./$types";
+
+/** Rows per request. Returned below so the pager counts against what was asked. */
+const PAGE_SIZE = 25;
+
+interface SearchMeta {
+  totalCount: number;
+  durationMs: number;
+  timestamp: Date;
+}
+
+/**
+ * The page's data, with every field stated once.
+ *
+ * Each failure returns the same shape as success so the page reads one set of
+ * fields, and an omitted field is the empty case rather than a missing key.
+ */
+function pageData(
+  url: URL,
+  parts: {
+    searchOptions?: SearchOptionsResponse | null;
+    resolvedInstructors?: Record<string, string>;
+    searchResult?: SearchResponse | null;
+    searchError?: string | null;
+    searchMeta?: SearchMeta | null;
+  }
+) {
+  return {
+    searchOptions: parts.searchOptions ?? null,
+    resolvedInstructors: parts.resolvedInstructors ?? {},
+    searchResult: parts.searchResult ?? null,
+    searchError: parts.searchError ?? null,
+    searchMeta: parts.searchMeta ?? null,
+    urlSearch: url.search,
+    pageSize: PAGE_SIZE,
+  };
+}
 
 export const load: PageLoad = async ({ url, fetch }) => {
   const client = new BannerApiClient(undefined, fetch);
@@ -11,43 +50,33 @@ export const load: PageLoad = async ({ url, fetch }) => {
   if (optionsResult.isErr) {
     const { code, message } = optionsResult.error;
     console.error(`Failed to load search options [${code}]: ${message}`);
-    return {
-      searchOptions: null,
-      resolvedInstructors: {},
-      searchResult: null,
-      searchError: `Failed to load search options: ${message}`,
-      searchMeta: null,
-      urlSearch: url.search,
-    };
+    return pageData(url, { searchError: `Failed to load search options: ${message}` });
   }
 
   const searchOptions = optionsResult.value;
   const defaultTerm = searchOptions.terms[0]?.slug ?? "";
-
   const validSubjects = new Set(searchOptions.subjects.map((s) => s.code));
 
-  // Resolve instructor slugs not already in the client-side cache.
-  // On SSR the cache is empty so all slugs are resolved; on client navigations
-  // after autocomplete selection the cache is warm and no request is made.
-  const unresolvedSlugs = uncachedInstructorSlugs(url.searchParams.getAll("instructor"));
+  // A server render knows no names and resolves every slug; a client navigation
+  // after an autocomplete pick already holds them and asks for nothing.
+  const pending = unresolvedSlugs(url.searchParams.getAll("instructor"));
   let resolvedInstructors: Record<string, string> = {};
-  if (unresolvedSlugs.length > 0) {
-    const resolveResult = await client.resolveInstructors(unresolvedSlugs);
+  if (pending.length > 0) {
+    const resolveResult = await client.resolveInstructors(pending);
+    // A failure here costs the chips their names, not the results: the slug
+    // reads poorly but still says which instructor is being filtered on.
     if (resolveResult.isOk) {
       resolvedInstructors = resolveResult.value;
     }
   }
 
-  const filters = parseFilters(url.searchParams, validSubjects, resolvedInstructors);
-
-  const offset = Number(url.searchParams.get("offset")) || 0;
-  const sorting = parseSort(url.searchParams.get("sort"));
+  const filters = parseFilters(url.searchParams, validSubjects);
 
   const apiParams = toAPIParams(filters, {
-    term: url.searchParams.get("term") ?? defaultTerm,
-    limit: 25,
-    offset,
-    sorting,
+    term: urlTerm ?? defaultTerm,
+    limit: PAGE_SIZE,
+    offset: Number(url.searchParams.get("offset")) || 0,
+    sorting: parseSort(url.searchParams.get("sort")),
   });
 
   const t0 = performance.now();
@@ -55,26 +84,21 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const durationMs = performance.now() - t0;
 
   if (searchResult.isErr) {
-    return {
+    return pageData(url, {
       searchOptions,
       resolvedInstructors,
-      searchResult: null,
       searchError: searchResult.error.message,
-      searchMeta: null,
-      urlSearch: url.search,
-    };
+    });
   }
 
-  return {
+  return pageData(url, {
     searchOptions,
     resolvedInstructors,
     searchResult: searchResult.value,
-    searchError: null,
     searchMeta: {
       totalCount: searchResult.value.totalCount,
       durationMs,
       timestamp: new Date(),
     },
-    urlSearch: url.search,
-  };
+  });
 };

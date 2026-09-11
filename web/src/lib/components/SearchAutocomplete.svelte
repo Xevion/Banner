@@ -3,7 +3,7 @@ import type { Subject } from "$lib/api";
 import { client } from "$lib/api";
 import type { SuggestResponse } from "$lib/bindings";
 import { useSuggestions } from "$lib/composables/useSuggestions.svelte";
-import { populateInstructorCache } from "$lib/filters";
+import { getInstructorNames } from "$lib/stores/instructor-names";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { Suggestion } from "$lib/suggestions";
 import { createSubjectSearch, mergeSuggestions, suggestionId } from "$lib/suggestions";
@@ -20,6 +20,7 @@ let {
 } = $props();
 
 const filters = getFiltersContext();
+const instructorNames = getInstructorNames();
 
 let anchorEl = $state<HTMLDivElement>(null!);
 
@@ -57,7 +58,7 @@ function apply(suggestion: Suggestion) {
       break;
     case "instructor": {
       const { slug, displayName } = suggestion.instructor;
-      populateInstructorCache({ [slug]: displayName });
+      instructorNames.seed({ [slug]: displayName });
       if (!filters.instructor.includes(slug)) {
         filters.instructor = [...filters.instructor, slug];
       }

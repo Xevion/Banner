@@ -4,7 +4,8 @@ import FilterChip from "$lib/components/FilterChip.svelte";
 import SegmentedChip from "$lib/components/SegmentedChip.svelte";
 import { dayCode } from "$lib/days";
 import type { FilterState } from "$lib/filters";
-import { clearFilters, countActive, formatCompactTime, instructorDisplayName } from "$lib/filters";
+import { clearFilters, countActive, formatCompactTime } from "$lib/filters";
+import { getInstructorNames } from "$lib/stores/instructor-names";
 import {
   getAttributeFilterLabel,
   getCampusFilterLabel,
@@ -13,6 +14,8 @@ import {
 import { type ScrollMetrics, maskGradient as computeMaskGradient } from "$lib/scroll-fade";
 
 let { filters }: { filters: FilterState } = $props();
+
+const instructorNames = getInstructorNames();
 
 function formatDaysChip(d: string[]): string {
   return d.map((day) => dayCode(day as DayOfWeek)).join("");
@@ -190,7 +193,7 @@ $effect(() => {
   {/if}
   {#each filters.instructor as slug (slug)}
     <FilterChip
-      label={instructorDisplayName(slug)}
+      label={instructorNames.get(slug)}
       onRemove={() => (filters.instructor = filters.instructor.filter((i) => i !== slug))}
     />
   {/each}

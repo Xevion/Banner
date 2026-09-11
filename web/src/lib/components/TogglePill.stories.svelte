@@ -1,6 +1,6 @@
 <script module>
 import { defineMeta } from "@storybook/addon-svelte-csf";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, mocked, userEvent, within } from "storybook/test";
 import TogglePill from "./TogglePill.svelte";
 
 const { Story } = defineMeta({
@@ -35,7 +35,6 @@ const { Story } = defineMeta({
 
     await expect(button).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(button);
-    // @ts-expect-error - args type not fully inferred
-    await expect(args.onclick).toHaveBeenCalled();
+    await expect(mocked(args.onclick)).toHaveBeenCalled();
   }}
 />

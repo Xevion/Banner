@@ -8,7 +8,9 @@ describe("BannerApiClient", () => {
 
   beforeEach(() => {
     apiClient = new BannerApiClient();
-    vi.clearAllMocks();
+    // Resets rather than clears: a queued mockResolvedValueOnce a test did not
+    // consume would otherwise answer the next test's first request.
+    vi.resetAllMocks();
   });
 
   it("should fetch status data", async () => {

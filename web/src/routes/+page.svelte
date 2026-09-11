@@ -21,6 +21,7 @@ import { SortController } from "$lib/composables/useSort.svelte";
 import { type URLSyncHandle, useURLSync } from "$lib/composables/useURLSync.svelte";
 import { parseFilters, searchKey } from "$lib/filters";
 import { parseSort } from "$lib/sort";
+import { InstructorNames, setInstructorNames } from "$lib/stores/instructor-names";
 import { createFilterState, setFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { PageProps } from "./$types";
 
@@ -54,12 +55,11 @@ const initial = resolveState(
   untrack(() => data.searchOptions)
 );
 const validSubjects = new Set(untrack(() => data.searchOptions?.subjects.map((s) => s.code) ?? []));
-const filters = createFilterState(
-  initial.params,
-  validSubjects,
-  untrack(() => data.resolvedInstructors)
-);
+const filters = createFilterState(initial.params, validSubjects);
 setFiltersContext(filters);
+
+const instructorNames = new InstructorNames(untrack(() => data.resolvedInstructors));
+setInstructorNames(instructorNames);
 
 let selectedTerm = $state(initial.selectedTerm);
 let offset = $state(initial.offset);
@@ -80,7 +80,8 @@ $effect(() => {
     untrack(() => searchOptions)
   );
   const subjects = new Set(untrack(() => searchOptions?.subjects.map((s) => s.code) ?? []));
-  const parsed = parseFilters(resolved.params, subjects, data.resolvedInstructors);
+  const parsed = parseFilters(resolved.params, subjects);
+  instructorNames.seed(data.resolvedInstructors);
 
   selectedTerm = resolved.selectedTerm;
   // Apply parsed filter state to the reactive object
@@ -160,7 +161,9 @@ const urlSync: URLSyncHandle = useURLSync({
   sorting: () => sort.terms,
 });
 
-const limit = 25;
+// The size the load actually asked for, so the pager cannot count against a
+// different one.
+const limit = $derived(data.pageSize);
 
 function handlePageChange(newOffset: number) {
   offset = newOffset;
