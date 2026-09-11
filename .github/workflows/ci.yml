@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Overrides .cargo/config.toml's target-cpu=native: the build cache is shared across runners
+  # with different CPUs, so native-built artifacts restored onto another one would fault.
+  RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
 
 jobs:
   rust-quality:

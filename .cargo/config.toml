@@ -1,6 +1,10 @@
 [env]
 TS_RS_EXPORT_DIR = { value = "web/src/lib/bindings/", relative = true }
 
+# Per-target, not [build]: Cargo picks the first matching rustflags source instead of merging.
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+rustflags = ["-C", "link-arg=-fuse-ld=mold", "-C", "target-cpu=native"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=native"]
