@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1](https://github.com/Xevion/Banner/compare/v0.8.0...v0.8.1) (2026-09-11)
+
+
+### Features
+
+* **deploy:** Fail the build on an unstartable binary, roll back when one ships ([566a0e6](https://github.com/Xevion/Banner/commit/566a0e646833ba1afc031202eea2d7b7e06137a2))
+
+
+### Bug Fixes
+
+* **deps:** Update backend dependencies ([8b81e65](https://github.com/Xevion/Banner/commit/8b81e65081506fc4c1f7a524b224d1476b44923f))
+* **docker:** Pin the builder and runtime to the same Debian codename ([f814e7d](https://github.com/Xevion/Banner/commit/f814e7d351495b597b5df8e149e451abb92e7494))
+
+
+### Miscellaneous
+
+* **deps:** Move actions onto the Node 24 runtime and pin them by digest ([bd2530e](https://github.com/Xevion/Banner/commit/bd2530e999222533386e56784d73e138882429b0))
+* **deps:** Update frontend dependencies ([2c489d1](https://github.com/Xevion/Banner/commit/2c489d13b0e962f76903565f0b607a7a26026c0c))
+
 ## [0.8.0](https://github.com/Xevion/Banner/compare/v0.7.1...v0.8.0) (2026-09-11)
 
 
