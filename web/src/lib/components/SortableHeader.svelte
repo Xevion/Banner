@@ -11,6 +11,8 @@ import type { HeaderGroup } from "@tanstack/table-core";
 export interface HeaderOverride {
   /** Replaces the column's own label, with the active sort key or a shared heading. */
   label?: string;
+  /** Keeps the label for screen readers only, for a column its neighbour heads. */
+  labelHidden?: boolean;
   indicator?: "asc" | "desc" | "none";
   /** Native tooltip, describing what the next click does. */
   title?: string;
@@ -77,7 +79,9 @@ let {
               >
                 <!-- Only the text may shrink, so a label wider than its track
                      ellipsizes rather than running into the next column. -->
-                <span class="min-w-0 truncate">{@render label()}</span>
+                <span class="min-w-0 truncate {override?.labelHidden ? 'sr-only' : ''}"
+                  >{@render label()}</span
+                >
                 {#if sorted === "asc"}
                   <ArrowUp class="size-3.5 shrink-0" />
                 {:else if sorted === "desc"}

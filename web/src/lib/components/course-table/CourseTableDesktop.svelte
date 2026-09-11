@@ -6,7 +6,7 @@ import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import type { CourseResponse } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
-import SortableHeader, { type HeaderOverride } from "$lib/components/SortableHeader.svelte";
+import SortableHeader from "$lib/components/SortableHeader.svelte";
 import SortMenuSection from "$lib/components/SortMenuSection.svelte";
 import { APP_TABLE_FEATURES, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
@@ -14,9 +14,9 @@ import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svel
 import type { SortController } from "$lib/composables/useSort.svelte";
 import { useTooltipDelegation } from "$lib/composables/useTooltipDelegation";
 import { timeSpansPair } from "$lib/scheduleState";
-import { headerSortStep } from "$lib/sort";
 import { COLUMN_DEFS, COLUMNS, FLEX_COLUMN, tableMinWidth } from "./columns";
 import { setTableContext } from "./context";
+import { courseHeaderOverride } from "./header-override";
 import EmptyState from "./EmptyState.svelte";
 import { buildSkeletonHtml } from "./skeletons";
 
@@ -119,31 +119,15 @@ function handleVisibilityChange(updater: Updater<ColumnVisibilityState>) {
   columnVisibility = newVisibility;
 }
 
-/**
- * Every sortable header runs the same cycle: each key the column offers, both
- * ways round, then off. The instructor header's five states are that rule on a
- * two-key column rather than a mechanism of its own.
- */
 const sortLabels = $derived(new Map((sort?.catalog ?? []).map((option) => [option.key, option])));
 
-function courseHeaderOverride(headerId: string): HeaderOverride | null {
-  const step = headerSortStep(headerId, sort?.terms ?? [], sortLabels);
-  if (!step) return null;
-
-  // Shown together the columns are one range under one label, so the titles are
-  // left to say which half each sort control orders.
-  const paired = columnVisibility.time !== false && columnVisibility.time_end !== false;
-  let label = step.label ?? undefined;
-  if (paired && headerId === "time") label = "Time";
-  if (paired && headerId === "time_end") label = "";
-
-  return {
-    label,
-    indicator: step.indicator,
-    title: step.title,
-    onclick: () => sort?.applyHeaderClick(step.next),
-  };
-}
+const headerOverride = (headerId: string) =>
+  courseHeaderOverride(headerId, {
+    terms: sort?.terms ?? [],
+    labels: sortLabels,
+    isColumnVisible: (id) => columnVisibility[id] !== false,
+    onSort: (next) => sort?.applyHeaderClick(next),
+  });
 
 const table = createSvelteTable({
   features: APP_TABLE_FEATURES,
@@ -194,7 +178,7 @@ const table = createSvelteTable({
           checkVisibility={true}
           headerClass={(id) =>
             id === "time" || id === "duration" || id === "time_end" ? "text-right" : ""}
-          headerOverride={courseHeaderOverride}
+          {headerOverride}
         />
         {#if loading && courses.length === 0}
           <tbody>
