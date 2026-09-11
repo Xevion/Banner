@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { AppTableFeatures } from "$lib/components/ui/data-table/index.js";
 import type { ColumnDef } from "@tanstack/table-core";
 
 let {
@@ -10,7 +11,7 @@ let {
   defaultWidth = "w-20",
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic component accepts any column type
-  columns: ColumnDef<any, any>[];
+  columns: ColumnDef<AppTableFeatures, any, any>[];
   rowCount?: number;
   skeletonWidths?: Record<string, string>;
   cellClass?: string;

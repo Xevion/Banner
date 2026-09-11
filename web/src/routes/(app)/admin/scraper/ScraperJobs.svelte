@@ -3,19 +3,18 @@ import { client } from "$lib/api";
 import type { ScrapeJobDto } from "$lib/bindings";
 import SortableHeader from "$lib/components/SortableHeader.svelte";
 import TableSkeleton from "$lib/components/TableSkeleton.svelte";
-import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import {
+  APP_TABLE_FEATURES,
+  type AppTableFeatures,
+  createSvelteTable,
+} from "$lib/components/ui/data-table/index.js";
 import { createSortingHandler } from "$lib/composables/sorting";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration } from "$lib/time";
 import { TOOLTIP_SURFACE } from "$lib/tooltipClass";
 import { TriangleAlert } from "@lucide/svelte";
-import {
-  type ColumnDef,
-  type SortingState,
-  getCoreRowModel,
-  getSortedRowModel,
-} from "@tanstack/table-core";
+import { type ColumnDef, type SortingState } from "@tanstack/table-core";
 import { onMount } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
@@ -223,7 +222,7 @@ function overdueDurationColor(ms: number): string {
   return "text-amber-500";
 }
 
-const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, ScrapeJobDto, unknown>[] = [
   {
     id: "id",
     accessorKey: "id",
@@ -235,7 +234,7 @@ const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
     accessorKey: "status",
     header: "Status",
     enableSorting: true,
-    sortingFn: (rowA, rowB) => {
+    sortFn: (rowA, rowB) => {
       const order: Record<string, number> = {
         processing: 0,
         staleLock: 1,
@@ -271,7 +270,7 @@ const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
     accessorKey: "priority",
     header: "Priority",
     enableSorting: true,
-    sortingFn: (rowA, rowB) => {
+    sortFn: (rowA, rowB) => {
       const order: Record<string, number> = {
         critical: 0,
         urgent: 0,
@@ -297,6 +296,7 @@ const columns: ColumnDef<ScrapeJobDto, unknown>[] = [
 ];
 
 const table = createSvelteTable({
+  features: APP_TABLE_FEATURES,
   get data() {
     return jobs;
   },
@@ -308,8 +308,6 @@ const table = createSvelteTable({
     },
   },
   onSortingChange: handleSortingChange,
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel(),
   enableSortingRemoval: true,
 });
 

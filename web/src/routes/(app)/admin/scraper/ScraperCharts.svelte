@@ -99,7 +99,7 @@ function xAxisFormat(p: ScraperPeriod) {
         yDomain={[0, scrapeYMax]}
         yNice
         padding={{ top: 10, bottom: 30, left: 45, right: 10 }}
-        tooltip={{ mode: "bisect-x" }}
+        tooltipContext={{ mode: "bisect-x" }}
       >
         <Svg>
           <Axis
@@ -131,22 +131,23 @@ function xAxisFormat(p: ScraperPeriod) {
           <Highlight lines />
         </Svg>
         <Tooltip.Root
-          let:data
           classes={{ root: "text-xs" }}
           variant="none"
         >
-          {@const d = data as ChartPoint}
-          <div class="bg-card text-card-foreground shadow-md rounded-md px-2.5 py-1.5 flex flex-col gap-y-1">
-            <p class="text-muted-foreground font-medium">{d.date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
-            <div class="flex items-center justify-between gap-4">
-              <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-green"></span>Successful</span>
-              <span class="tabular-nums font-medium">{d.success}</span>
+          {#snippet children({ data })}
+            {@const d = data as ChartPoint}
+            <div class="bg-card text-card-foreground shadow-md rounded-md px-2.5 py-1.5 flex flex-col gap-y-1">
+              <p class="text-muted-foreground font-medium">{d.date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+              <div class="flex items-center justify-between gap-4">
+                <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-green"></span>Successful</span>
+                <span class="tabular-nums font-medium">{d.success}</span>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-red"></span>Errors</span>
+                <span class="tabular-nums font-medium">{d.errors}</span>
+              </div>
             </div>
-            <div class="flex items-center justify-between gap-4">
-              <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-red"></span>Errors</span>
-              <span class="tabular-nums font-medium">{d.errors}</span>
-            </div>
-          </div>
+          {/snippet}
         </Tooltip.Root>
       </Chart>
     </div>
@@ -162,7 +163,7 @@ function xAxisFormat(p: ScraperPeriod) {
         yDomain={[0, changesYMax]}
         yNice
         padding={{ top: 10, bottom: 30, left: 45, right: 10 }}
-        tooltip={{ mode: "bisect-x" }}
+        tooltipContext={{ mode: "bisect-x" }}
       >
         <Svg>
           <Axis
@@ -186,18 +187,19 @@ function xAxisFormat(p: ScraperPeriod) {
           <Highlight lines />
         </Svg>
         <Tooltip.Root
-          let:data
           classes={{ root: "text-xs" }}
           variant="none"
         >
-          {@const d = data as ChartPoint}
-          <div class="bg-card text-card-foreground shadow-md rounded-md px-2.5 py-1.5 flex flex-col gap-y-1">
-            <p class="text-muted-foreground font-medium">{d.date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
-            <div class="flex items-center justify-between gap-4">
-              <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-blue"></span>Changed</span>
-              <span class="tabular-nums font-medium">{d.coursesChanged}</span>
+          {#snippet children({ data })}
+            {@const d = data as ChartPoint}
+            <div class="bg-card text-card-foreground shadow-md rounded-md px-2.5 py-1.5 flex flex-col gap-y-1">
+              <p class="text-muted-foreground font-medium">{d.date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+              <div class="flex items-center justify-between gap-4">
+                <span class="flex items-center gap-1.5"><span class="inline-block size-2 rounded-full bg-status-blue"></span>Changed</span>
+                <span class="tabular-nums font-medium">{d.coursesChanged}</span>
+              </div>
             </div>
-          </div>
+          {/snippet}
         </Tooltip.Root>
       </Chart>
     </div>

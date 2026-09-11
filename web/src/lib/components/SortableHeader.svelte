@@ -1,6 +1,7 @@
 <script lang="ts">
 import { FlexRender } from "$lib/components/ui/data-table/index.js";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "@lucide/svelte";
+import type { AppTableFeatures } from "$lib/components/ui/data-table/index.js";
 import type { HeaderGroup } from "@tanstack/table-core";
 
 /**
@@ -28,7 +29,7 @@ let {
   headerOverride,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic component accepts any row type
-  headerGroups: HeaderGroup<any>[];
+  headerGroups: HeaderGroup<AppTableFeatures, any>[];
   thClass?: string;
   sortSpanClass?: string;
   checkVisibility?: boolean;

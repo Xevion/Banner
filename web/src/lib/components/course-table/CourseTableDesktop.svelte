@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Check, RotateCcw } from "@lucide/svelte";
-import { getCoreRowModel, type Updater, type VisibilityState } from "@tanstack/table-core";
+import type { ColumnVisibilityState, Updater } from "@tanstack/table-core";
 import { ContextMenu } from "bits-ui";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
@@ -8,7 +8,7 @@ import type { CourseResponse } from "$lib/bindings";
 import CourseDetail from "$lib/components/CourseDetail.svelte";
 import SortableHeader, { type HeaderOverride } from "$lib/components/SortableHeader.svelte";
 import SortMenuSection from "$lib/components/SortMenuSection.svelte";
-import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import { APP_TABLE_FEATURES, createSvelteTable } from "$lib/components/ui/data-table/index.js";
 import { useClipboard } from "$lib/composables/useClipboard.svelte";
 import { useOverlayScrollbars } from "$lib/composables/useOverlayScrollbars.svelte";
 import type { SortController } from "$lib/composables/useSort.svelte";
@@ -41,8 +41,8 @@ let {
   /** Omitted where the table is a plain listing, leaving header clicks inert. */
   sort?: SortController;
   subjectMap?: Record<string, string>;
-  columnVisibility?: VisibilityState;
-  defaultVisibility?: VisibilityState;
+  columnVisibility?: ColumnVisibilityState;
+  defaultVisibility?: ColumnVisibilityState;
   expandedCrn: string | null;
   onToggle: (crn: string) => void;
   skeletonRowCount: number;
@@ -114,7 +114,7 @@ function resetColumnVisibility() {
   columnVisibility = { ...defaultVisibility };
 }
 
-function handleVisibilityChange(updater: Updater<VisibilityState>) {
+function handleVisibilityChange(updater: Updater<ColumnVisibilityState>) {
   const newVisibility = typeof updater === "function" ? updater(columnVisibility) : updater;
   columnVisibility = newVisibility;
 }
@@ -147,6 +147,7 @@ function courseHeaderOverride(headerId: string): HeaderOverride | null {
 }
 
 const table = createSvelteTable({
+  features: APP_TABLE_FEATURES,
   get data() {
     return courses;
   },
@@ -158,7 +159,6 @@ const table = createSvelteTable({
     },
   },
   onColumnVisibilityChange: handleVisibilityChange,
-  getCoreRowModel: getCoreRowModel(),
 });
 </script>
 

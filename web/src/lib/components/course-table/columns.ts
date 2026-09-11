@@ -1,5 +1,6 @@
 // columns.ts
 
+import type { AppTableFeatures } from "$lib/components/ui/data-table/index.js";
 import type { ColumnDef } from "@tanstack/table-core";
 import type { Component } from "svelte";
 import type { CourseResponse } from "$lib/bindings";
@@ -108,7 +109,7 @@ export const COLUMN_DEFS = COLUMN_IDS.map((id) => ({
   accessorFn: COLUMNS[id].accessorFn,
   header: COLUMNS[id].label,
   enableSorting: false,
-})) satisfies ColumnDef<CourseResponse, unknown>[];
+})) satisfies ColumnDef<AppTableFeatures, CourseResponse, unknown>[];
 
 /**
  * The one track left unsized in the colgroup. Surplus width collects here rather

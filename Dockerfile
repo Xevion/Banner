@@ -1,5 +1,5 @@
 # Build arguments
-ARG RUST_VERSION=1.96.0
+ARG RUST_VERSION=1.96.1
 ARG GIT_COMMIT_SHA
 
 # Frontend Build Stage
@@ -10,15 +10,17 @@ WORKDIR /app
 # Install zstd for pre-compression
 RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf /var/lib/apt/lists/*
 
-# Copy backend Cargo.toml for build-time version retrieval
-COPY ./Cargo.toml ./
-
 # Copy frontend package files and install dependencies
 COPY ./web/package.json ./web/bun.lock* ./
 RUN bun install --frozen-lockfile
 
 # Copy frontend source code
 COPY ./web ./
+
+# Backend Cargo.toml, read at build time for the version. It lands after the install
+# because its version line changes on every release, and copying it earlier would
+# invalidate the dependency install for a file that install never reads.
+COPY ./Cargo.toml ./
 
 # PostHog host is needed at build time for the CSP reportOnly header in svelte.config.js.
 # Defaults to the official PostHog EU ingestion endpoint; override at build time if using a
@@ -64,7 +66,10 @@ COPY .cargo ./.cargo
 
 # Copy recipe from planner and build dependencies only
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json --bin banner
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo chef cook --release --recipe-path recipe.json --bin banner
 
 # Copy source code
 COPY Cargo.toml Cargo.lock ./
@@ -79,10 +84,15 @@ COPY --from=frontend-builder /app/build/client ./web/build/client
 
 # Build with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
 ENV SQLX_OFFLINE=true
-RUN cargo build --release --bin banner
-
-# Strip the binary to reduce size
-RUN strip target/release/banner
+# target/ is a BuildKit cache mount so incremental artifacts survive between builds. The mount is
+# invisible to the image layer, so the binary has to be stripped and copied out of it within the
+# same RUN or it disappears with it.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build --release --bin banner \
+    && strip target/release/banner \
+    && cp target/release/banner /banner
 
 # Node runtime for the SvelteKit SSR server
 FROM node:24-trixie-slim
@@ -108,7 +118,7 @@ RUN groupadd --gid $GID $APP_USER \
     && mkdir -p ${APP}
 
 # Copy Rust binary
-COPY --from=builder --chown=$APP_USER:$APP_USER /app/target/release/banner ${APP}/banner
+COPY --from=builder --chown=$APP_USER:$APP_USER /banner ${APP}/banner
 RUN chmod +x ${APP}/banner
 
 # The loader resolves every symbol before main, so a runtime whose glibc is older

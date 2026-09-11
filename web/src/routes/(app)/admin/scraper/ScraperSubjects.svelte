@@ -4,17 +4,16 @@ import type { SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import SortableHeader from "$lib/components/SortableHeader.svelte";
 import TableSkeleton from "$lib/components/TableSkeleton.svelte";
-import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import {
+  APP_TABLE_FEATURES,
+  type AppTableFeatures,
+  createSvelteTable,
+} from "$lib/components/ui/data-table/index.js";
 import { createSortingHandler } from "$lib/composables/sorting";
 import { formatAbsoluteDate } from "$lib/date";
 import { formatDuration, formatDurationMs, relativeTime } from "$lib/time";
 import { ChevronDown, ChevronRight } from "@lucide/svelte";
-import {
-  type ColumnDef,
-  type SortingState,
-  getCoreRowModel,
-  getSortedRowModel,
-} from "@tanstack/table-core";
+import { type ColumnDef, type SortingState } from "@tanstack/table-core";
 import { onDestroy } from "svelte";
 import { slide } from "svelte/transition";
 
@@ -80,20 +79,20 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
-const columns: ColumnDef<SubjectSummary, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, SubjectSummary, unknown>[] = [
   {
     id: "subject",
     accessorKey: "subject",
     header: "Subject",
     enableSorting: true,
-    sortingFn: (a, b) => a.original.subject.localeCompare(b.original.subject),
+    sortFn: (a, b) => a.original.subject.localeCompare(b.original.subject),
   },
   {
     id: "status",
     accessorFn: (row) => row.scheduleState,
     header: "Scrape in",
     enableSorting: true,
-    sortingFn: (a, b) => {
+    sortFn: (a, b) => {
       const order: Record<string, number> = { eligible: 0, cooldown: 1, paused: 2, read_only: 3 };
       const sa = order[a.original.scheduleState] ?? 4;
       const sb = order[b.original.scheduleState] ?? 4;
@@ -143,6 +142,7 @@ const columns: ColumnDef<SubjectSummary, unknown>[] = [
 ];
 
 const table = createSvelteTable({
+  features: APP_TABLE_FEATURES,
   get data() {
     return subjects;
   },
@@ -154,8 +154,6 @@ const table = createSvelteTable({
     },
   },
   onSortingChange: handleSortingChange,
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel<SubjectSummary>(),
   enableSortingRemoval: true,
 });
 

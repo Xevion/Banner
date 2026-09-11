@@ -353,14 +353,16 @@ const axisY = $derived(containerHeight - PADDING.bottom);
             {#if rmpRating != null}
                     <!-- Star [star] centered ~4px above band center; R=4.5 outer, r=1.9 inner -->
                     <g opacity={rmpDimOpacity} style="transition: opacity 0.12s ease">
-                        <Points x="rmpRating" r={3} let:points>
-                            {#each points as point (point.xValue)}
-                                <polygon
-                                    points="{point.x},{point.y - 8.5} {point.x + 1.1},{point.y - 5.5} {point.x + 4.3},{point.y - 5.4} {point.x + 1.8},{point.y - 3.4} {point.x + 2.6},{point.y - 0.4} {point.x},{point.y - 2.1} {point.x - 2.6},{point.y - 0.4} {point.x - 1.8},{point.y - 3.4} {point.x - 4.3},{point.y - 5.4} {point.x - 1.1},{point.y - 5.5}"
-                                    fill={rmpColor}
-                                    fill-opacity="0.85"
-                                />
-                            {/each}
+                        <Points x="rmpRating" r={3}>
+                            {#snippet children({ points })}
+                                {#each points as point (point.xValue)}
+                                    <polygon
+                                        points="{point.x},{point.y - 8.5} {point.x + 1.1},{point.y - 5.5} {point.x + 4.3},{point.y - 5.4} {point.x + 1.8},{point.y - 3.4} {point.x + 2.6},{point.y - 0.4} {point.x},{point.y - 2.1} {point.x - 2.6},{point.y - 0.4} {point.x - 1.8},{point.y - 3.4} {point.x - 4.3},{point.y - 5.4} {point.x - 1.1},{point.y - 5.5}"
+                                        fill={rmpColor}
+                                        fill-opacity="0.85"
+                                    />
+                                {/each}
+                            {/snippet}
                         </Points>
                     </g>
                 {/if}
@@ -368,14 +370,16 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                 {#if bbRating != null}
                     <!-- Upward triangle [triangle] below band center -->
                     <g opacity={bbDimOpacity} style="transition: opacity 0.12s ease">
-                        <Points x="bbRating" r={3} let:points>
-                            {#each points as point (point.xValue)}
-                                <polygon
-                                    points="{point.x},{point.y + 1} {point.x - 3.5},{point.y + 7} {point.x + 3.5},{point.y + 7}"
-                                    fill={bbColor}
-                                    fill-opacity="0.85"
-                                />
-                            {/each}
+                        <Points x="bbRating" r={3}>
+                            {#snippet children({ points })}
+                                {#each points as point (point.xValue)}
+                                    <polygon
+                                        points="{point.x},{point.y + 1} {point.x - 3.5},{point.y + 7} {point.x + 3.5},{point.y + 7}"
+                                        fill={bbColor}
+                                        fill-opacity="0.85"
+                                    />
+                                {/each}
+                            {/snippet}
                         </Points>
                     </g>
                 {/if}

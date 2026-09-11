@@ -3,7 +3,11 @@ import type { AuditLogEntry } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import SortableHeader from "$lib/components/SortableHeader.svelte";
 import TableSkeleton from "$lib/components/TableSkeleton.svelte";
-import { createSvelteTable } from "$lib/components/ui/data-table/index.js";
+import {
+  APP_TABLE_FEATURES,
+  type AppTableFeatures,
+  createSvelteTable,
+} from "$lib/components/ui/data-table/index.js";
 import { createSortingHandler } from "$lib/composables/sorting";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatAbsoluteDate } from "$lib/date";
@@ -11,12 +15,7 @@ import { type DiffEntry, formatDiffPath, jsonDiff } from "$lib/diff";
 import { relativeTime } from "$lib/time";
 import { formatNumber } from "$lib/utils";
 import { ChevronDown, ChevronRight } from "@lucide/svelte";
-import {
-  type ColumnDef,
-  type SortingState,
-  getCoreRowModel,
-  getSortedRowModel,
-} from "@tanstack/table-core";
+import { type ColumnDef, type SortingState } from "@tanstack/table-core";
 import { onDestroy } from "svelte";
 import { slide } from "svelte/transition";
 
@@ -133,7 +132,7 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
-const columns: ColumnDef<AuditLogEntry, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, AuditLogEntry, unknown>[] = [
   {
     id: "time",
     accessorKey: "timestamp",
@@ -167,6 +166,7 @@ const columns: ColumnDef<AuditLogEntry, unknown>[] = [
 ];
 
 const table = createSvelteTable({
+  features: APP_TABLE_FEATURES,
   get data() {
     return entries;
   },
@@ -178,8 +178,6 @@ const table = createSvelteTable({
     },
   },
   onSortingChange: handleSortingChange,
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel<AuditLogEntry>(),
   enableSortingRemoval: true,
 });
 

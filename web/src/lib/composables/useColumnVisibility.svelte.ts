@@ -1,4 +1,4 @@
-import type { VisibilityState } from "@tanstack/table-core";
+import type { ColumnVisibilityState } from "@tanstack/table-core";
 import { untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 
@@ -27,7 +27,7 @@ export interface UseColumnVisibilityOptions {
  */
 export class ColumnVisibilityController {
   /** Current column visibility state for TanStack Table */
-  visibility: VisibilityState = $state({});
+  visibility: ColumnVisibilityState = $state({});
 
   /** Column definitions */
   readonly columns: ColumnDef[];
@@ -103,11 +103,11 @@ export class ColumnVisibilityController {
   };
 
   /** What `reset` restores, for consumers that render their own reset control. */
-  get defaultVisibility(): VisibilityState {
+  get defaultVisibility(): ColumnVisibilityState {
     return this.#defaultVisibility();
   }
 
-  #defaultVisibility(): VisibilityState {
+  #defaultVisibility(): ColumnVisibilityState {
     return Object.fromEntries(this.#defaultHidden.map((id) => [id, false]));
   }
 }

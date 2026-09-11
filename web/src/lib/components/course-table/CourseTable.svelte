@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { VisibilityState } from "@tanstack/table-core";
+import type { ColumnVisibilityState } from "@tanstack/table-core";
 import type { CourseResponse } from "$lib/bindings";
 import type { SortController } from "$lib/composables/useSort.svelte";
 import CourseTableDesktop from "./CourseTableDesktop.svelte";
@@ -21,9 +21,9 @@ let {
   sort?: SortController;
   subjectMap?: Record<string, string>;
   limit?: number;
-  columnVisibility?: VisibilityState;
+  columnVisibility?: ColumnVisibilityState;
   /** What "reset to default" restores, for columns hidden until opted into. */
-  defaultVisibility?: VisibilityState;
+  defaultVisibility?: ColumnVisibilityState;
 } = $props();
 
 const state = useCourseTableState(
