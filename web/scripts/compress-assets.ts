@@ -15,16 +15,8 @@ import { readFile, readdir, stat, writeFile } from "fs/promises";
 // Must match COMPRESSION_MIN_SIZE in src/web/encoding.rs
 const MIN_SIZE = 512;
 
-const COMPRESSIBLE_EXTENSIONS = new Set([
-  ".js",
-  ".css",
-  ".html",
-  ".json",
-  ".svg",
-  ".txt",
-  ".xml",
-  ".map",
-]);
+// No .map: rust-embed excludes them, so a compressed variant is never served.
+const COMPRESSIBLE_EXTENSIONS = new Set([".js", ".css", ".html", ".json", ".svg", ".txt", ".xml"]);
 
 // Check if zstd CLI is available
 let hasZstd = false;

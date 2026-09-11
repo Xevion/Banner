@@ -539,7 +539,7 @@ export default defineConfig({
         // pushing an amd64 image the node cannot run.
         await sshStep(
           ctx,
-          `cd ${DEPLOY_PATH} && docker buildx build --platform linux/arm64 --build-arg PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST} --build-arg GIT_COMMIT_SHA=${sha} -t ${DEPLOY_IMAGE}:${tag} --push .`,
+          `cd ${DEPLOY_PATH} && docker buildx build --platform linux/arm64 --provenance=false --sbom=false --build-arg PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST} --build-arg GIT_COMMIT_SHA=${sha} -t ${DEPLOY_IMAGE}:${tag} --push .`,
           "image build",
         );
 

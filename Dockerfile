@@ -28,8 +28,21 @@ COPY ./Cargo.toml ./
 ARG PUBLIC_POSTHOG_HOST="https://us.posthog.com"
 ENV PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST}
 
-# Build SSR output, then pre-compress static client assets (gzip, brotli, zstd)
-RUN bun run build && bun run scripts/compress-assets.ts
+# Build SSR output, then pre-compress static client assets (gzip, brotli, zstd).
+# Maps are dropped first: nothing serves them, so compressing them is pure build time.
+RUN bun run build \
+    && find build -name '*.map' -delete \
+    && bun run scripts/compress-assets.ts
+
+# Production Dependency Stage
+# Dropping devDependencies sheds the build toolchain; dropping peers sheds vite and its platform
+# binaries, which reach the tree through @sveltejs/kit and are never loaded at runtime.
+FROM oven/bun:1 AS frontend-deps
+
+WORKDIR /app
+
+COPY ./web/package.json ./web/bun.lock* ./
+RUN bun install --frozen-lockfile --production --omit=peer
 
 # Chef Base Stage
 # Both this stage and the runtime pin the Debian codename: the binary links
@@ -108,7 +121,6 @@ ARG GID=1001
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     tzdata \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
 ARG TZ=Etc/UTC
@@ -119,23 +131,27 @@ RUN groupadd --gid $GID $APP_USER \
     && useradd --uid $UID --gid $GID --no-create-home $APP_USER \
     && mkdir -p ${APP}
 
-# Copy Rust binary
-COPY --from=builder --chown=$APP_USER:$APP_USER /banner ${APP}/banner
-RUN chmod +x ${APP}/banner
-
-# The loader resolves every symbol before main, so a runtime whose glibc is older
-# than the builder's fails here; --version exits before config, database or socket.
-RUN ${APP}/banner --version
-
-# Copy SvelteKit SSR build output
-COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
+# Ordered by how often each input changes: a COPY's cache key covers its parents, so anything
+# below the binary is re-copied and re-exported every deploy.
+COPY --from=frontend-deps --chown=$APP_USER:$APP_USER /app/node_modules ${APP}/web/node_modules
 
 # Console logger preload, normalizing SSR output to the JSON log format
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/console-logger.js ${APP}/web/console-logger.js
 
-# adapter-node leaves dependencies as bare imports rather than bundling them,
-# so the SSR server still resolves packages from node_modules at runtime.
-COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/node_modules ${APP}/web/node_modules
+COPY --chown=$APP_USER:$APP_USER web/scripts/check-ssr-imports.mjs ${APP}/web/scripts/check-ssr-imports.mjs
+
+# Copy SvelteKit SSR build output
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
+
+# Turns a package missing from the production install into a build failure, not a crash loop.
+RUN node ${APP}/web/scripts/check-ssr-imports.mjs ${APP}/web/build
+
+# Copy Rust binary
+COPY --from=builder --chown=$APP_USER:$APP_USER --chmod=755 /banner ${APP}/banner
+
+# The loader resolves every symbol before main, so a runtime whose glibc is older
+# than the builder's fails here; --version exits before config, database or socket.
+RUN ${APP}/banner --version
 
 USER $APP_USER
 WORKDIR ${APP}
@@ -151,9 +167,7 @@ ENV SSR_COMMAND="node --import ${APP}/web/console-logger.js ${APP}/web/build/ind
 
 EXPOSE ${PORT}
 
-# Health check hits Rust (public-facing server)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1
+# No HEALTHCHECK: the chart's own probes hit /api/health, and Docker's needed a wget install.
 
 # Can be explicitly overriden with different hosts & ports
 ENV HOSTS=0.0.0.0,[::]
