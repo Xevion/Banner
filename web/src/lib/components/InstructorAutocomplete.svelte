@@ -91,25 +91,30 @@ const listId = "instructor-autocomplete-list";
       />
     </div>
     {#if query.open}
-      <Command.List
+      <div
         id={listId}
-        onmousedown={(e: MouseEvent) => e.preventDefault()}
         class="absolute top-full left-0 right-0 z-10 mt-1 border border-border bg-card shadow-md rounded-md
                max-h-40 overflow-y-auto scrollbar-none p-1"
       >
+        <!--
+          Outside the list on purpose: a listbox holding a sentence instead of
+          options is invalid, and a screen reader announces it as an empty list.
+        -->
         {#if query.error}
           <div role="alert" class="flex items-center gap-1.5 px-2 py-2 text-xs text-destructive">
             <TriangleAlert class="size-3 shrink-0" />
             {query.error}
           </div>
         {:else if query.loading && results.length === 0}
-          <div class="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
+          <div role="status" class="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
             <Loader2 class="size-3 animate-spin shrink-0" />
             Searching...
           </div>
         {:else if results.length === 0}
-          <div class="px-2 py-2 text-xs text-muted-foreground">No results found.</div>
+          <div role="status" class="px-2 py-2 text-xs text-muted-foreground">No results found.</div>
         {:else}
+          <!-- Keeps the input focused: a blur here would close the list mid-click. -->
+          <Command.List onmousedown={(e: MouseEvent) => e.preventDefault()}>
           {#each results as instructor (instructor.id)}
             <Command.Item
               class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm
@@ -124,8 +129,9 @@ const listId = "instructor-autocomplete-list";
               >
             </Command.Item>
           {/each}
+          </Command.List>
         {/if}
-      </Command.List>
+      </div>
     {/if}
   </Command.Root>
 </div>

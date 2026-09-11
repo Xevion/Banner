@@ -127,26 +127,34 @@ const listId = "search-autocomplete-list";
         {#if isOpen}
           <div {...wrapperProps}>
             <div {...props} transition:fly={{ duration: 150, y: -4 }}>
-              <Command.List
+              <div
                 id={listId}
                 class="border border-border bg-card shadow-md rounded-md
                        w-[var(--bits-popover-anchor-width)] min-w-[280px] max-w-[480px]
                        max-h-72 overflow-y-auto scrollbar-none p-1"
               >
+                <!--
+                  These sit outside the list rather than in it: a listbox is
+                  required to hold options, and one holding only a sentence is
+                  invalid markup that a screen reader has to guess at.
+                -->
                 {#if query.error}
                   <div role="alert" class="flex items-center gap-1.5 px-2 py-2 text-sm text-destructive">
                     <TriangleAlert class="size-3.5 shrink-0" />
                     {query.error}
                   </div>
                 {:else if query.loading && suggestions.length === 0}
-                  <div class="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
+                  <div role="status" class="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
                     <Loader2 class="size-3.5 animate-spin shrink-0" />
                     Searching...
                   </div>
                 {:else if isEmpty}
-                  <div class="px-2 py-2 text-sm text-muted-foreground">No results found.</div>
+                  <div role="status" class="px-2 py-2 text-sm text-muted-foreground">
+                    No results found.
+                  </div>
                 {/if}
 
+                <Command.List>
                 {#each suggestions as item (suggestionId(item))}
                   <Command.Item
                     class="rounded-sm outline-hidden flex h-8 w-full select-none items-center gap-2 px-2 text-sm whitespace-nowrap
@@ -184,11 +192,14 @@ const listId = "search-autocomplete-list";
                     {/if}
                   </Command.Item>
                 {/each}
+                </Command.List>
 
                 {#if query.loading && suggestions.length > 0}
-                  <div class="px-2 py-1.5 text-xs text-muted-foreground italic">Updating...</div>
+                  <div role="status" class="px-2 py-1.5 text-xs text-muted-foreground italic">
+                    Updating...
+                  </div>
                 {/if}
-              </Command.List>
+              </div>
             </div>
           </div>
         {/if}

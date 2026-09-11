@@ -107,7 +107,7 @@ const selectValue = $derived(String(currentPage));
     </div>
   </div>
 {:else if totalCount > 0 && totalPages > 1}
-    <div class="flex items-start text-xs mt-2 pl-2">
+    <div class="flex items-center text-xs mt-2 pl-2">
         <!-- Left zone: result count -->
         <div class="flex-1">
             <span class="text-muted-foreground select-none hidden md:inline">

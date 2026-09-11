@@ -7,19 +7,22 @@ let {
   campus: string[];
 } = $props();
 
-// Determine which availability option is effectively selected based on campus filter
-// This is a UI convenience - internally we still use campus codes
-const availabilitySelection = $derived.by(() => {
-  if (campus.length === 0) return "all";
+// A convenience over the campus codes, which are what the filter actually holds.
+const hasCampusStudents = $derived(campus.some((c) => CAMPUS_GROUPS.campusStudents.includes(c)));
+const hasOnlinePrograms = $derived(campus.some((c) => CAMPUS_GROUPS.onlinePrograms.includes(c)));
 
-  const hasCampusStudent = campus.some((c) => CAMPUS_GROUPS.campusStudents.includes(c));
-  const hasOnlinePrograms = campus.some((c) => CAMPUS_GROUPS.onlinePrograms.includes(c));
-
-  if (hasCampusStudent && hasOnlinePrograms) return "all";
-  if (hasCampusStudent) return "campus";
-  if (hasOnlinePrograms) return "online";
-  return "all";
-});
+/**
+ * Which single group is in effect, or "all" when the filter does not reduce to
+ * one of them.
+ *
+ * Both groups at once is not the same as no filter: an empty list asks for
+ * every campus, while naming both still excludes any campus in neither group.
+ * The pills are lit from the two flags above rather than from this, so that
+ * case shows as both chosen instead of as nothing chosen.
+ */
+const availabilitySelection = $derived(
+  hasCampusStudents === hasOnlinePrograms ? "all" : hasCampusStudents ? "campus" : "online"
+);
 
 function selectAvailability(option: "campus" | "online" | "all") {
   if (option === "campus") {
@@ -50,9 +53,9 @@ function toggleAvailability(option: "campus" | "online") {
   <div class="flex flex-wrap gap-1">
     <button
       type="button"
-      aria-pressed={availabilitySelection === "campus"}
+      aria-pressed={hasCampusStudents}
       class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer select-none
-             {availabilitySelection === 'campus'
+             {hasCampusStudents
         ? 'bg-primary text-primary-foreground'
         : 'bg-muted text-muted-foreground hover:bg-muted/80'}"
       onclick={() => toggleAvailability("campus")}
@@ -63,9 +66,9 @@ function toggleAvailability(option: "campus" | "online") {
 
     <button
       type="button"
-      aria-pressed={availabilitySelection === "online"}
+      aria-pressed={hasOnlinePrograms}
       class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer select-none
-             {availabilitySelection === 'online'
+             {hasOnlinePrograms
         ? 'bg-primary text-primary-foreground'
         : 'bg-muted text-muted-foreground hover:bg-muted/80'}"
       onclick={() => toggleAvailability("online")}

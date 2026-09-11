@@ -10,8 +10,9 @@ import {
   staffInstructorCourse,
 } from "$lib/stories/fixtures/courses";
 import { defineMeta } from "@storybook/addon-svelte-csf";
-import { expect, fn, mocked, userEvent, within } from "storybook/test";
+import { expect, fn, mocked, userEvent, waitFor, within } from "storybook/test";
 import { ok } from "true-myth/result";
+import StatefulCourseCard from "$lib/stories/StatefulCourseCard.svelte";
 import CourseCard from "./CourseCard.svelte";
 
 const { Story } = defineMeta({
@@ -33,10 +34,16 @@ const { Story } = defineMeta({
 });
 </script>
 
-<Story
-  name="Default"
-  args={{ course: courseWithSeats, expanded: false, onToggle: fn() }}
-/>
+<!--
+  Expanding here really works, because the header invites a click and a card
+  that ignores one is the first thing anyone tries. The stories below pin a
+  state on purpose and do not respond, which is what they are for.
+-->
+<Story name="Default" args={{ course: courseWithSeats }}>
+  {#snippet template(args)}
+    <StatefulCourseCard {...args} />
+  {/snippet}
+</Story>
 
 <Story
   name="Expanded"
@@ -70,18 +77,27 @@ const { Story } = defineMeta({
   args={{ course: staffInstructorCourse, expanded: false, onToggle: fn() }}
 />
 
+<!-- Clicking the header has to actually open the card, not just fire a handler. -->
 <Story
   name="Interactive"
-  args={{ course: courseWithSeats, expanded: false, onToggle: fn() }}
-  play={async ({ args, canvasElement }) => {
-    const element = canvasElement;
-    const canvas = within(element);
-    const button = canvas.getByRole("button");
+  args={{ course: courseWithSeats }}
+  play={async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const header = canvas.getAllByRole("button")[0];
 
-    await expect(button).toBeVisible();
-    await expect(button).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(button);
-    // @ts-expect-error - args type not fully inferred
-    await expect(args.onToggle).toHaveBeenCalled();
+    await expect(header).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(header);
+    await waitFor(async () => {
+      await expect(header).toHaveAttribute("aria-expanded", "true");
+    });
+    // The detail slides open, so it is in the DOM a moment before it is on screen.
+    const heading = await canvas.findByText("Other Sections");
+    await waitFor(async () => {
+      await expect(heading).toBeVisible();
+    });
   }}
-/>
+>
+  {#snippet template(args)}
+    <StatefulCourseCard {...args} />
+  {/snippet}
+</Story>
