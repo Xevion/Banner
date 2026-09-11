@@ -43,7 +43,7 @@ pub fn commands_fingerprint(commands: &[poise::Command<Data, Error>]) -> String 
                 .parameters
                 .iter()
                 .map(|p| {
-                    let mut ps = p.name.clone();
+                    let mut ps = p.name.to_string();
                     if let Some(desc) = &p.description {
                         write!(ps, ":{desc}").unwrap();
                     }

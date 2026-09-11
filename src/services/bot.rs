@@ -73,7 +73,7 @@ impl BotService {
                             .unwrap_or("unknown".to_string());
 
                         let span = tracing::Span::current();
-                        span.record("command_name", ctx.command().qualified_name.as_str());
+                        span.record("command_name", &*ctx.command().qualified_name);
                         span.record("invocation", ctx.invocation_string());
                         span.record("msg.content", content.as_str());
                         span.record("msg.author", ctx.author().tag().as_str());
@@ -82,7 +82,7 @@ impl BotService {
                         span.record("msg.channel", channel_name.as_str());
 
                         tracing::info!(
-                            command_name = ctx.command().qualified_name.as_str(),
+                            command_name = &*ctx.command().qualified_name,
                             invocation = ctx.invocation_string(),
                             msg.content = %content,
                             msg.author = %ctx.author().tag(),
