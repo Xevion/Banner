@@ -38,7 +38,7 @@ static HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
 /// Installs the global recorder once per process; a second install would fail.
 pub fn recorder() -> &'static PrometheusHandle {
     HANDLE.get_or_init(|| {
-        PrometheusBuilder::new()
+        let handle = PrometheusBuilder::new()
             .set_buckets(LATENCY_BUCKETS)
             .expect("latency buckets are non-empty and ascending")
             // Counters and histograms only. A gauge tracks current state owned by a live RAII
@@ -49,8 +49,127 @@ pub fn recorder() -> &'static PrometheusHandle {
                 Some(IDLE_TIMEOUT),
             )
             .install_recorder()
-            .expect("no global metrics recorder was installed before this call")
+            .expect("no global metrics recorder was installed before this call");
+
+        describe();
+        handle
     })
+}
+
+/// Registers the HELP text the exposition carries for each metric.
+///
+/// Must run after the recorder is installed: a description recorded before that is dropped, and the
+/// loss is silent because the metric itself still exports fine without one.
+fn describe() {
+    use metrics::{Unit, describe_counter, describe_gauge, describe_histogram};
+
+    describe_counter!(
+        HTTP_REQUESTS,
+        Unit::Count,
+        "HTTP responses served, by matched route template, method, and status."
+    );
+    describe_histogram!(
+        HTTP_DURATION,
+        Unit::Seconds,
+        "Wall time from entering the metrics layer to the response being returned."
+    );
+    describe_gauge!(
+        DB_POOL_CONNECTIONS,
+        Unit::Count,
+        "Postgres pool connections, sampled on a timer rather than on acquisition."
+    );
+    describe_counter!(
+        DB_FAILURES,
+        Unit::Count,
+        "Database failures by kind; `pool_timeout` is the one that signals contention."
+    );
+    describe_counter!(
+        SCRAPE_JOBS,
+        Unit::Count,
+        "Scrape job outcomes. Not a partition: `recoverable_error` counts per retry attempt."
+    );
+    describe_counter!(
+        SCRAPE_COURSES,
+        Unit::Count,
+        "Courses seen by completed scrapes, split into fetched, changed, and unchanged."
+    );
+    describe_counter!(
+        BANNER_REQUESTS,
+        Unit::Count,
+        "Requests to the upstream Banner API, by endpoint and transport outcome."
+    );
+    describe_histogram!(
+        BANNER_DURATION,
+        Unit::Seconds,
+        "Round-trip time for an upstream Banner API request, excluding rate-limit wait."
+    );
+    describe_histogram!(
+        BANNER_RATE_LIMIT_WAIT,
+        Unit::Seconds,
+        "Time spent held by the client-side rate limiter before a Banner request was sent."
+    );
+    describe_counter!(
+        BANNER_DECODE_FAILURES,
+        Unit::Count,
+        "Banner responses that arrived intact but could not be deserialized."
+    );
+    describe_gauge!(
+        WS_CONNECTIONS,
+        Unit::Count,
+        "WebSocket connections currently open."
+    );
+    describe_gauge!(
+        WS_SUBSCRIPTIONS,
+        Unit::Count,
+        "Course subscriptions currently registered across all WebSocket connections."
+    );
+    describe_counter!(
+        WS_MESSAGES,
+        Unit::Count,
+        "WebSocket messages by direction, payload kind, and outcome."
+    );
+    describe_gauge!(
+        BUILD_INFO,
+        Unit::Count,
+        "Always 1. Carries the running version and commit as labels."
+    );
+
+    describe_gauge!(
+        crate::scraper::scheduler::SCRAPE_QUEUE_DEPTH,
+        Unit::Count,
+        "Scrape jobs due to run and not currently locked."
+    );
+    describe_gauge!(
+        crate::scraper::scheduler::SCRAPE_QUEUE_OLDEST_SECONDS,
+        Unit::Seconds,
+        "Age of the oldest job due to run, measured from its scheduled time."
+    );
+
+    describe_gauge!(
+        process::CPU_SECONDS,
+        Unit::Seconds,
+        "Total user and system CPU time consumed by this process."
+    );
+    describe_gauge!(
+        process::RESIDENT_BYTES,
+        Unit::Bytes,
+        "Resident set size of this process."
+    );
+    describe_gauge!(
+        process::VIRTUAL_BYTES,
+        Unit::Bytes,
+        "Virtual memory size of this process."
+    );
+    describe_gauge!(
+        process::OPEN_FDS,
+        Unit::Count,
+        "File descriptors currently open by this process."
+    );
+    describe_gauge!(
+        process::START_TIME,
+        Unit::Seconds,
+        "Unix timestamp at which this process started."
+    );
 }
 
 /// Standard verbs only. `http::Method` accepts arbitrary extension tokens and axum produces a 405
@@ -181,6 +300,21 @@ mod tests {
         assert!(
             rendered.contains(SCRAPE_JOBS),
             "expected {SCRAPE_JOBS} in exposition output, got: {rendered}"
+        );
+    }
+
+    /// A description registered before the recorder is installed is dropped silently, and the
+    /// metric still exports without one, so only the rendered output proves `describe` ran in time.
+    #[test]
+    fn test_render_includes_help_text() {
+        let handle = recorder();
+        metrics::counter!(SCRAPE_JOBS, "outcome" => "test_probe").increment(1);
+
+        let rendered = handle.render();
+
+        assert!(
+            rendered.contains(&format!("# HELP {SCRAPE_JOBS}")),
+            "expected HELP text for {SCRAPE_JOBS} in exposition output, got: {rendered}"
         );
     }
 }

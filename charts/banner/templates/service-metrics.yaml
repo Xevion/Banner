@@ -1,0 +1,19 @@
+{{- /*
+Separate from the main Service so the exposition stays off the public NodePort: this one is
+ClusterIP, reachable from the host's scraper but never from outside the node.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-metrics
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  clusterIP: {{ .Values.app.metricsClusterIP }}
+  selector:
+    app: {{ .Release.Name }}
+  ports:
+    - name: metrics
+      port: {{ .Values.app.metricsPort }}
+      targetPort: metrics

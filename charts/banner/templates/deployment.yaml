@@ -79,7 +79,7 @@ spec:
           ports:
             - containerPort: {{ .Values.app.port }}
               name: http
-            {{- /* Kept out of service.yaml on purpose: in-cluster scrapes use the pod IP. */}}
+            {{- /* Exposed through the ClusterIP metrics Service, never the public NodePort. */}}
             - containerPort: {{ .Values.app.metricsPort }}
               name: metrics
           # sqlx migrations run at boot before the server binds, so startup is bounded by the

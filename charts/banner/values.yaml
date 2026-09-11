@@ -36,8 +36,13 @@ app:
   # The Rust binary is the public listener and proxies non-API routes to the SSR child it
   # supervises, so unlike bf4-emblems there is one externally reachable port, not two.
   port: 8080
-  # Prometheus exposition. Absent from the Service, which is what keeps it off the public NodePort.
+  # Prometheus exposition. Carried by the ClusterIP metrics Service, so it never reaches the
+  # public NodePort; the host's vmagent scrapes it over the cluster network.
   metricsPort: 9090
+  # Pinned because the scraper lives outside the cluster and cannot resolve cluster DNS, so it
+  # targets this address literally. Taken from the low band of the service CIDR, which Kubernetes
+  # keeps clear of dynamically assigned addresses.
+  metricsClusterIP: 10.43.0.90
   # The supervisor parses this port and hands it to the Node child as PORT, so the child cannot
   # inherit the outer PORT and collide with the Rust listener. It must carry an explicit port.
   ssrDownstream: http://localhost:3001
