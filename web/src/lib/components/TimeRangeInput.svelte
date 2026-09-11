@@ -10,12 +10,15 @@ let {
 } = $props();
 </script>
 
-<div class="flex flex-col gap-1.5">
-  <span class="text-xs font-medium text-muted-foreground select-none">Time range</span>
+<div class="flex flex-col gap-1.5" role="group" aria-label="Time range">
+  <span class="text-xs font-medium text-muted-foreground select-none" aria-hidden="true">
+    Time range
+  </span>
   <div class="flex items-center gap-2">
     <input
       type="text"
       placeholder="10:00 AM"
+      aria-label="Earliest start time"
       autocomplete="off"
       value={formatCompactTime(timeStart)}
       onchange={(e) => {
@@ -29,6 +32,7 @@ let {
     <input
       type="text"
       placeholder="3:00 PM"
+      aria-label="Latest end time"
       autocomplete="off"
       value={formatCompactTime(timeEnd)}
       onchange={(e) => {
