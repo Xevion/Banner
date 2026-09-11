@@ -48,10 +48,6 @@ RUN cargo chef prepare --recipe-path recipe.json --bin banner
 # Rust Build Stage
 FROM chef AS builder
 
-# Stamped into the binary by build.rs and surfaced at /api/status.
-ARG GIT_COMMIT_SHA
-ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
-
 # mold + clang for faster linking (matches .cargo/config.toml's linker override);
 # cmake builds aws-lc-sys, reqwest's rustls crypto provider.
 RUN apt-get update && apt-get install -y \
@@ -81,6 +77,12 @@ COPY .sqlx ./.sqlx
 
 # Copy SSR client assets for embedding (Rust serves /_app/* from binary)
 COPY --from=frontend-builder /app/build/client ./web/build/client
+
+# Stamped into the binary by build.rs and surfaced at /api/status. It changes on every commit, so
+# it sits below the dependency cook: any layer beneath it is re-run on every deploy. build.rs
+# declares rerun-if-env-changed for it, so the crate still picks up a new value here.
+ARG GIT_COMMIT_SHA
+ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
 # Build with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
 ENV SQLX_OFFLINE=true

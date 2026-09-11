@@ -3,5 +3,5 @@ bun = "latest"
 # Pinned so a global `node = "latest"` cannot supply a prerelease: Storybook parses
 # the version with Number(), and "26.8.0-alpha" yields NaN, failing its semver gate.
 node = "24"
-helm = "3"
+helm = "4"
 kubectl = "latest"

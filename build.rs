@@ -9,6 +9,10 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=web/build/client");
 
+    // The other rerun-if directives opt out of the default "rerun on any change", so without this
+    // a cached target dir reuses the previous deploy's hash and /api/status reports the wrong one.
+    println!("cargo:rerun-if-env-changed=GIT_COMMIT_SHA");
+
     // Prefer an explicitly supplied commit: the deploy rsyncs without .git, so the git fallback
     // below has no repository to read and would otherwise report "unknown" in /api/status.
     let git_hash = std::env::var("GIT_COMMIT_SHA").unwrap_or_else(|_| {

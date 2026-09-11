@@ -176,6 +176,20 @@ const ssh = (ctx: RunContext, command: string) =>
   ctx.run(["ssh", DEPLOY_HOST as string, command]);
 
 /**
+ * Run a deploy step, aborting the task if it fails.
+ *
+ * ctx.run reports failure by return code rather than throwing, so an unchecked call silently
+ * continues. Deploy steps are ordered: a failed build must never reach helm.
+ */
+async function step(ctx: RunContext, command: string[], what: string): Promise<void> {
+  const code = await ctx.run(command);
+  if (code !== 0) ctx.fail(`${what} failed (exit ${code})`);
+}
+
+const sshStep = (ctx: RunContext, command: string, what: string) =>
+  step(ctx, ["ssh", DEPLOY_HOST as string, command], what);
+
+/**
  * Merge the allowlisted .env values into the cluster Secret.
  *
  * .env holds development credentials, including a Discord application distinct from
@@ -496,21 +510,22 @@ export default defineConfig({
         // cluster Secret is the source of truth; `sync-secrets` pushes local values only
         // when asked for explicitly.
 
-        await ctx.run([
+        await step(ctx, [
           "rsync", "-az", "--delete",
           "--exclude", ".git", "--exclude", "target",
           "--exclude", "node_modules", "--exclude", ".svelte-kit",
           "--exclude", "build", "--exclude", "sim", "--exclude", "*.dump",
           "./", `${DEPLOY_HOST}:${DEPLOY_PATH}/`,
-        ]);
+        ], "source sync");
 
         // The default buildx driver builds inside the local daemon, so every
         // uniquely-tagged build stays in the image store forever with no GC.
-        await ssh(
+        await sshStep(
           ctx,
           `docker buildx inspect ci >/dev/null 2>&1 || docker buildx create --name ci --driver docker-container --config ${DEPLOY_PATH}/deploy/buildkitd.toml --bootstrap`,
+          "buildx builder setup",
         );
-        await ssh(ctx, "docker buildx use ci");
+        await sshStep(ctx, "docker buildx use ci", "buildx builder select");
 
         const sha = (await ctx.capture(["git", "rev-parse", "HEAD"])).stdout.trim();
         const short = (await ctx.capture(["git", "rev-parse", "--short=12", "HEAD"])).stdout.trim();
@@ -522,17 +537,29 @@ export default defineConfig({
 
         // The host is aarch64, so --platform keeps a developer on x86 from
         // pushing an amd64 image the node cannot run.
-        await ssh(
+        await sshStep(
           ctx,
           `cd ${DEPLOY_PATH} && docker buildx build --platform linux/arm64 --build-arg PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST} --build-arg GIT_COMMIT_SHA=${sha} -t ${DEPLOY_IMAGE}:${tag} --push .`,
+          "image build",
         );
-        await ssh(
+
+        // Recreate leaves nothing serving when a pod cannot start, so --atomic waits and
+        // rolls back rather than wait to be noticed. Migrations run at boot behind a
+        // startupProbe allowing 5 minutes, so the deadline has to clear that.
+        const rollout = await ssh(
           ctx,
-          // Recreate leaves nothing serving when a pod cannot start, so --atomic waits and
-          // rolls back rather than wait to be noticed. Migrations run at boot behind a
-          // startupProbe allowing 5 minutes, so the deadline has to clear that.
           `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install --atomic --timeout 360s ${DEPLOY_RELEASE} ./charts/banner --set image.tag=${tag}`,
         );
+        if (rollout !== 0) {
+          // Events, not pod logs: --atomic has already scaled the failed ReplicaSet to zero, so
+          // `kubectl logs` would return the healthy rolled-back pod. Events outlive the deletion
+          // and name the reason (CrashLoopBackOff, probe failure, image pull).
+          await ssh(
+            ctx,
+            `sudo k3s kubectl get events --sort-by=.lastTimestamp --field-selector type!=Normal | tail -30`,
+          );
+          ctx.fail(`rollout failed (exit ${rollout}): helm rolled back to the previous release`);
+        }
 
         return reportPublicOrigin(ctx);
       },

@@ -1,24 +1,32 @@
-# Bounds the shared docker-container builder's cache. Two Rust projects now build here, and they
-# land in different budgets: bf4-emblems mounts cargo registry/git/target as cache mounts
-# (exec.cachemount), while banner relies entirely on cargo-chef layer caching (regular).
+# Bounds the shared docker-container builder's cache. This is the single source of truth for the
+# `ci` builder: bf4-emblems builds on the same host and the same builder, and its copy of this file
+# is a pointer back here. The --config flag only applies when the builder is created, so editing
+# this file changes nothing until the builder is recreated:
 #
-# The stock split was backwards for that workload. Measured with bf4 alone at 7.19GB resident,
-# exec.cachemount held 469MB against a 24GB budget while regular layers held 6.72GB against 16GB.
-# Banner's first build then added ~7.1GB, all of it regular, taking the total to 14.33GB and
-# leaving the tighter budget nearly full while the larger one sat almost untouched. Without this
-# rebalance the two projects evict each other's layers on alternating builds.
+#     docker buildx rm ci
 #
-# Combined ceiling is ~40GB against 64GB free on /mnt/data.
+# The next deploy recreates it from this file, at the cost of one cold build.
+#
+# Both projects now mount the cargo registry, git checkouts and target dir as cache mounts
+# (exec.cachemount), so that is where nearly all the reusable weight lives and it gets the larger
+# budget. The registry and git mounts are keyed by path and therefore shared between the two
+# projects; each keeps its own target mount (/app/target for banner, /build/target for bf4).
+#
+# Regular image layers hold much less now that neither build bakes a target dir into a layer, so
+# the catch-all rule is the smaller of the two. The earlier split was the reverse of this and was
+# sized for a banner that had no cache mounts at all.
+#
+# Combined ceiling is ~44GB, against ~60GB free on /mnt/data with Postgres sharing the volume.
 [worker.oci]
   gc = true
 
   [[worker.oci.gcpolicy]]
     keepDuration = "168h"
-    reservedSpace = "8GB"
-    maxUsedSpace = "12GB"
+    reservedSpace = "16GB"
+    maxUsedSpace = "28GB"
     filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
 
   [[worker.oci.gcpolicy]]
     all = true
-    reservedSpace = "16GB"
-    maxUsedSpace = "28GB"
+    reservedSpace = "8GB"
+    maxUsedSpace = "16GB"
