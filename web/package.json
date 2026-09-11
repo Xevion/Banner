@@ -45,7 +45,7 @@
     "@types/d3-scale": "^4.0.9",
     "@types/d3-shape": "^3.2.0",
     "@types/d3-time-format": "^4.0.3",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.0.0",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
     "@vitest/browser": "^4.1.11",
