@@ -93,6 +93,79 @@ pub struct InstructorResponse {
     rating: Option<crate::data::course_types::InstructorRating>,
 }
 
+/// Largest page of sections the trend endpoint will sample at once.
+const MAX_TREND_CRNS: usize = 100;
+
+/// Samples per section. Enough for a sparkline to show movement, small enough to stay cheap.
+const TREND_BUCKETS: i32 = 12;
+
+#[derive(Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendsRequest {
+    pub term: String,
+    pub crns: Vec<String>,
+}
+
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendSample {
+    pub enrollment: i32,
+    pub wait_count: i32,
+    pub seats_available: i32,
+}
+
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendsResponse {
+    /// CRN to its oldest-first samples. Sections with no recorded history are absent.
+    pub trends: std::collections::BTreeMap<String, Vec<TrendSample>>,
+}
+
+/// Batched enrollment trends for a page of search results.
+///
+/// Kept off the search response so a decoration never slows the query users wait on.
+pub(super) async fn course_trends(
+    State(state): State<AppState>,
+    Json(body): Json<TrendsRequest>,
+) -> Result<Json<TrendsResponse>, ApiError> {
+    if body.crns.len() > MAX_TREND_CRNS {
+        return Err(ApiError::new(
+            ApiErrorCode::InvalidRange,
+            format!("Too many CRNs: {} (max {MAX_TREND_CRNS})", body.crns.len()),
+        ));
+    }
+
+    let mut trends: std::collections::BTreeMap<String, Vec<TrendSample>> = Default::default();
+    if body.crns.is_empty() {
+        return Ok(Json(TrendsResponse { trends }));
+    }
+
+    use crate::banner::models::terms::Term;
+    let term_code = Term::resolve_to_code(&body.term).unwrap_or_else(|| body.term.clone());
+
+    let rows = data::metrics::list_trends_for_courses(
+        &state.db_pool,
+        &term_code,
+        &body.crns,
+        TREND_BUCKETS,
+    )
+    .await
+    .map_err(|e| db_error("Course trends query", e))?;
+
+    for row in rows {
+        trends.entry(row.crn).or_default().push(TrendSample {
+            enrollment: row.enrollment,
+            wait_count: row.wait_count,
+            seats_available: row.seats_available,
+        });
+    }
+
+    Ok(Json(TrendsResponse { trends }))
+}
+
 #[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]

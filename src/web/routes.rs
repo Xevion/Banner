@@ -71,6 +71,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/status", get(status::status))
         .route("/metrics", get(status::metrics))
         .route("/courses/search", get(courses::search_courses))
+        .route("/courses/trends", post(courses::course_trends))
         .route("/courses/{term}/{crn}", get(courses::get_course))
         .route(
             "/courses/{term}/{subject}/{course_number}/sections",

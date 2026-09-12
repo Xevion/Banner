@@ -117,4 +117,7 @@ export type { TimeseriesParams } from "./TimeseriesParams";
 export type { TimeseriesPoint } from "./TimeseriesPoint";
 export type { TimeseriesResponse } from "./TimeseriesResponse";
 export type { TopCandidateResponse } from "./TopCandidateResponse";
+export type { TrendSample } from "./TrendSample";
+export type { TrendsRequest } from "./TrendsRequest";
+export type { TrendsResponse } from "./TrendsResponse";
 export type { User } from "./User";

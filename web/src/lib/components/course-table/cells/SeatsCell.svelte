@@ -1,9 +1,15 @@
 <script lang="ts">
 import type { CourseResponse } from "$lib/bindings";
 import { seatsColor } from "$lib/course";
+import { courseTrends } from "$lib/stores/course-trends.svelte";
 import { formatNumber } from "$lib/utils";
+import SeatsTrend from "./SeatsTrend.svelte";
 
 let { course }: { course: CourseResponse } = $props();
+
+// Absent for the ~97% of sections the scraper has never seen change; the cell just
+// renders without it rather than showing an empty slot.
+let trend = $derived(courseTrends.get(course.termSlug, course.crn));
 
 let open = $derived(course.enrollment.max - course.enrollment.current);
 let waitlisted = $derived(course.enrollment.waitCount);
@@ -21,7 +27,7 @@ let seatsTip = $derived(
 
 <td class="px-2 align-middle whitespace-nowrap">
   <span
-    class="grid grid-cols-[1.5rem_2.25rem_minmax(0,1fr)] items-baseline gap-x-[5px] select-none"
+    class="grid grid-cols-[1.5rem_2.25rem_2.5rem_2rem] items-baseline gap-x-[5px] select-none"
     data-tooltip={seatsTip}
     data-tooltip-side="left"
     data-tooltip-delay="200"
@@ -35,6 +41,11 @@ let seatsTip = $derived(
     >
     <span class="font-mono text-[10px] text-seat-over tabular-nums">
       {#if waitlisted > 0}wl {formatNumber(waitlisted)}{/if}
+    </span>
+    <span class="self-center justify-self-end">
+      {#if trend && trend.length > 1}
+        <SeatsTrend samples={trend} />
+      {/if}
     </span>
   </span>
 </td>

@@ -40,6 +40,8 @@ import type {
   TimeRange,
   TimelineRequest,
   TimelineResponse,
+  TrendsRequest,
+  TrendsResponse,
   TimeseriesResponse,
   User,
 } from "$lib/bindings";
@@ -421,6 +423,16 @@ export class BannerApiClient {
     return this.request<TimelineResponse>("/timeline", {
       method: "POST",
       body: { ranges } satisfies TimelineRequest,
+    });
+  }
+
+  async getCourseTrends(
+    term: string,
+    crns: string[]
+  ): Promise<Result<TrendsResponse, ApiErrorClass>> {
+    return this.request<TrendsResponse>("/courses/trends", {
+      method: "POST",
+      body: { term, crns } satisfies TrendsRequest,
     });
   }
 

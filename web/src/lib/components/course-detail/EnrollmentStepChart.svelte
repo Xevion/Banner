@@ -49,6 +49,7 @@ function formatStamp(d: Date): string {
       <Axis
         placement="bottom"
         format={formatTick}
+        ticks={6}
         grid={{ class: "stroke-muted-foreground/10" }}
         rule={false}
         classes={{ tickLabel: "fill-muted-foreground" }}

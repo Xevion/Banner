@@ -99,7 +99,9 @@ export const COLUMNS = {
   seats: {
     label: "Seats",
     accessorFn: (row) => row.enrollment.max - row.enrollment.current,
-    width: 132,
+    // Four fixed tracks: count, capacity, waitlist, trend. The waitlist track holds
+    // its width on sections without one, or the trend drifts row to row.
+    width: 164,
     cell: SeatsCell,
   },
 } satisfies Record<ColumnId, ColumnSpec>;
