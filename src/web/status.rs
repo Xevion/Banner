@@ -174,10 +174,14 @@ pub(super) async fn metrics(
         "24h" => chrono::Duration::hours(24),
         "7d" => chrono::Duration::days(7),
         "30d" => chrono::Duration::days(30),
+        "90d" => chrono::Duration::days(90),
+        // A term's enrollment history outlives any rolling window, so the history UI asks
+        // for the whole series and lets `limit` bound the response.
+        "term" => chrono::Duration::days(365),
         _ => {
             return Err(ApiError::new(
                 ApiErrorCode::InvalidRange,
-                format!("Invalid range '{range_str}'. Valid: 1h, 6h, 24h, 7d, 30d"),
+                format!("Invalid range '{range_str}'. Valid: 1h, 6h, 24h, 7d, 30d, 90d, term"),
             ));
         }
     };

@@ -9,6 +9,7 @@ import { Tabs } from "bits-ui";
 import SimpleTooltip from "../SimpleTooltip.svelte";
 import CourseDetailInstructors from "./CourseDetailInstructors.svelte";
 import CourseDetailSchedule from "./CourseDetailSchedule.svelte";
+import EnrollmentHistory from "./EnrollmentHistory.svelte";
 import RelatedSections from "./RelatedSections.svelte";
 
 let { course }: { course: CourseResponse } = $props();
@@ -254,14 +255,8 @@ $effect(() => {
     </Tabs.Content>
 
     <Tabs.Content value="history">
-        <div class="flex flex-col items-center justify-center py-8 text-center">
-            <p class="text-sm text-muted-foreground">
-                Historical enrollment and grade data coming soon.
-            </p>
-            <p class="text-xs text-muted-foreground/60 mt-1">
-                Enrollment trends, fill rates, and grade distributions across
-                past semesters.
-            </p>
-        </div>
+        {#if activeTab === "history"}
+            <EnrollmentHistory {course} />
+        {/if}
     </Tabs.Content>
 </Tabs.Root>
