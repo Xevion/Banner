@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.3](https://github.com/Xevion/Banner/compare/v0.8.2...v0.8.3) (2026-09-12)
+
+
+### Features
+
+* **course-detail:** Add enrollment history chart and timeline ([7bd44f7](https://github.com/Xevion/Banner/commit/7bd44f7783ae0bf54d4cf3e9dcb921e9b7ba35c0))
+* **course-table:** Add enrollment sparklines to the seats column ([fba05d3](https://github.com/Xevion/Banner/commit/fba05d30012263b99d2072ee3f5883d9c5eb7e09))
+* **telemetry:** Describe metrics and route exposition through a ClusterIP Service ([7d8559a](https://github.com/Xevion/Banner/commit/7d8559a69e6ca10b13e0f6381e328329abadf3de))
+* **telemetry:** Expose Prometheus metrics on a dedicated listener ([b5b2054](https://github.com/Xevion/Banner/commit/b5b20545831be1dd6bc28e868aa9507d6d6ac7b7))
+
+
+### Performance Improvements
+
+* **deploy:** Ship a production-only SSR install and slim the image ([369ad34](https://github.com/Xevion/Banner/commit/369ad342f215b6967e31a92e0bd06f0147dd86df))
+
+
+### Code Refactoring
+
+* **assets:** Serve the client build from disk via ServeDir ([d878cd6](https://github.com/Xevion/Banner/commit/d878cd66105049d10f2486d5f3c8bda8abfd1de9))
+
 ## [0.8.2](https://github.com/Xevion/Banner/compare/v0.8.1...v0.8.2) (2026-09-11)
 
 
