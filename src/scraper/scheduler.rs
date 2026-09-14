@@ -58,8 +58,8 @@ pub const KV_BLUEBOOK_SYNC: &str = "scheduler.bluebook_sync";
 pub const KV_RMP_REVIEW_SCRAPE: &str = "scheduler.rmp_review_scrape";
 pub const KV_CLUSTER_COURSES: &str = "scheduler.cluster_courses";
 
-pub const SCRAPE_QUEUE_DEPTH: &str = "scrape_queue_depth";
-pub const SCRAPE_QUEUE_OLDEST_SECONDS: &str = "scrape_queue_oldest_seconds";
+pub const SCRAPE_QUEUE_DEPTH: &str = "banner_scrape_queue_depth";
+pub const SCRAPE_QUEUE_OLDEST_SECONDS: &str = "banner_scrape_queue_oldest_seconds";
 
 /// Reads a persisted scheduler timestamp, treating a read failure as "never ran".
 ///

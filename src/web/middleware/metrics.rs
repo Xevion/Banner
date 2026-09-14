@@ -10,18 +10,37 @@ use crate::telemetry::{HTTP_DURATION, HTTP_REQUESTS, method_label};
 /// Raw URIs are attacker-controlled, so unmatched requests must not contribute path labels.
 const UNMATCHED: &str = "unmatched";
 
+/// Set by a handler outside the route table so this layer can label the request without echoing
+/// the raw URI that reached it. The value must be one of a fixed set, never caller-derived.
+#[derive(Clone, Copy)]
+pub struct RouteLabel(pub &'static str);
+
+/// Tags a response with the bounded label the metrics layer should record for it.
+pub fn labelled(mut response: Response, label: &'static str) -> Response {
+    response.extensions_mut().insert(RouteLabel(label));
+    response
+}
+
 /// Applied via `Router::layer`, which runs after routing, so `MatchedPath` is the route template.
 pub async fn track_metrics(req: Request, next: Next) -> Response {
-    let path = req
+    let matched = req
         .extensions()
         .get::<MatchedPath>()
-        .map_or(UNMATCHED, MatchedPath::as_str)
-        .to_owned();
+        .map(|path| path.as_str().to_owned());
     let method = method_label(req.method());
 
     let started = Instant::now();
     let response = next.run(req).await;
     let elapsed = started.elapsed();
+
+    // Resolved after the call: a response from outside the route table classifies itself.
+    let path = matched.unwrap_or_else(|| {
+        response
+            .extensions()
+            .get::<RouteLabel>()
+            .map_or(UNMATCHED, |label| label.0)
+            .to_owned()
+    });
 
     let status = response.status().as_u16().to_string();
 
@@ -103,6 +122,41 @@ mod tests {
             counter_label(snapshot, "path").as_deref(),
             Some("/courses/{term}/{crn}"),
             "the concrete term and CRN must never reach a label"
+        );
+    }
+
+    /// The fallback serves pages, assets and API 404s under one route, so it classifies itself
+    /// rather than letting the layer record every distinct URI that missed the route table.
+    #[test]
+    fn test_records_fallback_label_in_place_of_unmatched() {
+        let router = Router::new()
+            .route("/courses/{term}/{crn}", get(|| async { "ok" }))
+            .fallback(|| async { labelled("page".into_response(), "ssr") })
+            .layer(axum::middleware::from_fn(track_metrics));
+
+        let (status, snapshot) = request_labels(router, "/instructors/some-slug");
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            counter_label(snapshot, "path").as_deref(),
+            Some("ssr"),
+            "a self-classified fallback response must label with its own kind"
+        );
+    }
+
+    #[test]
+    fn test_falls_back_to_unmatched_when_no_label_was_attached() {
+        let router = Router::new()
+            .route("/courses/{term}/{crn}", get(|| async { "ok" }))
+            .fallback(|| async { "page" })
+            .layer(axum::middleware::from_fn(track_metrics));
+
+        let (_, snapshot) = request_labels(router, "/instructors/some-slug");
+
+        assert_eq!(
+            counter_label(snapshot, "path").as_deref(),
+            Some("unmatched"),
+            "an unlabelled fallback must not contribute a URI-derived label"
         );
     }
 

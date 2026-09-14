@@ -2,7 +2,7 @@
 
 pub mod process;
 
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use metrics_util::MetricKindMask;
 use sqlx::PgPool;
 use std::sync::OnceLock;
@@ -12,8 +12,11 @@ pub const HTTP_REQUESTS: &str = "http_requests_total";
 pub const HTTP_DURATION: &str = "http_request_duration_seconds";
 pub const DB_POOL_CONNECTIONS: &str = "db_pool_connections";
 pub const DB_FAILURES: &str = "db_failures_total";
-pub const SCRAPE_JOBS: &str = "scrape_jobs_total";
-pub const SCRAPE_COURSES: &str = "scrape_courses_total";
+// Prefixed away from the `scrape_*` names a Prometheus-compatible scraper injects about its own
+// collection, so `banner_scrape_job_duration_seconds` cannot be read as `scrape_duration_seconds`.
+pub const SCRAPE_JOBS: &str = "banner_scrape_jobs_total";
+pub const SCRAPE_COURSES: &str = "banner_scrape_courses_total";
+pub const SCRAPE_JOB_DURATION: &str = "banner_scrape_job_duration_seconds";
 pub const BANNER_REQUESTS: &str = "banner_api_requests_total";
 pub const BANNER_DURATION: &str = "banner_api_request_duration_seconds";
 pub const BANNER_RATE_LIMIT_WAIT: &str = "banner_api_rate_limit_wait_seconds";
@@ -30,6 +33,12 @@ const LATENCY_BUCKETS: &[f64] = &[
     60.0,
 ];
 
+/// A scrape job runs for seconds to minutes. The global set wastes half its buckets below a
+/// millisecond and stops at the 60s HTTP timeout, which a large term scrape passes routinely.
+const SCRAPE_JOB_BUCKETS: &[f64] = &[
+    0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0, 300.0, 600.0,
+];
+
 /// Bounds series growth from label values we do not fully control.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
@@ -41,6 +50,11 @@ pub fn recorder() -> &'static PrometheusHandle {
         let handle = PrometheusBuilder::new()
             .set_buckets(LATENCY_BUCKETS)
             .expect("latency buckets are non-empty and ascending")
+            .set_buckets_for_metric(
+                Matcher::Full(SCRAPE_JOB_DURATION.to_owned()),
+                SCRAPE_JOB_BUCKETS,
+            )
+            .expect("scrape job buckets are non-empty and ascending")
             // Counters and histograms only. A gauge tracks current state owned by a live RAII
             // guard, so reaping an idle series orphans that handle and the eventual decrement
             // lands on a fresh zero, under-counting for the life of the process.
@@ -92,6 +106,11 @@ fn describe() {
         SCRAPE_COURSES,
         Unit::Count,
         "Courses seen by completed scrapes, split into fetched, changed, and unchanged."
+    );
+    describe_histogram!(
+        SCRAPE_JOB_DURATION,
+        Unit::Seconds,
+        "Wall time for one scrape job attempt to reach a terminal outcome, by outcome."
     );
     describe_counter!(
         BANNER_REQUESTS,
@@ -230,6 +249,13 @@ pub fn record_scrape_job(outcome: &'static str) {
     metrics::counter!(SCRAPE_JOBS, "outcome" => outcome).increment(1);
 }
 
+/// Records how long one job attempt took, under the same outcome label as the counter.
+///
+/// A retried job records once per attempt, so this is attempt latency rather than job latency.
+pub fn record_scrape_job_duration(outcome: &'static str, elapsed: Duration) {
+    metrics::histogram!(SCRAPE_JOB_DURATION, "outcome" => outcome).record(elapsed.as_secs_f64());
+}
+
 /// Counts a database failure by kind. `pool_timeout` is the one that signals contention.
 pub fn record_db_failure(error: &anyhow::Error) {
     metrics::counter!(DB_FAILURES, "kind" => classify_db_error(error)).increment(1);
@@ -260,6 +286,23 @@ mod tests {
             std::ptr::eq(first, second),
             "recorder() must reuse the installed handle; a second install would panic"
         );
+    }
+
+    /// A Prometheus-compatible scraper injects its own `scrape_*` series describing each collection
+    /// (`scrape_duration_seconds`, `scrape_samples_scraped`), so ours must not share that namespace.
+    #[test]
+    fn test_scrape_metric_names_do_not_collide_with_scraper_meta_metrics() {
+        for name in [
+            SCRAPE_JOBS,
+            SCRAPE_COURSES,
+            crate::scraper::scheduler::SCRAPE_QUEUE_DEPTH,
+            crate::scraper::scheduler::SCRAPE_QUEUE_OLDEST_SECONDS,
+        ] {
+            assert!(
+                name.starts_with("banner_"),
+                "{name} sits in the namespace a scraper uses for its own collection metrics"
+            );
+        }
     }
 
     #[test]
@@ -300,6 +343,25 @@ mod tests {
         assert!(
             rendered.contains(SCRAPE_JOBS),
             "expected {SCRAPE_JOBS} in exposition output, got: {rendered}"
+        );
+    }
+
+    /// Duration is recorded for failures too: a job that fails after 30s and one that fails
+    /// immediately point at different causes, and the outcome counter cannot tell them apart.
+    #[test]
+    fn test_render_includes_scrape_job_duration_labelled_by_outcome() {
+        let handle = recorder();
+        record_scrape_job_duration("unrecoverable_error", Duration::from_millis(1500));
+
+        let rendered = handle.render();
+
+        assert!(
+            rendered.contains(SCRAPE_JOB_DURATION),
+            "expected {SCRAPE_JOB_DURATION} in exposition output, got: {rendered}"
+        );
+        assert!(
+            rendered.contains("outcome=\"unrecoverable_error\""),
+            "expected the outcome label on the histogram, got: {rendered}"
         );
     }
 

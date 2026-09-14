@@ -188,6 +188,15 @@ impl Worker {
     ) {
         let duration_ms = DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
 
+        telemetry::record_scrape_job_duration(
+            match &result {
+                Ok(_) => "success",
+                Err(JobError::Recoverable(_)) => "recoverable_error",
+                Err(JobError::Unrecoverable(_)) => "unrecoverable_error",
+            },
+            duration,
+        );
+
         const SLOW_THRESHOLD: Duration = Duration::from_secs(30);
         if duration > SLOW_THRESHOLD {
             warn!(

@@ -240,10 +240,15 @@ async fn ssr_fallback(
     let path = uri.path();
     let query = uri.query();
 
+    use crate::web::middleware::metrics::labelled;
+
     // Unmatched /api/* is never an SSR page; 404 directly instead of proxying
     // (the SSR has no /api routes and would hang until timeout).
     if path == "/api" || path.starts_with("/api/") {
-        return crate::web::error::ApiError::not_found("No such API route").into_response();
+        return labelled(
+            crate::web::error::ApiError::not_found("No such API route").into_response(),
+            "api_404",
+        );
     }
 
     let mut headers = request.headers().clone();
@@ -264,18 +269,24 @@ async fn ssr_fallback(
     #[cfg(feature = "serve-assets")]
     {
         if let Some(response) = try_serve_asset(&method, &uri, request.headers()).await {
-            return response;
+            return labelled(response, "asset");
         }
 
         // SvelteKit assets under _app/ that don't exist are a hard 404
         let trimmed = path.trim_start_matches('/');
         if trimmed.starts_with("_app/") || trimmed.starts_with("assets/") {
-            return (StatusCode::NOT_FOUND, "Asset not found").into_response();
+            return labelled(
+                (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+                "asset_404",
+            );
         }
     }
 
     // Proxy to the downstream SSR server
-    crate::web::proxy::proxy_to_ssr(&state, &method, path, query, headers).await
+    labelled(
+        crate::web::proxy::proxy_to_ssr(&state, &method, path, query, headers).await,
+        "ssr",
+    )
 }
 
 /// `GET /robots.txt`
