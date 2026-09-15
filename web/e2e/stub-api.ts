@@ -5,7 +5,13 @@
  * single stub answers both the SSR-time and the browser-time requests.
  */
 import { createServer } from "node:http";
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type {
+  CourseResponse,
+  TrendSample,
+  TrendsRequest,
+  TrendsResponse,
+} from "../src/lib/bindings";
 import { mockCourses } from "../src/lib/stories/fixtures/courses";
 
 const port = Number(process.env.E2E_STUB_PORT ?? 8788);
@@ -86,6 +92,39 @@ function json(res: ServerResponse, body: unknown, status = 200): void {
   res.end(payload);
 }
 
+/** History walked back from a section's current numbers, so its sparkline draws a path. */
+function trendFor(course: CourseResponse): TrendSample[] {
+  const { current, max, waitCount } = course.enrollment;
+  return Array.from({ length: 6 }, (_, index) => {
+    const stepsBack = 5 - index;
+    const enrollment = Math.max(0, current - stepsBack * 2);
+    return {
+      enrollment,
+      waitCount: Math.max(0, waitCount - stepsBack),
+      seatsAvailable: Math.max(0, max - enrollment),
+    };
+  });
+}
+
+const trendsByCrn = new Map(mockCourses.map((course) => [course.crn, trendFor(course)]));
+
+/** Like the real endpoint, a section with no recorded history is absent. */
+function courseTrends(body: TrendsRequest): TrendsResponse {
+  const trends: TrendsResponse["trends"] = {};
+  for (const crn of body.crns) {
+    const samples = trendsByCrn.get(crn);
+    if (samples) trends[crn] = samples;
+  }
+  return { trends };
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  req.setEncoding("utf8");
+  let raw = "";
+  for await (const chunk of req) raw += chunk as string;
+  return raw ? JSON.parse(raw) : {};
+}
+
 /**
  * Names for the slugs asked about, drawn from the same instructors the
  * autocomplete offers.
@@ -103,11 +142,13 @@ function resolveInstructors(url: URL): Record<string, string> {
   return resolved;
 }
 
-const server = createServer((req, res) => {
+async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://localhost:${port}`);
   const path = url.pathname;
 
   switch (path) {
+    case "/api/courses/trends":
+      return json(res, courseTrends((await readJsonBody(req)) as TrendsRequest));
     case "/api/health":
       return json(res, { status: "healthy", timestamp: new Date().toISOString() });
     case "/api/auth/me":
@@ -126,12 +167,17 @@ const server = createServer((req, res) => {
       return json(res, { slots: [], subjects: [] });
     case "/api/csp-report":
       res.writeHead(204);
-      return res.end();
+      res.end();
+      return;
     default:
       // Loud on purpose: an unstubbed endpoint should be obvious in the logs.
       process.stderr.write(`stub-api: no handler for ${path}\n`);
       return json(res, { code: "NOT_FOUND", message: `No stub for ${path}`, details: null }, 404);
   }
+}
+
+const server = createServer((req, res) => {
+  void handle(req, res);
 });
 
 server.listen(port, "127.0.0.1", () => {

@@ -30,6 +30,8 @@ export const test = base.extend<{
       // A route a test broke on purpose also makes the browser log the failed
       // load, which says nothing beyond what the test already arranged.
       if (isIgnored(message.location().url)) return;
+      // The response handler below already reports this, with the URL and status.
+      if (message.text().startsWith("Failed to load resource")) return;
       problems.push(`console error: ${message.text()}`);
     });
 

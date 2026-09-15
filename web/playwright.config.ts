@@ -35,8 +35,9 @@ export default defineConfig({
   // A retry in CI separates a genuine break from a flake without hiding either:
   // a test that only passes on the second attempt is reported as flaky.
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }], ["list"]] : [["list"]],
+  // A break that hits every test is diagnosed from the first few failures.
+  maxFailures: process.env.CI ? 5 : 0,
+  reporter: process.env.CI ? [["github"], ["dot"], ["html", { open: "never" }]] : [["list"]],
   use: {
     baseURL,
     // Keyed to failure rather than to a retry. Paired with retries: 0 locally,
