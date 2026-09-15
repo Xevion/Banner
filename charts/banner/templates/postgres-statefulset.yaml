@@ -50,12 +50,14 @@ spec:
               mountPath: /dev/shm
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+              # Shell-wrapped because probe commands do not expand $(VAR); raw, it falls back to
+              # the OS user and logs a FATAL per probe.
+              command: ["sh", "-c", 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             exec:
-              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+              command: ["sh", "-c", 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
             # Generous on purpose: a restart mid-recovery forces crash recovery on the next start,
             # which takes longer still and restarts again before finishing, a self-perpetuating
             # spiral. Give WAL replay genuine room rather than racing it.
