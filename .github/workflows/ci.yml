@@ -251,6 +251,8 @@ jobs:
 
       # A tag on the image the deploy already publishes, so GITHUB_TOKEN never has to
       # create a package. type=gha shares one 10GB/repo budget with every cache here.
+      # Only master writes the tag: a fork PR's token is read-only, and an export it
+      # cannot authorize fails the whole build. An unreadable import is only a warning.
       - name: Build image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -258,7 +260,7 @@ jobs:
           push: false
           build-args: CARGO_CACHE=layer
           cache-from: type=registry,ref=ghcr.io/xevion/banner:buildcache
-          cache-to: type=registry,ref=ghcr.io/xevion/banner:buildcache,mode=max
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/xevion/banner:buildcache,mode=max' || '' }}
 
   security:
     name: Security Scan
