@@ -15,6 +15,9 @@ spec:
       labels:
         app: {{ .Release.Name }}-postgres
     spec:
+      # The shutdown checkpoint has to flush the whole dirty buffer pool; SIGKILL at the 30s
+      # default leaves an unclean exit and a WAL replay far longer than the shutdown it cut short.
+      terminationGracePeriodSeconds: 300
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
@@ -48,20 +51,22 @@ spec:
               mountPath: /var/lib/postgresql/data
             - name: shm
               mountPath: /dev/shm
-          readinessProbe:
+          startupProbe:
             exec:
               # Shell-wrapped because probe commands do not expand $(VAR); raw, it falls back to
               # the OS user and logs a FATAL per probe.
               command: ["sh", "-c", 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
-            initialDelaySeconds: 5
+            # Recovery rejects connections until both WAL replay and the end-of-recovery checkpoint
+            # finish; killing it partway restarts that work from the same checkpoint, forever.
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
             periodSeconds: 5
           livenessProbe:
             exec:
               command: ["sh", "-c", 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
-            # Generous on purpose: a restart mid-recovery forces crash recovery on the next start,
-            # which takes longer still and restarts again before finishing, a self-perpetuating
-            # spiral. Give WAL replay genuine room rather than racing it.
-            initialDelaySeconds: 30
             periodSeconds: 15
             failureThreshold: 10
           resources: {{ toYaml .Values.postgres.resources | nindent 12 }}
