@@ -73,12 +73,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 COPY .cargo ./.cargo
 
+# "mount" keeps artifacts in the cache mount below: incremental, but no cache backend
+# exports it. "layer" redirects them clear of the mount so the image cache carries them.
+ARG CARGO_CACHE=mount
+
 # Copy recipe from planner and build dependencies only
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    cargo chef cook --release --recipe-path recipe.json --bin banner
+    if [ "$CARGO_CACHE" = layer ]; then export CARGO_TARGET_DIR=/app/target-layer; fi \
+    && cargo chef cook --release --recipe-path recipe.json --bin banner
 
 # Copy source code
 COPY Cargo.toml Cargo.lock ./
@@ -96,15 +101,15 @@ ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
 # Build with embedded assets; SQLX_OFFLINE uses the .sqlx cache (no DB needed at build time)
 ENV SQLX_OFFLINE=true
-# target/ is a BuildKit cache mount so incremental artifacts survive between builds. The mount is
-# invisible to the image layer, so the binary has to be stripped and copied out of it within the
-# same RUN or it disappears with it.
+# A cache mount is invisible to the image layer, so the binary is stripped and copied out
+# within the same RUN or it disappears with it.
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    cargo build --release --bin banner \
-    && strip target/release/banner \
-    && cp target/release/banner /banner
+    if [ "$CARGO_CACHE" = layer ]; then export CARGO_TARGET_DIR=/app/target-layer; fi \
+    && cargo build --release --bin banner \
+    && strip "${CARGO_TARGET_DIR:-target}/release/banner" \
+    && cp "${CARGO_TARGET_DIR:-target}/release/banner" /banner
 
 # Node runtime for the SvelteKit SSR server
 FROM node:24-trixie-slim
