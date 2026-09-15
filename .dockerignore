@@ -5,6 +5,7 @@ target/
 # Documentation
 README.md
 docs/
+observability/
 *.md
 
 # Old Go codebase
