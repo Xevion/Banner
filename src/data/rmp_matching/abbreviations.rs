@@ -1,0 +1,208 @@
+//! UTSA subject-code expansions used to compare against RMP department strings.
+
+/// UTSA subject-code expansions used to compare against RMP department strings.
+pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
+    // Computer Science & Engineering
+    ("cs", &["computer science"]),
+    ("ece", &["early childhood education", "early childhood"]),
+    (
+        "ee",
+        &["electrical engineering", "electrical", "engineering"],
+    ),
+    (
+        "me",
+        &["mechanical engineering", "mechanical", "engineering"],
+    ),
+    ("ce", &["civil engineering", "civil", "engineering"]),
+    ("egr", &["engineering"]),
+    ("bme", &["biomedical engineering", "engineering"]),
+    ("cme", &["chemical engineering", "engineering"]),
+    ("cpe", &["computer engineering", "engineering"]),
+    ("ise", &["industrial", "systems engineering", "engineering"]),
+    ("mate", &["materials engineering", "engineering"]),
+    // Sciences (include generic "science" for RMP catch-all departments)
+    ("bio", &["biology", "biological", "science"]),
+    ("chem", &["chemistry", "science"]),
+    ("che", &["chemistry", "science"]),
+    ("bch", &["biochemistry", "chemistry", "science"]),
+    ("phys", &["physics", "science"]),
+    ("phy", &["physics", "science"]),
+    ("math", &["mathematics"]),
+    ("sta", &["statistics"]),
+    ("geo", &["geology", "science"]),
+    ("ast", &["astronomy", "science"]),
+    ("es", &["environmental science", "science"]),
+    // English & Humanities
+    ("eng", &["english", "literature"]),
+    ("his", &["history"]),
+    ("phi", &["philosophy"]),
+    ("cla", &["classics"]),
+    ("hum", &["humanities", "religion", "philosophy"]),
+    ("wgss", &["women's studies"]),
+    // Social Sciences (include generic "social science")
+    ("pol", &["political science", "social science"]),
+    ("psy", &["psychology", "social science"]),
+    ("soc", &["sociology", "social science"]),
+    ("ant", &["anthropology", "social science"]),
+    ("eco", &["economics", "business"]),
+    ("crj", &["criminal justice"]),
+    ("swk", &["social work"]),
+    ("pad", &["public administration"]),
+    ("grg", &["geography"]),
+    ("ges", &["geography"]),
+    // Business (include generic "business" and "managerial" for RMP catch-alls)
+    (
+        "acc",
+        &["accounting", "business", "managerial science", "managerial"],
+    ),
+    (
+        "fin",
+        &["finance", "business", "managerial science", "managerial"],
+    ),
+    (
+        "mgt",
+        &["management", "business", "managerial science", "managerial"],
+    ),
+    (
+        "mkt",
+        &["marketing", "business", "managerial science", "managerial"],
+    ),
+    (
+        "ms",
+        &[
+            "management science",
+            "managerial science",
+            "managerial",
+            "management",
+            "business",
+            "statistics",
+        ],
+    ),
+    (
+        "is",
+        &["information systems", "information science", "business"],
+    ),
+    (
+        "gba",
+        &[
+            "general business",
+            "business",
+            "managerial science",
+            "managerial",
+        ],
+    ),
+    (
+        "ent",
+        &[
+            "entrepreneurship",
+            "business",
+            "managerial science",
+            "managerial",
+        ],
+    ),
+    ("blw", &["business law", "law", "business"]),
+    ("rfd", &["real estate"]),
+    (
+        "mot",
+        &[
+            "management of technology",
+            "management",
+            "business",
+            "managerial science",
+            "managerial",
+        ],
+    ),
+    // Arts & Fine Arts (include generic "fine arts")
+    ("art", &["art", "fine arts"]),
+    ("mus", &["music", "fine arts"]),
+    ("dan", &["dance", "fine arts"]),
+    ("thr", &["theater", "fine arts"]),
+    ("ahc", &["art history", "art", "fine arts"]),
+    // Architecture & Design
+    ("arc", &["architecture"]),
+    ("ide", &["interior design", "design"]),
+    // Anthropology & Ethnic Studies
+    ("aas", &["african american studies", "ethnic studies"]),
+    ("mas", &["mexican american studies", "ethnic studies"]),
+    ("regs", &["ethnic studies", "gender"]),
+    // Languages
+    ("lng", &["linguistics", "applied linguistics", "languages"]),
+    ("spn", &["spanish", "languages", "modern languages"]),
+    ("frn", &["french", "languages", "modern languages"]),
+    ("ger", &["german", "languages", "modern languages"]),
+    ("chn", &["chinese", "languages", "modern languages"]),
+    ("jpn", &["japanese", "languages", "modern languages"]),
+    ("kor", &["korean", "languages", "modern languages"]),
+    ("itl", &["italian", "languages", "modern languages"]),
+    ("rus", &["russian", "languages", "modern languages"]),
+    ("lat", &["latin", "languages"]),
+    ("grk", &["greek", "languages"]),
+    (
+        "asl",
+        &["american sign language", "sign language", "languages"],
+    ),
+    (
+        "fl",
+        &["foreign languages", "languages", "modern languages"],
+    ),
+    // Education
+    ("edu", &["education"]),
+    ("ci", &["curriculum", "education"]),
+    ("edl", &["educational leadership", "education"]),
+    ("csm", &["construction", "architecture", "engineering"]),
+    (
+        "edp",
+        &["educational psychology", "education", "psychology"],
+    ),
+    (
+        "bbl",
+        &["bilingual education", "bilingual", "education", "languages"],
+    ),
+    ("spe", &["special education", "education"]),
+    // Health & Kinesiology
+    ("hth", &["health"]),
+    ("hcp", &["health science", "health"]),
+    ("ntr", &["nutrition", "health science", "health"]),
+    ("kin", &["kinesiology", "physical ed", "physical education"]),
+    // Communication & Film
+    ("com", &["communication", "film"]),
+    // Military
+    ("msc", &["military science"]),
+    ("asc", &["aerospace"]),
+    // Other
+    ("cou", &["counseling", "psychology", "education"]),
+    (
+        "esl",
+        &[
+            "english as a second language",
+            "bilingual",
+            "education",
+            "languages",
+        ],
+    ),
+    (
+        "ais",
+        &[
+            "applied interdisciplinary studies",
+            "interdisciplinary",
+            "education",
+        ],
+    ),
+    (
+        "ids",
+        &[
+            "interdisciplinary studies",
+            "interdisciplinary",
+            "education",
+        ],
+    ),
+    ("hon", &["honors"]),
+    ("lted", &["literacy", "education"]),
+    ("rdg", &["reading", "education"]),
+    ("ilt", &["instructional technology", "education"]),
+    ("pal", &["law", "pre-law", "political science"]),
+    ("mes", &["media", "film", "communication"]),
+    ("ndt", &["nutrition", "health science", "health"]),
+    ("wrc", &["writing", "english"]),
+    ("set", &["tourism management", "tourism"]),
+];
