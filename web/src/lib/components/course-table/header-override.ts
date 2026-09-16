@@ -27,11 +27,10 @@ export function courseHeaderOverride(
   // Shown together the columns are one range under one label, so the titles are
   // left to say which half each sort control orders.
   const paired = context.isColumnVisible("time") && context.isColumnVisible("time_end");
-  let label = step.label ?? undefined;
-  if (paired && headerId === "time") label = "Time";
+  const label = paired && headerId === "time" ? "Time" : step.label;
 
   return {
-    label,
+    ...(label === null ? {} : { label }),
     labelHidden: paired && headerId === "time_end",
     indicator: step.indicator,
     title: step.title,

@@ -61,8 +61,8 @@ type ListedSortKey = (typeof SORT_KEYS)[number];
 // Compile-time assertion, mirroring the one in filters.ts: SortKey must be
 // assignable to ListedSortKey, so a key the backend adds and this list omits
 // fails the build rather than silently passing runtime validation.
-const _sortKeyExhaustiveCheck: ListedSortKey = {} as SortKey;
-void _sortKeyExhaustiveCheck;
+type Assignable<A extends B, B> = A;
+export type _SortKeyExhaustiveCheck = Assignable<SortKey, ListedSortKey>;
 
 const VALID_SORT_KEYS: ReadonlySet<SortKey> = new Set(SORT_KEYS);
 
@@ -143,8 +143,9 @@ export function headerSortStep(
           (step) => step !== null && step.key === lead.key && step.desc === lead.desc
         );
 
-  const active = activeIndex === -1 ? null : steps[activeIndex]!;
-  const next = steps[(activeIndex + 1) % steps.length];
+  // A cycle always ends in null, so an out-of-range read means the same as "no sort".
+  const active = activeIndex === -1 ? null : (steps[activeIndex] ?? null);
+  const next = steps[(activeIndex + 1) % steps.length] ?? null;
 
   const describe = (term: SortTerm | null) => {
     if (!term) return "Click to clear sorting";

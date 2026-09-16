@@ -1,6 +1,6 @@
 <script lang="ts">
 let {
-  active = false,
+  active,
   onclick,
   label,
   title,

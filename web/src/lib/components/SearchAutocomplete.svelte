@@ -7,7 +7,7 @@ import { getInstructorNames } from "$lib/stores/instructor-names";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
 import type { Suggestion } from "$lib/suggestions";
 import { createSubjectSearch, mergeSuggestions, suggestionId } from "$lib/suggestions";
-import { BookOpen, GraduationCap, Loader2, Search, TriangleAlert, User } from "@lucide/svelte";
+import { BookOpen, GraduationCap, LoaderCircle, Search, TriangleAlert, User } from "@lucide/svelte";
 import { Command, Popover } from "bits-ui";
 import { fly } from "svelte/transition";
 
@@ -22,7 +22,7 @@ let {
 const filters = getFiltersContext();
 const instructorNames = getInstructorNames();
 
-let anchorEl = $state<HTMLDivElement>(null!);
+let anchorEl = $state<HTMLDivElement | null>(null);
 
 const query = useSuggestions<SuggestResponse>({
   fetcher: (q) => client.suggest(selectedTerm, q),
@@ -86,7 +86,7 @@ const listId = "search-autocomplete-list";
   <Popover.Root bind:open={query.open}>
     <div class="relative" bind:this={anchorEl}>
       {#if query.loading}
-        <Loader2
+        <LoaderCircle
           class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none animate-spin"
         />
       {:else}
@@ -146,7 +146,7 @@ const listId = "search-autocomplete-list";
                   </div>
                 {:else if query.loading && suggestions.length === 0}
                   <div role="status" class="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
-                    <Loader2 class="size-3.5 animate-spin shrink-0" />
+                    <LoaderCircle class="size-3.5 animate-spin shrink-0" />
                     Searching...
                   </div>
                 {:else if isEmpty}

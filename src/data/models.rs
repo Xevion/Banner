@@ -1,16 +1,15 @@
 //! `sqlx` models for the database schema.
 
 use std::collections::BTreeSet;
-use std::fmt;
-use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sqlx::types::Json;
+use strum::{AsRefStr, EnumString, IntoStaticStr, VariantArray};
 use ts_rs::TS;
 
 use crate::banner::models::meetings::TimeRange;
-use crate::data::course_types::{DateRange, MeetingLocation};
+use crate::data::course_types::{DateRange, MeetingLocation, RatingSource};
 use crate::data::unsigned::Count;
 
 /// Serialize an `i64` as a string to avoid JavaScript precision loss for values exceeding 2^53.
@@ -295,12 +294,100 @@ pub struct Instructor {
     pub last_name: Option<String>,
 }
 
+/// A stored string that names no variant of a closed set.
+///
+/// Concrete rather than `anyhow` so a SQLx decode can carry it, and it names both
+/// the column's type and the offending value, which `strum::ParseError` does not.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("unknown {kind} value: {value:?}")]
+pub struct UnknownVariant {
+    pub kind: &'static str,
+    pub value: String,
+}
+
+impl UnknownVariant {
+    pub fn new(kind: &'static str, value: &str) -> Self {
+        Self {
+            kind,
+            value: value.to_owned(),
+        }
+    }
+}
+
+/// Give an enum the SQLx codec for a closed set stored in a text column.
+///
+/// The column is `TEXT`/`VARCHAR` rather than a Postgres enum type, so the codec
+/// delegates to `&str`. The string mapping itself comes from strum's `AsRefStr`
+/// and `EnumString`; only the encode/decode wiring lives here.
+macro_rules! text_column_enum {
+    ($name:ident) => {
+        impl sqlx::Type<sqlx::Postgres> for $name {
+            fn type_info() -> sqlx::postgres::PgTypeInfo {
+                <str as sqlx::Type<sqlx::Postgres>>::type_info()
+            }
+
+            fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+                <&str as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+            }
+        }
+
+        impl<'r> sqlx::Decode<'r, sqlx::Postgres> for $name {
+            fn decode(
+                value: sqlx::postgres::PgValueRef<'r>,
+            ) -> Result<Self, sqlx::error::BoxDynError> {
+                let text = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+                text.parse()
+                    .map_err(|_| UnknownVariant::new(stringify!($name), text).into())
+            }
+        }
+
+        impl<'q> sqlx::Encode<'q, sqlx::Postgres> for $name {
+            fn encode_by_ref(
+                &self,
+                buf: &mut sqlx::postgres::PgArgumentBuffer,
+            ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+                <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&self.as_ref(), buf)
+            }
+        }
+    };
+}
+
+pub(crate) use text_column_enum;
+
+/// One page of a list endpoint's results.
+///
+/// Every paginated endpoint returns this shape, so a client can page through any of
+/// them with the same code. `page` is 1-based.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub total: Count,
+    pub page: i32,
+    pub per_page: i32,
+}
+
 /// Match status for RMP instructor matching.
 ///
-/// Stored as VARCHAR in the database - this enum is for Rust API types
-/// and TypeScript bindings only (no sqlx::Type derive).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// Stored as VARCHAR, so `serde` and `strum` must spell every variant the same way:
+/// one drives the API and TypeScript union, the other the column round-trip.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TS,
+    AsRefStr,
+    EnumString,
+    IntoStaticStr,
+    VariantArray,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 #[ts(export)]
 pub enum RmpMatchStatus {
     Unmatched,
@@ -310,38 +397,62 @@ pub enum RmpMatchStatus {
     Rejected,
 }
 
-impl RmpMatchStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Unmatched => "unmatched",
-            Self::Pending => "pending",
-            Self::Auto => "auto",
-            Self::Confirmed => "confirmed",
-            Self::Rejected => "rejected",
-        }
-    }
+text_column_enum!(RmpMatchStatus);
+
+/// Review state of a single `rmp_match_candidates` row.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TS,
+    AsRefStr,
+    EnumString,
+    IntoStaticStr,
+    VariantArray,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+#[ts(export)]
+pub enum RmpCandidateStatus {
+    Pending,
+    Accepted,
+    Rejected,
 }
 
-impl fmt::Display for RmpMatchStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
+text_column_enum!(RmpCandidateStatus);
+
+/// Review state of an `instructor_bluebook_links` row.
+///
+/// `Auto` and `Pending` are algorithm-generated; the other two are human decisions.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TS,
+    AsRefStr,
+    EnumString,
+    IntoStaticStr,
+    VariantArray,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+#[ts(export)]
+pub enum BluebookLinkStatus {
+    Auto,
+    Pending,
+    Approved,
+    Rejected,
 }
 
-impl FromStr for RmpMatchStatus {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "unmatched" => Ok(Self::Unmatched),
-            "pending" => Ok(Self::Pending),
-            "auto" => Ok(Self::Auto),
-            "confirmed" => Ok(Self::Confirmed),
-            "rejected" => Ok(Self::Rejected),
-            other => Err(anyhow::anyhow!("unknown RmpMatchStatus: {other:?}")),
-        }
-    }
-}
+text_column_enum!(BluebookLinkStatus);
 
 #[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
@@ -376,7 +487,7 @@ pub struct CourseInstructorDetail {
     pub sc_ci_lower: Option<f32>,
     pub sc_ci_upper: Option<f32>,
     pub sc_confidence: Option<f32>,
-    pub sc_source: Option<String>,
+    pub sc_source: Option<RatingSource>,
     pub sc_rmp_count: Option<i32>,
     pub sc_bb_count: Option<i32>,
 }
@@ -637,4 +748,96 @@ pub struct SubjectResultStats {
     pub recent_failure_count: i64,
     pub recent_success_count: i64,
     pub last_completed: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::banner::models::terms::Season;
+    use crate::data::course_types::RatingSource;
+    use crate::data::instructor_merge::DuplicateTier;
+    use crate::data::watches::WatchType;
+    use assert2::check;
+    use strum::VariantArray;
+
+    /// Every variant's strum spelling, in declaration order.
+    fn spellings<T>() -> Vec<&'static str>
+    where
+        T: VariantArray + Copy + Into<&'static str>,
+    {
+        T::VARIANTS.iter().map(|v| (*v).into()).collect()
+    }
+
+    /// These are the exact strings the columns hold, so a casing change is a data bug.
+    #[test]
+    fn test_strum_spellings_match_the_stored_column_values() {
+        check!(
+            spellings::<RmpMatchStatus>()
+                == ["unmatched", "pending", "auto", "confirmed", "rejected"]
+        );
+        check!(spellings::<RmpCandidateStatus>() == ["pending", "accepted", "rejected"]);
+        check!(spellings::<BluebookLinkStatus>() == ["auto", "pending", "approved", "rejected"]);
+        check!(spellings::<RatingSource>() == ["both", "rmp", "bluebook"]);
+        check!(spellings::<WatchType>() == ["seats_available", "waitlist_open", "any_change"]);
+        check!(tier_spellings() == ["same_account", "missing_email", "different_account"]);
+        check!(season_spellings() == ["Fall", "Spring", "Summer"]);
+    }
+
+    /// `Season` and `DuplicateTier` cannot derive `IntoStaticStr` cleanly, so they
+    /// go through `AsRef` instead of the shared helper.
+    fn tier_spellings() -> Vec<&'static str> {
+        DuplicateTier::VARIANTS.iter().map(AsRef::as_ref).collect()
+    }
+
+    fn season_spellings() -> Vec<&'static str> {
+        Season::VARIANTS.iter().map(AsRef::as_ref).collect()
+    }
+
+    /// serde drives the TypeScript union; strum drives the column. They must agree.
+    #[test]
+    fn test_serde_spelling_matches_strum_spelling() {
+        for variant in RmpMatchStatus::VARIANTS {
+            check!(serde_json::to_value(variant).unwrap() == variant.as_ref());
+        }
+        for variant in RmpCandidateStatus::VARIANTS {
+            check!(serde_json::to_value(variant).unwrap() == variant.as_ref());
+        }
+        for variant in BluebookLinkStatus::VARIANTS {
+            check!(serde_json::to_value(variant).unwrap() == variant.as_ref());
+        }
+        for variant in RatingSource::VARIANTS {
+            check!(serde_json::to_value(variant).unwrap() == variant.as_ref());
+        }
+    }
+
+    /// Every list endpoint shares these four keys, so a client can page any of them.
+    #[test]
+    fn test_page_serializes_to_the_shared_envelope_keys() {
+        let page = Page {
+            items: vec!["a", "b"],
+            total: Count::new(7),
+            page: 2,
+            per_page: 2,
+        };
+
+        check!(
+            serde_json::to_value(&page).unwrap()
+                == serde_json::json!({
+                    "items": ["a", "b"],
+                    "total": 7,
+                    "page": 2,
+                    "perPage": 2,
+                })
+        );
+    }
+
+    #[test]
+    fn test_parsing_rejects_a_value_no_variant_names() {
+        check!("bogus".parse::<RmpMatchStatus>().is_err());
+        check!("auto".parse::<RmpCandidateStatus>().is_err());
+        check!("accepted".parse::<BluebookLinkStatus>().is_err());
+        check!("any".parse::<WatchType>().is_err());
+        // "bb" was dropped as a dead legacy spelling of "bluebook".
+        check!("bb".parse::<RatingSource>().is_err());
+    }
 }

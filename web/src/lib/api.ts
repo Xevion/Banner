@@ -25,7 +25,8 @@ import type {
   MergeStats,
   MetricsParams as MetricsParamsGenerated,
   MetricsResponse,
-  PublicInstructorListResponse,
+  Page,
+  PublicInstructorListItem,
   PublicInstructorProfileResponse,
   RejectCandidateBody,
   RescoreResponse,
@@ -33,7 +34,6 @@ import type {
   ScraperStatsResponse,
   SearchOptionsResponse,
   SearchParams as SearchParamsGenerated,
-  SearchResponse as SearchResponseGenerated,
   StatusResponse,
   SubjectDetailResponse,
   SubjectsResponse,
@@ -61,7 +61,7 @@ export type Subject = CodeDescription;
 export type ReferenceEntry = CodeDescription;
 
 // Re-export with simplified names
-export type SearchResponse = SearchResponseGenerated;
+export type SearchResponse = Page<CourseResponse>;
 export type SearchParams = SearchParamsGenerated;
 export type MetricsParams = MetricsParamsGenerated;
 export type ListInstructorsParams = ListInstructorsParamsGenerated;
@@ -378,13 +378,13 @@ export class BannerApiClient {
     sort?: string;
     page?: number;
     perPage?: number;
-  }): Promise<Result<PublicInstructorListResponse, ApiErrorClass>> {
+  }): Promise<Result<Page<PublicInstructorListItem>, ApiErrorClass>> {
     if (!params) {
-      return this.request<PublicInstructorListResponse>("/instructors");
+      return this.request<Page<PublicInstructorListItem>>("/instructors");
     }
     const query = toURLSearchParams(params);
     const qs = query.toString();
-    return this.request<PublicInstructorListResponse>(`/instructors${qs ? `?${qs}` : ""}`);
+    return this.request<Page<PublicInstructorListItem>>(`/instructors${qs ? `?${qs}` : ""}`);
   }
 
   async getInstructor(

@@ -76,14 +76,14 @@ export function stackVisibleSlots(
     const subjects: Record<string, number> = {};
     for (const subject of stackKeys) {
       const entry = subjectMap?.get(subject);
-      subjects[subject] = entry ? entry.current : slot.subjects[subject] || 0;
+      subjects[subject] = entry ? entry.current : (slot.subjects[subject] ?? 0);
     }
     return { time: slot.time, subjects };
   });
 
   const gen = stack<TimeSlot>()
     .keys(stackKeys)
-    .value((d, key) => d.subjects[key] || 0);
+    .value((d, key) => d.subjects[key] ?? 0);
   return gen(animatedSlots);
 }
 
@@ -145,9 +145,9 @@ export function drawGrid(chart: ChartContext): void {
  * Trace the top outline of the stacked area onto `ctx` as a clip path.
  */
 function traceStackOutline(chart: ChartContext, visibleStack: VisibleStack): void {
-  if (visibleStack.length === 0) return;
-  const { ctx, xScale, yScale } = chart;
   const topLayer = visibleStack[visibleStack.length - 1];
+  if (!topLayer) return;
+  const { ctx, xScale, yScale } = chart;
 
   ctx.beginPath();
   area<StackPoint>()
@@ -188,8 +188,8 @@ export function drawStackedArea(chart: ChartContext, visibleStack: VisibleStack)
 
   for (let i = visibleStack.length - 1; i >= 0; i--) {
     const layer = visibleStack[i];
-    const subject = layer.key;
-    const color = getSubjectColor(subject);
+    if (!layer) continue;
+    const color = getSubjectColor(layer.key);
 
     ctx.beginPath();
     area<StackPoint>()

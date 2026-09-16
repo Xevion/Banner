@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT mc.id, mc.rmp_legacy_id, mc.score,\n               mc.score_breakdown AS \"score_breakdown: sqlx::types::Json<ScoreBreakdown>\",\n               mc.status,\n               rp.first_name, rp.last_name, rp.department,\n               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,\n               mc.review_subjects, mc.review_years,\n               (SELECT i2.display_name\n                  FROM instructor_rmp_links l2\n                  JOIN instructors i2 ON i2.id = l2.instructor_id\n                 WHERE l2.rmp_legacy_id = mc.rmp_legacy_id\n                   AND l2.instructor_id <> $1) AS claimed_by\n        FROM rmp_match_candidates mc\n        JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id\n        WHERE mc.instructor_id = $1\n        ORDER BY (mc.status = 'accepted') DESC, mc.score DESC\n        ",
+  "query": "\n        SELECT mc.id, mc.rmp_legacy_id, mc.score,\n               mc.score_breakdown AS \"score_breakdown: sqlx::types::Json<ScoreBreakdown>\",\n               mc.status AS \"status: RmpCandidateStatus\",\n               rp.first_name, rp.last_name, rp.department,\n               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,\n               mc.review_subjects, mc.review_years,\n               (SELECT i2.display_name\n                  FROM instructor_rmp_links l2\n                  JOIN instructors i2 ON i2.id = l2.instructor_id\n                 WHERE l2.rmp_legacy_id = mc.rmp_legacy_id\n                   AND l2.instructor_id <> $1) AS claimed_by\n        FROM rmp_match_candidates mc\n        JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id\n        WHERE mc.instructor_id = $1\n        ORDER BY (mc.status = 'accepted') DESC, mc.score DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "status",
+        "name": "status: RmpCandidateStatus",
         "type_info": "Varchar",
         "origin": {
           "Table": {
@@ -187,5 +187,5 @@
       null
     ]
   },
-  "hash": "5e65ac28e98bd802c3a21e5fc0715436f3384c32ac50b66319e067ad2654ca08"
+  "hash": "d458aa1552b1b7594ccb2437022d9c5e3655388ffc9d05f3b7f457f496942b80"
 }

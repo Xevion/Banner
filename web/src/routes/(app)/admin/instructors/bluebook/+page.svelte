@@ -4,6 +4,7 @@ import type {
   BluebookLinkDetail,
   BluebookLinkListItem,
   BluebookLinkStats,
+  BluebookLinkStatus,
   BluebookMatchResponse,
   InstructorListItem,
 } from "$lib/bindings";
@@ -28,14 +29,14 @@ import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 
-let links = $state<BluebookLinkListItem[]>(untrack(() => data.links?.links ?? []));
+let links = $state<BluebookLinkListItem[]>(untrack(() => data.links?.page.items ?? []));
 let stats = $state<BluebookLinkStats>(
   untrack(() => data.links?.stats ?? { total: 0, auto: 0, pending: 0, approved: 0, rejected: 0 })
 );
-let totalCount = $state(untrack(() => data.links?.total ?? 0));
+let totalCount = $state(untrack(() => data.links?.page.total ?? 0));
 let currentPage = $state(1);
 let perPage = $state(25);
-let activeFilter = $state<string | undefined>(undefined);
+let activeFilter = $state<BluebookLinkStatus | undefined>(undefined);
 let error = $state<string | null>(untrack(() => data.error));
 let loading = $state(false);
 
@@ -83,7 +84,7 @@ const columns: MatchColumn[] = [
   { label: "Status" },
 ];
 
-const filterCards: FilterCard<BluebookLinkStats>[] = [
+const filterCards: FilterCard<BluebookLinkStats, BluebookLinkStatus>[] = [
   {
     label: "Total",
     value: undefined,
@@ -149,8 +150,8 @@ async function fetchLinks() {
     totalCount = 0;
   } else {
     error = null;
-    links = result.value.links;
-    totalCount = result.value.total;
+    links = result.value.page.items;
+    totalCount = result.value.page.total;
     stats = result.value.stats;
   }
   loading = false;
@@ -161,7 +162,7 @@ onDestroy(() => {
   highlight.clear();
 });
 
-function setFilter(value: string | undefined) {
+function setFilter(value: BluebookLinkStatus | undefined) {
   activeFilter = value;
   currentPage = 1;
   expand.collapse();
@@ -180,12 +181,12 @@ function goToPage(page: number) {
   void fetchLinks();
 }
 
-function updateLocalStatus(linkId: number, newStatus: string) {
+function updateLocalStatus(linkId: number, newStatus: BluebookLinkStatus) {
   links = links.map((l) => (l.id === linkId ? { ...l, status: newStatus } : l));
   highlight.mark(linkId);
 }
 
-function matchesFilter(status: string): boolean {
+function matchesFilter(status: BluebookLinkStatus): boolean {
   if (!activeFilter) return true;
   return status === activeFilter;
 }
@@ -267,7 +268,7 @@ async function doInstructorSearch() {
   instructorSearchLoading = true;
   const result = await client.getAdminInstructors({ search: q, perPage: 10 });
   if (result.isOk) {
-    instructorSearchResults = result.value.instructors;
+    instructorSearchResults = result.value.page.items;
   }
   instructorSearchLoading = false;
 }
@@ -546,9 +547,7 @@ function formatConfidence(confidence: number | null): string {
                       ? formatInstructorName(detail.instructorDisplayName)
                       : "Unknown"}
                   </span>
-                  {#if detail.instructorId !== null}
-                    <ProfileLink instructorId={detail.instructorId} />
-                  {/if}
+                  <ProfileLink instructorId={detail.instructorId} />
                 </div>
                 {#if detail.instructorEmail}
                   <div class="text-xs text-muted-foreground mt-0.5 break-all">
@@ -630,17 +629,18 @@ function formatConfidence(confidence: number | null): string {
           <div class="text-xs text-muted-foreground font-medium">Assign Instructor</div>
 
           {#if pendingAssignInstructor}
+            {@const pending = pendingAssignInstructor}
             <!-- Confirmation step -->
             <div class="flex items-center gap-2 text-xs" in:fade={{ duration: 100 }}>
               <span class="text-muted-foreground min-w-0 truncate">
                 Assign to <span class="text-foreground font-medium"
-                  >{formatInstructorName(pendingAssignInstructor.displayName)}</span
+                  >{formatInstructorName(pending.displayName)}</span
                 >?
               </span>
               <button
                 onclick={(e) => {
                   e.stopPropagation();
-                  void handleAssign(detail.id, pendingAssignInstructor!.id);
+                  void handleAssign(detail.id, pending.id);
                 }}
                 disabled={actionLoading !== null}
                 class="font-medium text-green-600 hover:text-green-700

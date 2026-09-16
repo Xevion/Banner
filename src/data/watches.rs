@@ -3,50 +3,25 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-use std::fmt;
-use std::str::FromStr;
+use strum::{AsRefStr, EnumString, IntoStaticStr, VariantArray};
+
+use crate::data::models::{UnknownVariant, text_column_enum};
 
 /// What condition to watch for on a course.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, EnumString, IntoStaticStr, VariantArray)]
+#[strum(serialize_all = "snake_case")]
 pub enum WatchType {
     SeatsAvailable,
     WaitlistOpen,
     AnyChange,
 }
 
-impl WatchType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::SeatsAvailable => "seats_available",
-            Self::WaitlistOpen => "waitlist_open",
-            Self::AnyChange => "any_change",
-        }
-    }
-}
-
-impl fmt::Display for WatchType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for WatchType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "seats_available" => Ok(Self::SeatsAvailable),
-            "waitlist_open" => Ok(Self::WaitlistOpen),
-            "any_change" => Ok(Self::AnyChange),
-            _ => Err(anyhow::anyhow!("unknown watch type: {}", s)),
-        }
-    }
-}
+text_column_enum!(WatchType);
 
 /// A watch entry joined with course info, for listing.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct WatchListItem {
-    pub watch_type: String,
+    pub watch_type: WatchType,
     pub notified_at: Option<DateTime<Utc>>,
     pub crn: String,
     pub term_code: String,
@@ -60,7 +35,7 @@ pub struct WatchListItem {
 pub struct TriggeredWatch {
     pub watch_id: i32,
     pub discord_user_id: i64,
-    pub watch_type: String,
+    pub watch_type: WatchType,
     pub crn: String,
     pub term_code: String,
     pub subject: String,
@@ -103,7 +78,7 @@ pub async fn upsert_watch(
     pool: &PgPool,
     discord_user_id: i64,
     course_id: i32,
-    watch_type: &WatchType,
+    watch_type: WatchType,
 ) -> Result<bool> {
     // xmax = 0 means the row was just inserted; non-zero means it was updated.
     let row: (bool,) = sqlx::query_as(
@@ -117,7 +92,7 @@ pub async fn upsert_watch(
     )
     .bind(discord_user_id)
     .bind(course_id)
-    .bind(watch_type.as_str())
+    .bind(watch_type)
     .fetch_one(pool)
     .await
     .context("failed to upsert watch")?;
@@ -129,7 +104,7 @@ pub async fn delete_watch(
     pool: &PgPool,
     discord_user_id: i64,
     course_id: i32,
-    watch_type: &WatchType,
+    watch_type: WatchType,
 ) -> Result<bool> {
     let result = sqlx::query(
         r#"
@@ -139,7 +114,7 @@ pub async fn delete_watch(
     )
     .bind(discord_user_id)
     .bind(course_id)
-    .bind(watch_type.as_str())
+    .bind(watch_type)
     .execute(pool)
     .await
     .context("failed to delete watch")?;

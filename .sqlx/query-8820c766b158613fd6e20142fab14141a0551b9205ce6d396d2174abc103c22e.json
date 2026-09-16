@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instructor_bluebook_links SET status = 'approved', updated_at = NOW() WHERE id = $1 AND status IN ('auto', 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8820c766b158613fd6e20142fab14141a0551b9205ce6d396d2174abc103c22e"
+}

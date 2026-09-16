@@ -10,7 +10,7 @@ import {
   serializeActionLogParams,
   toLocalInput,
 } from "$lib/action-log";
-import type { ActionLogParams, AdminAuditEntry } from "$lib/bindings";
+import type { ActionLogParams, AdminAction, AdminAuditEntry, AdminEntity } from "$lib/bindings";
 import ErrorPanel from "$lib/components/ErrorPanel.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
@@ -105,7 +105,7 @@ const inputClass =
       <StyledSelect
         items={actionItems}
         value={draft.action ?? ""}
-        onValueChange={(v) => apply({ action: (v || null) as ActionLogParams["action"] })}
+        onValueChange={(v) => apply({ action: (v || null) as AdminAction | null })}
         placeholder="Any action"
         triggerClass="min-w-[170px]"
       />
@@ -116,7 +116,7 @@ const inputClass =
       <StyledSelect
         items={entityItems}
         value={draft.entityType ?? ""}
-        onValueChange={(v) => apply({ entityType: (v || null) as ActionLogParams["entityType"] })}
+        onValueChange={(v) => apply({ entityType: (v || null) as AdminEntity | null })}
         placeholder="Any entity"
       />
     </div>
@@ -204,12 +204,12 @@ const inputClass =
             </td>
             <td class="px-4 py-3 whitespace-nowrap">
               <span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
-                {ACTION_LABELS[entry.action] ?? entry.action}
+                {ACTION_LABELS[entry.action]}
               </span>
             </td>
             <td class="px-4 py-3 whitespace-nowrap">
               <span class="text-xs text-muted-foreground">
-                {ENTITY_LABELS[entry.entityType] ?? entry.entityType}
+                {ENTITY_LABELS[entry.entityType]}
               </span>
               {#if entry.entityId}
                 <button

@@ -2,7 +2,7 @@
 //! sends Discord DMs to users who have active course watches.
 
 use crate::data::events::{AuditLogEvent, DomainEvent, EventBuffer};
-use crate::data::watches::{self, TriggeredWatch};
+use crate::data::watches::{self, TriggeredWatch, WatchType};
 use crate::telemetry;
 use serenity::all::{Color, CreateEmbed, CreateMessage, UserId};
 use sqlx::PgPool;
@@ -130,22 +130,22 @@ fn build_embed(watch: &TriggeredWatch, course_url: Option<&str>) -> CreateEmbed 
         watch.subject, watch.course_number, watch.title, watch.crn
     );
 
-    let (description, color) = match watch.watch_type.as_str() {
-        "seats_available" => {
+    let (description, color) = match watch.watch_type {
+        WatchType::SeatsAvailable => {
             let seats = watch.max_enrollment - watch.enrollment;
             (
                 format!("A seat has opened up! {} seat(s) available.", seats),
                 Color::from_rgb(0, 200, 100),
             )
         }
-        "waitlist_open" => {
+        WatchType::WaitlistOpen => {
             let slots = watch.wait_capacity - watch.wait_count;
             (
                 format!("A waitlist spot is available! {} slot(s) open.", slots),
                 Color::from_rgb(0, 150, 200),
             )
         }
-        _ => (
+        WatchType::AnyChange => (
             "This course has been updated.".to_string(),
             Color::from_rgb(150, 150, 150),
         ),

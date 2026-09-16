@@ -2,6 +2,7 @@ import type { ApiErrorClass } from "$lib/api";
 import { err, ok } from "true-myth/result";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutoRefreshController } from "./useAutoRefresh.svelte";
+import { expectDefined } from "$lib/test-utils";
 
 /** Helper to create a mock ApiErrorClass */
 function mockApiError(message: string, code = "INTERNAL_ERROR"): ApiErrorClass {
@@ -83,7 +84,7 @@ describe("AutoRefreshController", () => {
     });
 
     it("prevents concurrent fetches", async () => {
-      let resolveFirst: (value: unknown) => void;
+      let resolveFirst: ((value: unknown) => void) | undefined;
       const firstPromise = new Promise((resolve) => {
         resolveFirst = resolve;
       });
@@ -103,7 +104,7 @@ describe("AutoRefreshController", () => {
       expect(fetcher).toHaveBeenCalledTimes(1); // Still 1 - blocked
 
       // Complete first fetch
-      resolveFirst!(ok({ count: 1 }));
+      expectDefined(resolveFirst)(ok({ count: 1 }));
       await fetch1;
 
       expect(controller.data).toEqual({ count: 1 });

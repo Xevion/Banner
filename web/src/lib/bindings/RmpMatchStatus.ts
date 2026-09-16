@@ -3,7 +3,7 @@
 /**
  * Match status for RMP instructor matching.
  *
- * Stored as VARCHAR in the database - this enum is for Rust API types
- * and TypeScript bindings only (no sqlx::Type derive).
+ * Stored as VARCHAR, so `serde` and `strum` must spell every variant the same way:
+ * one drives the API and TypeScript union, the other the column round-trip.
  */
 export type RmpMatchStatus = "unmatched" | "pending" | "auto" | "confirmed" | "rejected";

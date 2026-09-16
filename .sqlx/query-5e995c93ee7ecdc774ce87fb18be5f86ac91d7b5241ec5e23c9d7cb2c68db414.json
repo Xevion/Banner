@@ -1,0 +1,138 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT irl.id as link_id,\n               rp.legacy_id, rp.first_name, rp.last_name, rp.department,\n               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,\n               COALESCE((\n                   SELECT ARRAY_AGG(DISTINCT subj ORDER BY subj)\n                   FROM (\n                       SELECT UPPER(regexp_replace(r.class, '[^A-Za-z].*$', '')) as subj\n                       FROM rmp_reviews r\n                       WHERE r.rmp_legacy_id = rp.legacy_id AND r.class IS NOT NULL\n                   ) sub\n                   WHERE subj != ''\n               ), '{}') as \"review_subjects!\",\n               COALESCE((\n                   SELECT ARRAY_AGG(DISTINCT EXTRACT(YEAR FROM r.posted_at)::SMALLINT ORDER BY EXTRACT(YEAR FROM r.posted_at)::SMALLINT)\n                   FROM rmp_reviews r\n                   WHERE r.rmp_legacy_id = rp.legacy_id AND r.posted_at IS NOT NULL\n               ), '{}') as \"review_years!\"\n        FROM instructor_rmp_links irl\n        JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id\n        WHERE irl.instructor_id = $1\n        ORDER BY rp.num_ratings DESC NULLS LAST\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_links",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "legacy_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "legacy_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "first_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "last_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "department",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "department"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_rating",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "avg_rating"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "avg_difficulty",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "avg_difficulty"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "num_ratings",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "num_ratings"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "would_take_again_pct",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "would_take_again_pct"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "review_subjects!",
+        "type_info": "TextArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "review_years!",
+        "type_info": "Int2Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "5e995c93ee7ecdc774ce87fb18be5f86ac91d7b5241ec5e23c9d7cb2c68db414"
+}

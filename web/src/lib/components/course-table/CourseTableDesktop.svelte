@@ -39,7 +39,7 @@ let {
   loading: boolean;
   stale: boolean;
   /** Omitted where the table is a plain listing, leaving header clicks inert. */
-  sort?: SortController;
+  sort?: SortController | undefined;
   subjectMap?: Record<string, string>;
   columnVisibility?: ColumnVisibilityState;
   defaultVisibility?: ColumnVisibilityState;
@@ -51,8 +51,8 @@ let {
   contentHeight: number | null;
 } = $props();
 
-let tableWrapper: HTMLDivElement = undefined!;
-let tableElement: HTMLTableElement = undefined!;
+let tableWrapper: HTMLDivElement | undefined;
+let tableElement: HTMLTableElement | undefined;
 const clipboard = useClipboard(1000);
 
 // Set context once for all cells - shared utilities
@@ -97,12 +97,12 @@ let visibleColumnIds = $derived(
 // starts hidden must not make the table look permanently customised.
 let hiddenColumnIds = $derived(
   Object.entries(columnVisibility)
-    .filter(([, visible]) => visible === false)
+    .filter(([, visible]) => !visible)
     .map(([id]) => id)
 );
 let defaultHiddenIds = $derived(
   Object.entries(defaultVisibility)
-    .filter(([, visible]) => visible === false)
+    .filter(([, visible]) => !visible)
     .map(([id]) => id)
 );
 let hasCustomVisibility = $derived(
@@ -134,7 +134,7 @@ const table = createSvelteTable({
   get data() {
     return courses;
   },
-  getRowId: (row) => String(row.crn),
+  getRowId: (row) => row.crn,
   columns: COLUMN_DEFS,
   state: {
     get columnVisibility() {

@@ -13,6 +13,7 @@ import { CourseTable } from "$lib/components/course-table";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import { formatInstructorName, rmpUrl } from "$lib/course";
+import { dependOn } from "$lib/utils";
 import { Copy, ExternalLink, Mail } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
 import { untrack } from "svelte";
@@ -65,7 +66,7 @@ async function onTermChange() {
 
 let termMounted = false;
 $effect(() => {
-  void selectedTerm;
+  dependOn(selectedTerm);
   if (!termMounted) {
     termMounted = true;
     return;
@@ -191,17 +192,15 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                     >
                       <span class="inline-flex items-center gap-1">
                         RateMyProfessors
-                        {#if rmp?.legacyId != null}
-                          <a
-                            href={rmpUrl(rmp.legacyId)}
-                            target="_blank"
-                            rel="noopener"
-                            class="text-muted-foreground hover:text-foreground"
-                            onclick={(e) => e.stopPropagation()}
-                          >
-                            <ExternalLink class="size-3" />
-                          </a>
-                        {/if}
+                        <a
+                          href={rmpUrl(rmp.legacyId)}
+                          target="_blank"
+                          rel="noopener"
+                          class="text-muted-foreground hover:text-foreground"
+                          onclick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink class="size-3" />
+                        </a>
                       </span>
                     </Tabs.Trigger>
                     <Tabs.Trigger
@@ -249,7 +248,7 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
         <h2 class="text-lg font-semibold">Sections</h2>
         {#if terms.length > 1}
           <TermCombobox {terms} bind:value={selectedTerm} />
-        {:else if terms.length === 1}
+        {:else if terms[0]}
           <span class="text-sm text-muted-foreground">{terms[0].description}</span>
         {/if}
       </div>

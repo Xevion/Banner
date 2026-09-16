@@ -20,6 +20,7 @@ import {
   acquireStreamClient,
   releaseStreamClient,
 } from "$lib/ws";
+import { match } from "ts-pattern";
 
 type EventFor<S extends StreamKind> = S extends "scrapeJobs"
   ? ScrapeJobEvent
@@ -89,7 +90,7 @@ export function useStream<S extends StreamKind, T>(
 
   $effect(() => {
     const stateChangeHandler = () => {
-      connectionState = client!.getConnectionState();
+      connectionState = client?.getConnectionState() ?? "disconnected";
     };
     client = acquireStreamClient(stateChangeHandler);
 
@@ -143,23 +144,19 @@ export function useStream<S extends StreamKind, T>(
 /**
  * Extract the state data from a snapshot based on stream type.
  */
-function extractSnapshotState<S extends StreamKind>(stream: S, snapshot: StreamSnapshot): unknown {
-  if (stream === "scrapeJobs" && snapshot.stream === "scrapeJobs") {
-    return snapshot.jobs;
-  }
-  if (stream === "auditLog" && snapshot.stream === "auditLog") {
-    return snapshot.entries;
-  }
-  if (stream === "scraperStats" && snapshot.stream === "scraperStats") {
-    return snapshot.stats;
-  }
-  if (stream === "scraperTimeseries" && snapshot.stream === "scraperTimeseries") {
-    return { points: snapshot.points, period: snapshot.period, bucket: snapshot.bucket };
-  }
-  if (stream === "scraperSubjects" && snapshot.stream === "scraperSubjects") {
-    return snapshot.subjects;
-  }
-  return null;
+function extractSnapshotState(stream: StreamKind, snapshot: StreamSnapshot): unknown {
+  if (stream !== snapshot.stream) return null;
+  return match(snapshot)
+    .with({ stream: "scrapeJobs" }, (s) => s.jobs)
+    .with({ stream: "auditLog" }, (s) => s.entries)
+    .with({ stream: "scraperStats" }, (s) => s.stats)
+    .with({ stream: "scraperTimeseries" }, (s) => ({
+      points: s.points,
+      period: s.period,
+      bucket: s.bucket,
+    }))
+    .with({ stream: "scraperSubjects" }, (s) => s.subjects)
+    .exhaustive();
 }
 
 /**

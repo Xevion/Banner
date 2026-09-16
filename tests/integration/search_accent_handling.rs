@@ -372,13 +372,13 @@ async fn test_list_public_instructors_unaccented_search() {
     .expect("list_public_instructors failed");
 
     assert!(
-        response.total >= 1,
+        response.total.get() >= 1,
         "expected at least 1 instructor for 'Hernandez', got {}",
         response.total
     );
     assert!(
         response
-            .instructors
+            .items
             .iter()
             .any(|i| i.display_name.contains("Hernández")),
         "should find 'Hernández, María'"
@@ -405,13 +405,13 @@ async fn test_list_public_instructors_unaccented_search_jose() {
     .expect("list_public_instructors failed");
 
     assert!(
-        response.total >= 1,
+        response.total.get() >= 1,
         "expected at least 1 instructor for 'Jose', got {}",
         response.total
     );
     assert!(
         response
-            .instructors
+            .items
             .iter()
             .any(|i| i.display_name.contains("José")),
         "should find 'García López, José'"
@@ -438,13 +438,13 @@ async fn test_list_public_instructors_unaccented_search_francois() {
     .expect("list_public_instructors failed");
 
     assert!(
-        response.total >= 1,
+        response.total.get() >= 1,
         "expected at least 1 instructor for 'Francois', got {}",
         response.total
     );
     assert!(
         response
-            .instructors
+            .items
             .iter()
             .any(|i| i.display_name.contains("François")),
         "should find 'Müller, François'"

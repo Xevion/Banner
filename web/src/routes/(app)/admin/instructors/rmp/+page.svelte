@@ -43,7 +43,7 @@ function buildSubjectMap(
 }
 
 let subjectMap = $state(untrack(() => buildSubjectMap(data.subjects)));
-let instructors = $state<InstructorListItem[]>(untrack(() => data.instructors?.instructors ?? []));
+let instructors = $state<InstructorListItem[]>(untrack(() => data.instructors?.page.items ?? []));
 let stats = $state<InstructorStats>(
   untrack(
     () =>
@@ -58,10 +58,10 @@ let stats = $state<InstructorStats>(
       }
   )
 );
-let totalCount = $state(untrack(() => data.instructors?.total ?? 0));
+let totalCount = $state(untrack(() => data.instructors?.page.total ?? 0));
 let currentPage = $state(1);
 let perPage = $state(25);
-let activeFilter = $state<string | undefined>(undefined);
+let activeFilter = $state<RmpMatchStatus | undefined>(undefined);
 let error = $state<string | null>(untrack(() => data.error));
 let loading = $state(false);
 
@@ -100,7 +100,7 @@ const columns: MatchColumn[] = [
   { label: "Candidates", class: "text-center" },
 ];
 
-const filterCards: FilterCard<InstructorStats>[] = [
+const filterCards: FilterCard<InstructorStats, RmpMatchStatus>[] = [
   {
     label: "No Candidates",
     value: "unmatched",
@@ -158,8 +158,8 @@ async function fetchInstructors() {
   // rather than flashing the panel away and back.
   highlight.clear();
   const result = await client.getAdminInstructors({
-    status: activeFilter,
-    search: searchQuery || undefined,
+    status: activeFilter ?? null,
+    search: searchQuery || null,
     page: currentPage,
     perPage: perPage,
   });
@@ -172,8 +172,8 @@ async function fetchInstructors() {
   } else {
     error = null;
     const res = result.value;
-    instructors = res.instructors;
-    totalCount = res.total;
+    instructors = res.page.items;
+    totalCount = res.page.total;
     stats = res.stats;
   }
   loading = false;
@@ -183,7 +183,7 @@ onDestroy(() => {
   highlight.clear();
 });
 
-function setFilter(value: string | undefined) {
+function setFilter(value: RmpMatchStatus | undefined) {
   activeFilter = value;
   currentPage = 1;
   expand.collapse();
@@ -476,7 +476,7 @@ function formatScore(score: number): string {
           <span class="text-xs text-muted-foreground">N/A</span>
         {/if}
         <span class="text-xs text-muted-foreground tabular-nums">
-          ({formatScore(tc.score ?? 0)}%)
+          ({formatScore(tc.score)}%)
         </span>
       </div>
     {:else}
@@ -494,10 +494,11 @@ function formatScore(score: number): string {
       <TriangleAlert size={14} class="text-amber-600 dark:text-amber-500" />
     </SimpleTooltip>
   {:else if instructor.topCandidate && (instructor.rmpMatchStatus === "unmatched" || instructor.rmpMatchStatus === "pending")}
+    {@const topCandidate = instructor.topCandidate}
     <button
       onclick={(e) => {
         e.stopPropagation();
-        void handleMatch(instructor.id, instructor.topCandidate!.rmpLegacyId);
+        void handleMatch(instructor.id, topCandidate.rmpLegacyId);
       }}
       disabled={actionLoading !== null}
       class="rounded p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30
@@ -539,8 +540,9 @@ function formatScore(score: number): string {
           <dt class="text-muted-foreground">Subjects</dt>
           <dd class="flex flex-wrap gap-1">
             {#each detail.instructor.subjectsTaught as subj (subj)}
-              {#if subjectMap.has(subj)}
-                <SimpleTooltip text={subjectMap.get(subj)!} delay={75}>
+              {@const description = subjectMap.get(subj)}
+              {#if description}
+                <SimpleTooltip text={description} delay={75}>
                   <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{subj}</span>
                 </SimpleTooltip>
               {:else}
@@ -617,8 +619,7 @@ function formatScore(score: number): string {
           {#each detail.candidates as candidate (candidate.id)}
             <CandidateCard
               {candidate}
-              isMatched={candidate.status === "matched" ||
-                matchedLegacyIds.has(candidate.rmpLegacyId)}
+              isMatched={matchedLegacyIds.has(candidate.rmpLegacyId)}
               isRejected={candidate.status === "rejected"}
               disabled={actionLoading !== null}
               {actionLoading}

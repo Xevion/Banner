@@ -65,7 +65,7 @@ let hue = $derived(rating ? ratingColor(rating.score, themeStore.isDark) : null)
          section leaves it empty rather than showing a placeholder dash. -->
     <span class="w-8 text-right">
       {#if rating && hue}
-        <ScorePopover rating={rating} rmp={primary?.rmp} bluebook={primary?.bluebook}>
+        <ScorePopover rating={rating} rmp={primary?.rmp ?? null} bluebook={primary?.bluebook ?? null}>
           <span
             class="inline-block w-8 rounded-[4px] py-[1.5px] text-center font-mono text-[10.5px] font-semibold tabular-nums"
             style:background-color="color-mix(in oklab, {hue} 15%, transparent)"

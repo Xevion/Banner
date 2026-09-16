@@ -32,8 +32,9 @@ export function dayPlural(d: DayOfWeek): string {
  * Multi-day -> concatenated codes: "MWF", "TTh"
  */
 export function formatDayCodes(days: DayOfWeek[]): string {
-  if (days.length === 0) return "";
-  if (days.length === 1) return DAYS[days[0]].short;
+  const [first] = days;
+  if (first === undefined) return "";
+  if (days.length === 1) return DAYS[first].short;
   return days.map((d) => DAYS[d].code).join("");
 }
 
@@ -43,8 +44,9 @@ export function formatDayCodes(days: DayOfWeek[]): string {
  * Multi-day -> "Mon, Wed, Fri"
  */
 export function formatDayList(days: DayOfWeek[]): string {
-  if (days.length === 0) return "";
-  if (days.length === 1) return DAYS[days[0]].plural;
+  const [first] = days;
+  if (first === undefined) return "";
+  if (days.length === 1) return DAYS[first].plural;
   return days.map((d) => DAYS[d].short).join(", ");
 }
 
@@ -54,9 +56,10 @@ export function formatDayList(days: DayOfWeek[]): string {
  */
 export function formatDayVerbose(days: DayOfWeek[]): string {
   const names = days.map((d) => DAYS[d].plural);
-  if (names.length === 0) return "";
-  if (names.length === 1) return names[0];
-  return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
+  const last = names.pop();
+  if (last === undefined) return "";
+  if (names.length === 0) return last;
+  return `${names.join(", ")} & ${last}`;
 }
 
 /** Day options for filter UI, derived from canonical data. */

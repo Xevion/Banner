@@ -53,7 +53,7 @@ function posthogSourceMaps(): Plugin | null {
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit(), devtoolsJson(), posthogSourceMaps()],
-  resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
+  ...(process.env.VITEST ? { resolve: { conditions: ["browser"] } } : {}),
   test: {
     projects: [
       {

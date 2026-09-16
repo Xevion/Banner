@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, created_by, source) VALUES ($1, $2, $3, 'manual') ON CONFLICT (rmp_legacy_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ef172c773e6ec5f30fe046860852c355a62e48b2d0813aa1be3bbbf78537a23"
+}

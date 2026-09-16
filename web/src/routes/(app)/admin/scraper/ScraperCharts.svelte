@@ -11,7 +11,8 @@ import { Tween } from "svelte/motion";
 
 interface Props {
   period: ScraperPeriod;
-  term?: string;
+  /** Null asks for every term, matching the filter the stream takes. */
+  term: string | null;
 }
 
 let { period, term }: Props = $props();
@@ -42,7 +43,7 @@ interface ChartPoint {
 }
 
 let chartData = $derived(
-  (timeseries.state.points ?? []).map((p) => ({
+  timeseries.state.points.map((p) => ({
     date: new Date(p.timestamp),
     success: p.successCount,
     errors: p.errorCount,
@@ -57,12 +58,15 @@ const tweenedChart = new Tween<ChartPoint[]>([], {
   interpolate(from, to) {
     if (from.length !== to.length) return () => to;
     return (t) =>
-      to.map((dest, i) => ({
-        date: dest.date,
-        success: from[i].success + (dest.success - from[i].success) * t,
-        errors: from[i].errors + (dest.errors - from[i].errors) * t,
-        coursesChanged: from[i].coursesChanged + (dest.coursesChanged - from[i].coursesChanged) * t,
-      }));
+      to.map((dest, i) => {
+        const src = from[i] ?? dest;
+        return {
+          date: dest.date,
+          success: src.success + (dest.success - src.success) * t,
+          errors: src.errors + (dest.errors - src.errors) * t,
+          coursesChanged: src.coursesChanged + (dest.coursesChanged - src.coursesChanged) * t,
+        };
+      });
   },
 });
 

@@ -29,7 +29,7 @@ const fmtTime = timeFormat("%-I:%M %p");
         </div>
         <div class="flex flex-col gap-y-0.5">
             {#each activeSubjects as subject (subject)}
-                {@const count = slot.subjects[subject] || 0}
+                {@const count = slot.subjects[subject] ?? 0}
                 {#if count > 0}
                     <div class="flex items-center justify-between gap-3">
                         <div class="flex items-center gap-1.5">

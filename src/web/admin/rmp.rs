@@ -11,6 +11,7 @@ use ts_rs::TS;
 
 use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::admin_rmp::{self, AdminRmpError, CandidateResponse, ListInstructorsFilter};
+use crate::data::models::{RmpCandidateStatus, RmpMatchStatus};
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
@@ -38,7 +39,7 @@ fn rmp_error(context: &str, e: anyhow::Error) -> ApiError {
 
 /// Describe why a candidate is still waiting, in the reviewer's terms.
 fn explain_block(candidate: &CandidateResponse) -> Option<String> {
-    if candidate.status == "accepted" {
+    if candidate.status == RmpCandidateStatus::Accepted {
         return None;
     }
     if let Some(holder) = &candidate.claimed_by {
@@ -66,7 +67,7 @@ fn explain_candidates(mut detail: InstructorDetailResponse) -> InstructorDetailR
 #[ts(export)]
 pub struct ListInstructorsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub status: Option<RmpMatchStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -309,7 +310,11 @@ mod tests {
     use crate::web::error::ApiErrorCode;
     use assert2::check;
 
-    fn candidate(status: &str, claimed_by: Option<&str>, subject: f32) -> CandidateResponse {
+    fn candidate(
+        status: RmpCandidateStatus,
+        claimed_by: Option<&str>,
+        subject: f32,
+    ) -> CandidateResponse {
         CandidateResponse {
             id: 1,
             rmp_legacy_id: 42,
@@ -325,7 +330,7 @@ mod tests {
                 subject,
                 ..ScoreBreakdown::default()
             }),
-            status: status.to_string(),
+            status,
             review_subjects: Vec::new(),
             review_years: Vec::new(),
             claimed_by: claimed_by.map(str::to_string),
@@ -405,24 +410,28 @@ mod tests {
 
     #[test]
     fn test_accepted_candidate_has_no_blocked_reason() {
-        check!(explain_block(&candidate("accepted", None, 0.0)) == None);
+        check!(explain_block(&candidate(RmpCandidateStatus::Accepted, None, 0.0)) == None);
     }
 
     #[test]
     fn test_claimed_candidate_names_the_holder() {
-        let reason = explain_block(&candidate("pending", Some("Fictional, Bryn"), 1.0));
+        let reason = explain_block(&candidate(
+            RmpCandidateStatus::Pending,
+            Some("Fictional, Bryn"),
+            1.0,
+        ));
         check!(reason == Some("Already linked to Fictional, Bryn".to_string()));
     }
 
     #[test]
     fn test_weak_subject_evidence_is_explained() {
-        let reason = explain_block(&candidate("pending", None, 0.4));
+        let reason = explain_block(&candidate(RmpCandidateStatus::Pending, None, 0.4));
         check!(reason.unwrap().starts_with("Subject not confirmed:"));
     }
 
     #[test]
     fn test_strong_subject_evidence_falls_back_to_shared_name() {
-        let reason = explain_block(&candidate("pending", None, 1.0));
+        let reason = explain_block(&candidate(RmpCandidateStatus::Pending, None, 1.0));
         check!(reason == Some("Held for review: another professor shares this name".to_string()));
     }
 }

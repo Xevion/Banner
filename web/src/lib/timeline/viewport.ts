@@ -14,7 +14,8 @@ export function lowerBound(slots: TimeSlot[], targetMs: number): number {
   let hi = slots.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (slots[mid].time.getTime() < targetMs) lo = mid + 1;
+    const slot = slots[mid];
+    if (slot !== undefined && slot.time.getTime() < targetMs) lo = mid + 1;
     else hi = mid;
   }
   return lo;
@@ -38,11 +39,12 @@ export function findSlotByTime(data: TimeSlot[], timeMs: number): TimeSlot | nul
   let best: TimeSlot | null = null;
   let bestDist = Infinity;
   for (const i of [idx - 1, idx]) {
-    if (i < 0 || i >= data.length) continue;
-    const dist = Math.abs(data[i].time.getTime() - timeMs);
+    const slot = data[i];
+    if (!slot) continue;
+    const dist = Math.abs(slot.time.getTime() - timeMs);
     if (dist < bestDist) {
       bestDist = dist;
-      best = data[i];
+      best = slot;
     }
   }
   if (best && bestDist < SLOT_INTERVAL_MS) return best;
@@ -58,7 +60,7 @@ export function snapToSlot(timeMs: number): number {
 export function enabledTotalClasses(slot: TimeSlot, activeSubjects: readonly string[]): number {
   let sum = 0;
   for (const s of activeSubjects) {
-    sum += slot.subjects[s] || 0;
+    sum += slot.subjects[s] ?? 0;
   }
   return sum;
 }

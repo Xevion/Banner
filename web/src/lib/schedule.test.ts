@@ -7,6 +7,7 @@ import {
   parseTimeMinutes,
 } from "$lib/schedule";
 import { describe, expect, it } from "vitest";
+import { expectDefined } from "./test-utils";
 
 function makeMeetingTime(overrides: Partial<DbMeetingTime> = {}): DbMeetingTime {
   return {
@@ -76,33 +77,33 @@ describe("meetingTrackSpans", () => {
 
   it("maps a 2:30-3:45 PM meeting onto the 7am-10pm window", () => {
     const mt = makeMeetingTime({ timeRange: { start: "14:30:00", end: "15:45:00" } });
-    const [span] = meetingTrackSpans([mt]);
+    const span = expectDefined(meetingTrackSpans([mt])[0]);
     expect(span.left).toBeCloseTo(50, 5);
     expect(span.width).toBeCloseTo((75 / 900) * 100, 5);
   });
 
   it("starts at zero for a 7 AM meeting", () => {
     const mt = makeMeetingTime({ timeRange: { start: "07:00:00", end: "07:50:00" } });
-    expect(meetingTrackSpans([mt])[0].left).toBeCloseTo(0, 5);
+    expect(expectDefined(meetingTrackSpans([mt])[0]).left).toBeCloseTo(0, 5);
   });
 
   it("clamps a meeting that starts before the window", () => {
     const mt = makeMeetingTime({ timeRange: { start: "06:00:00", end: "07:30:00" } });
-    const [span] = meetingTrackSpans([mt]);
+    const span = expectDefined(meetingTrackSpans([mt])[0]);
     expect(span.left).toBe(0);
     expect(span.width).toBeCloseTo((30 / 900) * 100, 5);
   });
 
   it("clamps a meeting that runs past the window", () => {
     const mt = makeMeetingTime({ timeRange: { start: "21:30:00", end: "23:00:00" } });
-    const [span] = meetingTrackSpans([mt]);
+    const span = expectDefined(meetingTrackSpans([mt])[0]);
     expect(span.left).toBeCloseTo((870 / 900) * 100, 5);
     expect(span.left + span.width).toBeCloseTo(100, 5);
   });
 
   it("keeps a meeting fully outside the window visible at the nearest edge", () => {
     const mt = makeMeetingTime({ timeRange: { start: "05:00:00", end: "06:00:00" } });
-    const [span] = meetingTrackSpans([mt]);
+    const span = expectDefined(meetingTrackSpans([mt])[0]);
     expect(span.left).toBe(0);
     expect(span.width).toBeGreaterThan(0);
   });
@@ -112,8 +113,9 @@ describe("meetingTrackSpans", () => {
     const b = makeMeetingTime({ timeRange: { start: "09:30:00", end: "11:00:00" } });
     const spans = meetingTrackSpans([a, b]);
     expect(spans).toHaveLength(1);
-    expect(spans[0].left).toBeCloseTo((120 / 900) * 100, 5);
-    expect(spans[0].width).toBeCloseTo((120 / 900) * 100, 5);
+    const merged = expectDefined(spans[0]);
+    expect(merged.left).toBeCloseTo((120 / 900) * 100, 5);
+    expect(merged.width).toBeCloseTo((120 / 900) * 100, 5);
   });
 
   it("keeps disjoint meetings as separate spans, sorted by start", () => {
@@ -121,6 +123,6 @@ describe("meetingTrackSpans", () => {
     const morning = makeMeetingTime({ timeRange: { start: "09:00:00", end: "10:00:00" } });
     const spans = meetingTrackSpans([afternoon, morning]);
     expect(spans).toHaveLength(2);
-    expect(spans[0].left).toBeLessThan(spans[1].left);
+    expect(expectDefined(spans[0]).left).toBeLessThan(expectDefined(spans[1]).left);
   });
 });

@@ -128,7 +128,8 @@ export class SortController {
 
   setDirection = (key: SortKey, desc: boolean): boolean => {
     const index = this.indexOf(key);
-    if (index === -1 || this.#terms[index].desc === desc) return false;
+    const current = this.#terms[index];
+    if (current === undefined || current.desc === desc) return false;
     this.#set(this.#terms.map((term) => (term.key === key ? { key, desc } : term)));
     return true;
   };
@@ -141,6 +142,7 @@ export class SortController {
     if (target < 0 || target >= this.#terms.length) return false;
     const next = [...this.#terms];
     const [term] = next.splice(index, 1);
+    if (!term) return false;
     next.splice(target, 0, term);
     this.#set(next);
     return true;

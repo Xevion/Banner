@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lesser_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_dismissals",
+            "name": "lesser_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "greater_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_dismissals",
+            "name": "greater_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ccca88b34a5cd4deda02842eef1013b7bf19991de141e920aa674298e972d623"
+}

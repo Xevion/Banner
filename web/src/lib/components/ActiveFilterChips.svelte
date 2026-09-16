@@ -29,7 +29,9 @@ function formatTimeChip(start: string | null, end: string | null): string {
 }
 
 function formatMultiChip(codes: string[], labelFn: (filterValue: string) => string): string {
-  const first = labelFn(codes[0]);
+  const [head] = codes;
+  if (head === undefined) return "";
+  const first = labelFn(head);
   if (codes.length === 1) return first;
   return `${first} + ${codes.length - 1} more`;
 }
@@ -61,7 +63,7 @@ function groupInstructionalMethods(methods: string[]): FormatChipGroup[] {
 
   const onlineCodes = methods.filter((m) => m.startsWith("Online."));
   if (onlineCodes.length > 0) {
-    const variantLabels = onlineCodes.map((c) => VARIANT_LABELS[c] || c);
+    const variantLabels = onlineCodes.map((c) => VARIANT_LABELS[c] ?? c);
     groups.push({
       type: "Online",
       codes: onlineCodes,
@@ -71,7 +73,7 @@ function groupInstructionalMethods(methods: string[]): FormatChipGroup[] {
 
   const hybridCodes = methods.filter((m) => m.startsWith("Hybrid."));
   if (hybridCodes.length > 0) {
-    const variantLabels = hybridCodes.map((c) => VARIANT_LABELS[c] || c);
+    const variantLabels = hybridCodes.map((c) => VARIANT_LABELS[c] ?? c);
     groups.push({
       type: "Hybrid",
       codes: hybridCodes,

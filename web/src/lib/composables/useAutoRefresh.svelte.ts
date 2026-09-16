@@ -57,6 +57,11 @@ export class AutoRefreshController<T> {
   #isPaused: boolean;
   #fetchInProgress = false;
 
+  /** Read through a call: a check before an await must not narrow the one after it. */
+  #isDestroyed(): boolean {
+    return this.#destroyed;
+  }
+
   constructor(options: AutoRefreshOptions<T>) {
     this.#baseInterval = options.interval ?? DEFAULT_INTERVAL;
     this.#maxInterval = options.maxInterval ?? DEFAULT_MAX_INTERVAL;
@@ -82,7 +87,7 @@ export class AutoRefreshController<T> {
   }
 
   #scheduleRefresh(): void {
-    if (this.#destroyed || this.#isPaused || this.#baseInterval <= 0) return;
+    if (this.#isDestroyed() || this.#isPaused || this.#baseInterval <= 0) return;
     clearTimeout(this.#refreshTimer);
     this.#refreshTimer = setTimeout(() => void this.fetch(), this.#currentInterval);
   }
@@ -92,7 +97,7 @@ export class AutoRefreshController<T> {
    * or manually via this method.
    */
   async fetch(): Promise<void> {
-    if (this.#destroyed || this.#isPaused || this.#fetchInProgress) return;
+    if (this.#isDestroyed() || this.#isPaused || this.#fetchInProgress) return;
 
     this.#fetchInProgress = true;
     this.isLoading = true;
@@ -100,7 +105,7 @@ export class AutoRefreshController<T> {
     const startedAt = performance.now();
 
     const result = await this.#fetcher();
-    if (this.#destroyed) {
+    if (this.#isDestroyed()) {
       this.#fetchInProgress = false;
       return;
     }

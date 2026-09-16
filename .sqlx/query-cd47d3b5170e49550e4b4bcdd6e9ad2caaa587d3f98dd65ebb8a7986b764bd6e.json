@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status AS \"status!: RmpMatchStatus\" FROM instructor_rmp_match_status WHERE instructor_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!: RmpMatchStatus",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_match_status",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "cd47d3b5170e49550e4b4bcdd6e9ad2caaa587d3f98dd65ebb8a7986b764bd6e"
+}

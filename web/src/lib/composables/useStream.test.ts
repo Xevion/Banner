@@ -4,6 +4,7 @@ import type { ScrapeJobDto, ScrapeJobEvent } from "$lib/bindings";
  */
 import { describe, expect, it } from "vitest";
 import { addItem, removeById, updateById } from "./reducers";
+import { expectDefined } from "$lib/test-utils";
 
 // Helper to create mock ScrapeJobDto
 function mockJob(overrides: Partial<ScrapeJobDto> = {}): ScrapeJobDto {
@@ -30,9 +31,9 @@ describe("updateById", () => {
     const result = updateById(jobs, 2, { lockedAt: "2024-01-01T12:00:00Z" });
 
     expect(result).toHaveLength(3);
-    expect(result[0].lockedAt).toBeNull();
-    expect(result[1].lockedAt).toBe("2024-01-01T12:00:00Z");
-    expect(result[2].lockedAt).toBeNull();
+    expect(expectDefined(result[0]).lockedAt).toBeNull();
+    expect(expectDefined(result[1]).lockedAt).toBe("2024-01-01T12:00:00Z");
+    expect(expectDefined(result[2]).lockedAt).toBeNull();
   });
 
   it("preserves other properties when updating", () => {
@@ -40,8 +41,8 @@ describe("updateById", () => {
 
     const result = updateById(jobs, 1, { retryCount: 3 });
 
-    expect(result[0].priority).toBe("high");
-    expect(result[0].retryCount).toBe(3);
+    expect(expectDefined(result[0]).priority).toBe("high");
+    expect(expectDefined(result[0]).retryCount).toBe(3);
   });
 
   it("returns a new array (immutable)", () => {
@@ -59,7 +60,7 @@ describe("updateById", () => {
     const result = updateById(jobs, 999, { lockedAt: "2024-01-01T12:00:00Z" });
 
     expect(result).toHaveLength(1);
-    expect(result[0].lockedAt).toBeNull();
+    expect(expectDefined(result[0]).lockedAt).toBeNull();
   });
 
   it("handles empty array", () => {
@@ -110,7 +111,7 @@ describe("addItem", () => {
     const result = addItem(jobs, newJob);
 
     expect(result).toHaveLength(3);
-    expect(result[2].id).toBe(3);
+    expect(expectDefined(result[2]).id).toBe(3);
   });
 
   it("sorts items when sort function provided", () => {
@@ -137,7 +138,7 @@ describe("addItem", () => {
     const result = addItem([] as ScrapeJobDto[], newJob);
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(1);
+    expect(expectDefined(result[0]).id).toBe(1);
   });
 });
 
@@ -171,8 +172,8 @@ describe("reducer patterns for scrape jobs", () => {
         lockedAt: event.lockedAt,
       });
 
-      expect(result[0].lockedAt).toBe("2024-01-01T12:00:00Z");
-      expect(result[1].lockedAt).toBeNull();
+      expect(expectDefined(result[0]).lockedAt).toBe("2024-01-01T12:00:00Z");
+      expect(expectDefined(result[1]).lockedAt).toBeNull();
     });
   });
 
@@ -188,7 +189,7 @@ describe("reducer patterns for scrape jobs", () => {
       const result = removeById(jobs, event.id);
 
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(2);
+      expect(expectDefined(result[0]).id).toBe(2);
     });
   });
 
@@ -209,9 +210,9 @@ describe("reducer patterns for scrape jobs", () => {
         lockedAt: null,
       });
 
-      expect(result[0].retryCount).toBe(1);
-      expect(result[0].queuedAt).toBe("2024-01-01T12:00:00Z");
-      expect(result[0].lockedAt).toBeNull();
+      expect(expectDefined(result[0]).retryCount).toBe(1);
+      expect(expectDefined(result[0]).queuedAt).toBe("2024-01-01T12:00:00Z");
+      expect(expectDefined(result[0]).lockedAt).toBeNull();
     });
   });
 
@@ -226,7 +227,7 @@ describe("reducer patterns for scrape jobs", () => {
       const result = updateById(jobs, event.id, { status: "exhausted" });
 
       expect(result).toHaveLength(1);
-      expect(result[0].status).toBe("exhausted");
+      expect(expectDefined(result[0]).status).toBe("exhausted");
     });
   });
 

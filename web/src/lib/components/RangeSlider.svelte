@@ -96,6 +96,7 @@ const isDefault = $derived(dual ? valueLow === null && valueHigh === null : valu
 
 function handleDualChange(event: CustomEvent<{ values: number[] }>) {
   const [low, high] = event.detail.values;
+  if (low === undefined || high === undefined) return;
   const nextLow = low === min && high === max ? null : low;
   const nextHigh = low === min && high === max ? null : high;
   if (nextLow === valueLow && nextHigh === valueHigh) return;

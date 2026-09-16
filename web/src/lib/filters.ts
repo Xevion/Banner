@@ -13,24 +13,16 @@ export function parseTimeInput(input: string): string | null {
   const trimmed = input.trim();
   if (trimmed === "") return null;
 
-  const ampmMatch = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(trimmed);
-  if (ampmMatch) {
-    let hours = parseInt(ampmMatch[1], 10);
-    const minutes = parseInt(ampmMatch[2], 10);
-    const period = ampmMatch[3].toUpperCase();
-    if (period === "PM" && hours !== 12) hours += 12;
-    if (period === "AM" && hours === 12) hours = 0;
-    return String(hours).padStart(2, "0") + String(minutes).padStart(2, "0");
-  }
+  // One pattern for both accepted forms; the meridiem is what makes it 12-hour.
+  const groups = /^(?<hour>\d{1,2}):(?<minute>\d{2})\s*(?<period>AM|PM)?$/i.exec(trimmed)?.groups;
+  if (groups?.hour === undefined || groups.minute === undefined) return null;
 
-  const militaryMatch = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
-  if (militaryMatch) {
-    const hours = parseInt(militaryMatch[1], 10);
-    const minutes = parseInt(militaryMatch[2], 10);
-    return String(hours).padStart(2, "0") + String(minutes).padStart(2, "0");
-  }
-
-  return null;
+  let hours = parseInt(groups.hour, 10);
+  const minutes = parseInt(groups.minute, 10);
+  const period = groups.period?.toUpperCase();
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
+  return String(hours).padStart(2, "0") + String(minutes).padStart(2, "0");
 }
 
 export function formatCompactTime(time: string | null): string {
@@ -184,10 +176,8 @@ export function campusParam(): ParamSerializer<string[]> {
     },
     decode(params, _key) {
       const availability = params.get("availability");
-      if (availability && availability in AVAILABILITY_GROUPS) {
-        return [...AVAILABILITY_GROUPS[availability]];
-      }
-      return params.getAll("campus");
+      const group = availability === null ? undefined : AVAILABILITY_GROUPS[availability];
+      return group ? [...group] : params.getAll("campus");
     },
     isActive(value) {
       return value.length > 0;
@@ -244,11 +234,10 @@ export type FilterState = {
 // Compile-time assertion: FilterState must be assignable to the filter-relevant
 // subset of SearchParams (the ts-rs binding). A mismatch here means the registry
 // and the Rust backend have diverged.
-type ApiFilterFields = Omit<SearchParams, "term" | "limit" | "offset" | "sort">;
-const _filterStateCheck: ApiFilterFields = {} as FilterState;
-const _reverseCheck: FilterState = {} as ApiFilterFields;
-void _filterStateCheck;
-void _reverseCheck;
+type ApiFilterFields = Omit<SearchParams, "term" | "page" | "perPage" | "sort">;
+type Assignable<A extends B, B> = A;
+export type _FilterStateCheck = Assignable<FilterState, ApiFilterFields>;
+export type _ReverseCheck = Assignable<ApiFilterFields, FilterState>;
 
 const registryEntries = Object.entries(FILTER_REGISTRY) as [
   keyof typeof FILTER_REGISTRY,
@@ -352,13 +341,15 @@ export function clearFilters(state: FilterState): void {
 /** Convert filter state + metadata to a full SearchParams for the API. */
 export function toAPIParams(
   state: FilterState,
-  meta: { term: string; limit: number; offset: number; sorting: SortTerm[] }
+  meta: { term: string; perPage: number; offset: number; sorting: SortTerm[] }
 ): SearchParams {
   return {
     ...state,
     term: meta.term,
-    limit: meta.limit,
-    offset: meta.offset,
+    perPage: meta.perPage,
+    // The UI pages in whole steps, so flooring only matters for a hand-edited
+    // offset, where the containing page is the closest honest answer.
+    page: Math.floor(meta.offset / meta.perPage) + 1,
     sort: meta.sorting.length > 0 ? formatSort(meta.sorting) : null,
   };
 }
@@ -369,8 +360,6 @@ export function toAPIParams(
  */
 export function expandCampusFromParams(params: URLSearchParams): string[] {
   const availability = params.get("availability");
-  if (availability && availability in AVAILABILITY_GROUPS) {
-    return [...AVAILABILITY_GROUPS[availability]];
-  }
-  return params.getAll("campus");
+  const group = availability === null ? undefined : AVAILABILITY_GROUPS[availability];
+  return group ? [...group] : params.getAll("campus");
 }

@@ -2,6 +2,7 @@
 import { page } from "$app/state";
 import { authStore } from "$lib/auth.svelte";
 import { navbar } from "$lib/stores/navigation.svelte";
+import { dependOn } from "$lib/utils";
 import { BookOpen, Clock, Search, User, Users } from "@lucide/svelte";
 import ThemeToggle from "./ThemeToggle.svelte";
 
@@ -43,7 +44,8 @@ function isLabelExpanded(tabHref: string): boolean {
 }
 
 // DOM refs
-let tabRefs: HTMLAnchorElement[] = $state([]);
+// bind:this fills this by index, so entries are absent until their tab mounts.
+let tabRefs: (HTMLAnchorElement | undefined)[] = $state([]);
 let containerRef: HTMLDivElement | undefined = $state();
 let pillRef: HTMLDivElement | undefined = $state();
 
@@ -167,8 +169,7 @@ function updateTargetFromResize() {
 
 // Start animation when route changes
 $effect(() => {
-  void page.url.pathname;
-  void profileTab.href;
+  dependOn(page.url.pathname, profileTab.href);
 
   requestAnimationFrame(() => {
     updateTarget();

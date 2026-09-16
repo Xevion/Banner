@@ -1,4 +1,5 @@
 import { BannerApiClient } from "$lib/api";
+import { compact } from "$lib/utils";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ url, fetch }) => {
@@ -10,7 +11,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const page = url.searchParams.has("page") ? Number(url.searchParams.get("page")) : undefined;
 
   const [instructorsResult, searchOptionsResult] = await Promise.all([
-    client.getInstructors({ search, subject, sort, page }),
+    client.getInstructors(compact({ search, subject, sort, page })),
     client.getSearchOptions(),
   ]);
 

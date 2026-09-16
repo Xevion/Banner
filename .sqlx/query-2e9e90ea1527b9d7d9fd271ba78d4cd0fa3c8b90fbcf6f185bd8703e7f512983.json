@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO instructor_bluebook_links\n            (instructor_name, instructor_id, status, confidence)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (instructor_name, COALESCE(subject, '')) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Varchar",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e9e90ea1527b9d7d9fd271ba78d4cd0fa3c8b90fbcf6f185bd8703e7f512983"
+}

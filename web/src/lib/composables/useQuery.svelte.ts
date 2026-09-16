@@ -51,13 +51,18 @@ export class QueryController<T> {
   // Configuration
   readonly #fetcher: () => Promise<Result<T, ApiErrorClass>>;
   readonly #debounceMs: number;
-  readonly #onSuccess?: (data: T) => void;
-  readonly #onError?: (error: ApiErrorClass) => void;
+  readonly #onSuccess: ((data: T) => void) | undefined;
+  readonly #onError: ((error: ApiErrorClass) => void) | undefined;
 
   // Internal state
   #debounceTimer: ReturnType<typeof setTimeout> | undefined;
   #destroyed = false;
   #fetchCounter = 0;
+
+  /** Read through a call: a check before an await must not narrow the one after it. */
+  #isDestroyed(): boolean {
+    return this.#destroyed;
+  }
 
   constructor(options: UseQueryOptions<T>) {
     this.#fetcher = options.fetcher;
@@ -74,7 +79,7 @@ export class QueryController<T> {
    * Fetch data immediately. Stale responses from superseded fetches are ignored.
    */
   async fetch(): Promise<void> {
-    if (this.#destroyed) return;
+    if (this.#isDestroyed()) return;
 
     const fetchId = ++this.#fetchCounter;
     this.isLoading = true;
@@ -82,7 +87,7 @@ export class QueryController<T> {
     const result = await this.#fetcher();
 
     // Ignore if destroyed or superseded by a newer fetch
-    if (this.#destroyed || fetchId !== this.#fetchCounter) return;
+    if (this.#isDestroyed() || fetchId !== this.#fetchCounter) return;
 
     if (result.isOk) {
       this.data = result.value;
@@ -101,7 +106,7 @@ export class QueryController<T> {
    * Clears any pending debounce timer before scheduling.
    */
   debouncedFetch(): void {
-    if (this.#destroyed) return;
+    if (this.#isDestroyed()) return;
 
     clearTimeout(this.#debounceTimer);
 

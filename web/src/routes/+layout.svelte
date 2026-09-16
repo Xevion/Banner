@@ -31,11 +31,15 @@ useOverlayScrollbars(() => document.body, {
   },
 });
 
+// Typed from the build machine's .env but read from the runtime environment,
+// where a key the build happened to have can genuinely be absent.
+const publicEnv: Record<string, string | undefined> = env;
+
 onMount(() => {
   themeStore.init();
   telemetry.init({
-    key: env.PUBLIC_POSTHOG_KEY ?? "",
-    host: env.PUBLIC_POSTHOG_HOST ?? "",
+    key: publicEnv.PUBLIC_POSTHOG_KEY ?? "",
+    host: publicEnv.PUBLIC_POSTHOG_HOST ?? "",
   });
   telemetry.trackPageViews();
 });

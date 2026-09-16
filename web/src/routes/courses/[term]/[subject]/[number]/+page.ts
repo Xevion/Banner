@@ -1,4 +1,5 @@
 import { BannerApiClient } from "$lib/api";
+import type { CourseResponse } from "$lib/bindings";
 import { error } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 
@@ -19,10 +20,12 @@ export const load: PageLoad = async ({ params, fetch }) => {
     error(500, sectionsResult.error.message);
   }
 
-  const sections = sectionsResult.value;
-  if (sections.length === 0) {
+  // Destructured so the non-empty invariant survives into the page's own type.
+  const [first, ...rest] = sectionsResult.value;
+  if (!first) {
     error(404, "Course not found");
   }
+  const sections: [CourseResponse, ...CourseResponse[]] = [first, ...rest];
 
   const searchOptions = searchOptionsResult.isOk ? searchOptionsResult.value : null;
 

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT c.subject\n        FROM course_instructors ci\n        JOIN courses c ON c.id = ci.course_id\n        WHERE ci.instructor_id = $1\n        ORDER BY c.subject\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e2900639575a83885fb737b0d3c2c82435134ba694f735d9ba01ddc217105137"
+}

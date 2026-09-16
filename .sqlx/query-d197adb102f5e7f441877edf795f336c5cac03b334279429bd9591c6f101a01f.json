@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT absorbed_email, absorbed_display_name, survivor_id FROM instructor_merges WHERE (absorbed_email IS NOT NULL AND absorbed_email = ANY($1::text[])) OR (absorbed_email IS NULL AND absorbed_display_name = ANY($2::text[]) AND NOT EXISTS (SELECT 1 FROM instructors i WHERE i.email IS NULL AND i.display_name = absorbed_display_name))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "absorbed_email",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_merges",
+            "name": "absorbed_email"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "absorbed_display_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_merges",
+            "name": "absorbed_display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "survivor_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_merges",
+            "name": "survivor_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d197adb102f5e7f441877edf795f336c5cac03b334279429bd9591c6f101a01f"
+}

@@ -3,7 +3,7 @@
 /**
  * A linked RMP profile in the detail view.
  */
-export type LinkedRmpProfile = { linkId: number, legacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, 
+export type LinkedRmpProfile = { linkId: number, legacyId: number, firstName: string, lastName: string, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number, wouldTakeAgainPct: number | null, 
 /**
  * Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
  */

@@ -2,5 +2,8 @@
 
 /**
  * Data source for an instructor rating.
+ *
+ * `BlueBook` lowercases to `bluebook` under both attributes, which is the only
+ * spelling `instructor_scores.source` still holds.
  */
 export type RatingSource = "both" | "rmp" | "bluebook";

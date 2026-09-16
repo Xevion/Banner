@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT instructor_id FROM instructor_rmp_links WHERE rmp_legacy_id = $1 AND instructor_id <> $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "instructor_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_links",
+            "name": "instructor_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "01287b9ca52a062181ab7c07fbbf5fb1bad1c2adf89b76780966bdfcb9cce742"
+}

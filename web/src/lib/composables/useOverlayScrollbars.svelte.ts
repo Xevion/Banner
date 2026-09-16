@@ -8,9 +8,13 @@ import { onMount } from "svelte";
  *
  * Must be called during component initialization (uses `onMount` internally).
  */
-export function useOverlayScrollbars(getElement: () => HTMLElement, options: PartialOptions = {}) {
+export function useOverlayScrollbars(
+  getElement: () => HTMLElement | undefined,
+  options: PartialOptions = {}
+) {
   onMount(() => {
     const element = getElement();
+    if (!element) return;
     const osInstance = OverlayScrollbars(element, {
       ...options,
       scrollbars: {

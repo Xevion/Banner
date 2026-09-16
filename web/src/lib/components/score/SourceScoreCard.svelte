@@ -9,8 +9,8 @@ import { BookOpen, ExternalLink, Star } from "@lucide/svelte";
 
 let {
   source,
-  bluebook = undefined,
-  rmp = undefined,
+  bluebook,
+  rmp,
   inline = false,
 }: {
   source: "bluebook" | "rmp";

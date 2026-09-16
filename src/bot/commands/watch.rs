@@ -26,12 +26,11 @@ impl From<WatchTypeChoice> for WatchType {
     }
 }
 
-fn watch_type_label(watch_type: &str) -> &'static str {
+fn watch_type_label(watch_type: WatchType) -> &'static str {
     match watch_type {
-        "seats_available" => "Seats Available",
-        "waitlist_open" => "Waitlist Open",
-        "any_change" => "Any Change",
-        _ => "Unknown",
+        WatchType::SeatsAvailable => "Seats Available",
+        WatchType::WaitlistOpen => "Waitlist Open",
+        WatchType::AnyChange => "Any Change",
     }
 }
 
@@ -69,9 +68,9 @@ pub async fn watch(
 
     watches::ensure_user(pool, discord_user_id, &discord_username).await?;
 
-    let is_new = watches::upsert_watch(pool, discord_user_id, course_id, &watch_type).await?;
+    let is_new = watches::upsert_watch(pool, discord_user_id, course_id, watch_type).await?;
 
-    let label = watch_type_label(watch_type.as_str());
+    let label = watch_type_label(watch_type);
     if is_new {
         ctx.say(format!(
             "Watch set! I'll DM you when **{}** is triggered for CRN **{}** (term {}).",
@@ -117,7 +116,7 @@ pub async fn unwatch(
 
     let removed = if let Some(choice) = watch_type {
         let wt = WatchType::from(choice);
-        let deleted = watches::delete_watch(pool, discord_user_id, course_id, &wt).await?;
+        let deleted = watches::delete_watch(pool, discord_user_id, course_id, wt).await?;
         if deleted { 1u64 } else { 0 }
     } else {
         watches::delete_all_watches_for_course(pool, discord_user_id, course_id).await?
@@ -170,7 +169,7 @@ pub async fn watches(ctx: Context<'_>) -> Result<(), Error> {
                 w.title,
                 w.crn,
                 w.term_code,
-                watch_type_label(&w.watch_type),
+                watch_type_label(w.watch_type),
                 last_notified,
             )
         })

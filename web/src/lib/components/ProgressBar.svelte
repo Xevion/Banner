@@ -17,11 +17,11 @@ const denom = $derived(total || 1);
 <div class="mb-6">
   <div class="bg-muted h-2 rounded-full overflow-hidden flex">
     {#each segments as seg (seg.stat)}
-      {@const pct = (stats[seg.stat] / denom) * 100}
+      {@const value = stats[seg.stat] ?? 0}
       <div
         class="{seg.color} h-full transition-all duration-500"
-        style="width: {pct}%"
-        title="{seg.label}: {stats[seg.stat]}"
+        style="width: {(value / denom) * 100}%"
+        title="{seg.label}: {value}"
       ></div>
     {/each}
   </div>

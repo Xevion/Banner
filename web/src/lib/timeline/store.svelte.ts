@@ -62,10 +62,11 @@ function mergeRange(ranges: Range[], added: Range): Range[] {
   const all = [...ranges, added].sort((a, b) => a[0] - b[0]);
   const merged: Range[] = [];
   for (const r of all) {
-    if (merged.length === 0 || merged[merged.length - 1][1] < r[0]) {
+    const tail = merged[merged.length - 1];
+    if (!tail || tail[1] < r[0]) {
       merged.push([r[0], r[1]]);
     } else {
-      merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], r[1]);
+      tail[1] = Math.max(tail[1], r[1]);
     }
   }
   return merged;
@@ -86,7 +87,7 @@ async function fetchFromApi(gaps: Range[]): Promise<TimeSlot[]> {
 
   return result.value.slots.map((slot) => ({
     time: new Date(slot.time),
-    subjects: Object.fromEntries(Object.entries(slot.subjects).map(([k, v]) => [k, Number(v)])),
+    subjects: { ...slot.subjects },
   }));
 }
 

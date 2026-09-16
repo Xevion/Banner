@@ -1,6 +1,6 @@
 <script lang="ts">
 import { type HistoryPoint, historyScaleMax, toDayRows } from "$lib/enrollment-history";
-import { formatNumber } from "$lib/utils";
+import { dependOn, formatNumber } from "$lib/utils";
 
 type Spacing = "change" | "day";
 
@@ -23,7 +23,7 @@ let shown = $state(0);
 // Reset paging whenever the underlying rows change, or a spacing switch would keep
 // scrolling from wherever the previous list left off.
 $effect(() => {
-  void rows;
+  dependOn(rows);
   shown = pageSize;
 });
 

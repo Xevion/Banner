@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM instructor_dismissals WHERE lesser_id = $1 AND greater_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cac875fc0bd133249e655c8d043074ce7543bafe5f31190c9667e60fc5c7f090"
+}

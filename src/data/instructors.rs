@@ -5,6 +5,8 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
+use crate::data::course_types::RatingSource;
+use crate::data::models::Page;
 use crate::data::unsigned::Count;
 
 const NANOID_ALPHABET: &[char] = &[
@@ -95,17 +97,6 @@ pub struct PublicInstructorListItem {
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub struct PublicInstructorListResponse {
-    pub instructors: Vec<PublicInstructorListItem>,
-    #[ts(as = "i32")]
-    pub total: i64,
-    pub page: i32,
-    pub per_page: i32,
-}
-
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
 pub struct PublicInstructorProfile {
     pub id: i32,
     pub slug: String,
@@ -174,7 +165,7 @@ fn default_per_page() -> i32 {
 pub async fn list_public_instructors(
     pool: &PgPool,
     params: &PublicInstructorListParams,
-) -> Result<PublicInstructorListResponse> {
+) -> Result<Page<PublicInstructorListItem>> {
     use sqlx::{Postgres, QueryBuilder};
 
     use super::scoring::{self, UnratedPolicy};
@@ -249,7 +240,7 @@ pub async fn list_public_instructors(
         ci_lower: Option<f32>,
         ci_upper: Option<f32>,
         confidence: Option<f32>,
-        score_source: Option<String>,
+        score_source: Option<RatingSource>,
         sc_rmp_count: Option<i32>,
         sc_bb_count: Option<i32>,
     }
@@ -370,9 +361,9 @@ pub async fn list_public_instructors(
         })
         .collect();
 
-    Ok(PublicInstructorListResponse {
-        instructors,
-        total,
+    Ok(Page {
+        items: instructors,
+        total: Count::try_from(total)?,
         page,
         per_page,
     })
@@ -491,7 +482,7 @@ pub async fn get_public_instructor_by_slug(
         ci_lower: f32,
         ci_upper: f32,
         confidence: f32,
-        source: String,
+        source: RatingSource,
         rmp_count: i32,
         bb_count: i32,
         calibrated_bb: Option<f32>,
@@ -512,7 +503,7 @@ pub async fn get_public_instructor_by_slug(
             ci_lower: s.ci_lower,
             ci_upper: s.ci_upper,
             confidence: s.confidence,
-            source: s.source.clone(),
+            source: s.source,
             rmp_count: s.rmp_count,
             bb_count: s.bb_count,
         })

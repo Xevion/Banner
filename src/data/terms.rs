@@ -12,6 +12,7 @@ use sqlx::PgPool;
 use ts_rs::TS;
 
 use crate::banner::BannerTerm;
+use crate::banner::models::terms::Season;
 use anyhow::{Context, Result};
 
 /// A term record from the database, synced from Banner.
@@ -28,8 +29,8 @@ pub struct DbTerm {
     pub description: String,
     /// Year extracted from code, e.g., 2024
     pub year: i16,
-    /// Season name: "Fall", "Spring", or "Summer"
-    pub season: String,
+    /// Academic season the term falls in
+    pub season: Season,
     /// Whether the scraper should process this term
     pub scrape_enabled: bool,
     /// Whether Banner marks this as "View Only"
@@ -176,11 +177,11 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
 /// season codes like "11"). This allows the sync to skip invalid terms gracefully.
 ///
 /// # Examples
-/// - "202510" -> Some((2024, "Fall"))   // Fall 2024, code prefix is 2025
-/// - "202520" -> Some((2025, "Spring"))
-/// - "202530" -> Some((2025, "Summer"))
+/// - "202510" -> Some((2024, Season::Fall))   // Fall 2024, code prefix is 2025
+/// - "202520" -> Some((2025, Season::Spring))
+/// - "202530" -> Some((2025, Season::Summer))
 /// - "201411" -> None (invalid season code)
-fn parse_term_code(code: &str) -> Option<(i16, String)> {
+fn parse_term_code(code: &str) -> Option<(i16, Season)> {
     if code.len() != 6 {
         return None;
     }
@@ -189,13 +190,13 @@ fn parse_term_code(code: &str) -> Option<(i16, String)> {
 
     let (season, display_year) = match &code[4..6] {
         // Fall display year is one less than the code prefix (Banner convention)
-        "10" => ("Fall", code_year - 1),
-        "20" => ("Spring", code_year),
-        "30" => ("Summer", code_year),
+        "10" => (Season::Fall, code_year - 1),
+        "20" => (Season::Spring, code_year),
+        "30" => (Season::Summer, code_year),
         _ => return None,
     };
 
-    Some((display_year, season.to_string()))
+    Some((display_year, season))
 }
 
 /// Sync terms from Banner API to database.
@@ -267,7 +268,7 @@ pub async fn sync_terms_from_banner(
             .bind(&term.code)
             .bind(&term.description)
             .bind(year)
-            .bind(&season)
+            .bind(season)
             .bind(scrape_enabled)
             .bind(is_archived)
             .execute(db_pool)
@@ -312,7 +313,7 @@ mod tests {
         // "202510": code_year=2025, Fall -> display_year = 2025 - 1 = 2024
         let (year, season) = parse_term_code("202510").unwrap();
         assert_eq!(year, 2024);
-        assert_eq!(season, "Fall");
+        assert_eq!(season, Season::Fall);
     }
 
     #[test]
@@ -320,21 +321,30 @@ mod tests {
         // Fall 2001: Banner code "200210", code_year=2002 -> display_year=2001
         let (year, season) = parse_term_code("200210").unwrap();
         assert_eq!(year, 2001);
-        assert_eq!(season, "Fall");
+        assert_eq!(season, Season::Fall);
     }
 
     #[test]
     fn test_parse_term_code_spring() {
         let (year, season) = parse_term_code("202520").unwrap();
         assert_eq!(year, 2025);
-        assert_eq!(season, "Spring");
+        assert_eq!(season, Season::Spring);
     }
 
     #[test]
     fn test_parse_term_code_summer() {
         let (year, season) = parse_term_code("202530").unwrap();
         assert_eq!(year, 2025);
-        assert_eq!(season, "Summer");
+        assert_eq!(season, Season::Summer);
+    }
+
+    /// The column stores the display name, so the write and read halves must agree.
+    #[test]
+    fn test_season_column_roundtrip() {
+        for season in [Season::Fall, Season::Spring, Season::Summer] {
+            assert_eq!(Season::from_slug(season.as_ref()), Some(season));
+        }
+        assert_eq!(Season::from_slug("Winter"), None);
     }
 
     #[test]

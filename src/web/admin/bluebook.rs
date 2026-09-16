@@ -12,6 +12,7 @@ use ts_rs::TS;
 
 use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::admin_bluebook::{self, BluebookError, ListBluebookLinksFilter};
+use crate::data::models::BluebookLinkStatus;
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
@@ -46,7 +47,7 @@ pub struct BluebookSyncTriggerResponse {
 #[ts(export)]
 pub struct ListBluebookLinksParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub status: Option<BluebookLinkStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

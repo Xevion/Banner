@@ -42,7 +42,7 @@ export class ColumnVisibilityController {
   /** Whether visibility differs from the default, rather than merely hiding something. */
   readonly hasCustomVisibility: boolean = $derived.by(() => {
     const hidden = Object.entries(this.visibility)
-      .filter(([, visible]) => visible === false)
+      .filter(([, visible]) => !visible)
       .map(([id]) => id);
     return (
       hidden.length !== this.#defaultHidden.length ||
@@ -82,7 +82,7 @@ export class ColumnVisibilityController {
           next[col] = false;
           changed = true;
         } else if (!compact && next[col] === false) {
-          delete next[col];
+          next[col] = true;
           changed = true;
         }
       }

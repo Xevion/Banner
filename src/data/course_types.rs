@@ -5,8 +5,10 @@
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumString, IntoStaticStr, VariantArray};
 use ts_rs::TS;
 
+use crate::data::models::{UnknownVariant, text_column_enum};
 use crate::data::unsigned::Count;
 
 /// An inclusive date range with the invariant that `start <= end`.
@@ -140,34 +142,33 @@ pub struct RmpFull {
 }
 
 /// Data source for an instructor rating.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+///
+/// `BlueBook` lowercases to `bluebook` under both attributes, which is the only
+/// spelling `instructor_scores.source` still holds.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TS,
+    AsRefStr,
+    EnumString,
+    IntoStaticStr,
+    VariantArray,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 #[ts(export)]
 pub enum RatingSource {
     Both,
     Rmp,
-    #[serde(rename = "bluebook")]
     BlueBook,
 }
 
-impl RatingSource {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Both => "both",
-            Self::Rmp => "rmp",
-            Self::BlueBook => "bluebook",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "both" => Some(Self::Both),
-            "rmp" => Some(Self::Rmp),
-            "bb" | "bluebook" => Some(Self::BlueBook),
-            _ => None,
-        }
-    }
-}
+text_column_enum!(RatingSource);
 
 /// Bayesian composite rating combining RMP and BlueBook via regression calibration.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

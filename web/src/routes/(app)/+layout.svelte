@@ -9,7 +9,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
-  MoreHorizontal,
+  Ellipsis,
   ScrollText,
   Settings,
   User,
@@ -213,7 +213,7 @@ const moreSheetItems: {
           class="flex flex-col items-center justify-center gap-0.5 flex-1 py-2 min-h-[56px]
             bg-transparent border-none cursor-pointer text-muted-foreground"
         >
-          <MoreHorizontal size={20} strokeWidth={1.75} />
+          <Ellipsis size={20} strokeWidth={1.75} />
           <span class="text-[10px] font-medium">More</span>
         </button>
       {:else}

@@ -2,7 +2,7 @@
 import BottomSheet from "$lib/components/BottomSheet.svelte";
 import { DRAWER_WIDTH } from "$lib/timeline/constants";
 import { getSubjectColor } from "$lib/timeline/data";
-import { Filter, X } from "@lucide/svelte";
+import { Funnel, X } from "@lucide/svelte";
 
 interface Props {
   open: boolean;
@@ -109,7 +109,7 @@ function onKeyDown(e: KeyboardEvent) {
     onclick={() => (open = true)}
     aria-label="Open filters"
   >
-    <Filter size={18} strokeWidth={2} />
+    <Funnel size={18} strokeWidth={2} />
   </button>
 </div>
 
@@ -162,7 +162,7 @@ function onKeyDown(e: KeyboardEvent) {
   onclick={() => (open = true)}
   aria-label="Open filters"
 >
-  <Filter size={20} strokeWidth={2} />
+  <Funnel size={20} strokeWidth={2} />
 </button>
 
 <!-- Mobile: Bottom sheet -->

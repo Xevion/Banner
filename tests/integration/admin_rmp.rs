@@ -2,6 +2,7 @@ use crate::helpers::db::test_db;
 use banner::data::admin_rmp::{
     AdminRmpError, ListInstructorsFilter, accept_candidate, list_instructors, reject_all_candidates,
 };
+use banner::data::models::RmpMatchStatus;
 use banner::data::rmp::unmatch_instructor;
 
 /// Test that unmatching an instructor resets accepted candidates back to pending.
@@ -244,7 +245,7 @@ async fn listing_by_status_filters_both_the_page_and_the_total() {
     .expect("failed to create link");
 
     let filter = ListInstructorsFilter {
-        status: Some("unmatched".to_string()),
+        status: Some(RmpMatchStatus::Unmatched),
         search: None,
         page: 1,
         per_page: 50,
@@ -254,8 +255,8 @@ async fn listing_by_status_filters_both_the_page_and_the_total() {
         .await
         .expect("listing by status should succeed");
 
-    let ids: Vec<i32> = response.instructors.iter().map(|i| i.id).collect();
+    let ids: Vec<i32> = response.page.items.iter().map(|i| i.id).collect();
     assert_eq!(ids, vec![unmatched_id]);
-    assert_eq!(response.total, 1);
+    assert_eq!(response.page.total.get(), 1);
     assert!(!ids.contains(&confirmed_id));
 }

@@ -8,8 +8,8 @@ import { DropdownMenu } from "bits-ui";
 let { course }: { course: CourseResponse } = $props();
 
 let sharedDateRange = $derived.by(() => {
-  if (course.meetingTimes.length === 0) return null;
-  const first = course.meetingTimes[0].dateRange;
+  const first = course.meetingTimes[0]?.dateRange;
+  if (!first) return null;
   const allSame = course.meetingTimes.every(
     (mt) => mt.dateRange.start === first.start && mt.dateRange.end === first.end
   );

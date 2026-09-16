@@ -70,12 +70,12 @@ describe("BannerApiClient", () => {
       subject: ["CS"],
       query: "data",
       openOnly: true,
-      limit: 25,
-      offset: 50,
+      perPage: 25,
+      page: 3,
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/courses/search?term=202420&subject=CS&query=data&openOnly=true&limit=25&offset=50",
+      "/api/courses/search?term=202420&subject=CS&query=data&openOnly=true&perPage=25&page=3",
       undefined
     );
     expect(result.isOk).toBe(true);

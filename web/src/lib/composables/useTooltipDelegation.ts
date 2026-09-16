@@ -46,7 +46,7 @@ export function useTooltipDelegation(container: HTMLElement) {
     currentTarget = target;
     clearTimeout(showTimeoutId);
 
-    const side = (target.dataset.tooltipSide as Placement) ?? "top";
+    const side = (target.dataset.tooltipSide as Placement | undefined) ?? "top";
     const delay = Number.parseInt(target.dataset.tooltipDelay ?? String(DEFAULT_DELAY), 10);
 
     const doShow = () => {
@@ -82,7 +82,7 @@ export function useTooltipDelegation(container: HTMLElement) {
   }
 
   function onMouseOver(e: MouseEvent) {
-    const target = (e.target as HTMLElement).closest?.("[data-tooltip]");
+    const target = (e.target as HTMLElement).closest("[data-tooltip]");
     if (target instanceof HTMLElement) {
       showTooltip(target);
     } else if (currentTarget) {
@@ -95,7 +95,7 @@ export function useTooltipDelegation(container: HTMLElement) {
   }
 
   function onFocusIn(e: FocusEvent) {
-    const target = (e.target as HTMLElement).closest?.("[data-tooltip]");
+    const target = (e.target as HTMLElement).closest("[data-tooltip]");
     if (target instanceof HTMLElement) showTooltip(target);
   }
 

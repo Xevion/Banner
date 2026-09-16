@@ -22,7 +22,11 @@ const CATALOG: SortKeyOption[] = [
 const asc = (key: SortKey): SortTerm => ({ key, desc: false });
 
 function make(initial: SortTerm[] = [], onChange?: (terms: SortTerm[]) => void) {
-  return new SortController({ catalog: () => CATALOG, initial, onChange });
+  return new SortController({
+    catalog: () => CATALOG,
+    initial,
+    ...(onChange === undefined ? {} : { onChange }),
+  });
 }
 
 describe("terms", () => {

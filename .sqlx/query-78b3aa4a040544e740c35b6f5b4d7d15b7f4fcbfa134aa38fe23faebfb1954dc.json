@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instructor_rmp_links SET instructor_id = $1 WHERE instructor_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "78b3aa4a040544e740c35b6f5b4d7d15b7f4fcbfa134aa38fe23faebfb1954dc"
+}

@@ -5,6 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Register values the surrounding `$effect` should re-run on but does not otherwise read.
+ * Evaluating the arguments inside the effect is what subscribes to them.
+ */
+export function dependOn(..._values: unknown[]): void {
+  // Intentionally empty: evaluating the arguments is the whole effect.
+}
+
+/**
+ * Drop keys whose value is `undefined`.
+ * `exactOptionalPropertyTypes` rejects an explicit `undefined` for an optional field, so
+ * an options bag assembled from possibly-absent values has to omit the key instead.
+ */
+export function compact<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as {
+    [K in keyof T]?: Exclude<T[K], undefined>;
+  };
+}
+
 /** Shared tooltip content styling for bits-ui Tooltip.Content */
 export const tooltipContentClass =
   "z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-md max-w-72";

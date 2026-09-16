@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM rmp_match_candidates WHERE instructor_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a5e127a36498fdcf1efe66f6a73b36c2f454c325fd8a978011da14b410077585"
+}

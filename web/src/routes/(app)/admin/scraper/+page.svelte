@@ -22,7 +22,7 @@ let { data }: { data: PageData } = $props();
 const PERIODS: ScraperPeriod[] = ["1h", "6h", "24h", "7d", "30d"];
 
 let selectedPeriod = $state<ScraperPeriod>("24h");
-let selectedTerm = $state<string | undefined>(undefined);
+let selectedTerm = $state<string | null>(null);
 
 // Tab state
 let activeTab = $state("charts");
@@ -109,7 +109,7 @@ function successRateColor(rate: number): string {
       <StyledSelect
         items={termItems}
         value={termSelectValue}
-        onValueChange={(v) => { selectedTerm = v === "" ? undefined : v; }}
+        onValueChange={(v) => { selectedTerm = v === "" ? null : v; }}
         placeholder="All Terms"
       />
 

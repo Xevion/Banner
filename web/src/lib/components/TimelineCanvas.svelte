@@ -245,17 +245,15 @@ function updateHover() {
 }
 
 function pinchDistance(): number {
-  const pts = [...activePointers.values()];
-  if (pts.length < 2) return 0;
-  const dx = pts[1].x - pts[0].x;
-  const dy = pts[1].y - pts[0].y;
-  return Math.hypot(dx, dy);
+  const [a, b] = activePointers.values();
+  if (!a || !b) return 0;
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 function pinchMidpoint(): { x: number; y: number } {
-  const pts = [...activePointers.values()];
-  if (pts.length < 2) return { x: 0, y: 0 };
-  return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  const [a, b] = activePointers.values();
+  if (!a || !b) return { x: 0, y: 0 };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 function onPointerDown(e: PointerEvent) {
@@ -340,8 +338,8 @@ function onPointerUp(e: PointerEvent) {
   if (isPinching) {
     if (activePointers.size < 2) {
       isPinching = false;
-      if (activePointers.size === 1) {
-        const remaining = [...activePointers.values()][0];
+      const [remaining] = activePointers.values();
+      if (remaining) {
         isDragging = true;
         dragStartX = remaining.x;
         dragStartY = remaining.y;
@@ -366,9 +364,9 @@ function onPointerUp(e: PointerEvent) {
     return;
   }
 
-  if (pointerSamples.length >= 2) {
-    const first = pointerSamples[0];
-    const last = pointerSamples[pointerSamples.length - 1];
+  const first = pointerSamples[0];
+  const last = pointerSamples[pointerSamples.length - 1];
+  if (first && last && pointerSamples.length >= 2) {
     const dt = last.time - first.time;
     if (dt > VELOCITY_MIN_DT) {
       const pxPerMsX = (last.x - first.x) / dt;

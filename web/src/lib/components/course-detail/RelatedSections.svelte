@@ -10,7 +10,7 @@ import {
 } from "$lib/course";
 import { getInstructionalMethodLabel } from "$lib/labels";
 import { formatNumber } from "$lib/utils";
-import { Loader2 } from "@lucide/svelte";
+import { LoaderCircle } from "@lucide/svelte";
 import { getCourseDetailContext } from "./context";
 
 let { course, sectionCount = $bindable(0) }: { course: CourseResponse; sectionCount?: number } =
@@ -50,11 +50,11 @@ const FADE = 0;
 const INSET = 4;
 
 const pad = HIDDEN + FADE + INSET;
-const fadeMask = `linear-gradient(to bottom, transparent 16px, black ${16}px, black calc(100% - ${24}px), transparent`;
+const fadeMask = `linear-gradient(to bottom, transparent 16px, black 16px, black calc(100% - 24px), transparent`;
 let maskStyle = $derived(sectionCount >= 2 ? fadeMask : "none");
 
 function handleNavigate(crn: string) {
-  ctx?.navigateToSection?.(crn);
+  ctx.navigateToSection?.(crn);
 }
 </script>
 
@@ -67,7 +67,7 @@ function handleNavigate(crn: string) {
 
     {#if state.mode === "loading"}
         <div class="flex items-center justify-center py-4">
-            <Loader2 class="size-4 text-muted-foreground animate-spin" />
+            <LoaderCircle class="size-4 text-muted-foreground animate-spin" />
         </div>
     {:else if state.mode === "error"}
         <p class="text-xs text-muted-foreground italic">{state.message}</p>
@@ -106,7 +106,7 @@ function handleNavigate(crn: string) {
                                 onclick={(e) => {
                                     // Stay in the drawer when it can navigate itself; the
                                     // href carries the click everywhere else.
-                                    if (ctx?.navigateToSection) {
+                                    if (ctx.navigateToSection) {
                                         e.preventDefault();
                                         handleNavigate(section.crn);
                                     }

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Subject } from "$lib/api";
-import { formatNumber } from "$lib/utils";
+import { dependOn, formatNumber } from "$lib/utils";
 import { Check, ChevronsUpDown } from "@lucide/svelte";
 import { Combobox } from "bits-ui";
 import { untrack } from "svelte";
@@ -16,7 +16,7 @@ let {
 
 let open = $state(false);
 let searchValue = $state("");
-let containerEl = $state<HTMLDivElement>(null!);
+let containerEl = $state<HTMLDivElement | null>(null);
 
 const filteredSubjects = $derived.by(() => {
   const query = searchValue.toLowerCase().trim();
@@ -68,7 +68,7 @@ function clearSearch() {
 }
 
 $effect(() => {
-  void value;
+  dependOn(value);
   untrack(clearSearch);
 });
 </script>

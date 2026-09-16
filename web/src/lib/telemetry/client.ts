@@ -15,7 +15,7 @@ class TelemetryClient {
   init(config?: TelemetryConfig): void {
     if (!browser) return;
 
-    if (!config?.key || !config?.host) {
+    if (!config?.key || !config.host) {
       this.enabled = false;
       this.log("Telemetry disabled: missing PUBLIC_POSTHOG_KEY or PUBLIC_POSTHOG_HOST");
       return;
@@ -49,7 +49,7 @@ class TelemetryClient {
   }
 
   /** Capture a type-safe telemetry event. */
-  track<E extends TelemetryEvent>(event: E): void {
+  track(event: TelemetryEvent): void {
     this.log(`track: ${event.name}`, event.properties);
     if (this.enabled) {
       posthog.capture(event.name, event.properties);

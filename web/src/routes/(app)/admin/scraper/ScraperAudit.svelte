@@ -132,7 +132,7 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
-const columns: ColumnDef<AppTableFeatures, AuditLogEntry, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, AuditLogEntry>[] = [
   {
     id: "time",
     accessorKey: "timestamp",
@@ -242,7 +242,7 @@ const columnCount = columns.length;
         <span class="text-green-600 dark:text-green-400">{change.newRaw}</span>
       </span>
     {:else if change.kind === "json-single"}
-      {#if change.diffs.length === 1}
+      {#if change.diffs.length === 1 && change.diffs[0]}
         {@const d = change.diffs[0]}
         <span class="font-mono text-xs">
           <span class="text-muted-foreground">{formatDiffPath(d.path)}:</span> <span class="text-red-400">{stringify(d.oldVal)}</span>

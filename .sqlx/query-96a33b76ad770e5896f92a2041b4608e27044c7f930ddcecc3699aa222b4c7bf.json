@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM instructor_bluebook_links WHERE status IN ('auto', 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "96a33b76ad770e5896f92a2041b4608e27044c7f930ddcecc3699aa222b4c7bf"
+}

@@ -30,7 +30,10 @@ let {
 } = $props();
 </script>
 
-<Tooltip.Root delayDuration={delay} disableHoverableContent={passthrough}>
+<Tooltip.Root
+  {...(delay === undefined ? {} : { delayDuration: delay })}
+  disableHoverableContent={passthrough}
+>
   <Tooltip.Trigger>
     {#snippet child({ props })}
       <span class={triggerClass} {...props}>

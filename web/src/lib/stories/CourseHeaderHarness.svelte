@@ -71,7 +71,7 @@ const table = createSvelteTable({
   get data() {
     return courses;
   },
-  getRowId: (row) => String(row.crn),
+  getRowId: (row) => row.crn,
   columns: COLUMN_DEFS,
   state: {
     get columnVisibility() {

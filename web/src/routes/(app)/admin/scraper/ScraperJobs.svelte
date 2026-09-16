@@ -1,6 +1,6 @@
 <script lang="ts">
 import { client } from "$lib/api";
-import type { ScrapeJobDto } from "$lib/bindings";
+import type { ScrapeJobDto, ScrapeJobStatus, ScrapePriority } from "$lib/bindings";
 import SortableHeader from "$lib/components/SortableHeader.svelte";
 import TableSkeleton from "$lib/components/TableSkeleton.svelte";
 import {
@@ -15,6 +15,7 @@ import { formatDuration } from "$lib/time";
 import { TOOLTIP_SURFACE } from "$lib/tooltipClass";
 import { TriangleAlert } from "@lucide/svelte";
 import { type ColumnDef, type SortingState } from "@tanstack/table-core";
+import { match, P } from "ts-pattern";
 import { onMount } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
@@ -127,7 +128,7 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
-const PRIORITY_ORDER: Record<string, number> = {
+const PRIORITY_ORDER: Record<ScrapePriority, number> = {
   critical: 0,
   high: 1,
   medium: 2,
@@ -136,46 +137,40 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 function sortJobs(jobs: ScrapeJobDto[]): ScrapeJobDto[] {
   return [...jobs].sort((a, b) => {
-    const pa = PRIORITY_ORDER[String(a.priority).toLowerCase()] ?? 2;
-    const pb = PRIORITY_ORDER[String(b.priority).toLowerCase()] ?? 2;
+    const pa = PRIORITY_ORDER[a.priority];
+    const pb = PRIORITY_ORDER[b.priority];
     if (pa !== pb) return pa - pb;
     return new Date(a.executeAt).getTime() - new Date(b.executeAt).getTime();
   });
 }
 
 function getTermCode(job: ScrapeJobDto): string | null {
-  const payload = job.targetPayload as Record<string, unknown>;
-  return typeof payload.term === "string" ? payload.term : null;
+  return job.targetPayload.term;
 }
 
+// The payload union carries no tag of its own, so targetType and the payload shape are
+// matched together and a row whose two disagree falls through to the raw JSON.
 function formatJobDetails(job: ScrapeJobDto, subjects: Map<string, string>): string {
-  const payload = job.targetPayload as Record<string, unknown>;
-  switch (job.targetType) {
-    case "subject": {
-      const code = payload.subject as string;
-      const desc = subjects.get(code);
-      return desc ? `${code} \u2014 ${desc}` : code;
-    }
-    case "crnList": {
-      const crns = payload.crns as string[];
-      return `${crns.length} CRNs`;
-    }
-    case "singleCrn":
-      return `CRN ${payload.crn as string}`;
-    case "courseRange":
-      return `${payload.subject as string} ${payload.low as number}\u2013${payload.high as number}`;
-    default:
-      return JSON.stringify(payload);
-  }
+  return match([job.targetType, job.targetPayload] as const)
+    .with(["subject", { subject: P.string }], ([, payload]) => {
+      const desc = subjects.get(payload.subject);
+      return desc ? `${payload.subject} \u2014 ${desc}` : payload.subject;
+    })
+    .with(["crnList", { crns: P.array(P.string) }], ([, payload]) => `${payload.crns.length} CRNs`)
+    .with(["singleCrn", { crn: P.string }], ([, payload]) => `CRN ${payload.crn}`)
+    .with(
+      ["courseRange", { subject: P.string, low: P.number, high: P.number }],
+      ([, payload]) => `${payload.subject} ${payload.low}\u2013${payload.high}`
+    )
+    .otherwise(() => JSON.stringify(job.targetPayload));
 }
 
-function priorityColor(priority: ScrapeJobDto["priority"]): string {
-  const p = String(priority).toLowerCase();
-  if (p === "urgent" || p === "critical") return "text-red-500";
-  if (p === "high") return "text-orange-500";
-  if (p === "low") return "text-muted-foreground";
-  return "text-foreground";
-}
+const PRIORITY_COLORS: Record<ScrapePriority, string> = {
+  critical: "text-red-500",
+  high: "text-orange-500",
+  medium: "text-foreground",
+  low: "text-muted-foreground",
+};
 
 function retryColor(retryCount: number, maxRetries: number): string {
   if (retryCount >= maxRetries && maxRetries > 0) return "text-red-500";
@@ -183,30 +178,17 @@ function retryColor(retryCount: number, maxRetries: number): string {
   return "text-muted-foreground";
 }
 
-function statusColor(status: string): { text: string; dot: string } {
-  switch (status) {
-    case "processing":
-      return { text: "text-blue-500", dot: "bg-blue-500" };
-    case "pending":
-      return { text: "text-green-500", dot: "bg-green-500" };
-    case "scheduled":
-      return { text: "text-muted-foreground", dot: "bg-muted-foreground" };
-    case "staleLock":
-      return { text: "text-red-500", dot: "bg-red-500" };
-    case "exhausted":
-      return { text: "text-red-500", dot: "bg-red-500" };
-    default:
-      return { text: "text-muted-foreground", dot: "bg-muted-foreground" };
-  }
-}
+const STATUS_COLORS: Record<ScrapeJobStatus, { text: string; dot: string }> = {
+  processing: { text: "text-blue-500", dot: "bg-blue-500" },
+  pending: { text: "text-green-500", dot: "bg-green-500" },
+  scheduled: { text: "text-muted-foreground", dot: "bg-muted-foreground" },
+  staleLock: { text: "text-red-500", dot: "bg-red-500" },
+  exhausted: { text: "text-red-500", dot: "bg-red-500" },
+};
 
 function formatStatusLabel(status: string): string {
   // Convert camelCase to separate words, capitalize first letter
   return status.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^\w/, (c) => c.toUpperCase());
-}
-
-function formatTargetType(targetType: ScrapeJobDto["targetType"]): string {
-  return formatStatusLabel(String(targetType));
 }
 
 function lockDurationColor(ms: number): string {
@@ -222,7 +204,7 @@ function overdueDurationColor(ms: number): string {
   return "text-amber-500";
 }
 
-const columns: ColumnDef<AppTableFeatures, ScrapeJobDto, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, ScrapeJobDto>[] = [
   {
     id: "id",
     accessorKey: "id",
@@ -235,16 +217,14 @@ const columns: ColumnDef<AppTableFeatures, ScrapeJobDto, unknown>[] = [
     header: "Status",
     enableSorting: true,
     sortFn: (rowA, rowB) => {
-      const order: Record<string, number> = {
+      const order: Record<ScrapeJobStatus, number> = {
         processing: 0,
         staleLock: 1,
         pending: 2,
         scheduled: 3,
         exhausted: 4,
       };
-      const a = order[rowA.original.status] ?? 3;
-      const b = order[rowB.original.status] ?? 3;
-      return a - b;
+      return order[rowA.original.status] - order[rowB.original.status];
     },
   },
   {
@@ -270,19 +250,8 @@ const columns: ColumnDef<AppTableFeatures, ScrapeJobDto, unknown>[] = [
     accessorKey: "priority",
     header: "Priority",
     enableSorting: true,
-    sortFn: (rowA, rowB) => {
-      const order: Record<string, number> = {
-        critical: 0,
-        urgent: 0,
-        high: 1,
-        normal: 2,
-        medium: 2,
-        low: 3,
-      };
-      const a = order[String(rowA.original.priority).toLowerCase()] ?? 2;
-      const b = order[String(rowB.original.priority).toLowerCase()] ?? 2;
-      return a - b;
-    },
+    sortFn: (rowA, rowB) =>
+      PRIORITY_ORDER[rowA.original.priority] - PRIORITY_ORDER[rowB.original.priority],
   },
   {
     id: "timing",
@@ -325,19 +294,34 @@ const skeletonWidths: Record<string, string> = {
 // Uses tick dependency so Svelte re-evaluates every second.
 function getTimingDisplay(
   job: ScrapeJobDto,
-  tick: number
+  _tick: number
 ): {
   text: string;
   colorClass: string;
   icon: "warning" | "none";
   tooltip: string;
 } {
-  void tick;
   const now = Date.now();
   const queuedTime = new Date(job.queuedAt).getTime();
   const executeTime = new Date(job.executeAt).getTime();
 
-  if (job.status === "processing" || job.status === "staleLock") {
+  const executeAtDiff = now - executeTime;
+
+  // A job overdue for execution reads as scheduled whatever its own status says.
+  const scheduled = () => {
+    const tooltipLines = [
+      `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
+      `Executes: ${formatAbsoluteDate(job.executeAt)}`,
+    ];
+    return {
+      text: `in ${formatDuration(Math.abs(executeAtDiff))}`,
+      colorClass: "text-muted-foreground",
+      icon: "none" as const,
+      tooltip: tooltipLines.join("\n"),
+    };
+  };
+
+  const processing = () => {
     const lockedTime = job.lockedAt ? new Date(job.lockedAt).getTime() : now;
     const processingMs = now - lockedTime;
     const waitedMs = lockedTime - queuedTime;
@@ -360,51 +344,41 @@ function getTimingDisplay(
     return {
       text: `${prefix} ${formatDuration(processingMs)}`,
       colorClass,
-      icon: job.status === "staleLock" ? "warning" : "none",
+      icon: job.status === "staleLock" ? ("warning" as const) : ("none" as const),
       tooltip: tooltipLines.join("\n"),
     };
-  }
+  };
 
-  if (job.status === "exhausted") {
-    const tooltipLines = [
+  const exhausted = () => ({
+    text: "exhausted",
+    colorClass: "text-red-500",
+    icon: "warning" as const,
+    tooltip: [
       `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
       `Retries: ${job.retryCount}/${job.maxRetries} exhausted`,
-    ];
-    return {
-      text: "exhausted",
-      colorClass: "text-red-500",
-      icon: "warning",
-      tooltip: tooltipLines.join("\n"),
-    };
-  }
+    ].join("\n"),
+  });
 
-  // Scheduled (future execute_at)
-  const executeAtDiff = now - executeTime;
-  if (job.status === "scheduled" || executeAtDiff < 0) {
-    const tooltipLines = [
-      `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
-      `Executes: ${formatAbsoluteDate(job.executeAt)}`,
-    ];
+  // Overdue: execute_at is in the past and nothing has picked the job up.
+  const waiting = () => {
+    const waitingMs = now - queuedTime;
     return {
-      text: `in ${formatDuration(Math.abs(executeAtDiff))}`,
-      colorClass: "text-muted-foreground",
-      icon: "none",
-      tooltip: tooltipLines.join("\n"),
+      text: `waiting ${formatDuration(waitingMs)}`,
+      colorClass: overdueDurationColor(waitingMs),
+      icon: "warning" as const,
+      tooltip: [
+        `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
+        `Waiting: ${formatDuration(waitingMs)}`,
+      ].join("\n"),
     };
-  }
-
-  // Pending (overdue -- execute_at is in the past, waiting to be picked up)
-  const waitingMs = now - queuedTime;
-  const tooltipLines = [
-    `Queued: ${formatAbsoluteDate(job.queuedAt)}`,
-    `Waiting: ${formatDuration(waitingMs)}`,
-  ];
-  return {
-    text: `waiting ${formatDuration(waitingMs)}`,
-    colorClass: overdueDurationColor(waitingMs),
-    icon: "warning",
-    tooltip: tooltipLines.join("\n"),
   };
+
+  return match(job.status)
+    .with("processing", "staleLock", processing)
+    .with("exhausted", exhausted)
+    .with("scheduled", scheduled)
+    .with("pending", () => (executeAtDiff < 0 ? scheduled() : waiting()))
+    .exhaustive();
 }
 </script>
 
@@ -413,7 +387,7 @@ function getTimingDisplay(
 {/snippet}
 
 {#snippet statusCell(job: ScrapeJobDto)}
-  {@const sc = statusColor(job.status)}
+  {@const sc = STATUS_COLORS[job.status]}
   <td class="px-3 py-2.5 whitespace-nowrap">
     <span class="inline-flex items-center gap-1.5">
       <span class="size-1.5 shrink-0 rounded-full {sc.dot}"></span>
@@ -434,7 +408,7 @@ function getTimingDisplay(
     <span
       class="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
     >
-      {formatTargetType(job.targetType)}
+      {formatStatusLabel(job.targetType)}
     </span>
   </td>
 {/snippet}
@@ -460,7 +434,7 @@ function getTimingDisplay(
 
 {#snippet priorityCell(job: ScrapeJobDto)}
   <td class="px-3 py-2.5 whitespace-nowrap">
-    <span class="font-medium capitalize {priorityColor(job.priority)}">
+    <span class="font-medium capitalize {PRIORITY_COLORS[job.priority]}">
       {job.priority}
     </span>
   </td>

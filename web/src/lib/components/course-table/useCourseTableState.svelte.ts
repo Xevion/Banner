@@ -43,7 +43,7 @@ export function useCourseTableState(
   /** Bind to the table element to track content height via ResizeObserver */
   function observeHeight(tableElement: HTMLTableElement) {
     const observer = new ResizeObserver(([entry]) => {
-      contentHeight = entry.contentRect.height;
+      if (entry) contentHeight = entry.contentRect.height;
     });
     observer.observe(tableElement);
     return () => observer.disconnect();

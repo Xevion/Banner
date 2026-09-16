@@ -84,7 +84,10 @@ export function initNavigation() {
     const toPath = navigation.to?.url.pathname;
     const isPageChange = fromPath !== toPath;
 
-    if (!document.startViewTransition) {
+    // Read through Partial: the DOM lib types this as always present, but browsers
+    // without view transitions do not ship it.
+    const startViewTransition = (document as Partial<Document>).startViewTransition?.bind(document);
+    if (!startViewTransition) {
       void navigation.complete.then(() => {
         navbar.path = window.location.pathname;
       });
@@ -118,7 +121,7 @@ export function initNavigation() {
       // so they don't create independent transition groups during page nav.
       document.documentElement.classList.add("nav-transitioning");
 
-      const vt = document.startViewTransition(async () => {
+      const vt = startViewTransition(async () => {
         resolve();
         await navigation.complete;
       });

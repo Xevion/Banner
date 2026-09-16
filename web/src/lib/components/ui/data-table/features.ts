@@ -2,7 +2,9 @@ import {
   columnVisibilityFeature,
   createSortedRowModel,
   rowSortingFeature,
-  sortFns,
+  sortFn_alphanumeric,
+  sortFn_datetime,
+  sortFn_text,
   tableFeatures,
 } from "@tanstack/table-core";
 
@@ -17,7 +19,13 @@ export const APP_TABLE_FEATURES = tableFeatures({
   columnVisibilityFeature,
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
-  sortFns,
+  // Only the three `sortFn: "auto"` can resolve to; every other column passes a
+  // function directly, and unregistered auto falls back to the built-in basic sort.
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    datetime: sortFn_datetime,
+    text: sortFn_text,
+  },
 });
 
 export type AppTableFeatures = typeof APP_TABLE_FEATURES;

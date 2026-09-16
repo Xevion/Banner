@@ -142,15 +142,22 @@ Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashM
 
 ## Database
 
-- **Runtime queries are the default.** Use `sqlx::query_as::<_, T>(sql)` for SELECTs that
-  map to a struct and `sqlx::query(sql)` for mutations, binding parameters with `.bind()`.
-  Nearly every query in `src/data/` uses this form.
-- **Do not add `query!`/`query_as!`/`query_scalar!` macros.** A few remain in `kv.rs` and
-  `scoring.rs`; treat them as legacy, not as the pattern to follow.
+- **Compile-time macros are the default.** When the SQL is a string literal, use
+  `sqlx::query!`, `sqlx::query_as!` or `sqlx::query_scalar!`. The macro checks the query
+  against the live schema and reports each column's real nullability, which is what keeps
+  domain types honest.
+- **Runtime queries are the exception**, for queries whose *shape* genuinely varies: a
+  dynamic `ORDER BY` cannot be a bind parameter, and a WHERE clause assembled with
+  `format!` is not a literal. Use `sqlx::query_as::<_, T>(sql)` / `sqlx::query(sql)` with
+  `.bind()`, and leave a one-line comment at the call site saying why it cannot be a macro.
 - **Row structs** derive `sqlx::FromRow`. Column names must match field names (or be
-  aliased in the SQL).
+  aliased in the SQL). `query_as!` ignores `FromRow` entirely, so a struct with
+  `#[sqlx(default)]` fields needs `query!` plus a hand-written map.
 - **Migrations** run automatically on startup via `sqlx::migrate!()`
-- Use `Option<T>` for nullable columns
+- **The macro's reported nullability is the source of truth.** Only declare `Option<T>`
+  where sqlx says the column is nullable; do not widen a type for convenience. Where sqlx
+  is conservative and you know better -- a view's `CASE` expression, `COUNT(*)`, a
+  `COALESCE`d aggregate -- assert it with `AS "col!"` rather than wrapping the field.
 - **Batch operations**: Use `UNNEST` for bulk inserts/upserts instead of looping single inserts
 - **JSONB**: Used for nested structures (meeting times, enrollment). Query with `jsonb_array_elements` and lateral joins.
 
@@ -172,14 +179,45 @@ sqlx::query(
 .context("failed to batch upsert reference data")?;
 ```
 
-A handful of compile-time macro queries survive in `src/data/kv.rs` and
-`src/data/scoring.rs`. They are the reason `.sqlx/` exists: tempo's preflight regenerates
-that offline metadata when Rust sources or migrations change, so a `SQLX_OFFLINE=true`
-build can still verify them without a live database. Do not add more -- every new query
-uses the runtime form.
+Macro queries are the reason `.sqlx/` exists: tempo's preflight regenerates that offline
+metadata when Rust sources or migrations change, so a `SQLX_OFFLINE=true` build verifies
+them without a live database, and CI fails when the checked-in metadata is stale.
 
-The trade-off is explicit: runtime queries are not checked against the schema at build
-time, so a column rename surfaces as a runtime error. Cover new queries with tests.
+The trade-off is explicit: a runtime query is not checked against the schema at build
+time, so a column rename surfaces as a failed request instead of a failed build. Cover
+every runtime query with a test.
+
+## Closed Value Sets
+
+A column that holds one of a fixed set of strings gets a Rust enum, never a `String`.
+The column is `TEXT`/`VARCHAR` rather than a Postgres enum type, so the enum carries:
+
+- `strum`'s `AsRefStr`, `EnumString` and `IntoStaticStr` for the string mapping, with
+  `#[strum(serialize_all = ...)]` matching serde's `#[serde(rename_all = ...)]` so the
+  column value and the JSON value cannot drift.
+- `text_column_enum!` (`src/data/models.rs`) for the SQLx `Type`/`Decode`/`Encode` codec.
+  An unrecognised row fails the decode with `UnknownVariant`, naming the type and value.
+- `VariantArray` where a test or a UI list needs every variant without a hand-kept copy.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS,
+         AsRefStr, EnumString, IntoStaticStr, VariantArray)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+#[ts(export)]
+pub enum BluebookLinkStatus { Auto, Pending, Approved, Rejected }
+
+text_column_enum!(BluebookLinkStatus);
+```
+
+The enum then binds and decodes directly, a macro query names it with
+`AS "status: BluebookLinkStatus"`, and every `match` on it is exhaustive.
+
+## Pagination
+
+List endpoints return `Page<T>` (`src/data/models.rs`): `items`, `total`, `page`,
+`per_page`. Responses that carry extra aggregates nest it as a `page` field rather than
+inventing a second envelope shape. `AdminAuditPage` is the one holdout and should move.
 
 ## Serialization
 

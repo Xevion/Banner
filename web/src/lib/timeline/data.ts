@@ -34,7 +34,7 @@ const KNOWN_SUBJECT_COLORS: Record<string, string> = {
  * Extended palette for subjects that don't have a hand-picked color.
  * These are chosen to be visually distinct from each other.
  */
-const FALLBACK_PALETTE = [
+const FALLBACK_PALETTE: readonly [string, ...string[]] = [
   "#f472b6", // pink-400
   "#60a5fa", // blue-400
   "#34d399", // emerald-400
@@ -70,8 +70,10 @@ export function getSubjectColor(subject: string): string {
   const cached = colorCache.get(subject);
   if (cached) return cached;
 
+  const fallbackIndex = hashCode(subject) % FALLBACK_PALETTE.length;
+  // The palette is non-empty, so the modulo always lands; index 0 satisfies the checker.
   const color =
-    KNOWN_SUBJECT_COLORS[subject] ?? FALLBACK_PALETTE[hashCode(subject) % FALLBACK_PALETTE.length];
+    KNOWN_SUBJECT_COLORS[subject] ?? FALLBACK_PALETTE[fallbackIndex] ?? FALLBACK_PALETTE[0];
 
   colorCache.set(subject, color);
   return color;

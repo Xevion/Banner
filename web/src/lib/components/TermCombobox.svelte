@@ -49,7 +49,7 @@ const filteredTerms = $derived.by(() => {
   type="single"
   bind:value={() => value, selectTerm}
   bind:open
-  {inputValue}
+  {...(inputValue === undefined ? {} : { inputValue })}
   onOpenChangeComplete={(o) => {
     if (!o) {
       searchValue = "";

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { CandidateResponse } from "$lib/bindings";
 import { formatYearRange, ratingStyle, rmpUrl } from "$lib/course";
-import { Check, ExternalLink, Info, LoaderCircle, Merge, X, XCircle } from "@lucide/svelte";
+import { Check, ExternalLink, Info, LoaderCircle, Merge, X, CircleX } from "@lucide/svelte";
 import ScoreBreakdown from "./ScoreBreakdown.svelte";
 
 let {
@@ -112,7 +112,7 @@ const isMergeLoading = $derived(actionLoading === `merge-${candidate.rmpLegacyId
           {#if isUnmatchLoading}
             <LoaderCircle size={14} class="animate-spin" />
           {:else}
-            <XCircle size={14} />
+            <CircleX size={14} />
           {/if}
           Unmatch
         </button>
@@ -206,6 +206,6 @@ const isMergeLoading = $derived(actionLoading === `merge-${candidate.rmpLegacyId
 
   <!-- Score breakdown -->
   <div class="mt-2">
-    <ScoreBreakdown breakdown={candidate.scoreBreakdown} score={candidate.score ?? 0} />
+    <ScoreBreakdown breakdown={candidate.scoreBreakdown} score={candidate.score} />
   </div>
 </div>

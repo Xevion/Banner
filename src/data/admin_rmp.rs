@@ -10,8 +10,9 @@ use tracing::warn;
 use ts_rs::TS;
 
 use crate::data::escape_like;
-use crate::data::models::RmpMatchStatus;
+use crate::data::models::{Page, RmpCandidateStatus, RmpMatchStatus};
 use crate::data::rmp_matching::ScoreBreakdown;
+use crate::data::unsigned::Count;
 
 /// Domain errors for RMP matching admin operations.
 ///
@@ -42,13 +43,13 @@ pub enum AdminRmpError {
 #[ts(export)]
 pub struct TopCandidateResponse {
     pub rmp_legacy_id: i32,
-    pub score: Option<f32>,
-    pub score_breakdown: Option<ScoreBreakdown>,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
+    pub score: f32,
+    pub score_breakdown: ScoreBreakdown,
+    pub first_name: String,
+    pub last_name: String,
     pub department: Option<String>,
     pub avg_rating: Option<f32>,
-    pub num_ratings: Option<i32>,
+    pub num_ratings: i32,
     /// Instructor already holding this profile, when it is not this one.
     pub claimed_by: Option<String>,
 }
@@ -114,18 +115,18 @@ pub struct InstructorDetail {
 }
 
 /// A linked RMP profile in the detail view.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct LinkedRmpProfile {
     pub link_id: i32,
     pub legacy_id: i32,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
+    pub first_name: String,
+    pub last_name: String,
     pub department: Option<String>,
     pub avg_rating: Option<f32>,
     pub avg_difficulty: Option<f32>,
-    pub num_ratings: Option<i32>,
+    pub num_ratings: i32,
     pub would_take_again_pct: Option<f32>,
     /// Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
     pub review_subjects: Vec<String>,
@@ -134,7 +135,7 @@ pub struct LinkedRmpProfile {
 }
 
 /// A match candidate in the detail view.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct CandidateResponse {
@@ -150,7 +151,7 @@ pub struct CandidateResponse {
     pub score: f32,
     #[ts(as = "ScoreBreakdown")]
     pub score_breakdown: sqlx::types::Json<ScoreBreakdown>,
-    pub status: String,
+    pub status: RmpCandidateStatus,
     /// Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
     pub review_subjects: Vec<String>,
     /// Distinct years in which this professor received reviews.
@@ -158,7 +159,6 @@ pub struct CandidateResponse {
     /// Instructor already holding this RMP profile, if any.
     pub claimed_by: Option<String>,
     /// Why this candidate was not linked automatically.
-    #[sqlx(default)]
     pub blocked_reason: Option<String>,
 }
 
@@ -177,11 +177,7 @@ pub struct InstructorDetailResponse {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ListInstructorsResponse {
-    pub instructors: Vec<InstructorListItem>,
-    #[ts(as = "i32")]
-    pub total: i64,
-    pub page: i32,
-    pub per_page: i32,
+    pub page: Page<InstructorListItem>,
     pub stats: InstructorStats,
 }
 
@@ -211,8 +207,8 @@ struct InstructorRow {
     id: i32,
     display_name: String,
     email: Option<String>,
-    rmp_match_status: String,
-    rmp_link_count: Option<i64>,
+    rmp_match_status: RmpMatchStatus,
+    rmp_link_count: i64,
     top_candidate_rmp_id: Option<i32>,
     top_candidate_score: Option<f32>,
     top_candidate_breakdown: Option<sqlx::types::Json<ScoreBreakdown>>,
@@ -222,15 +218,15 @@ struct InstructorRow {
     tc_avg_rating: Option<f32>,
     tc_num_ratings: Option<i32>,
     tc_claimed_by: Option<String>,
-    candidate_count: Option<i64>,
-    course_subject_count: Option<i64>,
+    candidate_count: i64,
+    course_subject_count: i64,
     teaching_years: Option<Vec<i16>>,
     subjects_taught: Option<Vec<String>>,
 }
 
 /// Filter/sort/pagination params for listing instructors.
 pub struct ListInstructorsFilter {
-    pub status: Option<String>,
+    pub status: Option<RmpMatchStatus>,
     pub search: Option<String>,
     pub page: i32,
     pub per_page: i32,
@@ -253,6 +249,7 @@ pub async fn list_instructors(
         _ => "tc.score DESC NULLS LAST, i.display_name ASC",
     };
 
+    let status = filter.status.map(<&'static str>::from);
     let search_pattern = filter
         .search
         .as_ref()
@@ -298,7 +295,7 @@ pub async fn list_instructors(
     // Only the sort is interpolated, and ORDER BY cannot be a bind parameter, so this
     // one stays runtime-checked. A NULL bind disables its own filter clause.
     let rows = sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str))
-        .bind(filter.status.as_deref())
+        .bind(status)
         .bind(search_pattern.as_deref())
         .bind(per_page)
         .bind(offset)
@@ -316,7 +313,7 @@ pub async fn list_instructors(
         WHERE ($1::text IS NULL OR ms.status = $1)
           AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)
         "#,
-        filter.status.as_deref(),
+        status,
         search_pattern.as_deref(),
     )
     .fetch_one(pool)
@@ -327,7 +324,7 @@ pub async fn list_instructors(
     // status through a CASE expression, and an aggregate, as nullable.
     let stats_rows = sqlx::query!(
         r#"
-        SELECT status AS "status!", COUNT(*) AS "count!"
+        SELECT status AS "status!: RmpMatchStatus", COUNT(*) AS "count!"
         FROM instructor_rmp_match_status
         GROUP BY status
         "#
@@ -354,44 +351,60 @@ pub async fn list_instructors(
     };
     for row in &stats_rows {
         stats.total += row.count;
-        match row.status.as_str() {
-            "unmatched" => stats.unmatched = row.count,
-            "pending" => stats.pending = row.count,
-            "auto" => stats.auto = row.count,
-            "confirmed" => stats.confirmed = row.count,
-            "rejected" => stats.rejected = row.count,
-            _ => {
-                warn!(status = %row.status, "unexpected rmp_match_status value");
-            }
+        match row.status {
+            RmpMatchStatus::Unmatched => stats.unmatched = row.count,
+            RmpMatchStatus::Pending => stats.pending = row.count,
+            RmpMatchStatus::Auto => stats.auto = row.count,
+            RmpMatchStatus::Confirmed => stats.confirmed = row.count,
+            RmpMatchStatus::Rejected => stats.rejected = row.count,
         }
     }
 
     let instructors: Vec<InstructorListItem> = rows
         .iter()
         .map(|r| {
-            let top_candidate = r.top_candidate_rmp_id.map(|rmp_id| TopCandidateResponse {
-                rmp_legacy_id: rmp_id,
-                score: r.top_candidate_score,
-                score_breakdown: r.top_candidate_breakdown.as_ref().map(|b| b.0.clone()),
-                first_name: r.tc_first_name.clone(),
-                last_name: r.tc_last_name.clone(),
-                department: r.tc_department.clone(),
-                avg_rating: r.tc_avg_rating,
-                num_ratings: r.tc_num_ratings,
-                claimed_by: r.tc_claimed_by.clone(),
-            });
+            // The lateral join either produces a whole candidate row or none of it,
+            // and its rmp_legacy_id is a foreign key, so the professor columns follow.
+            let top_candidate = r
+                .top_candidate_rmp_id
+                .map(|rmp_id| -> Result<TopCandidateResponse> {
+                    Ok(TopCandidateResponse {
+                        rmp_legacy_id: rmp_id,
+                        score: r
+                            .top_candidate_score
+                            .context("top candidate has no score")?,
+                        score_breakdown: r
+                            .top_candidate_breakdown
+                            .as_ref()
+                            .context("top candidate has no score breakdown")?
+                            .0
+                            .clone(),
+                        first_name: r
+                            .tc_first_name
+                            .clone()
+                            .context("top candidate has no rmp profile")?,
+                        last_name: r
+                            .tc_last_name
+                            .clone()
+                            .context("top candidate has no rmp profile")?,
+                        department: r.tc_department.clone(),
+                        avg_rating: r.tc_avg_rating,
+                        num_ratings: r
+                            .tc_num_ratings
+                            .context("top candidate has no rmp profile")?,
+                        claimed_by: r.tc_claimed_by.clone(),
+                    })
+                })
+                .transpose()?;
 
             Ok(InstructorListItem {
                 id: r.id,
                 display_name: r.display_name.clone(),
                 email: r.email.clone(),
-                rmp_match_status: r
-                    .rmp_match_status
-                    .parse()
-                    .context("invalid rmp_match_status")?,
-                rmp_link_count: r.rmp_link_count.unwrap_or(0),
-                candidate_count: r.candidate_count.unwrap_or(0),
-                course_subject_count: r.course_subject_count.unwrap_or(0),
+                rmp_match_status: r.rmp_match_status,
+                rmp_link_count: r.rmp_link_count,
+                candidate_count: r.candidate_count,
+                course_subject_count: r.course_subject_count,
                 top_candidate,
                 teaching_years: r.teaching_years.clone().unwrap_or_default(),
                 subjects_taught: r.subjects_taught.clone().unwrap_or_default(),
@@ -400,10 +413,12 @@ pub async fn list_instructors(
         .collect::<Result<Vec<_>>>()?;
 
     Ok(ListInstructorsResponse {
-        instructors,
-        total,
-        page,
-        per_page,
+        page: Page {
+            items: instructors,
+            total: Count::try_from(total)?,
+            page,
+            per_page,
+        },
         stats,
     })
 }
@@ -412,37 +427,46 @@ pub async fn list_instructors(
 ///
 /// `blocked_reason` is left empty; the web layer fills in reviewer-facing copy.
 pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
-    let instructor: Option<(i32, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT i.id, i.display_name, i.email, ms.status \
-         FROM instructors i \
-         JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id \
-         WHERE i.id = $1",
+    // The view reads status through a CASE expression, so sqlx calls it nullable.
+    let instructor = sqlx::query!(
+        r#"
+        SELECT i.id, i.display_name, i.email, ms.status AS "status!: RmpMatchStatus"
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        WHERE i.id = $1
+        "#,
+        id
     )
-    .bind(id)
     .fetch_optional(pool)
     .await
-    .context("failed to fetch instructor")?;
+    .context("failed to fetch instructor")?
+    .ok_or(AdminRmpError::NoSuchInstructor)?;
 
-    let (inst_id, display_name, email, rmp_match_status) =
-        instructor.ok_or(AdminRmpError::NoSuchInstructor)?;
+    let inst_id = instructor.id;
 
-    let subjects: Vec<(String,)> = sqlx::query_as(
-        "SELECT DISTINCT c.subject FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = $1 ORDER BY c.subject",
+    let subjects = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT c.subject
+        FROM course_instructors ci
+        JOIN courses c ON c.id = ci.course_id
+        WHERE ci.instructor_id = $1
+        ORDER BY c.subject
+        "#,
+        inst_id
     )
-    .bind(inst_id)
     .fetch_all(pool)
     .await
     .context("failed to fetch subjects")?;
 
-    let (course_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(DISTINCT ci.course_id) FROM course_instructors ci WHERE ci.instructor_id = $1",
+    let course_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(DISTINCT ci.course_id) AS "count!" FROM course_instructors ci WHERE ci.instructor_id = $1"#,
+        inst_id
     )
-    .bind(inst_id)
     .fetch_one(pool)
     .await
     .context("failed to count courses")?;
 
-    let teaching_year_rows: Vec<(i16,)> = sqlx::query_as(
+    let teaching_years = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT t.year
         FROM course_instructors ci
@@ -451,21 +475,18 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
         WHERE ci.instructor_id = $1
         ORDER BY t.year
         "#,
+        inst_id
     )
-    .bind(inst_id)
     .fetch_all(pool)
     .await
     .context("failed to fetch teaching years")?;
 
-    let teaching_years: Vec<i16> = teaching_year_rows.into_iter().map(|(y,)| y).collect();
-
-    // Hand-mapped rather than selected straight into CandidateResponse: the macro
-    // ignores FromRow, so blocked_reason's #[sqlx(default)] would not apply.
+    // Hand-mapped because blocked_reason is not a column: the web layer fills it in.
     let candidates = sqlx::query!(
         r#"
         SELECT mc.id, mc.rmp_legacy_id, mc.score,
                mc.score_breakdown AS "score_breakdown: sqlx::types::Json<ScoreBreakdown>",
-               mc.status,
+               mc.status AS "status: RmpCandidateStatus",
                rp.first_name, rp.last_name, rp.department,
                rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,
                mc.review_subjects, mc.review_years,
@@ -505,7 +526,8 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     })
     .collect::<Vec<_>>();
 
-    let current_matches = sqlx::query_as::<_, LinkedRmpProfile>(
+    let current_matches = sqlx::query_as!(
+        LinkedRmpProfile,
         r#"
         SELECT irl.id as link_id,
                rp.legacy_id, rp.first_name, rp.last_name, rp.department,
@@ -518,19 +540,19 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
                        WHERE r.rmp_legacy_id = rp.legacy_id AND r.class IS NOT NULL
                    ) sub
                    WHERE subj != ''
-               ), '{}') as review_subjects,
+               ), '{}') as "review_subjects!",
                COALESCE((
                    SELECT ARRAY_AGG(DISTINCT EXTRACT(YEAR FROM r.posted_at)::SMALLINT ORDER BY EXTRACT(YEAR FROM r.posted_at)::SMALLINT)
                    FROM rmp_reviews r
                    WHERE r.rmp_legacy_id = rp.legacy_id AND r.posted_at IS NOT NULL
-               ), '{}') as review_years
+               ), '{}') as "review_years!"
         FROM instructor_rmp_links irl
         JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id
         WHERE irl.instructor_id = $1
         ORDER BY rp.num_ratings DESC NULLS LAST
         "#,
+        inst_id
     )
-    .bind(inst_id)
     .fetch_all(pool)
     .await
     .context("failed to fetch linked rmp profiles")?;
@@ -538,12 +560,10 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     Ok(InstructorDetailResponse {
         instructor: InstructorDetail {
             id: inst_id,
-            display_name,
-            email,
-            rmp_match_status: rmp_match_status
-                .parse()
-                .context("invalid rmp_match_status")?,
-            subjects_taught: subjects.into_iter().map(|(s,)| s).collect(),
+            display_name: instructor.display_name,
+            email: instructor.email,
+            rmp_match_status: instructor.status,
+            subjects_taught: subjects,
             course_count,
             teaching_years,
         },
@@ -563,11 +583,11 @@ pub async fn accept_candidate(
     resolved_by: i64,
 ) -> Result<()> {
     // Verify the candidate exists and is pending
-    let candidate: Option<(i32,)> = sqlx::query_as(
+    let candidate = sqlx::query_scalar!(
         "SELECT id FROM rmp_match_candidates WHERE instructor_id = $1 AND rmp_legacy_id = $2 AND status = 'pending'",
+        instructor_id,
+        rmp_legacy_id,
     )
-    .bind(instructor_id)
-    .bind(rmp_legacy_id)
     .fetch_optional(pool)
     .await
     .context("failed to check candidate")?;
@@ -577,53 +597,53 @@ pub async fn accept_candidate(
     }
 
     // Check if this RMP profile is already linked to a different instructor
-    let conflict: Option<(i32, String, Option<String>)> = sqlx::query_as(
+    let conflict = sqlx::query!(
         "SELECT i.id, i.display_name, i.email \
          FROM instructor_rmp_links l \
          JOIN instructors i ON i.id = l.instructor_id \
          WHERE l.rmp_legacy_id = $1 AND l.instructor_id != $2",
+        rmp_legacy_id,
+        instructor_id,
     )
-    .bind(rmp_legacy_id)
-    .bind(instructor_id)
     .fetch_optional(pool)
     .await
     .context("failed to check rmp uniqueness")?;
 
-    if let Some((other_id, other_name, other_email)) = conflict {
+    if let Some(holder) = conflict {
         // Reaching this point means a candidate was offered that could never be
         // accepted, so the queue showed the reviewer a dead end.
         warn!(
             instructor_id,
             rmp_legacy_id,
-            holder_id = other_id,
+            holder_id = holder.id,
             "Unacceptable RMP candidate was offered for review"
         );
         return Err(AdminRmpError::AlreadyLinked {
-            instructor_id: other_id,
-            display_name: other_name,
-            email: other_email,
+            instructor_id: holder.id,
+            display_name: holder.display_name,
+            email: holder.email,
         }
         .into());
     }
 
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
 
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, created_by, source) VALUES ($1, $2, $3, 'manual') ON CONFLICT (rmp_legacy_id) DO NOTHING",
+        instructor_id,
+        rmp_legacy_id,
+        resolved_by,
     )
-    .bind(instructor_id)
-    .bind(rmp_legacy_id)
-    .bind(resolved_by)
     .execute(&mut *tx)
     .await
     .context("failed to insert rmp link")?;
 
-    sqlx::query(
+    sqlx::query!(
         "UPDATE rmp_match_candidates SET status = 'accepted', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND rmp_legacy_id = $3",
+        resolved_by,
+        instructor_id,
+        rmp_legacy_id,
     )
-    .bind(resolved_by)
-    .bind(instructor_id)
-    .bind(rmp_legacy_id)
     .execute(&mut *tx)
     .await
     .context("failed to accept candidate")?;
@@ -647,12 +667,12 @@ pub async fn reject_candidate(
 ) -> Result<bool> {
     let mut tx = pool.begin().await.context("failed to begin rejection")?;
 
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "UPDATE rmp_match_candidates SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND rmp_legacy_id = $3 AND status = 'pending'",
+        resolved_by,
+        instructor_id,
+        rmp_legacy_id,
     )
-    .bind(resolved_by)
-    .bind(instructor_id)
-    .bind(rmp_legacy_id)
     .execute(&mut *tx)
     .await
     .context("failed to reject candidate")?;
@@ -672,24 +692,26 @@ pub async fn reject_all_candidates(
 ) -> Result<()> {
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
 
-    let current_status: Option<(String,)> =
-        sqlx::query_as("SELECT status FROM instructor_rmp_match_status WHERE instructor_id = $1")
-            .bind(instructor_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .context("failed to fetch instructor status")?;
+    // The view reads status through a CASE expression, so sqlx calls it nullable.
+    let current_status = sqlx::query_scalar!(
+        r#"SELECT status AS "status!: RmpMatchStatus" FROM instructor_rmp_match_status WHERE instructor_id = $1"#,
+        instructor_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .context("failed to fetch instructor status")?;
 
-    let (status,) = current_status.ok_or(AdminRmpError::NoSuchInstructor)?;
+    let status = current_status.ok_or(AdminRmpError::NoSuchInstructor)?;
 
-    if status == "confirmed" {
+    if status == RmpMatchStatus::Confirmed {
         return Err(AdminRmpError::ConfirmedMatches.into());
     }
 
-    sqlx::query(
+    sqlx::query!(
         "UPDATE rmp_match_candidates SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND status = 'pending'",
+        resolved_by,
+        instructor_id,
     )
-    .bind(resolved_by)
-    .bind(instructor_id)
     .execute(&mut *tx)
     .await
     .context("failed to reject candidates")?;
@@ -701,8 +723,7 @@ pub async fn reject_all_candidates(
 
 /// Check if an instructor exists.
 pub async fn instructor_exists(pool: &PgPool, id: i32) -> Result<bool> {
-    let exists: Option<(i32,)> = sqlx::query_as("SELECT id FROM instructors WHERE id = $1")
-        .bind(id)
+    let exists = sqlx::query_scalar!("SELECT id FROM instructors WHERE id = $1", id)
         .fetch_optional(pool)
         .await
         .context("failed to check instructor")?;

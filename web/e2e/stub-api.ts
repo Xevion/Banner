@@ -148,31 +148,40 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   switch (path) {
     case "/api/courses/trends":
-      return json(res, courseTrends((await readJsonBody(req)) as TrendsRequest));
+      json(res, courseTrends((await readJsonBody(req)) as TrendsRequest));
+      break;
     case "/api/health":
-      return json(res, { status: "healthy", timestamp: new Date().toISOString() });
+      json(res, { status: "healthy", timestamp: new Date().toISOString() });
+      break;
     case "/api/auth/me":
-      return json(res, null);
+      json(res, null);
+      break;
     case "/api/search-options":
-      return json(res, searchOptions);
+      json(res, searchOptions);
+      break;
     case "/api/courses/search":
-      return json(res, { courses: mockCourses, totalCount: mockCourses.length });
+      json(res, { courses: mockCourses, totalCount: mockCourses.length });
+      break;
     case "/api/suggest":
-      return json(res, suggestions);
+      json(res, suggestions);
+      break;
     case "/api/instructors/suggest":
-      return json(res, suggestions.instructors);
+      json(res, suggestions.instructors);
+      break;
     case "/api/instructors/resolve":
-      return json(res, resolveInstructors(url));
+      json(res, resolveInstructors(url));
+      break;
     case "/api/timeline":
-      return json(res, { slots: [], subjects: [] });
+      json(res, { slots: [], subjects: [] });
+      break;
     case "/api/csp-report":
       res.writeHead(204);
       res.end();
-      return;
+      break;
     default:
       // Loud on purpose: an unstubbed endpoint should be obvious in the logs.
       process.stderr.write(`stub-api: no handler for ${path}\n`);
-      return json(res, { code: "NOT_FOUND", message: `No stub for ${path}`, details: null }, 404);
+      json(res, { code: "NOT_FOUND", message: `No stub for ${path}`, details: null }, 404);
   }
 }
 

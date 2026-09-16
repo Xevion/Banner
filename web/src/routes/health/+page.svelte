@@ -122,10 +122,6 @@ const services: Service[] = $derived(
     : []
 );
 
-const shouldShowTiming = $derived(
-  statusState.mode === "response" && statusState.timing.health !== null
-);
-
 const shouldShowLastFetch = $derived(
   statusState.mode === "response" || statusState.mode === "error" || statusState.mode === "timeout"
 );
@@ -332,14 +328,14 @@ onMount(() => {
             </div>
             <div class="h-4 w-12 bg-muted rounded animate-pulse"></div>
           </div>
-        {:else if shouldShowTiming && statusState.mode === "response"}
+        {:else if statusState.mode === "response" && statusState.timing.health !== null}
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Hourglass size={13} class="text-muted-foreground" />
               <span class="text-sm text-muted-foreground">Response Time</span>
             </div>
             <span class="text-sm text-muted-foreground">
-              {formatNumber(statusState.timing.health!)}ms
+              {formatNumber(statusState.timing.health)}ms
             </span>
           </div>
         {/if}
@@ -383,7 +379,7 @@ onMount(() => {
 
   <!-- Footer -->
   <Footer
-    commitHash={statusState.mode === "response" ? statusState.status.commit : undefined}
+    commitHash={statusState.mode === "response" ? statusState.status.commit : null}
     showStatusLink={false}
     class="mt-3 pt-0 pb-0"
   />

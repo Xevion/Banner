@@ -5,7 +5,7 @@ import FilterChip from "$lib/components/FilterChip.svelte";
 import { useSuggestions } from "$lib/composables/useSuggestions.svelte";
 import { getInstructorNames } from "$lib/stores/instructor-names";
 import { getFiltersContext } from "$lib/stores/search-filters.svelte";
-import { Loader2, Search, TriangleAlert } from "@lucide/svelte";
+import { LoaderCircle, Search, TriangleAlert } from "@lucide/svelte";
 import { Command } from "bits-ui";
 
 let { selectedTerm }: { selectedTerm: string } = $props();
@@ -59,7 +59,7 @@ const listId = "instructor-autocomplete-list";
   >
     <div class="relative">
       {#if query.loading}
-        <Loader2
+        <LoaderCircle
           class="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin pointer-events-none"
         />
       {:else}
@@ -108,7 +108,7 @@ const listId = "instructor-autocomplete-list";
           </div>
         {:else if query.loading && results.length === 0}
           <div role="status" class="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
-            <Loader2 class="size-3 animate-spin shrink-0" />
+            <LoaderCircle class="size-3 animate-spin shrink-0" />
             Searching...
           </div>
         {:else if results.length === 0}

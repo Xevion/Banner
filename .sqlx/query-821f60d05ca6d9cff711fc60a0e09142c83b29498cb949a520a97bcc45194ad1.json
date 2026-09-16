@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT status AS \"status!: RmpMatchStatus\", COUNT(*) AS \"count!\"\n        FROM instructor_rmp_match_status\n        GROUP BY status\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!: RmpMatchStatus",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_match_status",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "821f60d05ca6d9cff711fc60a0e09142c83b29498cb949a520a97bcc45194ad1"
+}

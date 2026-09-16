@@ -27,8 +27,11 @@ function path(values: number[]): string {
     .map((value, i) => {
       const x = PAD + (i / span) * (width - PAD * 2);
       const y = height - PAD - Math.min(1, value / scale) * (height - PAD * 2);
+      const previous = values[i - 1];
       const prev =
-        i === 0 ? y : height - PAD - Math.min(1, values[i - 1] / scale) * (height - PAD * 2);
+        previous === undefined
+          ? y
+          : height - PAD - Math.min(1, previous / scale) * (height - PAD * 2);
       return i === 0
         ? `M${x.toFixed(1)} ${y.toFixed(1)}`
         : `L${x.toFixed(1)} ${prev.toFixed(1)}L${x.toFixed(1)} ${y.toFixed(1)}`;

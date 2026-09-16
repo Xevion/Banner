@@ -3,9 +3,9 @@ export interface StatusBadge {
   classes: string;
 }
 
-export interface FilterCard<S> {
+export interface FilterCard<S, V extends string> {
   label: string;
-  value: string | undefined;
+  value: V | undefined;
   stat: keyof S;
   textColor: string;
   ringColor: string;
@@ -23,6 +23,7 @@ export interface ProgressSegment<S> {
   label: string;
 }
 
-export function getBadge(map: Record<string, StatusBadge>, status: string): StatusBadge {
-  return map[status] ?? { label: status, classes: "bg-muted text-muted-foreground" };
+/** Every variant of `K` must be present in `map`, so a new status fails the build. */
+export function getBadge<K extends string>(map: Record<K, StatusBadge>, status: K): StatusBadge {
+  return map[status];
 }

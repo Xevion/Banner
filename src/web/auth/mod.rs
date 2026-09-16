@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
 use tracing::{error, info, instrument, warn};
+use url::Url;
 
 use crate::state::AppState;
 
@@ -113,19 +114,22 @@ pub async fn auth_login(
     let origin = resolve_origin(&auth_config, &headers);
     let redirect_uri = format!("{origin}{CALLBACK_PATH}");
     let csrf_state = state.oauth_state_store.generate(origin);
-    let redirect_uri_encoded = urlencoding::encode(&redirect_uri);
 
-    let url = format!(
-        "https://discord.com/oauth2/authorize\
-         ?client_id={}\
-         &redirect_uri={redirect_uri_encoded}\
-         &response_type=code\
-         &scope=identify\
-         &state={csrf_state}",
-        auth_config.client_id,
-    );
+    // Every parameter is percent-encoded here; hand-built query strings encoded
+    // only the redirect and passed the client id and state through raw.
+    let url = Url::parse_with_params(
+        "https://discord.com/oauth2/authorize",
+        [
+            ("client_id", auth_config.client_id.as_str()),
+            ("redirect_uri", &redirect_uri),
+            ("response_type", "code"),
+            ("scope", "identify"),
+            ("state", &csrf_state),
+        ],
+    )
+    .expect("discord authorize endpoint is a valid literal URL");
 
-    Redirect::temporary(&url)
+    Redirect::temporary(url.as_str())
 }
 
 /// `GET /api/auth/callback` -- Handle Discord OAuth2 callback.

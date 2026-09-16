@@ -92,11 +92,9 @@ const clipboard = useClipboard(1000);
         >
           {course.crossList.identifier}
         </span>
-        {#if course.crossList.count != null && course.crossList.capacity != null}
-          <span class="text-muted-foreground text-xs">
-            {formatNumber(course.crossList.count)}/{formatNumber(course.crossList.capacity)}
-          </span>
-        {/if}
+        <span class="text-muted-foreground text-xs">
+          {formatNumber(course.crossList.count)}/{formatNumber(course.crossList.capacity)}
+        </span>
       </span>
     {/if}
     </div>

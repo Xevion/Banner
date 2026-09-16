@@ -1,12 +1,9 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { client } from "$lib/api";
+import { client, type SearchResponse } from "$lib/api";
 import { formatInstructorName, NameFormat } from "$lib/course";
-import type {
-  PublicInstructorListItem,
-  SearchOptionsResponse,
-  SearchResponse,
-} from "$lib/bindings";
+import { dependOn } from "$lib/utils";
+import type { PublicInstructorListItem, SearchOptionsResponse } from "$lib/bindings";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
 import InstructorCard from "$lib/components/InstructorCard.svelte";
@@ -29,7 +26,7 @@ interface PageData {
 let { data }: { data: PageData } = $props();
 
 let selectedTerm = $state(untrack(() => data.term ?? ""));
-let courses = $state(untrack(() => data.searchResult?.courses ?? []));
+let courses = $state(untrack(() => data.searchResult?.items ?? []));
 let loading = $state(false);
 let searchError = $state(untrack(() => data.searchError));
 
@@ -54,15 +51,15 @@ async function onTermChange() {
   const result = await client.searchCourses({
     term: selectedTerm,
     subject: [data.subject],
-    limit: 100,
+    perPage: 100,
   });
   if (result.isOk) {
-    courses = result.value.courses;
+    courses = result.value.items;
     searchError = null;
   } else {
     // Drop the stale rows, or they read as this term's sections.
     courses = [];
-    searchError = result.error.message ?? "Could not load sections for this term.";
+    searchError = result.error.message;
   }
   loading = false;
 
@@ -74,7 +71,7 @@ async function onTermChange() {
 
 let termMounted = false;
 $effect(() => {
-  void selectedTerm;
+  dependOn(selectedTerm);
   if (!termMounted) {
     termMounted = true;
     return;
@@ -108,7 +105,7 @@ $effect(() => {
     <div class="flex flex-wrap items-center gap-3 mb-4">
       {#if terms.length > 1}
         <TermCombobox {terms} bind:value={selectedTerm} />
-      {:else if terms.length === 1}
+      {:else if terms[0]}
         <span class="text-sm text-muted-foreground">{terms[0].description}</span>
       {/if}
 

@@ -360,11 +360,11 @@ describe("toAPIParams", () => {
     state.openOnly = true;
 
     const sorting: SortTerm[] = [{ key: "course_code", desc: false }];
-    const apiParams = toAPIParams(state, { term: "202501", limit: 25, offset: 0, sorting });
+    const apiParams = toAPIParams(state, { term: "202501", perPage: 25, offset: 0, sorting });
 
     expect(apiParams.term).toBe("202501");
-    expect(apiParams.limit).toBe(25);
-    expect(apiParams.offset).toBe(0);
+    expect(apiParams.perPage).toBe(25);
+    expect(apiParams.page).toBe(1);
     expect(apiParams.sort).toBe("course_code");
     expect(apiParams.query).toBe("calculus");
     expect(apiParams.subject).toEqual(["MATH"]);
@@ -375,7 +375,7 @@ describe("toAPIParams", () => {
     const sorting: SortTerm[] = [{ key: "seats_open", desc: true }];
     const apiParams = toAPIParams(defaultFilters(), {
       term: "202501",
-      limit: 25,
+      perPage: 25,
       offset: 0,
       sorting,
     });
@@ -389,7 +389,7 @@ describe("toAPIParams", () => {
     ];
     const apiParams = toAPIParams(defaultFilters(), {
       term: "202501",
-      limit: 25,
+      perPage: 25,
       offset: 0,
       sorting,
     });
@@ -399,7 +399,7 @@ describe("toAPIParams", () => {
   it("handles empty sorting", () => {
     const apiParams = toAPIParams(defaultFilters(), {
       term: "202501",
-      limit: 25,
+      perPage: 25,
       offset: 0,
       sorting: [],
     });

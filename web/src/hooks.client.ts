@@ -18,6 +18,6 @@ export const handleError: HandleClientError = ({ error, status }) => {
     message: status === 404 ? "Not Found" : errorMessage,
     errorId,
     timestamp,
-    stack,
+    ...(stack === undefined ? {} : { stack }),
   };
 };

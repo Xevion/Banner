@@ -9,7 +9,7 @@ import InstructorCard from "$lib/components/InstructorCard.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import SortSelect from "$lib/components/SortSelect.svelte";
 import type { SortOption } from "$lib/components/SortSelect.svelte";
-import { formatNumber } from "$lib/utils";
+import { compact, formatNumber } from "$lib/utils";
 import { Search } from "@lucide/svelte";
 import { untrack } from "svelte";
 import type { PageProps } from "./$types";
@@ -18,9 +18,10 @@ let { data }: PageProps = $props();
 
 let search = $state(untrack(() => data.url.searchParams.get("search") ?? ""));
 let selectedSubjects = $state<string[]>(
-  untrack(() =>
-    data.url.searchParams.get("subject") ? [data.url.searchParams.get("subject")!] : []
-  )
+  untrack(() => {
+    const subject = data.url.searchParams.get("subject");
+    return subject ? [subject] : [];
+  })
 );
 let selectedSort = $state(untrack(() => data.url.searchParams.get("sort") ?? "name_asc"));
 let page = $state(untrack(() => Number(data.url.searchParams.get("page")) || 1));
@@ -37,20 +38,20 @@ const sortOptions: SortOption[] = [
 
 const query = useQuery({
   fetcher: () =>
-    client.getInstructors({
-      search: search || undefined,
-      subject: selectedSubjects[0] || undefined,
-      sort: selectedSort,
-      page,
-    }),
+    client.getInstructors(
+      compact({
+        search: search || undefined,
+        subject: selectedSubjects[0],
+        sort: selectedSort,
+        page,
+      })
+    ),
   deps: () => [search, selectedSubjects[0], selectedSort, page],
   debounce: 300,
   initial: untrack(() => data.instructors),
 });
 
-const totalPages = $derived(
-  query.data ? Math.ceil(Number(query.data.total) / query.data.perPage) : 0
-);
+const totalPages = $derived(query.data ? Math.ceil(query.data.total / query.data.perPage) : 0);
 
 // Reset to page 1 when subject or sort changes
 let _prevSubject = $state(untrack(() => selectedSubjects[0]));
@@ -76,7 +77,8 @@ $effect(() => {
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const params = new URLSearchParams();
   if (search) params.set("search", search);
-  if (selectedSubjects.length === 1) params.set("subject", selectedSubjects[0]);
+  const onlySubject = selectedSubjects.length === 1 ? selectedSubjects[0] : undefined;
+  if (onlySubject) params.set("subject", onlySubject);
   if (selectedSort !== "name_asc") params.set("sort", selectedSort);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
@@ -118,7 +120,7 @@ function resolveSubject(code: string): string {
     <!-- Results count -->
     {#if query.data && !query.isLoading}
       <p class="text-xs text-muted-foreground mb-3">
-        {formatNumber(Number(query.data.total))} instructor{Number(query.data.total) !== 1 ? "s" : ""} found
+        {formatNumber(query.data.total)} instructor{query.data.total !== 1 ? "s" : ""} found
       </p>
     {/if}
 
@@ -148,7 +150,7 @@ function resolveSubject(code: string): string {
         class:opacity-50={query.isLoading}
       >
         {#if query.data}
-          {#each query.data.instructors as instructor (instructor.id)}
+          {#each query.data.items as instructor (instructor.id)}
             <InstructorCard
               variant="grid"
               name={formatInstructorName(instructor.displayName, NameFormat.LastNameFirst)}
@@ -164,7 +166,7 @@ function resolveSubject(code: string): string {
     {/if}
 
     <!-- Empty state -->
-    {#if query.data?.instructors.length === 0 && !query.isLoading}
+    {#if query.data?.items.length === 0 && !query.isLoading}
       <div class="text-center py-16 text-muted-foreground">
         <p class="text-sm">No instructors found matching your criteria.</p>
       </div>

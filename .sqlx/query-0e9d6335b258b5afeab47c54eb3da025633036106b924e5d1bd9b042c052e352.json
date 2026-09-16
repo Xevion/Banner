@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT be.instructor_name\n        FROM bluebook_evaluations be\n        WHERE NOT EXISTS (\n            SELECT 1 FROM instructor_bluebook_links ibl\n            WHERE ibl.instructor_name = be.instructor_name\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "instructor_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "bluebook_evaluations",
+            "name": "instructor_name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0e9d6335b258b5afeab47c54eb3da025633036106b924e5d1bd9b042c052e352"
+}

@@ -7,20 +7,20 @@ interface Variant {
 let {
   label,
   codes,
-  variants,
+  variants = [],
   selected = $bindable<string[]>([]),
 }: {
   label: string;
   codes: string[];
-  variants?: Variant[];
+  variants?: Variant[] | undefined;
   selected: string[];
 } = $props();
 
-let hasVariants = $derived(variants !== undefined && variants.length > 0);
+let hasVariants = $derived(variants.length > 0);
 let hasSomeSelected = $derived(codes.some((code) => selected.includes(code)));
 let hasAllSelected = $derived(
   hasVariants
-    ? variants!.every((v) => selected.includes(v.code))
+    ? variants.every((v) => selected.includes(v.code))
     : codes.every((code) => selected.includes(code))
 );
 
@@ -28,7 +28,7 @@ function toggleAll() {
   if (hasAllSelected) {
     selected = selected.filter((c) => !codes.includes(c));
   } else if (hasVariants) {
-    const variantCodes = variants!.map((v) => v.code);
+    const variantCodes = variants.map((v) => v.code);
     selected = [...selected.filter((c) => !codes.includes(c)), ...variantCodes];
   } else {
     selected = [...selected.filter((c) => !codes.includes(c)), ...codes];
@@ -57,7 +57,7 @@ function toggleVariant(code: string) {
   >
     <span class="text-sm font-medium">{label}</span>
     <span class="ml-auto flex items-center gap-1 whitespace-nowrap">
-      {#each variants! as variant (variant.code)}
+      {#each variants as variant (variant.code)}
         {@const isSelected = selected.includes(variant.code)}
         <span
           role="button"

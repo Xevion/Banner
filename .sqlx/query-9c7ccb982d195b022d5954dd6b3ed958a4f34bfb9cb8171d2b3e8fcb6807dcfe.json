@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT DISTINCT t.year\n                FROM course_instructors ci\n                JOIN courses c ON c.id = ci.course_id\n                JOIN terms t ON t.code = c.term_code\n                WHERE ci.instructor_id = $1\n                ORDER BY t.year\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "year",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "year"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9c7ccb982d195b022d5954dd6b3ed958a4f34bfb9cb8171d2b3e8fcb6807dcfe"
+}

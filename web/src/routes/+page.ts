@@ -74,7 +74,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
 
   const apiParams = toAPIParams(filters, {
     term: urlTerm ?? defaultTerm,
-    limit: PAGE_SIZE,
+    perPage: PAGE_SIZE,
     offset: Number(url.searchParams.get("offset")) || 0,
     sorting: parseSort(url.searchParams.get("sort")),
   });
@@ -96,7 +96,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
     resolvedInstructors,
     searchResult: searchResult.value,
     searchMeta: {
-      totalCount: searchResult.value.totalCount,
+      totalCount: searchResult.value.total,
       durationMs,
       timestamp: new Date(),
     },

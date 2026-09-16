@@ -202,6 +202,7 @@ function onMouseLeave() {
 
 function onTouchStart(e: TouchEvent) {
   const touch = e.touches[0];
+  if (!touch) return;
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   mouseX = touch.clientX - rect.left;
   mouseY = touch.clientY - rect.top;
@@ -210,6 +211,24 @@ function onTouchStart(e: TouchEvent) {
 
 function onTouchEnd() {
   isHovering = false;
+}
+
+// layerchart ships its component types as .svelte files, which eslint's TypeScript
+// program cannot resolve, so the marker snippets annotate the shape they use.
+interface MarkerPoint {
+  x: number;
+  y: number;
+  xValue: unknown;
+}
+
+/** Five-pointed star centred 4px above the band, outer radius 4.5 and inner 1.9. */
+function starPoints(x: number, y: number): string {
+  return `${x},${y - 8.5} ${x + 1.1},${y - 5.5} ${x + 4.3},${y - 5.4} ${x + 1.8},${y - 3.4} ${x + 2.6},${y - 0.4} ${x},${y - 2.1} ${x - 2.6},${y - 0.4} ${x - 1.8},${y - 3.4} ${x - 4.3},${y - 5.4} ${x - 1.1},${y - 5.5}`;
+}
+
+/** Upward triangle sitting just below the band centre. */
+function trianglePoints(x: number, y: number): string {
+  return `${x},${y + 1} ${x - 3.5},${y + 7} ${x + 3.5},${y + 7}`;
 }
 
 // touchmove must be registered non-passively to allow preventDefault(),
@@ -222,6 +241,7 @@ $effect(() => {
     if (!el) return;
     e.preventDefault();
     const touch = e.touches[0];
+    if (!touch) return;
     const rect = el.getBoundingClientRect();
     mouseX = touch.clientX - rect.left;
     mouseY = touch.clientY - rect.top;
@@ -351,13 +371,12 @@ const axisY = $derived(containerHeight - PADDING.bottom);
 
             <!-- Source markers -->
             {#if rmpRating != null}
-                    <!-- Star [star] centered ~4px above band center; R=4.5 outer, r=1.9 inner -->
                     <g opacity={rmpDimOpacity} style="transition: opacity 0.12s ease">
                         <Points x="rmpRating" r={3}>
-                            {#snippet children({ points })}
+                            {#snippet children({ points }: { points: MarkerPoint[] })}
                                 {#each points as point (point.xValue)}
                                     <polygon
-                                        points="{point.x},{point.y - 8.5} {point.x + 1.1},{point.y - 5.5} {point.x + 4.3},{point.y - 5.4} {point.x + 1.8},{point.y - 3.4} {point.x + 2.6},{point.y - 0.4} {point.x},{point.y - 2.1} {point.x - 2.6},{point.y - 0.4} {point.x - 1.8},{point.y - 3.4} {point.x - 4.3},{point.y - 5.4} {point.x - 1.1},{point.y - 5.5}"
+                                        points={starPoints(point.x, point.y)}
                                         fill={rmpColor}
                                         fill-opacity="0.85"
                                     />
@@ -368,13 +387,12 @@ const axisY = $derived(containerHeight - PADDING.bottom);
                 {/if}
 
                 {#if bbRating != null}
-                    <!-- Upward triangle [triangle] below band center -->
                     <g opacity={bbDimOpacity} style="transition: opacity 0.12s ease">
                         <Points x="bbRating" r={3}>
-                            {#snippet children({ points })}
+                            {#snippet children({ points }: { points: MarkerPoint[] })}
                                 {#each points as point (point.xValue)}
                                     <polygon
-                                        points="{point.x},{point.y + 1} {point.x - 3.5},{point.y + 7} {point.x + 3.5},{point.y + 7}"
+                                        points={trianglePoints(point.x, point.y)}
                                         fill={bbColor}
                                         fill-opacity="0.85"
                                     />

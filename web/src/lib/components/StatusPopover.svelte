@@ -4,7 +4,7 @@ import FilterPopover from "./FilterPopover.svelte";
 import RangeSlider from "./RangeSlider.svelte";
 
 let {
-  waitCountMaxRange = 0,
+  waitCountMaxRange,
 }: {
   waitCountMaxRange: number;
 } = $props();

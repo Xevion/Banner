@@ -111,7 +111,7 @@ export const COLUMN_DEFS = COLUMN_IDS.map((id) => ({
   accessorFn: COLUMNS[id].accessorFn,
   header: COLUMNS[id].label,
   enableSorting: false,
-})) satisfies ColumnDef<AppTableFeatures, CourseResponse, unknown>[];
+})) satisfies ColumnDef<AppTableFeatures, CourseResponse>[];
 
 /**
  * The one track left unsized in the colgroup. Surplus width collects here rather

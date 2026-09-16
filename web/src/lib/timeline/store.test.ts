@@ -1,6 +1,7 @@
 import { type Result, err, ok } from "true-myth/result";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimelineRange, TimelineResponse } from "$lib/bindings";
+import { expectDefined } from "$lib/test-utils";
 
 type GetTimeline = (ranges: TimelineRange[]) => Promise<Result<TimelineResponse, Error>>;
 
@@ -27,7 +28,8 @@ function response(slots: [number, Record<string, number>][]): TimelineResponse {
 }
 
 /** The ranges passed to the API on the nth call. */
-const rangesOf = (call: number): TimelineRange[] => getTimeline.mock.calls[call][0];
+const rangesOf = (call: number): TimelineRange[] =>
+  expectDefined(getTimeline.mock.calls[call], `call ${call}`)[0];
 
 /**
  * A 20-slot viewport starting at slot `n`. The store's 15 % buffer is exactly
@@ -73,7 +75,7 @@ describe("timeline store", () => {
       await tick();
 
       expect(store.data.map((slot) => slot.time.getTime())).toEqual([ms(100), ms(101)]);
-      expect(store.data[0].subjects).toEqual({ CS: 5, MAT: 3 });
+      expect(expectDefined(store.data[0]).subjects).toEqual({ CS: 5, MAT: 3 });
       expect(store.subjects).toEqual(["CS", "MAT"]);
     });
 
@@ -167,7 +169,7 @@ describe("timeline store", () => {
       store.requestRange(ms(100) + 1, ms(120) - 1);
       await tick();
 
-      const [range] = rangesOf(0);
+      const range = expectDefined(rangesOf(0)[0]);
       expect(new Date(range.start).getTime()).toBeLessThanOrEqual(ms(100));
       expect(new Date(range.end).getTime()).toBeGreaterThanOrEqual(ms(120));
       expect(new Date(range.start).getTime() % SLOT).toBe(0);

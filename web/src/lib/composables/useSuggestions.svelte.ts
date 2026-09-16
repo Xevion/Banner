@@ -114,7 +114,7 @@ export class SuggestionQuery<T> {
       },
       Err: (e) => {
         this.data = this.#empty;
-        this.error = e.message ?? "Failed to fetch suggestions";
+        this.error = e.message;
       },
     });
 

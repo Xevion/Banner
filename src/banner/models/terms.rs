@@ -3,6 +3,10 @@ use std::{ops::RangeInclusive, str::FromStr};
 use anyhow::Context;
 use chrono::{Datelike, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, VariantArray};
+use ts_rs::TS;
+
+use crate::data::models::UnknownVariant;
 
 /// The current year at the time of compilation
 const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
@@ -33,7 +37,10 @@ pub enum TermPoint {
 }
 
 /// Represents a season within a term
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, AsRefStr, VariantArray,
+)]
+#[ts(export)]
 pub enum Season {
     Fall,
     Spring,
@@ -255,13 +262,38 @@ impl Season {
     }
 }
 
+/// Codec for the `terms.season` column, which stores the variant name, not the code.
+///
+/// `FromStr` is already taken by the two-digit season code, so this cannot use `EnumString`.
+impl sqlx::Type<sqlx::Postgres> for Season {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <str as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <&str as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Season {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let name = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        Season::from_slug(name).ok_or_else(|| UnknownVariant::new("Season", name).into())
+    }
+}
+
+impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Season {
+    fn encode_by_ref(
+        &self,
+        buf: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&self.as_ref(), buf)
+    }
+}
+
 impl std::fmt::Display for Season {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Season::Fall => write!(f, "Fall"),
-            Season::Spring => write!(f, "Spring"),
-            Season::Summer => write!(f, "Summer"),
-        }
+        f.write_str(self.as_ref())
     }
 }
 

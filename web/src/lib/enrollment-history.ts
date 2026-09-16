@@ -50,7 +50,9 @@ export interface DayRow extends HistoryPoint {
 }
 
 export function toDayRows(points: HistoryPoint[]): DayRow[] {
-  if (points.length === 0) return [];
+  const first = points[0];
+  const lastPoint = points[points.length - 1];
+  if (!first || !lastPoint) return [];
 
   const DAY_MS = 86_400_000;
   const dayOf = (d: Date) => Math.floor(d.getTime() / DAY_MS);
@@ -58,11 +60,11 @@ export function toDayRows(points: HistoryPoint[]): DayRow[] {
   const lastOfDay = new Map<number, HistoryPoint>();
   for (const p of points) lastOfDay.set(dayOf(p.date), p);
 
-  const firstDay = dayOf(points[0].date);
-  const lastDay = dayOf(points[points.length - 1].date);
+  const firstDay = dayOf(first.date);
+  const lastDay = dayOf(lastPoint.date);
 
   const rows: DayRow[] = [];
-  let carry = points[0];
+  let carry: HistoryPoint = first;
   for (let day = firstDay; day <= lastDay; day++) {
     const seen = lastOfDay.get(day);
     if (seen) carry = seen;

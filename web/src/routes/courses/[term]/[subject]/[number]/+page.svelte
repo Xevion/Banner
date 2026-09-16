@@ -10,7 +10,8 @@ import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import { untrack } from "svelte";
 
 interface PageData {
-  sections: CourseResponse[];
+  /** Non-empty: the loader 404s when the course has no sections. */
+  sections: [CourseResponse, ...CourseResponse[]];
   searchOptions: SearchOptionsResponse | null;
   term: string;
   subject: string;

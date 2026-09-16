@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 use sqlx::{AssertSqlSafe, PgPool};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use strum::{AsRefStr, IntoStaticStr, VariantArray};
 use tracing::{debug, info};
 use ts_rs::TS;
+
+use crate::data::models::RmpMatchStatus;
 
 /// Domain errors for instructor merge operations.
 ///
@@ -34,8 +37,24 @@ pub enum MergeError {
 }
 
 /// How much evidence there is that two records are the same person.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+///
+/// The two casings differ on purpose: `instructor_merges.tier` stores snake_case,
+/// while the API and TypeScript union use camelCase.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TS,
+    AsRefStr,
+    IntoStaticStr,
+    VariantArray,
+)]
 #[serde(rename_all = "camelCase")]
+#[strum(serialize_all = "snake_case")]
 #[ts(export)]
 pub enum DuplicateTier {
     /// One UTSA account reached through both its student and staff domain.
@@ -51,14 +70,6 @@ impl DuplicateTier {
     pub fn is_auto_mergeable(self) -> bool {
         matches!(self, Self::SameAccount)
     }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::SameAccount => "same_account",
-            Self::MissingEmail => "missing_email",
-            Self::DifferentAccount => "different_account",
-        }
-    }
 }
 
 /// One side of a duplicate pair.
@@ -72,7 +83,7 @@ pub struct DuplicateSide {
     pub course_count: i64,
     pub subjects: Vec<String>,
     pub rmp_legacy_ids: Vec<i32>,
-    pub match_status: String,
+    pub match_status: RmpMatchStatus,
 }
 
 /// Two instructor records that appear to describe the same person.
@@ -109,7 +120,6 @@ pub fn canonical_email(email: &str) -> String {
 }
 
 /// One participant in a merge, as the transaction needs it.
-#[derive(sqlx::FromRow)]
 struct MergeSide {
     id: i32,
     email: Option<String>,
@@ -122,7 +132,7 @@ struct InstructorRow {
     id: i32,
     display_name: String,
     email: Option<String>,
-    rmp_match_status: String,
+    rmp_match_status: RmpMatchStatus,
     course_count: i64,
     subjects: Vec<String>,
     rmp_legacy_ids: Vec<i32>,
@@ -137,7 +147,7 @@ impl From<&InstructorRow> for DuplicateSide {
             course_count: row.course_count,
             subjects: row.subjects.clone(),
             rmp_legacy_ids: row.rmp_legacy_ids.clone(),
-            match_status: row.rmp_match_status.clone(),
+            match_status: row.rmp_match_status,
         }
     }
 }
@@ -213,12 +223,17 @@ fn build_pair(a: &InstructorRow, b: &InstructorRow) -> DuplicatePair {
 }
 
 async fn dismissed_pairs(pool: &PgPool) -> Result<Vec<(i32, i32)>> {
-    sqlx::query_as(
-        "SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC",
+    let rows = sqlx::query!(
+        "SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC"
     )
     .fetch_all(pool)
     .await
-    .context("failed to fetch dismissed instructor pairs")
+    .context("failed to fetch dismissed instructor pairs")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.lesser_id, r.greater_id))
+        .collect())
 }
 
 /// Find instructor records that share a display name, paired and classified.
@@ -295,13 +310,13 @@ pub async fn find_dismissed_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
 pub async fn dismiss_pair(pool: &PgPool, a: i32, b: i32, decided_by: Option<i64>) -> Result<()> {
     let (lesser, greater) = ordered_pair(a, b).ok_or(MergeError::SelfDismiss)?;
 
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "INSERT INTO instructor_dismissals (lesser_id, greater_id, decided_by) \
          VALUES ($1, $2, $3) ON CONFLICT (lesser_id, greater_id) DO NOTHING",
+        lesser,
+        greater,
+        decided_by,
     )
-    .bind(lesser)
-    .bind(greater)
-    .bind(decided_by)
     .execute(pool)
     .await;
 
@@ -324,13 +339,14 @@ pub async fn dismiss_pair(pool: &PgPool, a: i32, b: i32, decided_by: Option<i64>
 pub async fn undismiss_pair(pool: &PgPool, a: i32, b: i32) -> Result<bool> {
     let (lesser, greater) = ordered_pair(a, b).ok_or(MergeError::SelfDismiss)?;
 
-    let result =
-        sqlx::query("DELETE FROM instructor_dismissals WHERE lesser_id = $1 AND greater_id = $2")
-            .bind(lesser)
-            .bind(greater)
-            .execute(pool)
-            .await
-            .context("failed to undo the dismissal")?;
+    let result = sqlx::query!(
+        "DELETE FROM instructor_dismissals WHERE lesser_id = $1 AND greater_id = $2",
+        lesser,
+        greater,
+    )
+    .execute(pool)
+    .await
+    .context("failed to undo the dismissal")?;
 
     let removed = result.rows_affected() > 0;
     info!(lesser, greater, removed, "Undid an instructor dismissal");
@@ -354,12 +370,14 @@ pub async fn merge_instructors(
 
     let mut tx = pool.begin().await.context("failed to begin merge")?;
 
-    let sides: Vec<MergeSide> =
-        sqlx::query_as("SELECT id, email, display_name, slug FROM instructors WHERE id = ANY($1)")
-            .bind(vec![survivor_id, loser_id])
-            .fetch_all(&mut *tx)
-            .await
-            .context("failed to load merge participants")?;
+    let sides = sqlx::query_as!(
+        MergeSide,
+        "SELECT id, email, display_name, slug FROM instructors WHERE id = ANY($1::int4[])",
+        &[survivor_id, loser_id][..],
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("failed to load merge participants")?;
 
     if sides.len() != 2 {
         return Err(MergeError::MissingInstructor.into());
@@ -383,59 +401,72 @@ pub async fn merge_instructors(
 
     // Course links are keyed on (course_id, instructor_id); both records can
     // hold the same section, so move what is new and discard the rest.
-    sqlx::query(
+    sqlx::query!(
         "UPDATE course_instructors SET instructor_id = $1 \
          WHERE instructor_id = $2 \
            AND course_id NOT IN (SELECT course_id FROM course_instructors WHERE instructor_id = $1)",
+        survivor_id,
+        loser_id,
     )
-    .bind(survivor_id)
-    .bind(loser_id)
     .execute(&mut *tx)
     .await
     .context("failed to move course links")?;
 
-    sqlx::query("DELETE FROM course_instructors WHERE instructor_id = $1")
-        .bind(loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to drop leftover course links")?;
+    sqlx::query!(
+        "DELETE FROM course_instructors WHERE instructor_id = $1",
+        loser_id
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to drop leftover course links")?;
 
     // A single RMP profile is globally unique to one instructor, so these can
     // move wholesale; the summary view aggregates several profiles per person.
-    for stmt in [
+    sqlx::query!(
         "UPDATE instructor_rmp_links SET instructor_id = $1 WHERE instructor_id = $2",
-        "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
-    ] {
-        sqlx::query(stmt)
-            .bind(survivor_id)
-            .bind(loser_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to move instructor links")?;
-    }
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to move rmp links")?;
 
-    sqlx::query(
+    sqlx::query!(
+        "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to move bluebook links")?;
+
+    sqlx::query!(
         "UPDATE rmp_match_candidates SET instructor_id = $1 \
          WHERE instructor_id = $2 \
            AND rmp_legacy_id NOT IN \
                (SELECT rmp_legacy_id FROM rmp_match_candidates WHERE instructor_id = $1)",
+        survivor_id,
+        loser_id,
     )
-    .bind(survivor_id)
-    .bind(loser_id)
     .execute(&mut *tx)
     .await
     .context("failed to move match candidates")?;
 
-    for stmt in [
+    sqlx::query!(
         "DELETE FROM rmp_match_candidates WHERE instructor_id = $1",
+        loser_id
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to clear leftover match candidates")?;
+
+    sqlx::query!(
         "DELETE FROM instructor_scores WHERE instructor_id = $1",
-    ] {
-        sqlx::query(stmt)
-            .bind(loser_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to clear loser rows")?;
-    }
+        loser_id
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to clear the loser score")?;
 
     let survivor = sides
         .iter()
@@ -449,39 +480,42 @@ pub async fn merge_instructors(
     // Keep an address if the survivor lacked one.
     let email = survivor.email.clone().or_else(|| loser.email.clone());
 
-    sqlx::query("UPDATE instructors SET email = $1 WHERE id = $2")
-        .bind(email)
-        .bind(survivor_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to update survivor")?;
+    sqlx::query!(
+        "UPDATE instructors SET email = $1 WHERE id = $2",
+        email,
+        survivor_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to update survivor")?;
 
     // Anything the loser had already absorbed must follow it across, or deleting
     // the loser would cascade those records away and let the scrape rebuild them.
-    sqlx::query("UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2")
-        .bind(survivor_id)
-        .bind(loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to move earlier merges")?;
+    sqlx::query!(
+        "UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .context("failed to move earlier merges")?;
 
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO instructor_merges \
              (survivor_id, absorbed_email, absorbed_display_name, absorbed_slug, tier, decided_by) \
          VALUES ($1, $2, $3, $4, $5, $6)",
+        survivor_id,
+        loser.email.as_deref(),
+        loser.display_name,
+        loser.slug.as_deref(),
+        <&'static str>::from(classify(survivor.email.as_deref(), loser.email.as_deref())),
+        decided_by,
     )
-    .bind(survivor_id)
-    .bind(loser.email.as_deref())
-    .bind(&loser.display_name)
-    .bind(loser.slug.as_deref())
-    .bind(classify(survivor.email.as_deref(), loser.email.as_deref()).as_str())
-    .bind(decided_by)
     .execute(&mut *tx)
     .await
     .context("failed to record the merge")?;
 
-    sqlx::query("DELETE FROM instructors WHERE id = $1")
-        .bind(loser_id)
+    sqlx::query!("DELETE FROM instructors WHERE id = $1", loser_id)
         .execute(&mut *tx)
         .await
         .context("failed to delete merged instructor")?;
@@ -503,47 +537,47 @@ pub async fn merge_with_claimant(
     rmp_legacy_id: i32,
     decided_by: Option<i64>,
 ) -> Result<(i32, i32)> {
-    let claimant: Option<(i32,)> = sqlx::query_as(
+    let claimant = sqlx::query_scalar!(
         "SELECT instructor_id FROM instructor_rmp_links \
          WHERE rmp_legacy_id = $1 AND instructor_id <> $2",
+        rmp_legacy_id,
+        instructor_id,
     )
-    .bind(rmp_legacy_id)
-    .bind(instructor_id)
     .fetch_optional(pool)
     .await
     .context("failed to find the claiming instructor")?;
 
-    let Some((claimant_id,)) = claimant else {
+    let Some(claimant_id) = claimant else {
         return Err(MergeError::NoClaimant.into());
     };
 
-    let names: Vec<(i32, String, Option<String>, i64)> = sqlx::query_as(
-        "SELECT i.id, i.display_name, i.email, \
-                (SELECT COUNT(*) FROM course_instructors ci WHERE ci.instructor_id = i.id) \
-         FROM instructors i WHERE i.id = ANY($1)",
+    let names = sqlx::query!(
+        r#"
+        SELECT i.id, i.display_name, i.email,
+               (SELECT COUNT(*) FROM course_instructors ci WHERE ci.instructor_id = i.id) AS "course_count!"
+        FROM instructors i WHERE i.id = ANY($1::int4[])
+        "#,
+        &[instructor_id, claimant_id][..],
     )
-    .bind(vec![instructor_id, claimant_id])
     .fetch_all(pool)
     .await
     .context("failed to load merge participants")?;
 
-    if names.len() != 2 {
+    let [first, second] = names.as_slice() else {
         return Err(MergeError::MissingInstructor.into());
-    }
-    if names[0].1 != names[1].1 {
+    };
+    if first.display_name != second.display_name {
         return Err(MergeError::DifferentPeople.into());
     }
 
-    let staff = |email: &Option<String>| {
-        email
-            .as_deref()
-            .is_some_and(|e| !e.to_lowercase().contains("@my."))
-    };
-    let key = |r: &(i32, String, Option<String>, i64)| (r.3, staff(&r.2), -r.0);
-    let (survivor, loser) = if key(&names[0]) >= key(&names[1]) {
-        (names[0].0, names[1].0)
+    let staff = |email: Option<&str>| email.is_some_and(|e| !e.to_lowercase().contains("@my."));
+    let key = |id: i32, email: Option<&str>, courses: i64| (courses, staff(email), -id);
+    let (survivor, loser) = if key(first.id, first.email.as_deref(), first.course_count)
+        >= key(second.id, second.email.as_deref(), second.course_count)
+    {
+        (first.id, second.id)
     } else {
-        (names[1].0, names[0].0)
+        (second.id, first.id)
     };
 
     // The name check above is stricter than the one inside the merge.
@@ -573,25 +607,25 @@ pub async fn resolve_absorbed(
     }
     let variants: Vec<String> = variants.into_iter().collect();
 
-    let rows: Vec<(Option<String>, String, i32)> = sqlx::query_as(
+    let rows = sqlx::query!(
         "SELECT absorbed_email, absorbed_display_name, survivor_id FROM instructor_merges \
-         WHERE (absorbed_email IS NOT NULL AND absorbed_email = ANY($1)) \
-            OR (absorbed_email IS NULL AND absorbed_display_name = ANY($2) \
+         WHERE (absorbed_email IS NOT NULL AND absorbed_email = ANY($1::text[])) \
+            OR (absorbed_email IS NULL AND absorbed_display_name = ANY($2::text[]) \
                 AND NOT EXISTS (SELECT 1 FROM instructors i \
                     WHERE i.email IS NULL AND i.display_name = absorbed_display_name))",
+        &variants,
+        display_names,
     )
-    .bind(&variants)
-    .bind(display_names)
     .fetch_all(&mut *conn)
     .await
     .context("failed to resolve absorbed instructors")?;
 
     let mut by_email = HashMap::new();
     let mut by_name = HashMap::new();
-    for (email, name, survivor) in rows {
-        match email {
-            Some(email) => by_email.insert(canonical_email(&email), survivor),
-            None => by_name.insert(name, survivor),
+    for row in rows {
+        match row.absorbed_email {
+            Some(email) => by_email.insert(canonical_email(&email), row.survivor_id),
+            None => by_name.insert(row.absorbed_display_name, row.survivor_id),
         };
     }
     Ok((by_email, by_name))

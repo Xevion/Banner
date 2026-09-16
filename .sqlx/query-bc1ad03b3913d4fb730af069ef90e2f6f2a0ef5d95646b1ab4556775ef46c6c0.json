@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bc1ad03b3913d4fb730af069ef90e2f6f2a0ef5d95646b1ab4556775ef46c6c0"
+}

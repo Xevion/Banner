@@ -12,6 +12,7 @@ use ts_rs::TS;
 use crate::data::unsigned::Count;
 
 use crate::data::escape_like;
+use crate::data::models::{BluebookLinkStatus, Page};
 use crate::data::names::{MatchCandidate, NameMatchQuality, find_best_candidate};
 
 /// Domain errors for BlueBook link operations.
@@ -38,7 +39,7 @@ pub struct BluebookLinkListItem {
     pub id: i32,
     pub instructor_name: String,
     pub subject: Option<String>,
-    pub status: String,
+    pub status: BluebookLinkStatus,
     pub confidence: Option<f32>,
     pub instructor_id: Option<i32>,
     pub instructor_display_name: Option<String>,
@@ -62,10 +63,7 @@ pub struct BluebookLinkStats {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ListBluebookLinksResponse {
-    pub links: Vec<BluebookLinkListItem>,
-    pub total: Count,
-    pub page: i32,
-    pub per_page: i32,
+    pub page: Page<BluebookLinkListItem>,
     pub stats: BluebookLinkStats,
 }
 
@@ -77,7 +75,7 @@ pub struct BluebookLinkDetail {
     pub id: i32,
     pub instructor_name: String,
     pub subject: Option<String>,
-    pub status: String,
+    pub status: BluebookLinkStatus,
     pub confidence: Option<f32>,
     pub instructor_id: Option<i32>,
     pub instructor_display_name: Option<String>,
@@ -94,7 +92,7 @@ pub struct BluebookLinkDetail {
 }
 
 /// A course associated with a BlueBook link (via evaluations).
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct BluebookLinkCourse {
@@ -130,22 +128,21 @@ struct LinkListRow {
     id: i32,
     instructor_name: String,
     subject: Option<String>,
-    status: String,
+    status: BluebookLinkStatus,
     confidence: Option<f32>,
     instructor_id: Option<i32>,
     instructor_display_name: Option<String>,
-    eval_count: Option<i64>,
+    eval_count: i64,
 }
 
-#[derive(sqlx::FromRow)]
 struct StatusCount {
-    status: String,
+    status: BluebookLinkStatus,
     count: i64,
 }
 
 /// Filter/sort/pagination params for listing links.
 pub struct ListBluebookLinksFilter {
-    pub status: Option<String>,
+    pub status: Option<BluebookLinkStatus>,
     pub search: Option<String>,
     pub page: i32,
     pub per_page: i32,
@@ -208,7 +205,7 @@ pub async fn list_links(
     );
 
     let mut query = sqlx::query_as::<_, LinkListRow>(AssertSqlSafe(query_str));
-    if let Some(ref status) = filter.status {
+    if let Some(status) = filter.status {
         query = query.bind(status);
     }
     if let Some(ref search) = filter.search {
@@ -226,7 +223,7 @@ pub async fn list_links(
         "SELECT COUNT(*) FROM instructor_bluebook_links bl LEFT JOIN instructors i ON i.id = bl.instructor_id {where_clause}"
     );
     let mut count_query = sqlx::query_as::<_, (i64,)>(AssertSqlSafe(count_query_str));
-    if let Some(ref status) = filter.status {
+    if let Some(status) = filter.status {
         count_query = count_query.bind(status);
     }
     if let Some(ref search) = filter.search {
@@ -239,8 +236,13 @@ pub async fn list_links(
         .context("failed to count bluebook links")?;
 
     // Aggregate stats (unfiltered)
-    let stats_rows = sqlx::query_as::<_, StatusCount>(
-        "SELECT status, COUNT(*) AS count FROM instructor_bluebook_links GROUP BY status",
+    let stats_rows = sqlx::query_as!(
+        StatusCount,
+        r#"
+        SELECT status AS "status: BluebookLinkStatus", COUNT(*) AS "count!"
+        FROM instructor_bluebook_links
+        GROUP BY status
+        "#
     )
     .fetch_all(pool)
     .await
@@ -256,12 +258,11 @@ pub async fn list_links(
     for row in &stats_rows {
         let count = Count::try_from(row.count)?;
         stats.total = Count::new(stats.total.get() + count.get());
-        match row.status.as_str() {
-            "auto" => stats.auto = count,
-            "pending" => stats.pending = count,
-            "approved" => stats.approved = count,
-            "rejected" => stats.rejected = count,
-            _ => {}
+        match row.status {
+            BluebookLinkStatus::Auto => stats.auto = count,
+            BluebookLinkStatus::Pending => stats.pending = count,
+            BluebookLinkStatus::Approved => stats.approved = count,
+            BluebookLinkStatus::Rejected => stats.rejected = count,
         }
     }
 
@@ -276,49 +277,51 @@ pub async fn list_links(
                 confidence: r.confidence,
                 instructor_id: r.instructor_id,
                 instructor_display_name: r.instructor_display_name,
-                eval_count: Count::try_from(r.eval_count.unwrap_or(0))?,
+                eval_count: Count::try_from(r.eval_count)?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
 
     Ok(ListBluebookLinksResponse {
-        links,
-        total: Count::try_from(total)?,
-        page,
-        per_page,
+        page: Page {
+            items: links,
+            total: Count::try_from(total)?,
+            page,
+            per_page,
+        },
         stats,
     })
 }
 
 /// Fetch detail for a single BlueBook link, including associated evaluations.
 pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLinkDetail> {
-    let row: Option<LinkListRow> = sqlx::query_as(
+    let r = sqlx::query!(
         r#"
         SELECT
             bl.id,
             bl.instructor_name,
             bl.subject,
-            bl.status,
+            bl.status AS "status: BluebookLinkStatus",
             bl.confidence,
             bl.instructor_id,
             i.display_name AS instructor_display_name,
             (SELECT COUNT(*) FROM bluebook_evaluations be
              WHERE be.instructor_name = bl.instructor_name
                AND (bl.subject IS NULL OR be.subject = bl.subject)
-            ) AS eval_count
+            ) AS "eval_count!"
         FROM instructor_bluebook_links bl
         LEFT JOIN instructors i ON i.id = bl.instructor_id
         WHERE bl.id = $1
         "#,
+        link_id
     )
-    .bind(link_id)
     .fetch_optional(pool)
     .await
-    .context("failed to fetch bluebook link")?;
+    .context("failed to fetch bluebook link")?
+    .ok_or(BluebookError::NoSuchLink)?;
 
-    let r = row.ok_or(BluebookError::NoSuchLink)?;
-
-    let courses = sqlx::query_as::<_, BluebookLinkCourse>(
+    let courses = sqlx::query_as!(
+        BluebookLinkCourse,
         r#"
         SELECT DISTINCT be.subject, be.course_number, be.term,
                be.instructor_rating, be.course_rating
@@ -327,9 +330,9 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
           AND ($2::varchar IS NULL OR be.subject = $2)
         ORDER BY be.term DESC, be.subject, be.course_number
         "#,
+        r.instructor_name,
+        r.subject,
     )
-    .bind(&r.instructor_name)
-    .bind(&r.subject)
     .fetch_all(pool)
     .await
     .context("failed to fetch bluebook link courses")?;
@@ -337,23 +340,27 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
     // Fetch instructor detail fields when a proposed match exists.
     let (instructor_email, instructor_subjects, instructor_teaching_years, instructor_course_count) =
         if let Some(inst_id) = r.instructor_id {
-            let email: Option<(Option<String>,)> =
-                sqlx::query_as("SELECT email FROM instructors WHERE id = $1")
-                    .bind(inst_id)
-                    .fetch_optional(pool)
-                    .await
-                    .context("failed to fetch instructor email")?;
-            let email = email.and_then(|(e,)| e);
+            let email = sqlx::query_scalar!("SELECT email FROM instructors WHERE id = $1", inst_id)
+                .fetch_optional(pool)
+                .await
+                .context("failed to fetch instructor email")?
+                .flatten();
 
-            let subjects: Vec<(String,)> = sqlx::query_as(
-                "SELECT DISTINCT c.subject FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = $1 ORDER BY c.subject",
+            let subjects = sqlx::query_scalar!(
+                r#"
+                SELECT DISTINCT c.subject
+                FROM course_instructors ci
+                JOIN courses c ON c.id = ci.course_id
+                WHERE ci.instructor_id = $1
+                ORDER BY c.subject
+                "#,
+                inst_id
             )
-            .bind(inst_id)
             .fetch_all(pool)
             .await
             .context("failed to fetch instructor subjects")?;
 
-            let teaching_years: Vec<(i16,)> = sqlx::query_as(
+            let teaching_years = sqlx::query_scalar!(
                 r#"
                 SELECT DISTINCT t.year
                 FROM course_instructors ci
@@ -362,24 +369,24 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
                 WHERE ci.instructor_id = $1
                 ORDER BY t.year
                 "#,
+                inst_id
             )
-            .bind(inst_id)
             .fetch_all(pool)
             .await
             .context("failed to fetch instructor teaching years")?;
 
-            let (course_count,): (i64,) = sqlx::query_as(
-                "SELECT COUNT(DISTINCT ci.course_id) FROM course_instructors ci WHERE ci.instructor_id = $1",
+            let course_count = sqlx::query_scalar!(
+                r#"SELECT COUNT(DISTINCT ci.course_id) AS "count!" FROM course_instructors ci WHERE ci.instructor_id = $1"#,
+                inst_id
             )
-            .bind(inst_id)
             .fetch_one(pool)
             .await
             .context("failed to count instructor courses")?;
 
             (
                 email,
-                subjects.into_iter().map(|(s,)| s).collect(),
-                teaching_years.into_iter().map(|(y,)| y).collect(),
+                subjects,
+                teaching_years,
                 Some(Count::try_from(course_count)?),
             )
         } else {
@@ -394,7 +401,7 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
         confidence: r.confidence,
         instructor_id: r.instructor_id,
         instructor_display_name: r.instructor_display_name,
-        eval_count: Count::try_from(r.eval_count.unwrap_or(0))?,
+        eval_count: Count::try_from(r.eval_count)?,
         courses,
         instructor_email,
         instructor_subjects,
@@ -405,10 +412,10 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
 
 /// Approve an auto or pending BlueBook link.
 pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "UPDATE instructor_bluebook_links SET status = 'approved', updated_at = NOW() WHERE id = $1 AND status IN ('auto', 'pending')",
+        link_id
     )
-    .bind(link_id)
     .execute(pool)
     .await
     .context("failed to approve bluebook link")?;
@@ -422,10 +429,10 @@ pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
 
 /// Reject an auto or pending BlueBook link.
 pub async fn reject_link(pool: &PgPool, link_id: i32) -> Result<()> {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "UPDATE instructor_bluebook_links SET status = 'rejected', updated_at = NOW() WHERE id = $1 AND status IN ('auto', 'pending')",
+        link_id
     )
-    .bind(link_id)
     .execute(pool)
     .await
     .context("failed to reject bluebook link")?;
@@ -440,8 +447,7 @@ pub async fn reject_link(pool: &PgPool, link_id: i32) -> Result<()> {
 /// Manually assign an instructor to a BlueBook link and approve it.
 pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Result<()> {
     // Verify instructor exists
-    let exists: Option<(i32,)> = sqlx::query_as("SELECT id FROM instructors WHERE id = $1")
-        .bind(instructor_id)
+    let exists = sqlx::query_scalar!("SELECT id FROM instructors WHERE id = $1", instructor_id)
         .fetch_optional(pool)
         .await
         .context("failed to check instructor")?;
@@ -450,7 +456,7 @@ pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Res
         return Err(BluebookError::NoSuchInstructor.into());
     }
 
-    let result = sqlx::query(
+    let result = sqlx::query!(
         r#"
         UPDATE instructor_bluebook_links
         SET instructor_id = $1,
@@ -459,9 +465,9 @@ pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Res
         WHERE id = $2
           AND status IN ('auto', 'pending')
         "#,
+        instructor_id,
+        link_id,
     )
-    .bind(instructor_id)
-    .bind(link_id)
     .execute(pool)
     .await
     .context("failed to assign bluebook link")?;
@@ -471,19 +477,6 @@ pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Res
     }
 
     Ok(())
-}
-
-/// Distinct instructor name from `bluebook_evaluations` not yet in the links table.
-#[derive(sqlx::FromRow)]
-struct UnlinkedName {
-    instructor_name: String,
-}
-
-/// A candidate instructor found via CRN+term join.
-#[derive(sqlx::FromRow)]
-struct CrnCandidate {
-    instructor_id: i32,
-    display_name: String,
 }
 
 /// Idempotently refresh BlueBook instructor name matches.
@@ -509,30 +502,30 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
 
     // Step 0: Delete all algorithm-generated links so we can regenerate them.
     let deleted =
-        sqlx::query("DELETE FROM instructor_bluebook_links WHERE status IN ('auto', 'pending')")
+        sqlx::query!("DELETE FROM instructor_bluebook_links WHERE status IN ('auto', 'pending')")
             .execute(&mut *tx)
             .await
             .context("failed to delete stale auto/pending links")?;
     let deleted_stale = deleted.rows_affected() as usize;
 
     // Count names with manual decisions that we'll skip.
-    let (skipped_manual_count,): (i64,) = sqlx::query_as(
+    let skipped_manual_count = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(DISTINCT be.instructor_name)
+        SELECT COUNT(DISTINCT be.instructor_name) AS "count!"
         FROM bluebook_evaluations be
         WHERE EXISTS (
             SELECT 1 FROM instructor_bluebook_links ibl
             WHERE ibl.instructor_name = be.instructor_name
               AND ibl.status IN ('approved', 'rejected')
         )
-        "#,
+        "#
     )
     .fetch_one(&mut *tx)
     .await
     .context("failed to count manually-decided links")?;
 
     // Fetch all names that need matching (no approved/rejected link exists).
-    let unlinked: Vec<UnlinkedName> = sqlx::query_as(
+    let unlinked = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT be.instructor_name
         FROM bluebook_evaluations be
@@ -540,26 +533,20 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
             SELECT 1 FROM instructor_bluebook_links ibl
             WHERE ibl.instructor_name = be.instructor_name
         )
-        "#,
+        "#
     )
     .fetch_all(&mut *tx)
     .await
     .context("failed to fetch unlinked bluebook names")?;
 
     // Pre-fetch all instructors once for name-only fallback matching (avoids N+1).
-    let all_instructors: Vec<(i32, String)> =
-        sqlx::query_as("SELECT id, display_name FROM instructors")
-            .fetch_all(&mut *tx)
-            .await
-            .context("failed to fetch instructors for name matching")?;
-
-    let all_match_candidates: Vec<MatchCandidate> = all_instructors
-        .into_iter()
-        .map(|(id, dn)| MatchCandidate {
-            instructor_id: id,
-            display_name: dn,
-        })
-        .collect();
+    let all_match_candidates = sqlx::query_as!(
+        MatchCandidate,
+        "SELECT id AS instructor_id, display_name FROM instructors"
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("failed to fetch instructors for name matching")?;
 
     let total_names = unlinked.len();
     let skipped_manual = skipped_manual_count as usize;
@@ -567,11 +554,10 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     let mut pending_review = 0usize;
     let mut no_match = 0usize;
 
-    for row in &unlinked {
-        let name = &row.instructor_name;
-
+    for name in &unlinked {
         // Step 1: CRN+term join -- find instructor candidates via course matching
-        let crn_candidates: Vec<CrnCandidate> = sqlx::query_as(
+        let crn_candidates = sqlx::query_as!(
+            MatchCandidate,
             r#"
             SELECT DISTINCT i.id AS instructor_id, i.display_name
             FROM bluebook_evaluations be
@@ -582,25 +568,17 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
               AND be.crn IS NOT NULL
               AND be.crn != ''
             "#,
+            name
         )
-        .bind(name)
         .fetch_all(&mut *tx)
         .await
         .context("failed to find CRN candidates")?;
 
         if !crn_candidates.is_empty() {
-            // Step 2: Confirm name match among CRN candidates
-            let match_candidates: Vec<MatchCandidate> = crn_candidates
-                .iter()
-                .map(|c| MatchCandidate {
-                    instructor_id: c.instructor_id,
-                    display_name: c.display_name.clone(),
-                })
-                .collect();
-
             let has_single_crn = crn_candidates.len() == 1;
 
-            match find_best_candidate(name, &match_candidates) {
+            // Step 2: Confirm name match among CRN candidates
+            match find_best_candidate(name, &crn_candidates) {
                 Some(best) => {
                     // CRN evidence + name confirmation -> auto
                     let confidence = match best.result.quality {
@@ -613,7 +591,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                         &mut *tx,
                         name,
                         Some(best.instructor_id),
-                        "auto",
+                        BluebookLinkStatus::Auto,
                         Some(confidence),
                     )
                     .await?;
@@ -621,7 +599,8 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                 }
                 None => {
                     // CRN candidates exist but no name match -- pending review
-                    insert_link(&mut *tx, name, None, "pending", Some(0.1)).await?;
+                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1))
+                        .await?;
                     pending_review += 1;
                 }
             }
@@ -634,7 +613,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                         &mut *tx,
                         name,
                         Some(best.instructor_id),
-                        "pending",
+                        BluebookLinkStatus::Pending,
                         Some(0.5),
                     )
                     .await?;
@@ -646,14 +625,14 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                         &mut *tx,
                         name,
                         Some(best.instructor_id),
-                        "pending",
+                        BluebookLinkStatus::Pending,
                         Some(0.3),
                     )
                     .await?;
                     pending_review += 1;
                 }
                 None => {
-                    insert_link(&mut *tx, name, None, "pending", None).await?;
+                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, None).await?;
                     no_match += 1;
                 }
             }
@@ -692,21 +671,21 @@ async fn insert_link(
     executor: impl sqlx::PgExecutor<'_>,
     instructor_name: &str,
     instructor_id: Option<i32>,
-    status: &str,
+    status: BluebookLinkStatus,
     confidence: Option<f32>,
 ) -> Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO instructor_bluebook_links
             (instructor_name, instructor_id, status, confidence)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (instructor_name, COALESCE(subject, '')) DO NOTHING
         "#,
+        instructor_name,
+        instructor_id,
+        status as BluebookLinkStatus,
+        confidence,
     )
-    .bind(instructor_name)
-    .bind(instructor_id)
-    .bind(status)
-    .bind(confidence)
     .execute(executor)
     .await
     .context("failed to insert bluebook link")?;

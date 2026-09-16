@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(DISTINCT be.instructor_name) AS \"count!\"\n        FROM bluebook_evaluations be\n        WHERE EXISTS (\n            SELECT 1 FROM instructor_bluebook_links ibl\n            WHERE ibl.instructor_name = be.instructor_name\n              AND ibl.status IN ('approved', 'rejected')\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f97012c18a20b99412acf4ebdc42845001aad6612d9af8d59ce1e82d372eae25"
+}

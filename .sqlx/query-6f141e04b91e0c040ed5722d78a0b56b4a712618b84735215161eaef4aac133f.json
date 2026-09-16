@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO instructor_dismissals (lesser_id, greater_id, decided_by) VALUES ($1, $2, $3) ON CONFLICT (lesser_id, greater_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f141e04b91e0c040ed5722d78a0b56b4a712618b84735215161eaef4aac133f"
+}

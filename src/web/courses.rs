@@ -22,7 +22,11 @@ use crate::state::AppState;
 use crate::web::error::{ApiError, ApiErrorCode, OptionNotFoundExt, db_error};
 use crate::web::routes::{cache, with_cache_control};
 
-fn default_limit() -> i32 {
+fn default_page() -> i32 {
+    1
+}
+
+fn default_per_page() -> i32 {
     25
 }
 
@@ -166,14 +170,6 @@ pub(super) async fn course_trends(
     Ok(Json(TrendsResponse { trends }))
 }
 
-#[derive(Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct SearchResponse {
-    courses: Vec<CourseResponse>,
-    total_count: Count,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -214,10 +210,10 @@ pub struct SearchParams {
     #[serde(default)]
     #[ts(type = "Array<string>")]
     pub campus: Vec<FilterValue<Campus>>,
-    #[serde(default = "default_limit")]
-    pub limit: i32,
-    #[serde(default)]
-    pub offset: i32,
+    #[serde(default = "default_page")]
+    pub page: i32,
+    #[serde(default = "default_per_page")]
+    pub per_page: i32,
     /// Ordered sort keys, comma separated, `-` prefixed for descending.
     ///
     /// Taken as a string so a bad key answers with a shaped error rather than
@@ -460,8 +456,9 @@ pub(super) async fn search_courses(
 
     let term_code =
         Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
-    let limit = params.limit.clamp(1, 100);
-    let offset = params.offset.max(0);
+    let page = params.page.max(1);
+    let per_page = params.per_page.clamp(1, 100);
+    let offset = (page - 1) * per_page;
 
     // Convert typed filter values to raw Banner codes for SQL
     let method_codes: Vec<String> = params
@@ -541,7 +538,7 @@ pub(super) async fn search_courses(
     };
 
     let (courses, total_count) =
-        data::courses::search_courses(&state.db_pool, &filter, limit, offset, &sort)
+        data::courses::search_courses(&state.db_pool, &filter, per_page, offset, &sort)
             .await
             .map_err(|e| db_error("Course search", e))?;
 
@@ -562,13 +559,15 @@ pub(super) async fn search_courses(
         })
         .collect();
 
-    let total_count = Count::try_from(total_count)
+    let total = Count::try_from(total_count)
         .map_err(|_| ApiError::internal_error("total count overflow"))?;
 
     Ok(with_cache_control(
-        SearchResponse {
-            courses: course_responses,
-            total_count,
+        models::Page {
+            items: course_responses,
+            total,
+            page,
+            per_page,
         },
         cache::SEARCH,
     ))

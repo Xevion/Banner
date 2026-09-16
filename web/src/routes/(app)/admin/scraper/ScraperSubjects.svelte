@@ -79,7 +79,7 @@ const handleSortingChange = createSortingHandler(
   }
 );
 
-const columns: ColumnDef<AppTableFeatures, SubjectSummary, unknown>[] = [
+const columns: ColumnDef<AppTableFeatures, SubjectSummary>[] = [
   {
     id: "subject",
     accessorKey: "subject",

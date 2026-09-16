@@ -42,14 +42,14 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
     const result = await client.searchCourses({
       term: effectiveTerm,
       subject: [params.subject],
-      limit: 100,
+      perPage: 100,
     });
     if (result.isOk) {
       searchResult = result.value;
     } else {
       // Kept out of `error()` on purpose: the subject and term picker are still
       // usable, and a failed lookup must not read as a term with no sections.
-      searchError = result.error.message ?? "Could not load sections for this term.";
+      searchError = result.error.message;
     }
   }
 
@@ -61,7 +61,7 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
     subjectDescription: subject.description,
     term: effectiveTerm ?? null,
     // A failed lookup just hides the panel; the sections below are the page's point.
-    instructors: instructorsResult.isOk ? instructorsResult.value.instructors : [],
+    instructors: instructorsResult.isOk ? instructorsResult.value.items : [],
     instructorTotal: instructorsResult.isOk ? instructorsResult.value.total : 0,
   };
 };

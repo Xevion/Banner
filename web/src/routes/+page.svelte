@@ -122,9 +122,9 @@ const courseDetailCtx: CourseDetailContext = { navigateToSection: null };
 setCourseDetailContext(courseDetailCtx);
 
 $effect(() => {
-  if (courseTableRef) {
-    courseDetailCtx.navigateToSection = (crn: string) => courseTableRef?.navigateToSection(crn);
-  }
+  const table = courseTableRef;
+  if (!table) return;
+  courseDetailCtx.navigateToSection = (crn: string) => table.navigateToSection(crn);
 });
 
 const columns = new ColumnVisibilityController({
@@ -215,7 +215,7 @@ function handlePageChange(newOffset: number) {
     {:else}
       <CourseTable
         bind:this={courseTableRef}
-        courses={searchResult?.courses ?? []}
+        courses={searchResult?.items ?? []}
         {loading}
         {sort}
         {subjectMap}
@@ -226,7 +226,7 @@ function handlePageChange(newOffset: number) {
 
       {#if searchResult}
         <Pagination
-          totalCount={searchResult.totalCount}
+          totalCount={searchResult.total}
           {offset}
           {limit}
           {loading}

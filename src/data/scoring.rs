@@ -260,7 +260,7 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     let confidences: Vec<f32> = scores.iter().map(|s| s.confidence).collect();
     let sources: Vec<String> = scores
         .iter()
-        .map(|s| s.source.as_str().to_owned())
+        .map(|s| s.source.as_ref().to_owned())
         .collect();
     let rmp_ratings: Vec<Option<f32>> = scores.iter().map(|s| s.rmp_rating).collect();
     let rmp_counts: Vec<i32> = scores.iter().map(|s| s.rmp_count).collect();
@@ -323,7 +323,7 @@ pub struct ScoreRow {
     pub ci_lower: f32,
     pub ci_upper: f32,
     pub confidence: f32,
-    pub source: String,
+    pub source: RatingSource,
     pub rmp_count: i32,
     pub bb_count: i32,
 }
@@ -336,7 +336,7 @@ pub fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
         ci_lower: row.ci_lower,
         ci_upper: row.ci_upper,
         confidence: row.confidence,
-        source: RatingSource::parse(&row.source).unwrap_or(RatingSource::BlueBook),
+        source: row.source,
         total_responses: row.rmp_count + row.bb_count,
     }
 }
@@ -446,17 +446,15 @@ mod tests {
 
     #[test]
     fn test_rating_source_serialization() {
-        assert_eq!(RatingSource::Both.as_str(), "both");
-        assert_eq!(RatingSource::Rmp.as_str(), "rmp");
-        assert_eq!(RatingSource::BlueBook.as_str(), "bluebook");
-        assert_eq!(RatingSource::parse("both"), Some(RatingSource::Both));
-        assert_eq!(RatingSource::parse("rmp"), Some(RatingSource::Rmp));
+        assert_eq!(RatingSource::Both.as_ref(), "both");
+        assert_eq!(RatingSource::Rmp.as_ref(), "rmp");
+        assert_eq!(RatingSource::BlueBook.as_ref(), "bluebook");
+        assert_eq!("both".parse::<RatingSource>().unwrap(), RatingSource::Both);
+        assert_eq!("rmp".parse::<RatingSource>().unwrap(), RatingSource::Rmp);
         assert_eq!(
-            RatingSource::parse("bluebook"),
-            Some(RatingSource::BlueBook)
+            "bluebook".parse::<RatingSource>().unwrap(),
+            RatingSource::BlueBook
         );
-        // Legacy "bb" still accepted
-        assert_eq!(RatingSource::parse("bb"), Some(RatingSource::BlueBook));
-        assert_eq!(RatingSource::parse("invalid"), None);
+        assert!("invalid".parse::<RatingSource>().is_err());
     }
 }

@@ -28,25 +28,23 @@ const coursePageUrl = $derived(
 );
 const crnUrl = $derived(`/courses/${course.termSlug}/${course.crn}`);
 
-let leftColumn: HTMLDivElement;
-let rightColumn: HTMLDivElement;
+let leftColumn: HTMLDivElement | undefined;
+let rightColumn: HTMLDivElement | undefined;
 let sectionCount = $state(0);
 
 $effect(() => {
-  if (!leftColumn || !rightColumn) return;
+  const left = leftColumn;
+  const right = rightColumn;
+  if (!left || !right) return;
 
   const mdQuery = window.matchMedia("(min-width: 768px)");
 
-  function update() {
-    if (mdQuery.matches) {
-      rightColumn.style.maxHeight = `${leftColumn.offsetHeight}px`;
-    } else {
-      rightColumn.style.maxHeight = "";
-    }
-  }
+  const update = () => {
+    right.style.maxHeight = mdQuery.matches ? `${left.offsetHeight}px` : "";
+  };
 
   const observer = new ResizeObserver(update);
-  observer.observe(leftColumn);
+  observer.observe(left);
   mdQuery.addEventListener("change", update);
 
   return () => {
@@ -201,17 +199,11 @@ $effect(() => {
                                     >
                                         {course.crossList.identifier}
                                     </span>
-                                    {#if course.crossList.count != null && course.crossList.capacity != null}
-                                        <span
-                                            class="text-muted-foreground text-xs"
-                                        >
-                                            {formatNumber(
-                                                course.crossList.count,
-                                            )}/{formatNumber(
-                                                course.crossList.capacity,
-                                            )}
-                                        </span>
-                                    {/if}
+                                    <span class="text-muted-foreground text-xs">
+                                        {formatNumber(
+                                            course.crossList.count,
+                                        )}/{formatNumber(course.crossList.capacity)}
+                                    </span>
                                 </span>
                             {/if}
                         </div>

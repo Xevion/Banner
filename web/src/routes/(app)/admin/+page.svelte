@@ -77,7 +77,7 @@ function toTitleCase(s: string): string {
   <h2 class="mt-6 mb-3 text-sm font-semibold text-foreground">Services</h2>
   <div class="bg-card border-border rounded-lg border">
     {#each status.services as service (service.name)}
-      {@const color = STATUS_COLORS[service.status] ?? "var(--status-gray)"}
+      {@const color = STATUS_COLORS[service.status]}
       <div class="border-border flex items-center justify-between border-b px-4 py-3 last:border-b-0">
         <span class="font-medium select-none">{toTitleCase(service.name)}</span>
         <span

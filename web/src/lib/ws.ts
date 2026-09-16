@@ -11,8 +11,25 @@ import type {
   StreamServerMessage,
   StreamSnapshot,
 } from "$lib/bindings";
+import * as v from "valibot";
 
 export type ConnectionState = "connected" | "reconnecting" | "disconnected";
+
+/// A client can hold a socket open across a deploy, so the discriminant is checked
+/// rather than asserted. Mirroring the whole protocol here would only duplicate a
+/// generated type and drift from it; an unknown tag is the failure worth catching.
+const SERVER_MESSAGE_TAGS = [
+  "ready",
+  "subscribed",
+  "modified",
+  "unsubscribed",
+  "snapshot",
+  "delta",
+  "error",
+  "pong",
+] as const satisfies readonly StreamServerMessage["type"][];
+
+const ServerMessageTag = v.object({ type: v.picklist(SERVER_MESSAGE_TAGS) });
 
 const MAX_RECONNECT_DELAY = 30_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -121,12 +138,17 @@ export class StreamClient {
     };
 
     this.ws.onmessage = (event) => {
+      let parsed: unknown;
       try {
-        const parsed = JSON.parse(event.data as string) as StreamServerMessage;
-        this.handleMessage(parsed);
+        parsed = JSON.parse(event.data as string);
       } catch {
-        // ignore malformed messages
+        return;
       }
+      if (!v.is(ServerMessageTag, parsed)) {
+        console.warn("Unrecognised stream message, ignoring", parsed);
+        return;
+      }
+      this.handleMessage(parsed as StreamServerMessage);
     };
 
     this.ws.onclose = () => {
@@ -244,11 +266,7 @@ export class StreamClient {
   private sendSubscribe(spec: SubscriptionSpec<StreamKey>): void {
     const requestId = this.nextRequestId();
     const filter =
-      spec.filter === null
-        ? null
-        : spec.filter
-          ? ({ stream: spec.stream, ...spec.filter } as StreamFilter)
-          : undefined;
+      spec.filter === null ? null : ({ stream: spec.stream, ...spec.filter } as StreamFilter);
     const message: StreamClientMessage = {
       type: "subscribe",
       request_id: requestId,
@@ -262,8 +280,7 @@ export class StreamClient {
 
   private sendModify<S extends StreamKey>(subId: string, stream: S, filter: FilterFor<S>): void {
     const requestId = this.nextRequestId();
-    const wrappedFilter =
-      filter === null ? null : filter ? ({ stream, ...filter } as StreamFilter) : undefined;
+    const wrappedFilter = filter === null ? null : ({ stream, ...filter } as StreamFilter);
     const message: StreamClientMessage = {
       type: "modify",
       request_id: requestId,

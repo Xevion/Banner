@@ -313,6 +313,7 @@ pub async fn undismiss(
 mod tests {
     use super::*;
     use crate::data::instructor_merge::{DuplicateSide, DuplicateTier};
+    use crate::data::models::RmpMatchStatus;
     use crate::web::error::ApiErrorCode;
     use assert2::check;
 
@@ -324,7 +325,7 @@ mod tests {
             course_count: 0,
             subjects: Vec::new(),
             rmp_legacy_ids: Vec::new(),
-            match_status: "unmatched".to_string(),
+            match_status: RmpMatchStatus::Unmatched,
         }
     }
 

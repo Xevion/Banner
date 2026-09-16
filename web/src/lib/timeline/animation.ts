@@ -38,7 +38,7 @@ export function syncAnimTargets(
     }
 
     for (const subject of subjects) {
-      const realValue = enabledSubjects.has(subject) ? slot.subjects[subject] || 0 : 0;
+      const realValue = enabledSubjects.has(subject) ? (slot.subjects[subject] ?? 0) : 0;
       const entry = subjectMap.get(subject);
       if (entry) {
         entry.target = realValue;

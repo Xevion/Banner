@@ -12,10 +12,9 @@ import { formatDayCodes, formatDayList, formatDayVerbose } from "$lib/days";
 export function formatISOTime(time: string | null): string {
   if (!time) return "TBA";
   // ISO format: "HH:MM:SS"
-  const parts = time.split(":");
-  if (parts.length < 2) return "TBA";
-  const hours = parseInt(parts[0], 10);
-  const minutes = parts[1];
+  const [hourPart, minutes] = time.split(":");
+  if (hourPart === undefined || minutes === undefined) return "TBA";
+  const hours = parseInt(hourPart, 10);
   const period = hours >= 12 ? "PM" : "AM";
   const display = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
   return `${display}:${minutes} ${period}`;
@@ -39,23 +38,24 @@ export function formatMeetingDaysLong(mt: DbMeetingTime): string {
 export function formatTimeRange(begin: string | null, end: string | null): string {
   if (!begin || !end) return "TBA";
 
-  const bParts = begin.split(":");
-  const eParts = end.split(":");
-  if (bParts.length < 2 || eParts.length < 2) return "TBA";
+  const [bHourPart, bMinutes] = begin.split(":");
+  const [eHourPart, eMinutes] = end.split(":");
+  if (bHourPart === undefined || bMinutes === undefined) return "TBA";
+  if (eHourPart === undefined || eMinutes === undefined) return "TBA";
 
-  const bHours = parseInt(bParts[0], 10);
-  const eHours = parseInt(eParts[0], 10);
+  const bHours = parseInt(bHourPart, 10);
+  const eHours = parseInt(eHourPart, 10);
   const bPeriod = bHours >= 12 ? "PM" : "AM";
   const ePeriod = eHours >= 12 ? "PM" : "AM";
 
   const bDisplay = bHours > 12 ? bHours - 12 : bHours === 0 ? 12 : bHours;
   const eDisplay = eHours > 12 ? eHours - 12 : eHours === 0 ? 12 : eHours;
 
-  const endStr = `${eDisplay}:${eParts[1]} ${ePeriod}`;
+  const endStr = `${eDisplay}:${eMinutes} ${ePeriod}`;
   if (bPeriod === ePeriod) {
-    return `${bDisplay}:${bParts[1]}-${endStr}`;
+    return `${bDisplay}:${bMinutes}-${endStr}`;
   }
-  return `${bDisplay}:${bParts[1]} ${bPeriod}-${endStr}`;
+  return `${bDisplay}:${bMinutes} ${bPeriod}-${endStr}`;
 }
 
 /**
@@ -77,11 +77,13 @@ export function abbreviateInstructor(name: string, maxLen = 18): string {
 
   const last = name.slice(0, commaIdx);
   const parts = name.slice(commaIdx + 2).split(" ");
+  // split always yields at least one element; the index signature cannot say so.
+  const firstGiven = parts[0] ?? "";
 
   // Level 2: abbreviate trailing given names, keep first given name intact
   // "Maria Elena" -> "Maria E."
   if (parts.length > 1) {
-    const abbreviated = [parts[0], ...parts.slice(1).map((p) => `${p[0]}.`)].join(" ");
+    const abbreviated = [firstGiven, ...parts.slice(1).map((p) => `${p[0]}.`)].join(" ");
     const result = `${last}, ${abbreviated}`;
     if (result.length <= maxLen) return result;
   }
@@ -96,7 +98,7 @@ export function abbreviateInstructor(name: string, maxLen = 18): string {
 
   // Level 4: first initial only
   // "Maria Elena" -> "M."  or  "John" -> "J."
-  return `${last}, ${parts[0][0]}.`;
+  return `${last}, ${firstGiven[0]}.`;
 }
 
 /**
@@ -142,13 +144,13 @@ export interface ClockParts {
  */
 export function formatTimeParts(time: string | null): ClockParts | null {
   if (!time) return null;
-  const parts = time.split(":");
-  if (parts.length < 2) return null;
-  const hours = parseInt(parts[0], 10);
+  const [hourPart, minute] = time.split(":");
+  if (hourPart === undefined || minute === undefined) return null;
+  const hours = parseInt(hourPart, 10);
   if (Number.isNaN(hours)) return null;
   return {
     hour: String(hours > 12 ? hours - 12 : hours === 0 ? 12 : hours),
-    minute: parts[1],
+    minute,
     meridiem: hours >= 12 ? "PM" : "AM",
   };
 }
@@ -288,34 +290,42 @@ export function rmpUrl(legacyId: number): string {
  *   1.0 -> red, 3.0 -> amber, 5.0 -> green
  * with separate light/dark mode tuning.
  */
-export function ratingStyle(rating: number, isDark: boolean): string {
+interface OklchStop {
+  light: [number, number, number];
+  dark: [number, number, number];
+}
+
+/** Interpolate the three OKLCH components for a 1-5 rating. */
+function ratingOklch(rating: number, isDark: boolean): [number, number, number] {
   const clamped = Math.max(1, Math.min(5, rating));
 
-  // OKLCH stops: [lightness, chroma, hue]
-  const stops: { light: [number, number, number]; dark: [number, number, number] }[] = [
-    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] }, // 1.0 - red
-    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] }, // 3.0 - amber
-    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] }, // 5.0 - green
+  // OKLCH stops: [lightness, chroma, hue] at 1.0 red, 3.0 amber, 5.0 green
+  const stops: readonly [OklchStop, OklchStop, OklchStop] = [
+    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] },
+    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] },
+    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] },
   ];
+  const [red, amber, green] = stops;
 
-  let t: number;
-  let fromIdx: number;
-  if (clamped <= 3) {
-    t = (clamped - 1) / 2;
-    fromIdx = 0;
-  } else {
-    t = (clamped - 3) / 2;
-    fromIdx = 1;
-  }
+  const lower = clamped <= 3;
+  const t = lower ? (clamped - 1) / 2 : (clamped - 3) / 2;
+  const fromStop = lower ? red : amber;
+  const toStop = lower ? amber : green;
 
-  const from = isDark ? stops[fromIdx].dark : stops[fromIdx].light;
-  const to = isDark ? stops[fromIdx + 1].dark : stops[fromIdx + 1].light;
+  const from = isDark ? fromStop.dark : fromStop.light;
+  const to = isDark ? toStop.dark : toStop.light;
 
-  const l = from[0] + (to[0] - from[0]) * t;
-  const c = from[1] + (to[1] - from[1]) * t;
-  const h = from[2] + (to[2] - from[2]) * t;
+  return [
+    from[0] + (to[0] - from[0]) * t,
+    from[1] + (to[1] - from[1]) * t,
+    from[2] + (to[2] - from[2]) * t,
+  ];
+}
 
-  return `color: oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)}); text-shadow: 0 0 4px oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)} / 0.3);`;
+export function ratingStyle(rating: number, isDark: boolean): string {
+  const [l, c, h] = ratingOklch(rating, isDark);
+  const components = `${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)}`;
+  return `color: oklch(${components}); text-shadow: 0 0 4px oklch(${components} / 0.3);`;
 }
 
 /**
@@ -323,31 +333,7 @@ export function ratingStyle(rating: number, isDark: boolean): string {
  * Use this when you need the raw color for multiple CSS properties.
  */
 export function ratingColor(rating: number, isDark: boolean): string {
-  const clamped = Math.max(1, Math.min(5, rating));
-
-  const stops: { light: [number, number, number]; dark: [number, number, number] }[] = [
-    { light: [0.63, 0.2, 25], dark: [0.7, 0.19, 25] },
-    { light: [0.7, 0.16, 85], dark: [0.78, 0.15, 85] },
-    { light: [0.65, 0.2, 145], dark: [0.72, 0.19, 145] },
-  ];
-
-  let t: number;
-  let fromIdx: number;
-  if (clamped <= 3) {
-    t = (clamped - 1) / 2;
-    fromIdx = 0;
-  } else {
-    t = (clamped - 3) / 2;
-    fromIdx = 1;
-  }
-
-  const from = isDark ? stops[fromIdx].dark : stops[fromIdx].light;
-  const to = isDark ? stops[fromIdx + 1].dark : stops[fromIdx + 1].light;
-
-  const l = from[0] + (to[0] - from[0]) * t;
-  const c = from[1] + (to[1] - from[1]) * t;
-  const h = from[2] + (to[2] - from[2]) * t;
-
+  const [l, c, h] = ratingOklch(rating, isDark);
   return `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)})`;
 }
 
@@ -421,28 +407,29 @@ export function formatInstructorName(
 /** Compact meeting time summary for mobile cards: "MWF 9:00-9:50 AM", "Async", or "TBA" */
 export function formatMeetingTimeSummary(course: CourseResponse): string {
   if (course.isAsyncOnline) return "Async";
-  if (course.meetingTimes.length === 0) return "TBA";
-  const mt = course.meetingTimes[0];
+  const [mt] = course.meetingTimes;
+  if (!mt) return "TBA";
   if (mt.days.length === 0 && mt.timeRange === null) return "TBA";
   return `${formatMeetingDays(mt)} ${formatTimeRange(mt.timeRange?.start ?? null, mt.timeRange?.end ?? null)}`;
 }
 
 /** Format a sorted list of years into a compact range string (e.g. "2019-2022, 2025"). */
 export function formatYearRange(years: number[]): string {
-  if (years.length === 0) return "";
-  if (years.length === 1) return String(years[0]);
+  const [firstYear] = years;
+  if (firstYear === undefined) return "";
+  if (years.length === 1) return String(firstYear);
 
   const ranges: string[] = [];
-  let start = years[0];
-  let end = years[0];
+  let start = firstYear;
+  let end = firstYear;
 
-  for (let i = 1; i < years.length; i++) {
-    if (years[i] === end + 1) {
-      end = years[i];
+  for (const year of years.slice(1)) {
+    if (year === end + 1) {
+      end = year;
     } else {
       ranges.push(start === end ? String(start) : `${start}\u2013${end}`);
-      start = years[i];
-      end = years[i];
+      start = year;
+      end = year;
     }
   }
   ranges.push(start === end ? String(start) : `${start}\u2013${end}`);

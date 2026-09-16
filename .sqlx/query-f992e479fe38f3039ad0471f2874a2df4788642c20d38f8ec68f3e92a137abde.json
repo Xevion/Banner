@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f992e479fe38f3039ad0471f2874a2df4788642c20d38f8ec68f3e92a137abde"
+}

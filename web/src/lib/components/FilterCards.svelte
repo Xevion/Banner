@@ -1,4 +1,4 @@
-<script lang="ts" generics="S extends Record<string, number>">
+<script lang="ts" generics="S extends Record<string, number>, V extends string">
 import type { FilterCard } from "$lib/ui";
 
 let {
@@ -8,9 +8,9 @@ let {
   onSelect,
 }: {
   stats: S;
-  cards: FilterCard<S>[];
-  activeFilter: string | undefined;
-  onSelect: (value: string | undefined) => void;
+  cards: FilterCard<S, V>[];
+  activeFilter: V | undefined;
+  onSelect: (value: V | undefined) => void;
 } = $props();
 </script>
 

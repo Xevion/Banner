@@ -3,7 +3,7 @@ import { BannerApiClient } from "$lib/api";
 import type { CourseResponse } from "$lib/bindings";
 import { CHART_MIN_POINTS, type HistoryPoint, toHistoryPoints } from "$lib/enrollment-history";
 import { formatNumber } from "$lib/utils";
-import { BarChart3, List } from "@lucide/svelte";
+import { ChartColumn, List } from "@lucide/svelte";
 import EnrollmentStepChart from "./EnrollmentStepChart.svelte";
 import EnrollmentTimeline from "./EnrollmentTimeline.svelte";
 
@@ -49,6 +49,9 @@ $effect(() => {
 });
 
 let canChart = $derived(points.length >= CHART_MIN_POINTS);
+let firstChangeLabel = $derived(
+  points[0]?.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) ?? ""
+);
 
 const toggleClass =
   "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[11px] transition-colors cursor-pointer";
@@ -75,7 +78,7 @@ const toggleClass =
           {formatNumber(points.length)} recorded {points.length === 1 ? "change" : "changes"}
         </span>
         <span class="font-mono text-[11px] text-muted-foreground">
-          since {points[0].date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          since {firstChangeLabel}
         </span>
       </div>
 
@@ -89,7 +92,7 @@ const toggleClass =
             aria-pressed={view === "chart"}
             onclick={() => (view = "chart")}
           >
-            <BarChart3 class="size-3" />
+            <ChartColumn class="size-3" />
             Chart
           </button>
         {/if}

@@ -31,7 +31,7 @@ export default tseslint.config(
   // Base JS rules
   js.configs.recommended,
   // TypeScript: recommended type-checked + stylistic type-checked
-  ...tseslint.configs.recommendedTypeChecked,
+  ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   // Svelte recommended
   ...svelte.configs.recommended,
@@ -57,6 +57,8 @@ export default tseslint.config(
         "error",
         { prefer: "type-imports", fixStyle: "separate-type-imports" },
       ],
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+      "@typescript-eslint/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
     },
   },
   // TS files: use custom parser to resolve .svelte named exports
@@ -78,6 +80,17 @@ export default tseslint.config(
     },
     rules: {
       "svelte/no-navigation-without-resolve": "off",
+      // The Svelte parser reports every {@render snippet()} in markup as a void
+      // expression, and a render tag cannot be hoisted to its own statement.
+      "@typescript-eslint/no-confusing-void-expression": "off",
+    },
+  },
+  // Svelte markup files only: $bindable() must sit in the destructuring default
+  // slot, so the rule flags every bindable prop whose type is not optional.
+  {
+    files: ["**/*.svelte"],
+    rules: {
+      "@typescript-eslint/no-useless-default-assignment": "off",
     },
   },
   // Disable type-checked rules for plain JS config files
