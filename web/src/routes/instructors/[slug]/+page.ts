@@ -1,5 +1,5 @@
 import { BannerApiClient } from "$lib/api";
-import { error } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 
 export const prerender = false;
@@ -20,6 +20,12 @@ export const load: PageLoad = async ({ params, fetch }) => {
   }
 
   const profile = profileResult.value;
+
+  // The API resolves numeric ids and absorbed slugs too, so land those on the canonical URL.
+  if (profile.instructor.slug !== params.slug) {
+    redirect(308, `/instructors/${profile.instructor.slug}`);
+  }
+
   if (searchOptionsResult.isErr) {
     console.warn("Failed to load search options:", searchOptionsResult.error.message);
   }

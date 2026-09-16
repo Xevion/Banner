@@ -24,6 +24,7 @@ import { Check, LoaderCircle, TriangleAlert, X } from "@lucide/svelte";
 import { onDestroy, untrack } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 import { fade } from "svelte/transition";
+import ProfileLink from "../ProfileLink.svelte";
 import type { PageProps } from "./$types";
 import CandidateCard from "./CandidateCard.svelte";
 
@@ -426,8 +427,11 @@ function formatScore(score: number): string {
 {#snippet cells(instructor: InstructorListItem)}
   {@const badge = getBadge(BADGES, instructor.rmpMatchStatus)}
   <td class="px-4 py-2.5">
-    <div class="font-medium text-foreground">
-      {formatInstructorName(instructor.displayName)}
+    <div class="flex items-center gap-2">
+      <span class="font-medium text-foreground">
+        {formatInstructorName(instructor.displayName)}
+      </span>
+      <ProfileLink instructorId={instructor.id} label="" />
     </div>
     {#if instructor.email}
       <div class="text-xs text-muted-foreground">{instructor.email}</div>
@@ -510,8 +514,9 @@ function formatScore(score: number): string {
       <h3 class="font-medium text-foreground text-sm">Instructor</h3>
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt class="text-muted-foreground">Name</dt>
-        <dd class="text-foreground">
-          {formatInstructorName(detail.instructor.displayName)}
+        <dd class="text-foreground flex items-center gap-2">
+          <span>{formatInstructorName(detail.instructor.displayName)}</span>
+          <ProfileLink instructorId={detail.instructor.id} />
         </dd>
 
         {#if detail.instructor.email}

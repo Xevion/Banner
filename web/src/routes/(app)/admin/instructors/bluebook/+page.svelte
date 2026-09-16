@@ -22,6 +22,7 @@ import { getBadge } from "$lib/ui";
 import { Check, LoaderCircle, Search, X } from "@lucide/svelte";
 import { onDestroy, untrack } from "svelte";
 import { fade } from "svelte/transition";
+import ProfileLink from "../ProfileLink.svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -418,7 +419,12 @@ function formatConfidence(confidence: number | null): string {
   </td>
   <td class="px-4 py-2.5">
     {#if link.instructorDisplayName}
-      <span class="text-foreground">{formatInstructorName(link.instructorDisplayName)}</span>
+      <div class="flex items-center gap-2">
+        <span class="text-foreground">{formatInstructorName(link.instructorDisplayName)}</span>
+        {#if link.instructorId !== null}
+          <ProfileLink instructorId={link.instructorId} label="" />
+        {/if}
+      </div>
     {:else}
       <span class="text-muted-foreground text-xs">Unmatched</span>
     {/if}
@@ -528,10 +534,15 @@ function formatConfidence(confidence: number | null): string {
           >
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <div class="font-medium text-foreground text-sm">
-                  {detail.instructorDisplayName
-                    ? formatInstructorName(detail.instructorDisplayName)
-                    : "Unknown"}
+                <div class="flex items-center gap-2 font-medium text-foreground text-sm">
+                  <span class="truncate">
+                    {detail.instructorDisplayName
+                      ? formatInstructorName(detail.instructorDisplayName)
+                      : "Unknown"}
+                  </span>
+                  {#if detail.instructorId !== null}
+                    <ProfileLink instructorId={detail.instructorId} />
+                  {/if}
                 </div>
                 {#if detail.instructorEmail}
                   <div class="text-xs text-muted-foreground mt-0.5 break-all">

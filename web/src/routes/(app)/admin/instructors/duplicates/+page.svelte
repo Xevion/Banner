@@ -5,6 +5,7 @@ import ActionResultBanner from "$lib/components/ActionResultBanner.svelte";
 import { formatInstructorName } from "$lib/course";
 import { ArrowRight, LoaderCircle, Merge } from "@lucide/svelte";
 import { untrack } from "svelte";
+import ProfileLink from "../ProfileLink.svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -170,6 +171,7 @@ async function handleMergeAll() {
     <div class="flex items-center gap-1.5">
       <span class="font-medium text-foreground">#{person.id}</span>
       <span class="text-[10px] text-muted-foreground">{keeps ? "kept" : "absorbed"}</span>
+      <ProfileLink instructorId={person.id} class="ml-auto" />
     </div>
     <div class="mt-0.5 break-all text-muted-foreground">{person.email ?? "no email"}</div>
     <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">

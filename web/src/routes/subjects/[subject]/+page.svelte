@@ -1,9 +1,15 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { client } from "$lib/api";
-import type { SearchOptionsResponse, SearchResponse } from "$lib/bindings";
+import { formatInstructorName, NameFormat } from "$lib/course";
+import type {
+  PublicInstructorListItem,
+  SearchOptionsResponse,
+  SearchResponse,
+} from "$lib/bindings";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
+import InstructorCard from "$lib/components/InstructorCard.svelte";
 import TermCombobox from "$lib/components/TermCombobox.svelte";
 import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
@@ -16,6 +22,8 @@ interface PageData {
   subject: string;
   subjectDescription: string | null;
   term: string | null;
+  instructors: PublicInstructorListItem[];
+  instructorTotal: number;
 }
 
 let { data }: { data: PageData } = $props();
@@ -110,6 +118,33 @@ $effect(() => {
         <span>{uniqueCourseCount} course{uniqueCourseCount !== 1 ? "s" : ""}</span>
       </div>
     </div>
+
+    <!-- Instructors teaching this subject -->
+    {#if data.instructors.length > 0}
+      <section class="mb-6">
+        <div class="flex items-baseline justify-between gap-3 mb-2">
+          <h2 class="text-sm font-semibold">Instructors</h2>
+          <a
+            href="/instructors?subject={data.subject}&sort=score_desc"
+            class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            View all {data.instructorTotal} &rarr;
+          </a>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {#each data.instructors as instructor (instructor.id)}
+            <InstructorCard
+              variant="panel"
+              name={formatInstructorName(instructor.displayName, NameFormat.LastNameFirst)}
+              slug={instructor.slug}
+              rating={instructor.rating}
+              rmp={instructor.rmp}
+              bluebook={instructor.bluebook}
+            />
+          {/each}
+        </div>
+      </section>
+    {/if}
 
     <!-- Course table -->
     {#if loading}

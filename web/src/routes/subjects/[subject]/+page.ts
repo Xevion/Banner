@@ -4,6 +4,9 @@ import type { PageLoad } from "./$types";
 
 export const prerender = false;
 
+/** Enough of the subject's instructors to be worth browsing, short enough to stay a preview. */
+const INSTRUCTOR_PREVIEW_COUNT = 6;
+
 export const load: PageLoad = async ({ params, url, fetch }) => {
   const client = new BannerApiClient(undefined, fetch);
 
@@ -25,6 +28,13 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
 
   // Falling back to the newest term keeps a bare /subjects/ISC useful.
   const effectiveTerm = termParam ?? searchOptions.terms[0]?.slug;
+
+  // Instructors are not term-scoped, so this survives a term change without a refetch.
+  const instructorsResult = await client.getInstructors({
+    subject: params.subject,
+    sort: "score_desc",
+    perPage: INSTRUCTOR_PREVIEW_COUNT,
+  });
 
   let searchResult = null;
   let searchError: string | null = null;
@@ -50,5 +60,8 @@ export const load: PageLoad = async ({ params, url, fetch }) => {
     subject: params.subject,
     subjectDescription: subject.description,
     term: effectiveTerm ?? null,
+    // A failed lookup just hides the panel; the sections below are the page's point.
+    instructors: instructorsResult.isOk ? instructorsResult.value.instructors : [],
+    instructorTotal: instructorsResult.isOk ? instructorsResult.value.total : 0,
   };
 };
