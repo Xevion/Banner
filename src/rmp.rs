@@ -20,6 +20,27 @@ const GRAPHQL_URL: &str = "https://www.ratemyprofessors.com/graphql";
 /// Page size for paginated fetches.
 const PAGE_SIZE: u32 = 100;
 
+/// Parse a review timestamp, which RMP sends as Go's `2024-08-16 14:59:35 +0000 UTC`.
+fn parse_review_date(raw: &str) -> Option<DateTime<Utc>> {
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(raw) {
+        return Some(parsed.with_timezone(&Utc));
+    }
+
+    let mut parts = raw.split_whitespace();
+    let (date, time, offset) = (parts.next()?, parts.next()?, parts.next()?);
+    DateTime::parse_from_str(&format!("{date} {time} {offset}"), "%Y-%m-%d %H:%M:%S %z")
+        .ok()
+        .map(|parsed| parsed.with_timezone(&Utc))
+}
+
+/// Read a tally, clamping into range rather than failing the whole fetch.
+///
+/// Negative means a retracted vote that was never counted, so none were cast.
+fn clamped_count(value: &serde_json::Value) -> Count {
+    let raw = value.as_i64().unwrap_or(0);
+    Count::new(raw.clamp(0, i64::from(u32::MAX)) as u32)
+}
+
 /// A professor record from RateMyProfessors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RmpProfessor {
@@ -181,7 +202,7 @@ impl RmpClient {
                     department: node["department"].as_str().map(|s| s.to_string()),
                     avg_rating: node["avgRating"].as_f64().map(|v| v as f32),
                     avg_difficulty: node["avgDifficulty"].as_f64().map(|v| v as f32),
-                    num_ratings: Count::try_from(node["numRatings"].as_i64().unwrap_or(0))?,
+                    num_ratings: clamped_count(&node["numRatings"]),
                     would_take_again_pct: wta,
                 });
             }
@@ -328,9 +349,7 @@ impl RmpClient {
                     })
                     .unwrap_or_default();
 
-                let posted_at = node["date"]
-                    .as_str()
-                    .and_then(|s| s.parse::<DateTime<Utc>>().ok());
+                let posted_at = node["date"].as_str().and_then(parse_review_date);
 
                 let wta = node["wouldTakeAgain"].as_i64().map(|v| v as i16);
 
@@ -352,10 +371,8 @@ impl RmpClient {
                     textbook_use: node["textbookUse"]
                         .as_i64()
                         .and_then(|v| Count::try_from(v).ok()),
-                    thumbs_up_total: Count::try_from(node["thumbsUpTotal"].as_i64().unwrap_or(0))?,
-                    thumbs_down_total: Count::try_from(
-                        node["thumbsDownTotal"].as_i64().unwrap_or(0),
-                    )?,
+                    thumbs_up_total: clamped_count(&node["thumbsUpTotal"]),
+                    thumbs_down_total: clamped_count(&node["thumbsDownTotal"]),
                     posted_at,
                 });
             }
@@ -385,5 +402,62 @@ impl RmpClient {
         let detail = self.fetch_professor_detail(graphql_id).await?;
         let reviews = self.fetch_professor_reviews(graphql_id).await?;
         Ok((detail, reviews))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parses_the_format_rmp_actually_sends() {
+        let parsed = parse_review_date("2024-08-16 14:59:35 +0000 UTC").expect("should parse");
+        assert_eq!(parsed.to_rfc3339(), "2024-08-16T14:59:35+00:00");
+    }
+
+    #[test]
+    fn test_parses_rfc3339() {
+        let parsed = parse_review_date("2024-08-16T14:59:35Z").expect("should parse");
+        assert_eq!(parsed.to_rfc3339(), "2024-08-16T14:59:35+00:00");
+    }
+
+    #[test]
+    fn test_applies_a_non_utc_offset() {
+        let parsed = parse_review_date("2024-08-16 09:59:35 -0500 CDT").expect("should parse");
+        assert_eq!(parsed.to_rfc3339(), "2024-08-16T14:59:35+00:00");
+    }
+
+    #[test]
+    fn test_rejects_unparseable_dates() {
+        assert!(parse_review_date("").is_none());
+        assert!(parse_review_date("yesterday").is_none());
+        assert!(parse_review_date("2024-08-16").is_none());
+    }
+
+    #[test]
+    fn test_count_reads_a_normal_tally() {
+        assert_eq!(clamped_count(&serde_json::json!(7)).get(), 7);
+        assert_eq!(clamped_count(&serde_json::json!(0)).get(), 0);
+    }
+
+    #[test]
+    fn test_count_treats_a_drifted_counter_as_none_cast() {
+        assert_eq!(clamped_count(&serde_json::json!(-1)).get(), 0);
+        assert_eq!(clamped_count(&serde_json::json!(i64::MIN)).get(), 0);
+    }
+
+    #[test]
+    fn test_count_saturates_rather_than_zeroing_a_large_tally() {
+        assert_eq!(clamped_count(&serde_json::json!(i64::MAX)).get(), u32::MAX);
+        assert_eq!(
+            clamped_count(&serde_json::json!(i64::from(u32::MAX) + 1)).get(),
+            u32::MAX
+        );
+    }
+
+    #[test]
+    fn test_count_falls_back_when_the_field_is_absent() {
+        assert_eq!(clamped_count(&serde_json::json!(null)).get(), 0);
+        assert_eq!(clamped_count(&serde_json::json!("12")).get(), 0);
     }
 }

@@ -316,6 +316,30 @@ pub async fn mark_professor_reviews_scraped(
     Ok(())
 }
 
+/// How long a professor waits for another attempt after a failed fetch.
+const REVIEW_RETRY_DELAY_HOURS: i32 = 6;
+
+/// Hold a professor back after a failed fetch.
+///
+/// One that never succeeds otherwise keeps the oldest timestamp and is reselected forever.
+pub async fn defer_professor_review_scrape(pool: &PgPool, legacy_id: i32) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE rmp_professors SET
+            reviews_last_scraped_at =
+                NOW() - review_scrape_interval + make_interval(hours => $1)
+        WHERE legacy_id = $2
+        "#,
+    )
+    .bind(REVIEW_RETRY_DELAY_HOURS)
+    .bind(legacy_id)
+    .execute(pool)
+    .await
+    .context("failed to defer professor review scrape")?;
+
+    Ok(())
+}
+
 /// Refresh the `instructor_rmp_summary` materialized view.
 ///
 /// Call after any operation that changes `instructor_rmp_links`

@@ -864,6 +864,12 @@ impl Scheduler {
                 }
                 Err(e) => {
                     warn!(legacy_id, error = ?e, "Failed to fetch professor reviews from RMP");
+                    if let Err(e) =
+                        crate::data::rmp::defer_professor_review_scrape(db_pool, *legacy_id).await
+                    {
+                        telemetry::record_db_failure(&e);
+                        warn!(legacy_id, error = ?e, "Failed to defer professor review scrape");
+                    }
                 }
             }
         }
