@@ -258,7 +258,9 @@ jobs:
         with:
           context: .
           push: false
-          build-args: CARGO_CACHE=layer
+          build-args: |
+            CARGO_CACHE=layer
+            TARGET_CPU=x86-64
           cache-from: type=registry,ref=ghcr.io/xevion/banner:buildcache
           cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/xevion/banner:buildcache,mode=max' || '' }}
 

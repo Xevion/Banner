@@ -77,6 +77,11 @@ COPY .cargo ./.cargo
 # exports it. "layer" redirects them clear of the mount so the image cache carries them.
 ARG CARGO_CACHE=mount
 
+# CI restores cached artifacts on a different machine, where native code SIGILLs; the deploy
+# builds on its own host and keeps native. RUSTFLAGS replaces config rustflags, hence mold here.
+ARG TARGET_CPU=native
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=${TARGET_CPU}"
+
 # Copy recipe from planner and build dependencies only
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
