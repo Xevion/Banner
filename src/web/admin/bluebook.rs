@@ -10,8 +10,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use ts_rs::TS;
 
+use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::admin_bluebook::{self, BluebookError, ListBluebookLinksFilter};
 use crate::state::AppState;
+use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
 
@@ -124,13 +126,22 @@ pub async fn get_link(
 /// `POST /api/admin/bluebook/links/{id}/approve` -- Approve a pending link.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn approve_link(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<BluebookOkResponse>, ApiError> {
     admin_bluebook::approve_link(&state.db_pool, id)
         .await
         .map_err(|e| bluebook_not_found_or_db("approve bluebook link", e))?;
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::BluebookApproveLink,
+        Target::id(id),
+        serde_json::json!({}),
+    )
+    .await;
 
     info!(link_id = id, "BlueBook link approved");
 
@@ -140,13 +151,22 @@ pub async fn approve_link(
 /// `POST /api/admin/bluebook/links/{id}/reject` -- Reject a pending link.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn reject_link(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<BluebookOkResponse>, ApiError> {
     admin_bluebook::reject_link(&state.db_pool, id)
         .await
         .map_err(|e| bluebook_not_found_or_db("reject bluebook link", e))?;
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::BluebookRejectLink,
+        Target::id(id),
+        serde_json::json!({}),
+    )
+    .await;
 
     info!(link_id = id, "BlueBook link rejected");
 
@@ -156,7 +176,7 @@ pub async fn reject_link(
 /// `POST /api/admin/bluebook/links/{id}/assign` -- Manually assign an instructor to a link.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn assign_link(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(body): Json<AssignBody>,
@@ -164,6 +184,15 @@ pub async fn assign_link(
     admin_bluebook::assign_link(&state.db_pool, id, body.instructor_id)
         .await
         .map_err(|e| bluebook_not_found_or_db("assign bluebook link", e))?;
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::BluebookAssignLink,
+        Target::id(id),
+        serde_json::json!({ "instructorId": body.instructor_id }),
+    )
+    .await;
 
     info!(
         link_id = id,

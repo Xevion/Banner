@@ -1,5 +1,3 @@
-mod helpers;
-
 use banner::data::batch::batch_upsert_courses;
 use sqlx::PgPool;
 
@@ -22,7 +20,7 @@ async fn test_batch_upsert_empty_slice(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
     let courses = vec![
-        helpers::make_course(
+        crate::helpers::make_course(
             "10001",
             "202510",
             "CS",
@@ -30,7 +28,7 @@ async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
             "Intro to CS",
             (25, 30, 0, 5),
         ),
-        helpers::make_course(
+        crate::helpers::make_course(
             "10002",
             "202510",
             "MAT",
@@ -70,7 +68,7 @@ async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_batch_upsert_updates_existing(pool: PgPool) {
-    let initial = vec![helpers::make_course(
+    let initial = vec![crate::helpers::make_course(
         "20001",
         "202510",
         "CS",
@@ -81,7 +79,7 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
     batch_upsert_courses(&initial, &pool).await.unwrap();
 
     // Upsert the same CRN+term with updated enrollment
-    let updated = vec![helpers::make_course(
+    let updated = vec![crate::helpers::make_course(
         "20001",
         "202510",
         "CS",
@@ -109,7 +107,7 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
     let initial = vec![
-        helpers::make_course(
+        crate::helpers::make_course(
             "30001",
             "202510",
             "CS",
@@ -117,7 +115,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
             "Intro to CS",
             (10, 30, 0, 5),
         ),
-        helpers::make_course(
+        crate::helpers::make_course(
             "30002",
             "202510",
             "CS",
@@ -130,7 +128,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
 
     // Update both existing courses and add a new one
     let mixed = vec![
-        helpers::make_course(
+        crate::helpers::make_course(
             "30001",
             "202510",
             "CS",
@@ -138,7 +136,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
             "Intro to CS",
             (15, 30, 1, 5),
         ),
-        helpers::make_course(
+        crate::helpers::make_course(
             "30002",
             "202510",
             "CS",
@@ -146,7 +144,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
             "Computer Architecture",
             (25, 30, 0, 5),
         ),
-        helpers::make_course(
+        crate::helpers::make_course(
             "30003",
             "202510",
             "MAT",
@@ -190,7 +188,7 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
 async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
     // Same CRN, different term codes -> should produce two separate rows
     let courses = vec![
-        helpers::make_course(
+        crate::helpers::make_course(
             "40001",
             "202510",
             "CS",
@@ -198,7 +196,7 @@ async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
             "Intro to CS",
             (25, 30, 0, 5),
         ),
-        helpers::make_course(
+        crate::helpers::make_course(
             "40001",
             "202520",
             "CS",
@@ -235,7 +233,7 @@ async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
     // Insert initial data -- should create a baseline metric but no audits
-    let initial = vec![helpers::make_course(
+    let initial = vec![crate::helpers::make_course(
         "50001",
         "202510",
         "CS",
@@ -282,7 +280,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
     assert_eq!(seats, 25); // 35 - 10
 
     // Update enrollment and wait_count
-    let updated = vec![helpers::make_course(
+    let updated = vec![crate::helpers::make_course(
         "50001",
         "202510",
         "CS",
@@ -324,7 +322,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
 #[sqlx::test]
 async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
     // Insert then re-insert identical data -- should produce baseline metric but no audits or extra metrics
-    let course = vec![helpers::make_course(
+    let course = vec![crate::helpers::make_course(
         "60001",
         "202510",
         "CS",
@@ -357,7 +355,7 @@ async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
 /// One person reached through both UTSA domains must resolve to a single row.
 #[sqlx::test]
 async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) {
-    let mut first = helpers::make_course(
+    let mut first = crate::helpers::make_course(
         "20001",
         "202510",
         "SPN",
@@ -365,14 +363,14 @@ async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) 
         "Elementary",
         (5, 30, 0, 0),
     );
-    first.faculty = vec![helpers::make_faculty(
+    first.faculty = vec![crate::helpers::make_faculty(
         "Cano, Lilian",
         Some("lilian.cano@my.utsa.edu"),
         20001,
         "202510",
     )];
 
-    let mut second = helpers::make_course(
+    let mut second = crate::helpers::make_course(
         "20002",
         "202520",
         "SPN",
@@ -380,7 +378,7 @@ async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) 
         "Intermediate",
         (5, 30, 0, 0),
     );
-    second.faculty = vec![helpers::make_faculty(
+    second.faculty = vec![crate::helpers::make_faculty(
         "Cano, Lilian",
         Some("lilian.cano@utsa.edu"),
         20002,
@@ -417,7 +415,7 @@ async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) 
 /// Both spellings arriving in one batch must not collide in the upsert.
 #[sqlx::test]
 async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool) {
-    let mut a = helpers::make_course(
+    let mut a = crate::helpers::make_course(
         "20003",
         "202510",
         "SPN",
@@ -425,14 +423,14 @@ async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool)
         "Elementary",
         (5, 30, 0, 0),
     );
-    a.faculty = vec![helpers::make_faculty(
+    a.faculty = vec![crate::helpers::make_faculty(
         "Cano, Lilian",
         Some("lilian.cano@my.utsa.edu"),
         20003,
         "202510",
     )];
 
-    let mut b = helpers::make_course(
+    let mut b = crate::helpers::make_course(
         "20004",
         "202510",
         "SPN",
@@ -440,7 +438,7 @@ async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool)
         "Intermediate",
         (5, 30, 0, 0),
     );
-    b.faculty = vec![helpers::make_faculty(
+    b.faculty = vec![crate::helpers::make_faculty(
         "Cano, Lilian",
         Some("lilian.cano@utsa.edu"),
         20004,
@@ -459,16 +457,18 @@ async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool)
 /// Distinct accounts that merely share a name must stay separate.
 #[sqlx::test]
 async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
-    let mut a = helpers::make_course("20005", "202510", "BIO", "1404", "Biology", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20005", "202510", "BIO", "1404", "Biology", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Thompson, Patricia",
         Some("iki700@my.utsa.edu"),
         20005,
         "202510",
     )];
 
-    let mut b = helpers::make_course("20006", "202510", "HIS", "1043", "History", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20006", "202510", "HIS", "1043", "History", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Thompson, Patricia",
         Some("patricia.thompson@utsa.edu"),
         20006,
@@ -492,8 +492,9 @@ async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
 /// tombstone left by its own absorbed twin and stop taking updates.
 #[sqlx::test]
 async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool) {
-    let mut a = helpers::make_course("20017", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20017", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Dara",
         Some("dara.fictional@utsa.edu"),
         20017,
@@ -517,8 +518,8 @@ async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool
     .unwrap();
 
     let mut renamed =
-        helpers::make_course("20018", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
-    renamed.faculty = vec![helpers::make_faculty(
+        crate::helpers::make_course("20018", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    renamed.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Dara Q",
         Some("dara.fictional@utsa.edu"),
         20018,
@@ -541,16 +542,18 @@ async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool
 /// rather than recreating the record it absorbed.
 #[sqlx::test]
 async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) {
-    let mut a = helpers::make_course("20007", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20007", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Aster",
         Some("abc123@my.utsa.edu"),
         20007,
         "202510",
     )];
 
-    let mut b = helpers::make_course("20008", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20008", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Aster",
         Some("aster.fictional@utsa.edu"),
         20008,
@@ -574,8 +577,8 @@ async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) 
 
     // The absorbed address comes back on the next scrape.
     let mut again =
-        helpers::make_course("20009", "202520", "AST", "2013", "Planets", (5, 30, 0, 0));
-    again.faculty = vec![helpers::make_faculty(
+        crate::helpers::make_course("20009", "202520", "AST", "2013", "Planets", (5, 30, 0, 0));
+    again.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Aster",
         Some("aster.fictional@utsa.edu"),
         20009,
@@ -606,16 +609,18 @@ async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) 
 /// has to hold on the same key.
 #[sqlx::test]
 async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
-    let mut a = helpers::make_course("20010", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20010", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Bryn",
         None,
         20010,
         "202510",
     )];
 
-    let mut b = helpers::make_course("20011", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20011", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Bryn Q",
         Some("bryn.fictional@utsa.edu"),
         20011,
@@ -640,8 +645,9 @@ async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
         .await
         .unwrap();
 
-    let mut again = helpers::make_course("20012", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
-    again.faculty = vec![helpers::make_faculty(
+    let mut again =
+        crate::helpers::make_course("20012", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Bryn",
         None,
         20012,
@@ -660,24 +666,27 @@ async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
 /// first decision is quietly dropped.
 #[sqlx::test]
 async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
-    let mut a = helpers::make_course("20013", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20013", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Cyrus",
         Some("xyz789@my.utsa.edu"),
         20013,
         "202510",
     )];
 
-    let mut b = helpers::make_course("20014", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20014", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Cyrus",
         Some("cyrus.fictional@utsa.edu"),
         20014,
         "202510",
     )];
 
-    let mut c = helpers::make_course("20015", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
-    c.faculty = vec![helpers::make_faculty(
+    let mut c =
+        crate::helpers::make_course("20015", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
+    c.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Cyrus",
         Some("cyrus.fictional2@utsa.edu"),
         20015,
@@ -701,8 +710,9 @@ async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
         .unwrap();
 
     // The address absorbed by the first merge returns on a later scrape.
-    let mut again = helpers::make_course("20016", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
-    again.faculty = vec![helpers::make_faculty(
+    let mut again =
+        crate::helpers::make_course("20016", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Cyrus",
         Some("xyz789@my.utsa.edu"),
         20016,
@@ -729,16 +739,18 @@ async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
 /// Two records sharing a display name across distinct accounts -- the shape
 /// review keeps offering until someone records that they are two people.
 async fn seed_distinct_namesakes(pool: &PgPool) -> (i32, i32) {
-    let mut a = helpers::make_course("20020", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20020", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Devan",
         Some("devan.fictional@utsa.edu"),
         20020,
         "202510",
     )];
 
-    let mut b = helpers::make_course("20021", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20021", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Devan",
         Some("devan.fictional2@utsa.edu"),
         20021,
@@ -785,8 +797,9 @@ async fn test_dismissal_survives_a_later_scrape(pool: PgPool) {
     let (a, b) = seed_distinct_namesakes(&pool).await;
     dismiss_pair(&pool, a, b, None).await.unwrap();
 
-    let mut again = helpers::make_course("20022", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
-    again.faculty = vec![helpers::make_faculty(
+    let mut again =
+        crate::helpers::make_course("20022", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Devan",
         Some("devan.fictional@utsa.edu"),
         20022,
@@ -851,15 +864,17 @@ async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision(pool: PgPo
 async fn test_merging_unrelated_records_needs_confirmation(pool: PgPool) {
     use banner::data::instructor_merge::merge_instructors;
 
-    let mut a = helpers::make_course("20020", "202510", "MMI", "1013", "Media", (5, 30, 0, 0));
-    a.faculty = vec![helpers::make_faculty(
+    let mut a =
+        crate::helpers::make_course("20020", "202510", "MMI", "1013", "Media", (5, 30, 0, 0));
+    a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Esme",
         Some("esme.fictional@utsa.edu"),
         20020,
         "202510",
     )];
-    let mut b = helpers::make_course("20021", "202510", "ENG", "1013", "Writing", (5, 30, 0, 0));
-    b.faculty = vec![helpers::make_faculty(
+    let mut b =
+        crate::helpers::make_course("20021", "202510", "ENG", "1013", "Writing", (5, 30, 0, 0));
+    b.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Rafferty",
         Some("rafferty.fictional@utsa.edu"),
         20021,

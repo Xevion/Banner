@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use ts_rs::TS;
 
+use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::admin_rmp::{self, AdminRmpError, CandidateResponse, ListInstructorsFilter};
 use crate::state::AppState;
+use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
 
@@ -158,6 +160,15 @@ pub async fn match_instructor(
         .await
         .map_err(|e| rmp_error("match instructor", e))?;
 
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::RmpAcceptCandidate,
+        Target::id(id),
+        serde_json::json!({ "rmpLegacyId": body.rmp_legacy_id }),
+    )
+    .await;
+
     info!(
         instructor_id = id,
         rmp_legacy_id = body.rmp_legacy_id,
@@ -188,6 +199,15 @@ pub async fn reject_candidate(
         return Err(ApiError::not_found("pending candidate not found"));
     }
 
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::RmpRejectCandidate,
+        Target::id(id),
+        serde_json::json!({ "rmpLegacyId": body.rmp_legacy_id }),
+    )
+    .await;
+
     info!(
         instructor_id = id,
         rmp_legacy_id = body.rmp_legacy_id,
@@ -208,6 +228,15 @@ pub async fn reject_all(
         .await
         .map_err(|e| rmp_error("reject all candidates", e))?;
 
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::RmpRejectAll,
+        Target::id(id),
+        serde_json::json!({}),
+    )
+    .await;
+
     info!(instructor_id = id, "all RMP candidates rejected");
 
     Ok(Json(OkResponse { ok: true }))
@@ -219,7 +248,7 @@ pub async fn reject_all(
 /// to remove all links for the instructor.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn unmatch_instructor(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(id): Path<i32>,
     body: Option<Json<UnmatchBody>>,
@@ -236,6 +265,15 @@ pub async fn unmatch_instructor(
     crate::data::rmp::unmatch_instructor(&state.db_pool, id, rmp_legacy_id)
         .await
         .map_err(|e| db_error("unmatch instructor", e))?;
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::RmpUnmatch,
+        Target::id(id),
+        serde_json::json!({ "rmpLegacyId": rmp_legacy_id }),
+    )
+    .await;
 
     info!(
         instructor_id = id,

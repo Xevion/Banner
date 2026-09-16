@@ -115,6 +115,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .route("/admin/scrape-jobs", get(admin::list_scrape_jobs))
         .route("/admin/audit-log", get(admin::list_audit_log))
+        .route("/admin/action-log", get(admin::action_log::list_action_log))
         .route("/admin/instructors", get(admin::rmp::list_instructors))
         .route(
             "/admin/instructors/duplicates",

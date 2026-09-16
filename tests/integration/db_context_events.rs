@@ -8,15 +8,13 @@ use banner::web::ws::ScrapeJobEvent;
 use serde_json::json;
 use std::sync::Arc;
 
-mod helpers;
-
 #[sqlx::test]
 async fn db_context_emits_event_on_job_lock(pool: sqlx::PgPool) {
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 
     // Insert a test job
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({ "subject": "CS", "term": "202620" }),
@@ -51,7 +49,7 @@ async fn db_context_emits_event_on_job_complete(pool: sqlx::PgPool) {
     let ctx = DbContext::new(pool.clone(), events.clone());
 
     // Insert and lock a job
-    let job_id = helpers::insert_scrape_job(
+    let job_id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({ "subject": "MATH", "term": "202620" }),
@@ -89,7 +87,7 @@ async fn db_context_emits_event_on_job_retry(pool: sqlx::PgPool) {
     let ctx = DbContext::new(pool.clone(), events.clone());
 
     // Insert and lock a job
-    let job_id = helpers::insert_scrape_job(
+    let job_id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({ "subject": "PHYS", "term": "202620" }),
@@ -129,7 +127,7 @@ async fn db_context_emits_events_on_job_exhaust(pool: sqlx::PgPool) {
     let ctx = DbContext::new(pool.clone(), events.clone());
 
     // Insert and lock a job
-    let job_id = helpers::insert_scrape_job(
+    let job_id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({ "subject": "CHEM", "term": "202620" }),
@@ -175,7 +173,7 @@ async fn db_context_emits_event_on_job_delete(pool: sqlx::PgPool) {
     let ctx = DbContext::new(pool.clone(), events.clone());
 
     // Insert a job
-    let job_id = helpers::insert_scrape_job(
+    let job_id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({ "subject": "BIO", "term": "202620" }),

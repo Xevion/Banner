@@ -3,11 +3,9 @@
 //! Covers `open_only`, `subject`, `time_start`, `time_end`, day filters,
 //! and multi-filter combinations including pagination.
 
-mod helpers;
-
+use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
-use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
 /// Run `search_courses` using a `SearchFilter`, returning (CRNs, total_count).

@@ -1,5 +1,3 @@
-mod helpers;
-
 use banner::data::DbContext;
 use banner::data::events::EventBuffer;
 use banner::data::models::{ScrapePriority, SubjectTarget, TargetPayload, TargetType};
@@ -33,7 +31,7 @@ async fn lock_next_empty_queue(pool: PgPool) {
 
 #[sqlx::test]
 async fn lock_next_returns_job_and_sets_locked_at(pool: PgPool) {
-    let id = helpers::insert_scrape_job(
+    let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "CS"}),
@@ -68,7 +66,7 @@ async fn lock_next_returns_job_and_sets_locked_at(pool: PgPool) {
 
 #[sqlx::test]
 async fn lock_next_skips_locked_jobs(pool: PgPool) {
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "CS"}),
@@ -103,7 +101,7 @@ async fn lock_next_skips_future_execute_at(pool: PgPool) {
 #[sqlx::test]
 async fn lock_next_priority_desc_ordering(pool: PgPool) {
     // Insert low priority first, then critical
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "LOW"}),
@@ -114,7 +112,7 @@ async fn lock_next_priority_desc_ordering(pool: PgPool) {
     )
     .await;
 
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "CRIT"}),
@@ -176,7 +174,7 @@ async fn lock_next_execute_at_asc_ordering(pool: PgPool) {
 
 #[sqlx::test]
 async fn delete_removes_row(pool: PgPool) {
-    let id = helpers::insert_scrape_job(
+    let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::SingleCrn,
         json!({"crn": "12345"}),
@@ -206,7 +204,7 @@ async fn delete_nonexistent_id_no_error(pool: PgPool) {
 
 #[sqlx::test]
 async fn unlock_clears_locked_at(pool: PgPool) {
-    let id = helpers::insert_scrape_job(
+    let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::CrnList,
         json!({"crns": [1, 2, 3]}),
@@ -236,7 +234,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
     let payload_c = subject_payload("ENG");
 
     // Insert A and B as Subject jobs
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         payload_json(&payload_a),
@@ -246,7 +244,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
         3,
     )
     .await;
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         payload_json(&payload_b),
@@ -257,7 +255,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
     )
     .await;
     // Insert C as a different target type
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::SingleCrn,
         payload_json(&payload_c),
@@ -286,7 +284,7 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
 async fn find_existing_payloads_includes_locked(pool: PgPool) {
     let payload = subject_payload("CS");
 
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         payload_json(&payload),
@@ -314,7 +312,7 @@ async fn find_existing_payloads_includes_locked(pool: PgPool) {
 #[sqlx::test]
 async fn find_existing_payloads_empty_candidates(pool: PgPool) {
     // Insert a job so the table isn't empty
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "CS"}),
@@ -411,7 +409,7 @@ async fn test_queue_depth_counts_ready_job_and_ages_it(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_queue_depth_excludes_locked_job(pool: PgPool) {
-    helpers::insert_scrape_job(
+    crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
         json!({"subject": "CS"}),

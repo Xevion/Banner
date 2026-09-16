@@ -4,14 +4,12 @@
 //! scores it produces, so a change in matching behaviour fails here rather than
 //! surfacing as a wrong instructor on a live profile.
 
-mod helpers;
-
-use assert2::check;
-use banner::data::rmp_matching::generate_candidates;
-use helpers::{
+use crate::helpers::{
     insert_instructor, insert_instructor_with_status, insert_rmp_professor, insert_rmp_review,
     insert_taught_course,
 };
+use assert2::check;
+use banner::data::rmp_matching::generate_candidates;
 use sqlx::PgPool;
 
 /// Every link row, ordered so comparisons are stable.

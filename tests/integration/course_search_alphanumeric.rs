@@ -1,10 +1,8 @@
 //! Test course search with alphanumeric course numbers (e.g., "015X", "399H").
 
-mod helpers;
-
+use crate::helpers::make_course;
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
-use helpers::make_course;
 
 #[sqlx::test]
 async fn test_search_alphanumeric_course_numbers(pool: sqlx::PgPool) {

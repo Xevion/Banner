@@ -2,6 +2,7 @@
 //!
 //! All endpoints require the `AdminUser` extractor, returning 401/403 as needed.
 
+pub mod action_log;
 pub mod bluebook;
 pub mod duplicates;
 pub mod rmp;
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, trace};
 use ts_rs::TS;
 
+use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::models::User;
 use crate::state::AppState;
 use crate::state::ServiceStatus;
@@ -125,7 +127,7 @@ pub struct SetAdminBody {
 /// `PUT /api/admin/users/{discord_id}/admin` -- Set admin status for a user.
 #[instrument(skip_all, fields(discord_id))]
 pub async fn set_user_admin(
-    AdminUser(_user): AdminUser,
+    AdminUser(actor): AdminUser,
     State(state): State<AppState>,
     Path(discord_id): Path<i64>,
     Json(body): Json<SetAdminBody>,
@@ -134,6 +136,15 @@ pub async fn set_user_admin(
         .await
         .map_err(|e| db_error("set admin status", e))?
         .ok_or_else(|| ApiError::not_found("User not found"))?;
+
+    action_log::record(
+        &state.db_pool,
+        &actor,
+        AdminAction::UserSetAdmin,
+        Target::id(discord_id),
+        serde_json::json!({ "username": user.discord_username, "isAdmin": body.is_admin }),
+    )
+    .await;
 
     state.session_cache.evict_user(discord_id);
 

@@ -1,5 +1,6 @@
 //! Database models and schema.
 
+pub mod admin_audits;
 pub mod admin_bluebook;
 pub mod admin_rmp;
 pub mod admin_scraper;

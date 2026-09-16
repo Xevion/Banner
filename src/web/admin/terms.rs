@@ -11,8 +11,10 @@ use serde::Serialize;
 use tracing::{error, info, instrument, trace};
 use ts_rs::TS;
 
+use crate::data::admin_audits::{AdminAction, Target};
 use crate::data::terms::{self, DbTerm, SyncResult};
 use crate::state::AppState;
+use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
 
@@ -74,7 +76,7 @@ pub async fn list_terms(
 /// `POST /api/admin/terms/:code/enable` -- Enable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn enable_term(
-    _admin: AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> Result<Json<TermUpdateResponse>, ApiError> {
@@ -87,6 +89,15 @@ pub async fn enable_term(
     if !found {
         return Err(ApiError::not_found("Term not found"));
     }
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::TermEnable,
+        Target::id(&code),
+        serde_json::json!({ "scrapeEnabled": true }),
+    )
+    .await;
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
         .await
@@ -105,7 +116,7 @@ pub async fn enable_term(
 /// `POST /api/admin/terms/:code/disable` -- Disable scraping for a term.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn disable_term(
-    _admin: AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> Result<Json<TermUpdateResponse>, ApiError> {
@@ -118,6 +129,15 @@ pub async fn disable_term(
     if !found {
         return Err(ApiError::not_found("Term not found"));
     }
+
+    action_log::record(
+        &state.db_pool,
+        &user,
+        AdminAction::TermDisable,
+        Target::id(&code),
+        serde_json::json!({ "scrapeEnabled": false }),
+    )
+    .await;
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
         .await

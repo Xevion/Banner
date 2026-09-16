@@ -2,15 +2,13 @@
 //!
 //! Users with US keyboards should be able to search "Jose Garcia" and find "José García".
 
-mod helpers;
-
+use crate::helpers::make_course;
 use banner::banner::models::meetings::FacultyItem;
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{
     SearchFilter, SortSpec, search_courses, suggest_courses, suggest_instructors,
 };
 use banner::data::instructors::{PublicInstructorListParams, list_public_instructors};
-use helpers::make_course;
 use sqlx::PgPool;
 
 /// Build a `FacultyItem` for attaching to a test course.

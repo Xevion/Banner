@@ -5,15 +5,13 @@
 //! These tests run each key through `search_courses` and pin the row order the
 //! denormalized summary columns are supposed to give.
 
-mod helpers;
-
+use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use assert2::check;
 use banner::banner::Course;
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{
     SearchFilter, SortDirection, SortKey, SortSpec, SortTerm, search_courses,
 };
-use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
 const TERM: &str = "202620";

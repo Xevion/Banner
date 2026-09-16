@@ -4,11 +4,9 @@
 //! days for the course to match. A course matches if ANY of its meetings
 //! satisfies the filter.
 
-mod helpers;
-
+use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
-use helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use sqlx::PgPool;
 
 /// Insert the standard dataset used by all day-filter tests.

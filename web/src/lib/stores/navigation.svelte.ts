@@ -21,6 +21,7 @@ const SIDEBAR_NAV_ORDER = [
   "/settings",
   "/admin",
   "/admin/scraper",
+  "/admin/actions",
   "/admin/terms",
   "/admin/users",
   "/admin/instructors",

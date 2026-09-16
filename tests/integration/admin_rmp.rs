@@ -1,5 +1,3 @@
-mod helpers;
-
 use banner::data::admin_rmp::{AdminRmpError, accept_candidate, reject_all_candidates};
 use banner::data::rmp::unmatch_instructor;
 use sqlx::PgPool;

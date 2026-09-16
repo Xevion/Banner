@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   MoreHorizontal,
+  ScrollText,
   Settings,
   User,
   Users,
@@ -58,6 +59,7 @@ const userItems = [
 const adminItems: AdminItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/scraper", label: "Scraper", icon: Activity },
+  { href: "/admin/actions", label: "Action Log", icon: ScrollText },
   { href: "/admin/terms", label: "Terms", icon: Calendar },
   { href: "/admin/users", label: "Users", icon: Users },
   {
@@ -101,6 +103,7 @@ const moreSheetItems: {
   indent?: boolean;
 }[] = [
   { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/admin/actions", icon: ScrollText, label: "Action Log" },
   { href: "/admin/terms", icon: Calendar, label: "Terms" },
   { href: "/admin/users", icon: Users, label: "Users" },
   { href: "/admin/instructors", icon: GraduationCap, label: "Instructors" },

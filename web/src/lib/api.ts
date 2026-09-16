@@ -1,6 +1,8 @@
 import { browser } from "$app/environment";
 import { authStore } from "$lib/auth.svelte";
 import type {
+  ActionLogParams,
+  AdminAuditPage,
   AdminStatusResponse,
   ApiError,
   ApiErrorCode,
@@ -420,6 +422,13 @@ export class BannerApiClient {
 
   async getAdminScrapeJobs(): Promise<Result<ScrapeJobsResponse, ApiErrorClass>> {
     return this.request<ScrapeJobsResponse>("/admin/scrape-jobs");
+  }
+
+  async getAdminActionLog(
+    params?: ActionLogParams
+  ): Promise<Result<AdminAuditPage, ApiErrorClass>> {
+    const qs = params ? toURLSearchParams(params).toString() : "";
+    return this.request<AdminAuditPage>(`/admin/action-log${qs ? `?${qs}` : ""}`);
   }
 
   async getTimeline(ranges: TimeRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {
