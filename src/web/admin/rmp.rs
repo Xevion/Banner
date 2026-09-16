@@ -44,12 +44,7 @@ fn explain_block(candidate: &CandidateResponse) -> Option<String> {
     if let Some(holder) = &candidate.claimed_by {
         return Some(format!("Already linked to {holder}"));
     }
-    let subject = candidate
-        .score_breakdown
-        .as_ref()
-        .map(|b| b.0.subject)
-        .unwrap_or(0.0);
-    if subject < 1.0 {
+    if candidate.score_breakdown.0.subject < 1.0 {
         return Some(
             "Subject not confirmed: neither the department nor the reviewed courses match what this instructor teaches"
                 .to_string(),
@@ -318,18 +313,18 @@ mod tests {
         CandidateResponse {
             id: 1,
             rmp_legacy_id: 42,
-            first_name: None,
-            last_name: None,
+            first_name: "Test".to_string(),
+            last_name: "Professor".to_string(),
             department: None,
             avg_rating: None,
             avg_difficulty: None,
-            num_ratings: None,
+            num_ratings: 0,
             would_take_again_pct: None,
-            score: None,
-            score_breakdown: Some(sqlx::types::Json(ScoreBreakdown {
+            score: 0.0,
+            score_breakdown: sqlx::types::Json(ScoreBreakdown {
                 subject,
                 ..ScoreBreakdown::default()
-            })),
+            }),
             status: status.to_string(),
             review_subjects: Vec::new(),
             review_years: Vec::new(),

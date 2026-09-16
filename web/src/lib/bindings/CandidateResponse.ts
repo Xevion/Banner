@@ -4,7 +4,7 @@ import type { ScoreBreakdown } from "./ScoreBreakdown";
 /**
  * A match candidate in the detail view.
  */
-export type CandidateResponse = { id: number, rmpLegacyId: number, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number | null, wouldTakeAgainPct: number | null, score: number | null, scoreBreakdown: ScoreBreakdown | null, status: string, 
+export type CandidateResponse = { id: number, rmpLegacyId: number, firstName: string, lastName: string, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number, wouldTakeAgainPct: number | null, score: number, scoreBreakdown: ScoreBreakdown, status: string, 
 /**
  * Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
  */

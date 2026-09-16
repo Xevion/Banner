@@ -140,16 +140,16 @@ pub struct LinkedRmpProfile {
 pub struct CandidateResponse {
     pub id: i32,
     pub rmp_legacy_id: i32,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
+    pub first_name: String,
+    pub last_name: String,
     pub department: Option<String>,
     pub avg_rating: Option<f32>,
     pub avg_difficulty: Option<f32>,
-    pub num_ratings: Option<i32>,
+    pub num_ratings: i32,
     pub would_take_again_pct: Option<f32>,
-    pub score: Option<f32>,
-    #[ts(as = "Option<ScoreBreakdown>")]
-    pub score_breakdown: Option<sqlx::types::Json<ScoreBreakdown>>,
+    pub score: f32,
+    #[ts(as = "ScoreBreakdown")]
+    pub score_breakdown: sqlx::types::Json<ScoreBreakdown>,
     pub status: String,
     /// Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
     pub review_subjects: Vec<String>,
@@ -226,12 +226,6 @@ struct InstructorRow {
     course_subject_count: Option<i64>,
     teaching_years: Option<Vec<i16>>,
     subjects_taught: Option<Vec<String>>,
-}
-
-#[derive(sqlx::FromRow)]
-struct StatusCount {
-    rmp_match_status: String,
-    count: i64,
 }
 
 /// Filter/sort/pagination params for listing instructors.
@@ -329,20 +323,25 @@ pub async fn list_instructors(
     .await
     .context("failed to count instructors")?;
 
-    // Aggregate stats (unfiltered)
-    let stats_rows = sqlx::query_as::<_, StatusCount>(
-        "SELECT status AS rmp_match_status, COUNT(*) as count \
-         FROM instructor_rmp_match_status GROUP BY status",
+    // Aggregate stats (unfiltered). Both overrides are the view's doing: sqlx reads
+    // status through a CASE expression, and an aggregate, as nullable.
+    let stats_rows = sqlx::query!(
+        r#"
+        SELECT status AS "status!", COUNT(*) AS "count!"
+        FROM instructor_rmp_match_status
+        GROUP BY status
+        "#
     )
     .fetch_all(pool)
     .await
     .context("failed to get instructor stats")?;
 
-    let (with_candidates,): (i64,) =
-        sqlx::query_as("SELECT COUNT(DISTINCT instructor_id) FROM rmp_match_candidates")
-            .fetch_one(pool)
-            .await
-            .context("failed to count instructors with candidates")?;
+    let with_candidates = sqlx::query_scalar!(
+        r#"SELECT COUNT(DISTINCT instructor_id) AS "count!" FROM rmp_match_candidates"#
+    )
+    .fetch_one(pool)
+    .await
+    .context("failed to count instructors with candidates")?;
 
     let mut stats = InstructorStats {
         total: 0,
@@ -355,14 +354,14 @@ pub async fn list_instructors(
     };
     for row in &stats_rows {
         stats.total += row.count;
-        match row.rmp_match_status.as_str() {
+        match row.status.as_str() {
             "unmatched" => stats.unmatched = row.count,
             "pending" => stats.pending = row.count,
             "auto" => stats.auto = row.count,
             "confirmed" => stats.confirmed = row.count,
             "rejected" => stats.rejected = row.count,
             _ => {
-                warn!(status = %row.rmp_match_status, "unexpected rmp_match_status value");
+                warn!(status = %row.status, "unexpected rmp_match_status value");
             }
         }
     }
@@ -460,9 +459,13 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
 
     let teaching_years: Vec<i16> = teaching_year_rows.into_iter().map(|(y,)| y).collect();
 
-    let candidates = sqlx::query_as::<_, CandidateResponse>(
+    // Hand-mapped rather than selected straight into CandidateResponse: the macro
+    // ignores FromRow, so blocked_reason's #[sqlx(default)] would not apply.
+    let candidates = sqlx::query!(
         r#"
-        SELECT mc.id, mc.rmp_legacy_id, mc.score, mc.score_breakdown, mc.status,
+        SELECT mc.id, mc.rmp_legacy_id, mc.score,
+               mc.score_breakdown AS "score_breakdown: sqlx::types::Json<ScoreBreakdown>",
+               mc.status,
                rp.first_name, rp.last_name, rp.department,
                rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,
                mc.review_subjects, mc.review_years,
@@ -476,11 +479,31 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
         WHERE mc.instructor_id = $1
         ORDER BY (mc.status = 'accepted') DESC, mc.score DESC
         "#,
+        inst_id
     )
-    .bind(inst_id)
     .fetch_all(pool)
     .await
-    .context("failed to fetch candidates")?;
+    .context("failed to fetch candidates")?
+    .into_iter()
+    .map(|r| CandidateResponse {
+        id: r.id,
+        rmp_legacy_id: r.rmp_legacy_id,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        department: r.department,
+        avg_rating: r.avg_rating,
+        avg_difficulty: r.avg_difficulty,
+        num_ratings: r.num_ratings,
+        would_take_again_pct: r.would_take_again_pct,
+        score: r.score,
+        score_breakdown: r.score_breakdown,
+        status: r.status,
+        review_subjects: r.review_subjects,
+        review_years: r.review_years,
+        claimed_by: r.claimed_by,
+        blocked_reason: None,
+    })
+    .collect::<Vec<_>>();
 
     let current_matches = sqlx::query_as::<_, LinkedRmpProfile>(
         r#"

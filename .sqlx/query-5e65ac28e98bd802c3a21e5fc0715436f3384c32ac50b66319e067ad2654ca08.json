@@ -1,0 +1,191 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT mc.id, mc.rmp_legacy_id, mc.score,\n               mc.score_breakdown AS \"score_breakdown: sqlx::types::Json<ScoreBreakdown>\",\n               mc.status,\n               rp.first_name, rp.last_name, rp.department,\n               rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,\n               mc.review_subjects, mc.review_years,\n               (SELECT i2.display_name\n                  FROM instructor_rmp_links l2\n                  JOIN instructors i2 ON i2.id = l2.instructor_id\n                 WHERE l2.rmp_legacy_id = mc.rmp_legacy_id\n                   AND l2.instructor_id <> $1) AS claimed_by\n        FROM rmp_match_candidates mc\n        JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id\n        WHERE mc.instructor_id = $1\n        ORDER BY (mc.status = 'accepted') DESC, mc.score DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "rmp_legacy_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "rmp_legacy_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "score",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "score"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "score_breakdown: sqlx::types::Json<ScoreBreakdown>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "score_breakdown"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "first_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "last_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "department",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "department"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "avg_rating",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "avg_rating"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "avg_difficulty",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "avg_difficulty"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "num_ratings",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "num_ratings"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "would_take_again_pct",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "rmp_professors",
+            "name": "would_take_again_pct"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "review_subjects",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "review_subjects"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "review_years",
+        "type_info": "Int2Array",
+        "origin": {
+          "Table": {
+            "table": "rmp_match_candidates",
+            "name": "review_years"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "claimed_by",
+        "type_info": "Varchar",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5e65ac28e98bd802c3a21e5fc0715436f3384c32ac50b66319e067ad2654ca08"
+}
