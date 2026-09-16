@@ -2,14 +2,15 @@
 import { goto } from "$app/navigation";
 import { client } from "$lib/api";
 import { useQuery } from "$lib/composables";
+import { formatInstructorName, NameFormat } from "$lib/course";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
+import InstructorCard from "$lib/components/InstructorCard.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import SortSelect from "$lib/components/SortSelect.svelte";
 import type { SortOption } from "$lib/components/SortSelect.svelte";
-import ScoreBadge from "$lib/components/score/ScoreBadge.svelte";
 import { formatNumber } from "$lib/utils";
-import { Mail, Search } from "@lucide/svelte";
+import { Search } from "@lucide/svelte";
 import { untrack } from "svelte";
 import type { PageProps } from "./$types";
 
@@ -148,59 +149,15 @@ function resolveSubject(code: string): string {
       >
         {#if query.data}
           {#each query.data.instructors as instructor (instructor.id)}
-            <div
-              class="relative rounded-lg border border-border bg-card p-4
-                     hover:border-foreground/20 hover:shadow-sm transition-all"
-            >
-              <a
-                href="/instructors/{instructor.slug}"
-                class="absolute inset-0 rounded-lg
-                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                aria-label={instructor.displayName}
-              ></a>
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                  <h2 class="font-semibold text-sm truncate">
-                    {instructor.displayName}
-                  </h2>
-                  {#if instructor.email}
-                    <div class="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-                      <Mail class="size-3 shrink-0" />
-                      <span class="truncate">{instructor.email}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                {#if instructor.rating != null}
-                  <div class="shrink-0">
-                    <ScoreBadge
-                      score={instructor.rating.score}
-                      confidence={instructor.rating.confidence}
-                      size="sm"
-                    />
-                  </div>
-                {/if}
-              </div>
-
-              {#if instructor.subjects.length > 0}
-                <div class="relative flex flex-wrap gap-1 mt-2.5">
-                  {#each instructor.subjects.slice(0, 4) as subject (subject)}
-                    <a
-                      href="/subjects/{subject}"
-                      class="relative z-10 inline-block px-1.5 py-0.5 text-[10px] font-medium rounded
-                             bg-muted text-muted-foreground truncate max-w-32 hover:bg-muted/80 hover:text-foreground transition-colors"
-                    >
-                      {resolveSubject(subject)}
-                    </a>
-                  {/each}
-                  {#if instructor.subjects.length > 4}
-                    <span class="text-[10px] text-muted-foreground self-center">
-                      +{instructor.subjects.length - 4}
-                    </span>
-                  {/if}
-                </div>
-              {/if}
-            </div>
+            <InstructorCard
+              variant="grid"
+              name={formatInstructorName(instructor.displayName, NameFormat.LastNameFirst)}
+              slug={instructor.slug}
+              email={instructor.email}
+              subjects={instructor.subjects}
+              subjectLabel={resolveSubject}
+              rating={instructor.rating}
+            />
           {/each}
         {/if}
       </div>

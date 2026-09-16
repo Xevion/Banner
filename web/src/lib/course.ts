@@ -368,31 +368,54 @@ export function formatCreditHours(course: CourseResponse): string {
   return `${course.creditHours.low}-${course.creditHours.high}`;
 }
 
+/** Which way round an instructor's name reads. */
+export const NameFormat = {
+  /** "Aamir Zulfiqar" -- natural reading order. */
+  FirstNameFirst: "firstNameFirst",
+  /** "Zulfiqar, Aamir" -- Banner's own order, and what a surname sort implies. */
+  LastNameFirst: "lastNameFirst",
+} as const;
+
+export type NameFormat = (typeof NameFormat)[keyof typeof NameFormat];
+
+type InstructorName = Pick<InstructorResponse, "displayName" | "firstName" | "lastName">;
+
+/** Split a name into parts, preferring explicit fields over parsing Banner's string. */
+function splitInstructorName(nameOrInstructor: string | InstructorName): {
+  first: string;
+  last: string;
+} {
+  if (typeof nameOrInstructor !== "string") {
+    const { firstName, lastName, displayName } = nameOrInstructor;
+    if (firstName && lastName) return { first: firstName, last: lastName };
+    return splitInstructorName(displayName);
+  }
+
+  const displayName = nameOrInstructor.trim();
+  const commaIdx = displayName.indexOf(",");
+  if (commaIdx === -1) return { first: "", last: displayName };
+
+  return {
+    first: displayName.slice(commaIdx + 1).trim(),
+    last: displayName.slice(0, commaIdx).trim(),
+  };
+}
+
 /**
  * Format an instructor's name for display.
  *
- * When an `InstructorResponse` object with `firstName` and `lastName` is
- * provided, uses them directly: "First Last". Otherwise falls back to parsing
- * `displayName` from Banner's "Last, First Middle" format.
+ * A name with no separable parts, such as "Staff", is returned unchanged in
+ * either format.
  */
 export function formatInstructorName(
-  nameOrInstructor: string | Pick<InstructorResponse, "displayName" | "firstName" | "lastName">
+  nameOrInstructor: string | InstructorName,
+  format: NameFormat = NameFormat.FirstNameFirst
 ): string {
-  if (typeof nameOrInstructor !== "string") {
-    const { firstName, lastName, displayName } = nameOrInstructor;
-    if (firstName && lastName) return `${firstName} ${lastName}`;
-    return formatInstructorName(displayName);
-  }
+  const { first, last } = splitInstructorName(nameOrInstructor);
+  if (!first) return last;
+  if (!last) return first;
 
-  const displayName = nameOrInstructor;
-  const commaIdx = displayName.indexOf(",");
-  if (commaIdx === -1) return displayName.trim();
-
-  const last = displayName.slice(0, commaIdx).trim();
-  const rest = displayName.slice(commaIdx + 1).trim();
-  if (!rest) return last;
-
-  return `${rest} ${last}`;
+  return format === NameFormat.LastNameFirst ? `${last}, ${first}` : `${first} ${last}`;
 }
 
 /** Compact meeting time summary for mobile cards: "MWF 9:00-9:50 AM", "Async", or "TBA" */

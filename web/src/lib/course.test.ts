@@ -4,6 +4,7 @@ import {
   formatCreditHours,
   formatISOTime,
   formatInstructorName,
+  NameFormat,
   formatMeetingDays,
   formatMeetingDaysLong,
   formatMeetingDaysVerbose,
@@ -359,6 +360,28 @@ describe("formatInstructorName", () => {
   it("falls back to displayName when both are null", () => {
     expect(formatInstructorName({ displayName: "Staff", firstName: null, lastName: null })).toBe(
       "Staff"
+    );
+  });
+  it("puts the surname first when asked", () => {
+    expect(formatInstructorName("Ramirez, Maria Elena", NameFormat.LastNameFirst)).toBe(
+      "Ramirez, Maria Elena"
+    );
+    expect(
+      formatInstructorName(
+        { displayName: "Ramirez, Maria Elena", firstName: "Maria", lastName: "Ramirez" },
+        NameFormat.LastNameFirst
+      )
+    ).toBe("Ramirez, Maria");
+  });
+  it("leaves an inseparable name alone in either format", () => {
+    expect(formatInstructorName("Staff", NameFormat.LastNameFirst)).toBe("Staff");
+    expect(formatInstructorName("Solo,", NameFormat.LastNameFirst)).toBe("Solo");
+  });
+  it("round-trips between the two formats", () => {
+    const first = formatInstructorName("Zulfiqar, Aamir");
+    expect(first).toBe("Aamir Zulfiqar");
+    expect(formatInstructorName("Zulfiqar, Aamir", NameFormat.LastNameFirst)).toBe(
+      "Zulfiqar, Aamir"
     );
   });
 });

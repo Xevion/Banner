@@ -3,7 +3,7 @@ import type { CourseResponse, SearchOptionsResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
 import { setCourseDetailContext } from "$lib/components/course-detail/context";
 import { CourseTable } from "$lib/components/course-table";
-import ScorePopover from "$lib/components/score/ScorePopover.svelte";
+import InstructorCard from "$lib/components/InstructorCard.svelte";
 import { formatCreditHours, formatInstructorName } from "$lib/course";
 import { getAttributeLabel, getInstructionalMethodLabel } from "$lib/labels";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
@@ -131,30 +131,14 @@ const uniqueInstructors = $derived.by(() => {
         <h2 class="text-lg font-semibold mb-3">Instructors</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {#each uniqueInstructors as instructor (instructor.instructorId)}
-            <div class="flex items-center gap-3 border border-border rounded-lg px-4 py-3 bg-card">
-              <div class="min-w-0 flex-1">
-                {#if instructor.slug != null}
-                  <a
-                    href="/instructors/{instructor.slug}"
-                    class="font-medium text-sm hover:underline truncate block"
-                  >
-                    {formatInstructorName(instructor)}
-                  </a>
-                {:else}
-                  <span class="font-medium text-sm truncate block">
-                    {formatInstructorName(instructor)}
-                  </span>
-                {/if}
-              </div>
-              {#if instructor.rating}
-                <ScorePopover
-                  rating={instructor.rating}
-                  rmp={instructor.rmp}
-                  bluebook={instructor.bluebook}
-                  size="xs"
-                />
-              {/if}
-            </div>
+            <InstructorCard
+              variant="panel"
+              name={formatInstructorName(instructor)}
+              slug={instructor.slug}
+              rating={instructor.rating}
+              rmp={instructor.rmp}
+              bluebook={instructor.bluebook}
+            />
           {/each}
         </div>
       </section>
