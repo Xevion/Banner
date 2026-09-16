@@ -225,6 +225,103 @@ pub async fn insert_scrape_job(
     id
 }
 
+/// Insert an instructor row, returning the generated ID.
+///
+/// `email` must be unique when present; rows without one are unique by name.
+pub async fn insert_instructor(pool: &PgPool, display_name: &str, email: Option<&str>) -> i32 {
+    insert_instructor_with_status(pool, display_name, email, "unmatched").await
+}
+
+/// Insert an instructor row with an explicit `rmp_match_status`.
+pub async fn insert_instructor_with_status(
+    pool: &PgPool,
+    display_name: &str,
+    email: Option<&str>,
+    status: &str,
+) -> i32 {
+    let (id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email, rmp_match_status)
+         VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(display_name)
+    .bind(email)
+    .bind(status)
+    .fetch_one(pool)
+    .await
+    .expect("insert_instructor failed");
+
+    id
+}
+
+/// Insert an RMP professor row for matching tests.
+pub async fn insert_rmp_professor(
+    pool: &PgPool,
+    legacy_id: i32,
+    first_name: &str,
+    last_name: &str,
+    department: Option<&str>,
+    num_ratings: i32,
+) {
+    sqlx::query(
+        "INSERT INTO rmp_professors (legacy_id, graphql_id, first_name, last_name, department, num_ratings)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(legacy_id)
+    .bind(format!("gql-{legacy_id}"))
+    .bind(first_name)
+    .bind(last_name)
+    .bind(department)
+    .bind(num_ratings)
+    .execute(pool)
+    .await
+    .expect("insert_rmp_professor failed");
+}
+
+/// Insert a course in `subject` and attach `instructor_id` to it.
+///
+/// Subject counts per instructor are what the RMP matcher scores against.
+pub async fn insert_taught_course(pool: &PgPool, instructor_id: i32, subject: &str, crn: &str) {
+    let (course_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO courses (crn, subject, course_number, title, term_code,
+             enrollment, max_enrollment, wait_count, wait_capacity, last_scraped_at)
+         VALUES ($1, $2, '1234', 'Test Course', '202620', 10, 30, 0, 0, NOW())
+         RETURNING id",
+    )
+    .bind(crn)
+    .bind(subject)
+    .fetch_one(pool)
+    .await
+    .expect("insert_taught_course failed to insert course");
+
+    sqlx::query(
+        "INSERT INTO course_instructors (course_id, instructor_id, banner_id, is_primary)
+         VALUES ($1, $2, $3, true)",
+    )
+    .bind(course_id)
+    .bind(instructor_id)
+    .bind(format!("@{instructor_id}"))
+    .execute(pool)
+    .await
+    .expect("insert_taught_course failed to link instructor");
+}
+
+/// Insert an RMP review carrying a course code such as `"HIS1043"`.
+///
+/// The posting date is pinned mid-year so the extracted year cannot drift
+/// across a timezone boundary.
+pub async fn insert_rmp_review(pool: &PgPool, legacy_id: i32, class: &str, posted_year: i32) {
+    sqlx::query(
+        "INSERT INTO rmp_reviews (rmp_legacy_id, class, posted_at)
+         VALUES ($1, $2, make_timestamptz($3, 6, 15, 12, 0, 0))",
+    )
+    .bind(legacy_id)
+    .bind(class)
+    .bind(posted_year)
+    .execute(pool)
+    .await
+    .expect("insert_rmp_review failed");
+}
+
 /// Build a `FacultyItem` for instructor upsert tests.
 pub fn make_faculty(
     display_name: &str,

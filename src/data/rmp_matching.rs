@@ -38,7 +38,8 @@ impl MatchScore {
     /// Whether this pair may be linked without human review. Requires confirmed
     /// subject evidence, so a name-only score cannot auto-link unverified.
     pub fn auto_eligible(&self, candidate_count: usize) -> bool {
-        // Never link against evidence that actively disagrees.
+        // Never link when both subject signals disagree. Either one alone is
+        // noisy: RMP departments do not always map onto a Banner subject.
         if self.breakdown.subject + SCORE_EPSILON < 0.5 {
             return false;
         }
@@ -89,12 +90,18 @@ const WEIGHT_SUBJECT: f32 = 0.30;
 const WEIGHT_UNIQUENESS: f32 = 0.15;
 const WEIGHT_VOLUME: f32 = 0.05;
 
+/// Whether a department string stands in for a missing value.
+fn is_placeholder_department(department: &str) -> bool {
+    let trimmed = department.trim();
+    trimmed.is_empty() || trimmed.eq_ignore_ascii_case("not specified")
+}
+
 /// Check if an instructor's subjects overlap with an RMP department.
 ///
 /// Returns `1.0` for a match, `0.2` for a mismatch, `0.5` when the RMP
 /// department is unknown.
 fn department_similarity(subjects: &[(String, u32)], rmp_department: Option<&str>) -> f32 {
-    let Some(dept) = rmp_department else {
+    let Some(dept) = rmp_department.filter(|d| !is_placeholder_department(d)) else {
         return 0.5;
     };
     // No courses on record: unverifiable, not a mismatch.
@@ -912,6 +919,11 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
                     if ms.auto_eligible(candidate_count) {
                         continue;
                     }
+                    // Identity carries across a shared name, but evidence that
+                    // actively disagrees still rules a profile out.
+                    if ms.breakdown.subject + SCORE_EPSILON < 0.5 {
+                        continue;
+                    }
                     let same_person = matched_profs_map
                         .get(legacy_id)
                         .is_some_and(|p| p.norm_name == name);
@@ -1116,11 +1128,12 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         }
     }
 
-    let auto_matched = linked_ids.len();
+    // One instructor can hold several profiles, so count people, not link rows.
+    let auto_instructor_ids: HashSet<i32> = linked_ids.iter().copied().collect();
+    let auto_matched = auto_instructor_ids.len();
 
     // Step 9: Mark instructors that have candidates but no auto-link as 'pending'
     // so they appear in the review queue with a distinct status.
-    let auto_instructor_ids: HashSet<i32> = linked_ids.iter().copied().collect();
     let pending_instructor_ids: Vec<i32> = instructors_with_candidates
         .iter()
         .filter(|id| !auto_instructor_ids.contains(id))
@@ -1136,6 +1149,9 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
             FROM UNNEST($1::int4[]) AS v(instructor_id)
             WHERE i.id = v.instructor_id
               AND i.rmp_match_status = 'unmatched'
+              AND NOT EXISTS (
+                  SELECT 1 FROM instructor_rmp_links l WHERE l.instructor_id = i.id
+              )
             "#,
         )
         .bind(&pending_instructor_ids)
