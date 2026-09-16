@@ -4,6 +4,7 @@
 //! days for the course to match. A course matches if ANY of its meetings
 //! satisfies the filter.
 
+use crate::helpers::db::test_db;
 use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
@@ -140,8 +141,9 @@ async fn search_by_days(pool: &PgPool, days: Option<&[String]>) -> (Vec<String>,
     (crns, total)
 }
 
-#[sqlx::test]
-async fn test_filter_single_day_monday(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_single_day_monday() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["monday".to_owned()];
@@ -182,8 +184,9 @@ async fn test_filter_single_day_monday(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_filter_single_day_saturday(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_single_day_saturday() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["saturday".to_owned()];
@@ -200,8 +203,9 @@ async fn test_filter_single_day_saturday(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_filter_multi_day_and_semantics(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_multi_day_and_semantics() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec![
@@ -234,8 +238,9 @@ async fn test_filter_multi_day_and_semantics(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_filter_tuesday_thursday(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_tuesday_thursday() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["tuesday".to_owned(), "thursday".to_owned()];
@@ -256,8 +261,9 @@ async fn test_filter_tuesday_thursday(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_no_day_filter_returns_all(pool: PgPool) {
+#[tokio::test]
+async fn test_no_day_filter_returns_all() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let (crns, total) = search_by_days(&pool, None).await;
@@ -277,8 +283,9 @@ async fn test_no_day_filter_returns_all(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_filter_day_excludes_tba(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_day_excludes_tba() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     // Try every individual day -- TBA course (10006) should never appear
@@ -301,8 +308,9 @@ async fn test_filter_day_excludes_tba(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_filter_nonexistent_day_combo(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_nonexistent_day_combo() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["saturday".to_owned(), "sunday".to_owned()];

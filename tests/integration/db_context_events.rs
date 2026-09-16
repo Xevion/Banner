@@ -1,5 +1,6 @@
 //! Integration tests for DbContext event emission.
 
+use crate::helpers::db::test_db;
 use banner::data::DbContext;
 use banner::data::events::{DomainEvent, EventBuffer};
 use banner::data::models::{ScrapePriority, TargetType};
@@ -8,8 +9,9 @@ use banner::web::ws::ScrapeJobEvent;
 use serde_json::json;
 use std::sync::Arc;
 
-#[sqlx::test]
-async fn db_context_emits_event_on_job_lock(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn db_context_emits_event_on_job_lock() {
+    let pool = test_db!().await;
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 
@@ -43,8 +45,9 @@ async fn db_context_emits_event_on_job_lock(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn db_context_emits_event_on_job_complete(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn db_context_emits_event_on_job_complete() {
+    let pool = test_db!().await;
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 
@@ -81,8 +84,9 @@ async fn db_context_emits_event_on_job_complete(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn db_context_emits_event_on_job_retry(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn db_context_emits_event_on_job_retry() {
+    let pool = test_db!().await;
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 
@@ -121,8 +125,9 @@ async fn db_context_emits_event_on_job_retry(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn db_context_emits_events_on_job_exhaust(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn db_context_emits_events_on_job_exhaust() {
+    let pool = test_db!().await;
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 
@@ -167,8 +172,9 @@ async fn db_context_emits_events_on_job_exhaust(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn db_context_emits_event_on_job_delete(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn db_context_emits_event_on_job_delete() {
+    let pool = test_db!().await;
     let events = Arc::new(EventBuffer::new(100));
     let ctx = DbContext::new(pool.clone(), events.clone());
 

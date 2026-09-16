@@ -75,6 +75,7 @@ metrics-util = "0.20"
 
 [dev-dependencies]
 assert2 = "0.4.1"
+dotenvy = "0.15.7"
 
 # A 'release mode' profile that compiles quickly, but still 'appears' like a release build, useful for debugging
 [profile.dev-release]

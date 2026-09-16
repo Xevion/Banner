@@ -2,6 +2,7 @@
 //!
 //! Users with US keyboards should be able to search "Jose Garcia" and find "José García".
 
+use crate::helpers::db::test_db;
 use crate::helpers::make_course;
 use banner::banner::models::meetings::FacultyItem;
 use banner::data::batch::batch_upsert_courses;
@@ -122,8 +123,9 @@ async fn insert_accented_test_data(pool: &PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
+#[tokio::test]
+async fn test_search_courses_title_unaccented_finds_accented() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Introduccion" (no accent) should find "Introduccion a la Linguistica"
@@ -146,8 +148,9 @@ async fn test_search_courses_title_unaccented_finds_accented(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_search_courses_title_unaccented_finds_umlaut(pool: PgPool) {
+#[tokio::test]
+async fn test_search_courses_title_unaccented_finds_umlaut() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Etudes" (no accent) should find "Etudes in Music Theory"
@@ -170,8 +173,9 @@ async fn test_search_courses_title_unaccented_finds_umlaut(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
+#[tokio::test]
+async fn test_search_courses_title_unaccented_finds_algebra() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Algebra" (no accent) should find "Algebra Lineal"
@@ -194,8 +198,9 @@ async fn test_search_courses_title_unaccented_finds_algebra(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
+#[tokio::test]
+async fn test_search_courses_instructor_filter_unaccented() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Filter by slug for Garcia Lopez, Jose -- slug assigned in insert_accented_test_data
@@ -219,8 +224,9 @@ async fn test_search_courses_instructor_filter_unaccented(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
+#[tokio::test]
+async fn test_search_courses_instructor_filter_muller() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Filter by slug for Muller, Francois -- slug assigned in insert_accented_test_data
@@ -244,8 +250,9 @@ async fn test_search_courses_instructor_filter_muller(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_suggest_courses_unaccented_finds_accented_title(pool: PgPool) {
+#[tokio::test]
+async fn test_suggest_courses_unaccented_finds_accented_title() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Suggest "Introduccion" should find the course with accented title
@@ -263,8 +270,9 @@ async fn test_suggest_courses_unaccented_finds_accented_title(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_suggest_courses_unaccented_finds_etudes(pool: PgPool) {
+#[tokio::test]
+async fn test_suggest_courses_unaccented_finds_etudes() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     let suggestions = suggest_courses(&pool, "202620", "Etudes", 10)
@@ -281,8 +289,9 @@ async fn test_suggest_courses_unaccented_finds_etudes(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_suggest_instructors_unaccented_finds_accented_name(pool: PgPool) {
+#[tokio::test]
+async fn test_suggest_instructors_unaccented_finds_accented_name() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Suggest "Garcia" should find "García López, José"
@@ -302,8 +311,9 @@ async fn test_suggest_instructors_unaccented_finds_accented_name(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_suggest_instructors_unaccented_finds_muller(pool: PgPool) {
+#[tokio::test]
+async fn test_suggest_instructors_unaccented_finds_muller() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     let suggestions = suggest_instructors(&pool, "202620", "Muller", 10)
@@ -322,8 +332,9 @@ async fn test_suggest_instructors_unaccented_finds_muller(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_suggest_instructors_unaccented_finds_sean(pool: PgPool) {
+#[tokio::test]
+async fn test_suggest_instructors_unaccented_finds_sean() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // "Sean" should find "Séan"
@@ -341,8 +352,9 @@ async fn test_suggest_instructors_unaccented_finds_sean(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_list_public_instructors_unaccented_search(pool: PgPool) {
+#[tokio::test]
+async fn test_list_public_instructors_unaccented_search() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Hernandez" (no accent) should find "Hernández, María"
@@ -373,8 +385,9 @@ async fn test_list_public_instructors_unaccented_search(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_list_public_instructors_unaccented_search_jose(pool: PgPool) {
+#[tokio::test]
+async fn test_list_public_instructors_unaccented_search_jose() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Jose" should find "García López, José"
@@ -405,8 +418,9 @@ async fn test_list_public_instructors_unaccented_search_jose(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_list_public_instructors_unaccented_search_francois(pool: PgPool) {
+#[tokio::test]
+async fn test_list_public_instructors_unaccented_search_francois() {
+    let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
     // Search "Francois" should find "Müller, François"

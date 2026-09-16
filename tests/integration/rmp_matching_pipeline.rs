@@ -4,6 +4,7 @@
 //! scores it produces, so a change in matching behaviour fails here rather than
 //! surfacing as a wrong instructor on a live profile.
 
+use crate::helpers::db::test_db;
 use crate::helpers::{
     insert_instructor, insert_rmp_professor, insert_rmp_review, insert_taught_course,
 };
@@ -94,8 +95,9 @@ fn close(actual: f32, expected: f32) -> bool {
 
 /// A full-strength name with no rival profile links even though nothing
 /// positively confirms the subject: score 0.85, below the auto-accept threshold.
-#[sqlx::test]
-async fn sole_uncontradicted_candidate_auto_links(pool: PgPool) {
+#[tokio::test]
+async fn sole_uncontradicted_candidate_auto_links() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Saldana, Liliana", Some("saldana@utsa.edu")).await;
     insert_rmp_professor(&pool, 1001, "Liliana", "Saldana", Some("Spanish"), 56).await;
 
@@ -117,8 +119,9 @@ async fn sole_uncontradicted_candidate_auto_links(pool: PgPool) {
 
 /// Review course codes that land in another subject entirely drag the merged
 /// subject evidence to 0.2, which the auto-eligibility gate refuses outright.
-#[sqlx::test]
-async fn contradicting_review_subjects_block_auto_link(pool: PgPool) {
+#[tokio::test]
+async fn contradicting_review_subjects_block_auto_link() {
+    let pool = test_db!().await;
     let instructor =
         insert_instructor(&pool, "Packham, Christopher", Some("packham@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
@@ -151,8 +154,9 @@ async fn contradicting_review_subjects_block_auto_link(pool: PgPool) {
 /// A department alone does not decide a match. RMP's strings frequently fail to
 /// map onto a Banner subject even for the right person, so a sole candidate on
 /// an exact name still links; only both subject signals disagreeing blocks it.
-#[sqlx::test]
-async fn department_mismatch_alone_does_not_block_auto_link(pool: PgPool) {
+#[tokio::test]
+async fn department_mismatch_alone_does_not_block_auto_link() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Fenwick, Alaric", Some("fenwick@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1003, "Alaric", "Fenwick", Some("History"), 50).await;
@@ -173,8 +177,9 @@ async fn department_mismatch_alone_does_not_block_auto_link(pool: PgPool) {
 
 /// "Not Specified" is a missing department, not a conflicting one, so it must
 /// not be scored as a mismatch.
-#[sqlx::test]
-async fn placeholder_department_is_treated_as_absent(pool: PgPool) {
+#[tokio::test]
+async fn placeholder_department_is_treated_as_absent() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Ortiz, Nadia", Some("ortiz@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1020, "Nadia", "Ortiz", Some("Not Specified"), 50).await;
@@ -193,8 +198,9 @@ async fn placeholder_department_is_treated_as_absent(pool: PgPool) {
 
 /// Two instructor rows share a name and both clear auto-accept, but the profile
 /// is unique: the heavier course load wins and the loser drops to review.
-#[sqlx::test]
-async fn contested_profile_links_once_to_the_heavier_load(pool: PgPool) {
+#[tokio::test]
+async fn contested_profile_links_once_to_the_heavier_load() {
+    let pool = test_db!().await;
     let winner = insert_instructor(&pool, "Smith, John", Some("john.a@utsa.edu")).await;
     let loser = insert_instructor(&pool, "Smith, John", Some("john.b@utsa.edu")).await;
     for crn in ["10001", "10002", "10003"] {
@@ -227,8 +233,9 @@ async fn contested_profile_links_once_to_the_heavier_load(pool: PgPool) {
 
 /// A manual link survives regeneration untouched, and the profile it holds is
 /// off limits to any other instructor that would otherwise auto-link to it.
-#[sqlx::test]
-async fn manual_link_survives_and_blocks_rival_claims(pool: PgPool) {
+#[tokio::test]
+async fn manual_link_survives_and_blocks_rival_claims() {
+    let pool = test_db!().await;
     let owner = insert_instructor(&pool, "Ellis, Ronald", Some("ron.a@utsa.edu")).await;
     let rival = insert_instructor(&pool, "Ellis, Ronald", Some("ron.b@utsa.edu")).await;
     insert_taught_course(&pool, rival, "CS", "10001").await;
@@ -261,8 +268,9 @@ async fn manual_link_survives_and_blocks_rival_claims(pool: PgPool) {
 
 /// A rejected pair is the one candidate row regeneration preserves, and the pair
 /// is skipped before scoring, so no replacement row and no link appear.
-#[sqlx::test]
-async fn rejected_candidate_survives_regeneration_unscored(pool: PgPool) {
+#[tokio::test]
+async fn rejected_candidate_survives_regeneration_unscored() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Garcia, Maria", Some("garcia@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1006, "Maria", "Garcia", Some("Computer Science"), 40).await;
@@ -296,8 +304,9 @@ async fn rejected_candidate_survives_regeneration_unscored(pool: PgPool) {
 
 /// RMP holds duplicate profiles for one person; linking all of them is intended.
 /// Two rivals depress uniqueness to 0.5, so each scores exactly 0.875.
-#[sqlx::test]
-async fn duplicate_profiles_for_one_person_all_link(pool: PgPool) {
+#[tokio::test]
+async fn duplicate_profiles_for_one_person_all_link() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Nguyen, Minh", Some("nguyen@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1007, "Minh", "Nguyen", Some("Computer Science"), 0).await;
@@ -330,8 +339,9 @@ async fn duplicate_profiles_for_one_person_all_link(pool: PgPool) {
 
 /// One profile identifies the person, but a sibling whose own evidence points
 /// at another field is a different teacher of the same name, so it stays out.
-#[sqlx::test]
-async fn contradicted_sibling_profile_is_not_inherited(pool: PgPool) {
+#[tokio::test]
+async fn contradicted_sibling_profile_is_not_inherited() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Nguyen, Minh", Some("nguyen@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1013, "Minh", "Nguyen", Some("Computer Science"), 0).await;
@@ -362,8 +372,9 @@ async fn contradicted_sibling_profile_is_not_inherited(pool: PgPool) {
 
 /// Inheritance is withheld when a second instructor also claims the sibling,
 /// so only the directly eligible profile is linked.
-#[sqlx::test]
-async fn contested_sibling_profile_is_not_inherited(pool: PgPool) {
+#[tokio::test]
+async fn contested_sibling_profile_is_not_inherited() {
+    let pool = test_db!().await;
     let winner = insert_instructor(&pool, "Nguyen, Minh", Some("minh.a@utsa.edu")).await;
     let loser = insert_instructor(&pool, "Nguyen, Minh", Some("minh.b@utsa.edu")).await;
     insert_taught_course(&pool, winner, "CS", "10001").await;
@@ -395,8 +406,9 @@ async fn contested_sibling_profile_is_not_inherited(pool: PgPool) {
 
 /// A nickname expansion on both sides discounts the name to 0.7. Confirmed
 /// subject evidence routes the pair through the threshold, which 0.85 misses.
-#[sqlx::test]
-async fn nickname_only_name_match_stays_below_the_threshold(pool: PgPool) {
+#[tokio::test]
+async fn nickname_only_name_match_stays_below_the_threshold() {
+    let pool = test_db!().await;
     let instructor =
         insert_instructor(&pool, "Packham, Christopher", Some("packham@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
@@ -427,8 +439,9 @@ async fn nickname_only_name_match_stays_below_the_threshold(pool: PgPool) {
 }
 
 /// With nothing eligible to match, the run still reports the deletions it made.
-#[sqlx::test]
-async fn no_eligible_instructors_returns_empty_stats(pool: PgPool) {
+#[tokio::test]
+async fn no_eligible_instructors_returns_empty_stats() {
+    let pool = test_db!().await;
     insert_rmp_professor(&pool, 1018, "Minh", "Nguyen", Some("Computer Science"), 0).await;
 
     let stats = generate_candidates(&pool)
@@ -446,8 +459,9 @@ async fn no_eligible_instructors_returns_empty_stats(pool: PgPool) {
 
 /// Two genuinely different RMP people share a first-name key. Both clear the
 /// score gate, so the pipeline refuses to guess and defers the whole instructor.
-#[sqlx::test]
-async fn distinct_people_sharing_a_name_defer_to_review(pool: PgPool) {
+#[tokio::test]
+async fn distinct_people_sharing_a_name_defer_to_review() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Smith, Jane", Some("jane@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1009, "Jane", "Smith", Some("Computer Science"), 0).await;
@@ -482,8 +496,9 @@ async fn distinct_people_sharing_a_name_defer_to_review(pool: PgPool) {
 
 /// Regeneration wipes every auto link and non-rejected candidate first, so state
 /// from a previous run that no longer matches disappears.
-#[sqlx::test]
-async fn stale_auto_state_is_cleared_before_rescoring(pool: PgPool) {
+#[tokio::test]
+async fn stale_auto_state_is_cleared_before_rescoring() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "Zhao, Peng", Some("zhao@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1011, "Someone", "Else", Some("Computer Science"), 20).await;
@@ -518,8 +533,9 @@ async fn stale_auto_state_is_cleared_before_rescoring(pool: PgPool) {
 }
 
 /// An unparseable display name is skipped outright rather than failing the run.
-#[sqlx::test]
-async fn unparseable_display_name_is_skipped(pool: PgPool) {
+#[tokio::test]
+async fn unparseable_display_name_is_skipped() {
+    let pool = test_db!().await;
     let instructor = insert_instructor(&pool, "SingleName", Some("single@utsa.edu")).await;
     insert_rmp_professor(&pool, 1012, "Single", "Name", Some("Computer Science"), 20).await;
 
@@ -536,8 +552,9 @@ async fn unparseable_display_name_is_skipped(pool: PgPool) {
 
 /// The two invariants the corpus harness checks, on a hermetic fixture that mixes
 /// a contested profile, a manual hold, a rejection and a duplicate-profile person.
-#[sqlx::test]
-async fn mixed_fixture_holds_link_and_acceptance_invariants(pool: PgPool) {
+#[tokio::test]
+async fn mixed_fixture_holds_link_and_acceptance_invariants() {
+    let pool = test_db!().await;
     let winner = insert_instructor(&pool, "Ellis, Ronald", Some("ron.a@utsa.edu")).await;
     let loser = insert_instructor(&pool, "Ellis, Ronald", Some("ron.b@utsa.edu")).await;
     let duplicated = insert_instructor(&pool, "Nguyen, Minh", Some("nguyen@utsa.edu")).await;

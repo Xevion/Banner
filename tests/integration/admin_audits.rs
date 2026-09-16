@@ -1,10 +1,10 @@
+use crate::helpers::db::test_db;
 use banner::data::admin_audits::{
     AdminAction, AdminAuditFilter, AdminEntity, Target, insert, list,
 };
 use banner::data::models::User;
 use chrono::Utc;
 use serde_json::json;
-use sqlx::PgPool;
 use strum::VariantArray;
 
 fn actor(discord_id: i64, username: &str) -> User {
@@ -19,8 +19,9 @@ fn actor(discord_id: i64, username: &str) -> User {
     }
 }
 
-#[sqlx::test]
-async fn test_recorded_entry_round_trips_its_detail(pool: PgPool) {
+#[tokio::test]
+async fn test_recorded_entry_round_trips_its_detail() {
+    let pool = test_db!().await;
     insert(
         &pool,
         &actor(1, "xevion"),
@@ -48,8 +49,9 @@ async fn test_recorded_entry_round_trips_its_detail(pool: PgPool) {
 }
 
 /// A sweep over every record of a kind has no single target.
-#[sqlx::test]
-async fn test_untargeted_action_records_a_null_entity_id(pool: PgPool) {
+#[tokio::test]
+async fn test_untargeted_action_records_a_null_entity_id() {
+    let pool = test_db!().await;
     insert(
         &pool,
         &actor(1, "xevion"),
@@ -66,8 +68,9 @@ async fn test_untargeted_action_records_a_null_entity_id(pool: PgPool) {
     assert!(page.entries[0].related_ids.is_empty());
 }
 
-#[sqlx::test]
-async fn test_every_action_records_and_lists_under_its_own_name(pool: PgPool) {
+#[tokio::test]
+async fn test_every_action_records_and_lists_under_its_own_name() {
+    let pool = test_db!().await;
     for action in AdminAction::VARIANTS {
         insert(
             &pool,
@@ -92,8 +95,9 @@ async fn test_every_action_records_and_lists_under_its_own_name(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_listing_filters_by_actor(pool: PgPool) {
+#[tokio::test]
+async fn test_listing_filters_by_actor() {
+    let pool = test_db!().await;
     insert(
         &pool,
         &actor(1, "first"),
@@ -123,8 +127,9 @@ async fn test_listing_filters_by_actor(pool: PgPool) {
     assert_eq!(page.entries[0].actor_username, "second");
 }
 
-#[sqlx::test]
-async fn test_listing_filters_by_entity_type(pool: PgPool) {
+#[tokio::test]
+async fn test_listing_filters_by_entity_type() {
+    let pool = test_db!().await;
     insert(
         &pool,
         &actor(1, "xevion"),
@@ -155,8 +160,9 @@ async fn test_listing_filters_by_entity_type(pool: PgPool) {
 }
 
 /// Asking what happened to one instructor must find merges it lost as well as won.
-#[sqlx::test]
-async fn test_listing_by_entity_id_matches_the_other_side_of_a_pair(pool: PgPool) {
+#[tokio::test]
+async fn test_listing_by_entity_id_matches_the_other_side_of_a_pair() {
+    let pool = test_db!().await;
     insert(
         &pool,
         &actor(1, "xevion"),
@@ -186,8 +192,9 @@ async fn test_listing_by_entity_id_matches_the_other_side_of_a_pair(pool: PgPool
     assert_eq!(page.entries[0].action, "instructor_merge");
 }
 
-#[sqlx::test]
-async fn test_listing_filters_by_time_range(pool: PgPool) {
+#[tokio::test]
+async fn test_listing_filters_by_time_range() {
+    let pool = test_db!().await;
     let first = insert(
         &pool,
         &actor(1, "xevion"),
@@ -224,8 +231,9 @@ async fn test_listing_filters_by_time_range(pool: PgPool) {
     assert_eq!(page.entries[0].id, first.id);
 }
 
-#[sqlx::test]
-async fn test_listing_paginates_newest_first(pool: PgPool) {
+#[tokio::test]
+async fn test_listing_paginates_newest_first() {
+    let pool = test_db!().await;
     for code in ["202610", "202620", "202630"] {
         insert(
             &pool,
@@ -265,8 +273,9 @@ async fn test_listing_paginates_newest_first(pool: PgPool) {
 
 /// The action has already committed by the time it is audited, so a broken
 /// audit write must leave it standing.
-#[sqlx::test]
-async fn test_failed_audit_write_leaves_the_action_intact(pool: PgPool) {
+#[tokio::test]
+async fn test_failed_audit_write_leaves_the_action_intact() {
+    let pool = test_db!().await;
     let first = crate::helpers::insert_instructor(&pool, "Doe, Jane", None).await;
     let second = crate::helpers::insert_instructor(&pool, "Doe, J", None).await;
 

@@ -1,3 +1,4 @@
+use crate::helpers::db::test_db;
 use banner::data::DbContext;
 use banner::data::events::EventBuffer;
 use banner::data::models::{ScrapePriority, SubjectTarget, TargetPayload, TargetType};
@@ -22,15 +23,17 @@ fn payload_json(payload: &TargetPayload) -> serde_json::Value {
     serde_json::to_value(payload).unwrap()
 }
 
-#[sqlx::test]
-async fn lock_next_empty_queue(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_empty_queue() {
+    let pool = test_db!().await;
     let ctx = make_ctx(pool);
     let result = ctx.scrape_jobs().lock_next().await.unwrap();
     assert!(result.is_none());
 }
 
-#[sqlx::test]
-async fn lock_next_returns_job_and_sets_locked_at(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_returns_job_and_sets_locked_at() {
+    let pool = test_db!().await;
     let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
@@ -64,8 +67,9 @@ async fn lock_next_returns_job_and_sets_locked_at(pool: PgPool) {
     assert!(locked_at.is_some(), "locked_at should be set after fetch");
 }
 
-#[sqlx::test]
-async fn lock_next_skips_locked_jobs(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_skips_locked_jobs() {
+    let pool = test_db!().await;
     crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
@@ -82,8 +86,9 @@ async fn lock_next_skips_locked_jobs(pool: PgPool) {
     assert!(result.is_none(), "locked jobs should be skipped");
 }
 
-#[sqlx::test]
-async fn lock_next_skips_future_execute_at(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_skips_future_execute_at() {
+    let pool = test_db!().await;
     // Insert a job with execute_at in the future via raw SQL
     sqlx::query(
         "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at)
@@ -98,8 +103,9 @@ async fn lock_next_skips_future_execute_at(pool: PgPool) {
     assert!(result.is_none(), "future execute_at jobs should be skipped");
 }
 
-#[sqlx::test]
-async fn lock_next_priority_desc_ordering(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_priority_desc_ordering() {
+    let pool = test_db!().await;
     // Insert low priority first, then critical
     crate::helpers::insert_scrape_job(
         &pool,
@@ -138,8 +144,9 @@ async fn lock_next_priority_desc_ordering(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn lock_next_execute_at_asc_ordering(pool: PgPool) {
+#[tokio::test]
+async fn lock_next_execute_at_asc_ordering() {
+    let pool = test_db!().await;
     // Insert an older job and a newer job, both same priority
     sqlx::query(
         "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at)
@@ -172,8 +179,9 @@ async fn lock_next_execute_at_asc_ordering(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn delete_removes_row(pool: PgPool) {
+#[tokio::test]
+async fn delete_removes_row() {
+    let pool = test_db!().await;
     let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::SingleCrn,
@@ -196,14 +204,16 @@ async fn delete_removes_row(pool: PgPool) {
     assert_eq!(count, 0, "row should be deleted");
 }
 
-#[sqlx::test]
-async fn delete_nonexistent_id_no_error(pool: PgPool) {
+#[tokio::test]
+async fn delete_nonexistent_id_no_error() {
+    let pool = test_db!().await;
     let ctx = make_ctx(pool);
     ctx.scrape_jobs().delete(999_999).await.unwrap();
 }
 
-#[sqlx::test]
-async fn unlock_clears_locked_at(pool: PgPool) {
+#[tokio::test]
+async fn unlock_clears_locked_at() {
+    let pool = test_db!().await;
     let id = crate::helpers::insert_scrape_job(
         &pool,
         TargetType::CrnList,
@@ -227,8 +237,9 @@ async fn unlock_clears_locked_at(pool: PgPool) {
     assert!(locked_at.is_none(), "locked_at should be cleared");
 }
 
-#[sqlx::test]
-async fn find_existing_payloads_returns_matching(pool: PgPool) {
+#[tokio::test]
+async fn find_existing_payloads_returns_matching() {
+    let pool = test_db!().await;
     let payload_a = subject_payload("CS");
     let payload_b = subject_payload("MAT");
     let payload_c = subject_payload("ENG");
@@ -280,8 +291,9 @@ async fn find_existing_payloads_returns_matching(pool: PgPool) {
     assert!(!existing.contains(&payload_json(&payload_c).to_string()));
 }
 
-#[sqlx::test]
-async fn find_existing_payloads_includes_locked(pool: PgPool) {
+#[tokio::test]
+async fn find_existing_payloads_includes_locked() {
+    let pool = test_db!().await;
     let payload = subject_payload("CS");
 
     crate::helpers::insert_scrape_job(
@@ -309,8 +321,9 @@ async fn find_existing_payloads_includes_locked(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn find_existing_payloads_empty_candidates(pool: PgPool) {
+#[tokio::test]
+async fn find_existing_payloads_empty_candidates() {
+    let pool = test_db!().await;
     // Insert a job so the table isn't empty
     crate::helpers::insert_scrape_job(
         &pool,
@@ -336,8 +349,9 @@ async fn find_existing_payloads_empty_candidates(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn batch_insert_inserts_multiple(pool: PgPool) {
+#[tokio::test]
+async fn batch_insert_inserts_multiple() {
+    let pool = test_db!().await;
     let jobs = vec![
         (
             subject_payload("CS"),
@@ -369,8 +383,9 @@ async fn batch_insert_inserts_multiple(pool: PgPool) {
     assert_eq!(count, 3);
 }
 
-#[sqlx::test]
-async fn batch_insert_empty_slice(pool: PgPool) {
+#[tokio::test]
+async fn batch_insert_empty_slice() {
+    let pool = test_db!().await;
     let ctx = make_ctx(pool.clone());
     ctx.scrape_jobs().batch_insert(&[]).await.unwrap();
 
@@ -381,15 +396,17 @@ async fn batch_insert_empty_slice(pool: PgPool) {
     assert_eq!(count, 0);
 }
 
-#[sqlx::test]
-async fn test_queue_depth_empty_queue_returns_zero(pool: PgPool) {
+#[tokio::test]
+async fn test_queue_depth_empty_queue_returns_zero() {
+    let pool = test_db!().await;
     let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
     assert_eq!(depth.count, 0);
     assert_eq!(depth.oldest_seconds, None);
 }
 
-#[sqlx::test]
-async fn test_queue_depth_counts_ready_job_and_ages_it(pool: PgPool) {
+#[tokio::test]
+async fn test_queue_depth_counts_ready_job_and_ages_it() {
+    let pool = test_db!().await;
     sqlx::query(
         "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at, queued_at)
          VALUES ('Subject', '{\"subject\": \"CS\"}', 'Medium', NOW(), NOW() - INTERVAL '90 seconds')",
@@ -407,8 +424,9 @@ async fn test_queue_depth_counts_ready_job_and_ages_it(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_queue_depth_excludes_locked_job(pool: PgPool) {
+#[tokio::test]
+async fn test_queue_depth_excludes_locked_job() {
+    let pool = test_db!().await;
     crate::helpers::insert_scrape_job(
         &pool,
         TargetType::Subject,
@@ -424,8 +442,9 @@ async fn test_queue_depth_excludes_locked_job(pool: PgPool) {
     assert_eq!(depth.count, 0, "actively locked jobs are not backlog");
 }
 
-#[sqlx::test]
-async fn test_queue_depth_excludes_future_execute_at(pool: PgPool) {
+#[tokio::test]
+async fn test_queue_depth_excludes_future_execute_at() {
+    let pool = test_db!().await;
     sqlx::query(
         "INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at)
          VALUES ('Subject', '{\"subject\": \"CS\"}', 'Medium', NOW() + INTERVAL '1 hour')",

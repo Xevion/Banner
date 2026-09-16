@@ -5,6 +5,7 @@
 //! These tests run each key through `search_courses` and pin the row order the
 //! denormalized summary columns are supposed to give.
 
+use crate::helpers::db::test_db;
 use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use assert2::check;
 use banner::banner::Course;
@@ -125,8 +126,9 @@ async fn crns_sorted_by(pool: &PgPool, spec: &str) -> Vec<String> {
     rows.iter().map(|c| c.crn.clone()).collect()
 }
 
-#[sqlx::test]
-async fn test_every_sort_key_executes_against_the_schema(pool: PgPool) {
+#[tokio::test]
+async fn test_every_sort_key_executes_against_the_schema() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let filter = SearchFilter {
@@ -159,8 +161,9 @@ async fn test_every_sort_key_executes_against_the_schema(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_start_time_orders_by_earliest_meeting(pool: PgPool) {
+#[tokio::test]
+async fn test_start_time_orders_by_earliest_meeting() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let asc = crns_sorted_by(&pool, "start_time").await;
@@ -170,8 +173,9 @@ async fn test_start_time_orders_by_earliest_meeting(pool: PgPool) {
     check!(desc == ["30004", "30003", "30001", "30006", "30002", "30005"]);
 }
 
-#[sqlx::test]
-async fn test_end_time_orders_by_earliest_meeting_end(pool: PgPool) {
+#[tokio::test]
+async fn test_end_time_orders_by_earliest_meeting_end() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let asc = crns_sorted_by(&pool, "end_time").await;
@@ -183,8 +187,9 @@ async fn test_end_time_orders_by_earliest_meeting_end(pool: PgPool) {
 
 /// 30003 is longer than 30004 by the week and shorter by the single meeting, so
 /// the two keys cannot be reading the same column.
-#[sqlx::test]
-async fn test_duration_and_weekly_minutes_diverge(pool: PgPool) {
+#[tokio::test]
+async fn test_duration_and_weekly_minutes_diverge() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let duration = crns_sorted_by(&pool, "duration").await;
@@ -199,8 +204,9 @@ async fn test_duration_and_weekly_minutes_diverge(pool: PgPool) {
 
 /// Ascending is Monday-first bit order, not day count: the Friday-only section
 /// sorts after both two-day patterns.
-#[sqlx::test]
-async fn test_days_orders_by_the_monday_first_mask(pool: PgPool) {
+#[tokio::test]
+async fn test_days_orders_by_the_monday_first_mask() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let asc = crns_sorted_by(&pool, "days").await;
@@ -210,8 +216,9 @@ async fn test_days_orders_by_the_monday_first_mask(pool: PgPool) {
     check!(desc == ["30001", "30006", "30004", "30002", "30003", "30005"]);
 }
 
-#[sqlx::test]
-async fn test_seats_open_orders_by_remaining_capacity(pool: PgPool) {
+#[tokio::test]
+async fn test_seats_open_orders_by_remaining_capacity() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let asc = crns_sorted_by(&pool, "seats_open").await;
@@ -221,8 +228,9 @@ async fn test_seats_open_orders_by_remaining_capacity(pool: PgPool) {
     check!(desc == ["30003", "30005", "30002", "30004", "30006", "30001"]);
 }
 
-#[sqlx::test]
-async fn test_course_code_orders_by_catalog_position(pool: PgPool) {
+#[tokio::test]
+async fn test_course_code_orders_by_catalog_position() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let asc = crns_sorted_by(&pool, "course_code").await;
@@ -236,8 +244,9 @@ async fn test_course_code_orders_by_catalog_position(pool: PgPool) {
 
 /// Absence is not a low value, so the unscheduled section stays last when the
 /// ordering is reversed.
-#[sqlx::test]
-async fn test_untimed_section_sinks_in_both_directions(pool: PgPool) {
+#[tokio::test]
+async fn test_untimed_section_sinks_in_both_directions() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     for key in [
@@ -257,8 +266,9 @@ async fn test_untimed_section_sinks_in_both_directions(pool: PgPool) {
 
 /// Sections sharing a sort value fall back to catalog order, the same way round
 /// regardless of the leading term's direction.
-#[sqlx::test]
-async fn test_ties_break_on_catalog_order(pool: PgPool) {
+#[tokio::test]
+async fn test_ties_break_on_catalog_order() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     for spec in ["start_time", "-start_time", "duration", "-duration"] {
@@ -279,8 +289,9 @@ async fn test_ties_break_on_catalog_order(pool: PgPool) {
 
 /// A section that loses its last meeting must have its summary cleared, not
 /// left reading the times it used to have.
-#[sqlx::test]
-async fn test_losing_every_meeting_clears_the_summary(pool: PgPool) {
+#[tokio::test]
+async fn test_losing_every_meeting_clears_the_summary() {
+    let pool = test_db!().await;
     insert_fixture(&pool).await;
 
     let before = crns_sorted_by(&pool, "start_time").await;

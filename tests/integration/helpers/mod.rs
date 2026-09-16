@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod db;
+
 use banner::banner::Course;
 use banner::banner::models::Term;
 use banner::banner::models::meetings::{MeetingTime, MeetingTimeResponse};

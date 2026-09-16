@@ -3,6 +3,7 @@
 //! Covers `open_only`, `subject`, `time_start`, `time_end`, day filters,
 //! and multi-filter combinations including pagination.
 
+use crate::helpers::db::test_db;
 use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
@@ -158,8 +159,9 @@ async fn insert_test_courses(pool: &PgPool) {
         .expect("Failed to insert test courses");
 }
 
-#[sqlx::test]
-async fn test_filter_open_only(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_open_only() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let (crns, total) = search(
@@ -178,8 +180,9 @@ async fn test_filter_open_only(pool: PgPool) {
     assert!(!crns.contains(&"20006".to_owned()), "20006 is full (20/20)");
 }
 
-#[sqlx::test]
-async fn test_filter_by_subject(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_by_subject() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let subjects = vec!["CS".to_owned()];
@@ -203,8 +206,9 @@ async fn test_filter_by_subject(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_filter_by_multiple_subjects(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_by_multiple_subjects() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let subjects = vec!["CS".to_owned(), "MATH".to_owned()];
@@ -228,8 +232,9 @@ async fn test_filter_by_multiple_subjects(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_filter_by_time_start(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_by_time_start() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     // Courses with at least one meeting starting at or after 10:00:00
@@ -261,8 +266,9 @@ async fn test_filter_by_time_start(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_filter_by_time_end(pool: PgPool) {
+#[tokio::test]
+async fn test_filter_by_time_end() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     // Courses with at least one meeting ending at or before 12:00:00
@@ -294,8 +300,9 @@ async fn test_filter_by_time_end(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_combined_subject_and_days(pool: PgPool) {
+#[tokio::test]
+async fn test_combined_subject_and_days() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let subjects = vec!["CS".to_owned()];
@@ -326,8 +333,9 @@ async fn test_combined_subject_and_days(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_combined_open_only_and_days(pool: PgPool) {
+#[tokio::test]
+async fn test_combined_open_only_and_days() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["tuesday".to_owned(), "thursday".to_owned()];
@@ -354,8 +362,9 @@ async fn test_combined_open_only_and_days(pool: PgPool) {
     assert!(!crns.contains(&"20002".to_owned()), "CS 2200 is full");
 }
 
-#[sqlx::test]
-async fn test_combined_days_and_time_range(pool: PgPool) {
+#[tokio::test]
+async fn test_combined_days_and_time_range() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec![
@@ -395,8 +404,9 @@ async fn test_combined_days_and_time_range(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
-async fn test_combined_triple_filter(pool: PgPool) {
+#[tokio::test]
+async fn test_combined_triple_filter() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let subjects = vec!["CS".to_owned(), "PHYS".to_owned()];
@@ -425,8 +435,9 @@ async fn test_combined_triple_filter(pool: PgPool) {
     }
 }
 
-#[sqlx::test]
-async fn test_pagination_with_filters(pool: PgPool) {
+#[tokio::test]
+async fn test_pagination_with_filters() {
+    let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
     let days = vec!["monday".to_owned()];

@@ -1,14 +1,15 @@
+use crate::helpers::db::test_db;
 use banner::data::admin_rmp::{AdminRmpError, accept_candidate, reject_all_candidates};
 use banner::data::rmp::unmatch_instructor;
-use sqlx::PgPool;
 
 /// Test that unmatching an instructor resets accepted candidates back to pending.
 ///
 /// When a user unmatches an instructor, accepted candidates should be reset to
 /// 'pending' so they can be re-matched later. This prevents the bug where
 /// candidates remain 'accepted' but have no corresponding link.
-#[sqlx::test]
-async fn unmatch_resets_accepted_candidates_to_pending(pool: PgPool) {
+#[tokio::test]
+async fn unmatch_resets_accepted_candidates_to_pending() {
+    let pool = test_db!().await;
     // ARRANGE: Create an instructor
     let (instructor_id,): (i32,) = sqlx::query_as(
         "INSERT INTO instructors (display_name, email) 
@@ -95,8 +96,9 @@ async fn unmatch_resets_accepted_candidates_to_pending(pool: PgPool) {
 
 /// Accepting a candidate whose RMP profile another instructor already holds must
 /// name that instructor in a typed error, not in a formatted message.
-#[sqlx::test]
-async fn accept_candidate_reports_the_holder_when_the_profile_is_taken(pool: PgPool) {
+#[tokio::test]
+async fn accept_candidate_reports_the_holder_when_the_profile_is_taken() {
+    let pool = test_db!().await;
     let (claimant_id,): (i32,) = sqlx::query_as(
         "INSERT INTO instructors (display_name, email) \
          VALUES ('Fictional, Bryn', 'bryn@utsa.edu') RETURNING id",
@@ -158,8 +160,9 @@ async fn accept_candidate_reports_the_holder_when_the_profile_is_taken(pool: PgP
 }
 
 /// An instructor with a confirmed match cannot be rejected wholesale.
-#[sqlx::test]
-async fn reject_all_refuses_an_instructor_with_confirmed_matches(pool: PgPool) {
+#[tokio::test]
+async fn reject_all_refuses_an_instructor_with_confirmed_matches() {
+    let pool = test_db!().await;
     let (instructor_id,): (i32,) = sqlx::query_as(
         "INSERT INTO instructors (display_name, email) \
          VALUES ('Test, Instructor', 'test@utsa.edu') RETURNING id",

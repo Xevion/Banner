@@ -1,3 +1,4 @@
+use crate::helpers::db::test_db;
 use banner::data::batch::batch_upsert_courses;
 use sqlx::PgPool;
 
@@ -5,8 +6,9 @@ use sqlx::PgPool;
 /// (crn, subject, course_number, title, enrollment, max_enrollment, wait_count, wait_capacity)
 type CourseRow = (String, String, String, String, i32, i32, i32, i32);
 
-#[sqlx::test]
-async fn test_batch_upsert_empty_slice(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_empty_slice() {
+    let pool = test_db!().await;
     batch_upsert_courses(&[], &pool).await.unwrap();
 
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
@@ -17,8 +19,9 @@ async fn test_batch_upsert_empty_slice(pool: PgPool) {
     assert_eq!(count.0, 0);
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_inserts_new_courses() {
+    let pool = test_db!().await;
     let courses = vec![
         crate::helpers::make_course(
             "10001",
@@ -66,8 +69,9 @@ async fn test_batch_upsert_inserts_new_courses(pool: PgPool) {
     assert_eq!(subject, "MAT");
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_updates_existing(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_updates_existing() {
+    let pool = test_db!().await;
     let initial = vec![crate::helpers::make_course(
         "20001",
         "202510",
@@ -104,8 +108,9 @@ async fn test_batch_upsert_updates_existing(pool: PgPool) {
     assert_eq!(wait_count, 2);
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_mixed_insert_and_update() {
+    let pool = test_db!().await;
     let initial = vec![
         crate::helpers::make_course(
             "30001",
@@ -184,8 +189,9 @@ async fn test_batch_upsert_mixed_insert_and_update(pool: PgPool) {
     assert_eq!(subject, "MAT");
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_unique_constraint_crn_term() {
+    let pool = test_db!().await;
     // Same CRN, different term codes -> should produce two separate rows
     let courses = vec![
         crate::helpers::make_course(
@@ -230,8 +236,9 @@ async fn test_batch_upsert_unique_constraint_crn_term(pool: PgPool) {
     assert_eq!(rows[1].1, 10);
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_creates_audit_and_metric_entries() {
+    let pool = test_db!().await;
     // Insert initial data -- should create a baseline metric but no audits
     let initial = vec![crate::helpers::make_course(
         "50001",
@@ -319,8 +326,9 @@ async fn test_batch_upsert_creates_audit_and_metric_entries(pool: PgPool) {
     assert_eq!(seats, 15); // 35 - 20
 }
 
-#[sqlx::test]
-async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
+#[tokio::test]
+async fn test_batch_upsert_no_change_no_audit() {
+    let pool = test_db!().await;
     // Insert then re-insert identical data -- should produce baseline metric but no audits or extra metrics
     let course = vec![crate::helpers::make_course(
         "60001",
@@ -353,8 +361,9 @@ async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
 }
 
 /// One person reached through both UTSA domains must resolve to a single row.
-#[sqlx::test]
-async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) {
+#[tokio::test]
+async fn test_upsert_instructors_merges_student_and_staff_domains() {
+    let pool = test_db!().await;
     let mut first = crate::helpers::make_course(
         "20001",
         "202510",
@@ -413,8 +422,9 @@ async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) 
 }
 
 /// Both spellings arriving in one batch must not collide in the upsert.
-#[sqlx::test]
-async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool) {
+#[tokio::test]
+async fn test_upsert_instructors_handles_both_domains_in_one_batch() {
+    let pool = test_db!().await;
     let mut a = crate::helpers::make_course(
         "20003",
         "202510",
@@ -455,8 +465,9 @@ async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool)
 }
 
 /// Distinct accounts that merely share a name must stay separate.
-#[sqlx::test]
-async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
+#[tokio::test]
+async fn test_upsert_instructors_keeps_distinct_accounts_apart() {
+    let pool = test_db!().await;
     let mut a =
         crate::helpers::make_course("20005", "202510", "BIO", "1404", "Biology", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
@@ -490,8 +501,9 @@ async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
 /// A tombstone speaks only for an identity whose row is gone. Both spellings of
 /// one account share a canonical form, so the survivor must not match the
 /// tombstone left by its own absorbed twin and stop taking updates.
-#[sqlx::test]
-async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool) {
+#[tokio::test]
+async fn test_survivor_still_takes_updates_after_absorbing_its_twin() {
+    let pool = test_db!().await;
     let mut a =
         crate::helpers::make_course("20017", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
@@ -540,8 +552,9 @@ async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool
 
 /// A merge is a decision about identity, so a later scrape must honour it
 /// rather than recreating the record it absorbed.
-#[sqlx::test]
-async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) {
+#[tokio::test]
+async fn test_absorbed_account_is_not_recreated_by_a_later_scrape() {
+    let pool = test_db!().await;
     let mut a =
         crate::helpers::make_course("20007", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
@@ -607,8 +620,9 @@ async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) 
 
 /// Records with no address are keyed on the display name, and a merge of one
 /// has to hold on the same key.
-#[sqlx::test]
-async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
+#[tokio::test]
+async fn test_absorbed_nameless_record_is_not_recreated() {
+    let pool = test_db!().await;
     let mut a =
         crate::helpers::make_course("20010", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
@@ -664,8 +678,9 @@ async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
 
 /// Merging a survivor onward must carry what it had already absorbed, or the
 /// first decision is quietly dropped.
-#[sqlx::test]
-async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
+#[tokio::test]
+async fn test_chained_merge_keeps_the_earlier_decision() {
+    let pool = test_db!().await;
     let mut a =
         crate::helpers::make_course("20013", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
@@ -767,8 +782,9 @@ async fn seed_distinct_namesakes(pool: &PgPool) -> (i32, i32) {
     (ids[0].0, ids[1].0)
 }
 
-#[sqlx::test]
-async fn test_dismissed_pair_leaves_the_duplicate_list(pool: PgPool) {
+#[tokio::test]
+async fn test_dismissed_pair_leaves_the_duplicate_list() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::{
         dismiss_pair, find_dismissed_pairs, find_duplicate_pairs,
     };
@@ -790,8 +806,9 @@ async fn test_dismissed_pair_leaves_the_duplicate_list(pool: PgPool) {
 }
 
 /// The decision is about identity, so a later scrape must not resurrect it.
-#[sqlx::test]
-async fn test_dismissal_survives_a_later_scrape(pool: PgPool) {
+#[tokio::test]
+async fn test_dismissal_survives_a_later_scrape() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs};
 
     let (a, b) = seed_distinct_namesakes(&pool).await;
@@ -811,8 +828,9 @@ async fn test_dismissal_survives_a_later_scrape(pool: PgPool) {
     assert!(pairs.is_empty(), "the dismissal must survive a rescrape");
 }
 
-#[sqlx::test]
-async fn test_undismissing_returns_the_pair_to_review(pool: PgPool) {
+#[tokio::test]
+async fn test_undismissing_returns_the_pair_to_review() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs, undismiss_pair};
 
     let (a, b) = seed_distinct_namesakes(&pool).await;
@@ -826,8 +844,9 @@ async fn test_undismissing_returns_the_pair_to_review(pool: PgPool) {
     assert_eq!(pairs.len(), 1, "a mistaken dismissal must be reversible");
 }
 
-#[sqlx::test]
-async fn test_dismissing_a_pair_twice_keeps_one_decision(pool: PgPool) {
+#[tokio::test]
+async fn test_dismissing_a_pair_twice_keeps_one_decision() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::dismiss_pair;
 
     let (a, b) = seed_distinct_namesakes(&pool).await;
@@ -842,8 +861,9 @@ async fn test_dismissing_a_pair_twice_keeps_one_decision(pool: PgPool) {
 }
 
 /// A dismissal speaks about two live records, so merging one away must take it.
-#[sqlx::test]
-async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision(pool: PgPool) {
+#[tokio::test]
+async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, merge_instructors};
 
     let (a, b) = seed_distinct_namesakes(&pool).await;
@@ -860,8 +880,9 @@ async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision(pool: PgPo
 
 /// Merging is irreversible, so two records that do not share a name must not
 /// fold together on an id alone.
-#[sqlx::test]
-async fn test_merging_unrelated_records_needs_confirmation(pool: PgPool) {
+#[tokio::test]
+async fn test_merging_unrelated_records_needs_confirmation() {
+    let pool = test_db!().await;
     use banner::data::instructor_merge::merge_instructors;
 
     let mut a =

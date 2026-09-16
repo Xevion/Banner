@@ -1,11 +1,13 @@
 //! Test course search with alphanumeric course numbers (e.g., "015X", "399H").
 
+use crate::helpers::db::test_db;
 use crate::helpers::make_course;
 use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
 
-#[sqlx::test]
-async fn test_search_alphanumeric_course_numbers(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn test_search_alphanumeric_course_numbers() {
+    let pool = test_db!().await;
     let term = "202620";
 
     // Insert courses with both numeric and alphanumeric course numbers
