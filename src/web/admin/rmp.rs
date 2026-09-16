@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use ts_rs::TS;
 
-use crate::data::admin_rmp::{self, ListInstructorsFilter};
+use crate::data::admin_rmp::{self, AdminRmpError, CandidateResponse, ListInstructorsFilter};
 use crate::state::AppState;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
@@ -18,6 +18,51 @@ use crate::web::error::{ApiError, db_error};
 pub use crate::data::admin_rmp::{
     InstructorDetailResponse, ListInstructorsResponse, RescoreResponse,
 };
+
+/// Map an [`AdminRmpError`] to its HTTP status; anything else is a generic 500.
+fn rmp_error(context: &str, e: anyhow::Error) -> ApiError {
+    match e.downcast::<AdminRmpError>() {
+        Ok(err) => match err {
+            AdminRmpError::NoSuchInstructor | AdminRmpError::NoPendingCandidate => {
+                ApiError::not_found(err.to_string())
+            }
+            AdminRmpError::AlreadyLinked { .. } | AdminRmpError::ConfirmedMatches => {
+                ApiError::conflict(err.to_string())
+            }
+        },
+        Err(e) => db_error(context, e),
+    }
+}
+
+/// Describe why a candidate is still waiting, in the reviewer's terms.
+fn explain_block(candidate: &CandidateResponse) -> Option<String> {
+    if candidate.status == "accepted" {
+        return None;
+    }
+    if let Some(holder) = &candidate.claimed_by {
+        return Some(format!("Already linked to {holder}"));
+    }
+    let subject = candidate
+        .score_breakdown
+        .as_ref()
+        .map(|b| b.0.subject)
+        .unwrap_or(0.0);
+    if subject < 1.0 {
+        return Some(
+            "Subject not confirmed: neither the department nor the reviewed courses match what this instructor teaches"
+                .to_string(),
+        );
+    }
+    Some("Held for review: another professor shares this name".to_string())
+}
+
+/// Attach reviewer-facing explanations to every candidate in a detail response.
+fn explain_candidates(mut detail: InstructorDetailResponse) -> InstructorDetailResponse {
+    for candidate in &mut detail.candidates {
+        candidate.blocked_reason = explain_block(candidate);
+    }
+    detail
+}
 
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -96,15 +141,9 @@ pub async fn get_instructor(
 ) -> Result<Json<InstructorDetailResponse>, ApiError> {
     let response = admin_rmp::get_instructor_detail(&state.db_pool, id)
         .await
-        .map_err(|e| {
-            if format!("{e:#}").contains("instructor not found") {
-                ApiError::not_found("instructor not found")
-            } else {
-                db_error("get instructor", e)
-            }
-        })?;
+        .map_err(|e| rmp_error("get instructor", e))?;
 
-    Ok(Json(response))
+    Ok(Json(explain_candidates(response)))
 }
 
 /// `POST /api/admin/instructors/{id}/match` -- Accept a candidate match.
@@ -117,16 +156,7 @@ pub async fn match_instructor(
 ) -> Result<Json<InstructorDetailResponse>, ApiError> {
     admin_rmp::accept_candidate(&state.db_pool, id, body.rmp_legacy_id, user.discord_id)
         .await
-        .map_err(|e| {
-            let msg = format!("{e:#}");
-            if msg.contains("pending candidate not found") {
-                ApiError::not_found("pending candidate not found for this instructor")
-            } else if let Some((_, detail)) = msg.split_once("RMP profile already linked to ") {
-                ApiError::conflict(format!("RMP profile already linked to {detail}"))
-            } else {
-                db_error("match instructor", e)
-            }
-        })?;
+        .map_err(|e| rmp_error("match instructor", e))?;
 
     info!(
         instructor_id = id,
@@ -138,7 +168,7 @@ pub async fn match_instructor(
         .await
         .map_err(|e| db_error("get instructor after match", e))?;
 
-    Ok(Json(detail))
+    Ok(Json(explain_candidates(detail)))
 }
 
 /// `POST /api/admin/instructors/{id}/reject-candidate` -- Reject a single candidate.
@@ -176,18 +206,7 @@ pub async fn reject_all(
 ) -> Result<Json<OkResponse>, ApiError> {
     admin_rmp::reject_all_candidates(&state.db_pool, id, user.discord_id)
         .await
-        .map_err(|e| {
-            let msg = format!("{e:#}");
-            if msg.contains("instructor not found") {
-                ApiError::not_found("instructor not found")
-            } else if msg.contains("cannot reject instructor with confirmed matches") {
-                ApiError::conflict(
-                    "cannot reject instructor with confirmed matches -- unmatch first",
-                )
-            } else {
-                db_error("reject all candidates", e)
-            }
-        })?;
+        .map_err(|e| rmp_error("reject all candidates", e))?;
 
     info!(instructor_id = id, "all RMP candidates rejected");
 
@@ -248,4 +267,129 @@ pub async fn rescore(
     );
 
     Ok(Json(stats))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::rmp_matching::ScoreBreakdown;
+    use crate::web::error::ApiErrorCode;
+    use assert2::check;
+
+    fn candidate(status: &str, claimed_by: Option<&str>, subject: f32) -> CandidateResponse {
+        CandidateResponse {
+            id: 1,
+            rmp_legacy_id: 42,
+            first_name: None,
+            last_name: None,
+            department: None,
+            avg_rating: None,
+            avg_difficulty: None,
+            num_ratings: None,
+            would_take_again_pct: None,
+            score: None,
+            score_breakdown: Some(sqlx::types::Json(ScoreBreakdown {
+                subject,
+                ..ScoreBreakdown::default()
+            })),
+            status: status.to_string(),
+            review_subjects: Vec::new(),
+            review_years: Vec::new(),
+            claimed_by: claimed_by.map(str::to_string),
+            blocked_reason: None,
+        }
+    }
+
+    #[test]
+    fn test_already_linked_maps_to_conflict_naming_the_holder() {
+        let err = anyhow::Error::from(AdminRmpError::AlreadyLinked {
+            instructor_id: 7,
+            display_name: "Fictional, Bryn".to_string(),
+            email: Some("bryn@utsa.edu".to_string()),
+        });
+
+        let api = rmp_error("match instructor", err);
+
+        check!(api.code == ApiErrorCode::Conflict);
+        check!(
+            api.message
+                == "RMP profile already linked to instructor Fictional, Bryn (bryn@utsa.edu, #7)"
+        );
+    }
+
+    #[test]
+    fn test_already_linked_without_email_says_no_email() {
+        let err = anyhow::Error::from(AdminRmpError::AlreadyLinked {
+            instructor_id: 7,
+            display_name: "Fictional, Bryn".to_string(),
+            email: None,
+        });
+
+        let api = rmp_error("match instructor", err);
+
+        check!(
+            api.message
+                == "RMP profile already linked to instructor Fictional, Bryn (no email, #7)"
+        );
+    }
+
+    #[test]
+    fn test_typed_error_survives_added_context() {
+        let err = anyhow::Error::from(AdminRmpError::NoSuchInstructor).context("instructor lookup");
+
+        let api = rmp_error("get instructor", err);
+
+        check!(api.code == ApiErrorCode::NotFound);
+        check!(api.message == "instructor not found");
+    }
+
+    #[test]
+    fn test_missing_candidate_maps_to_not_found() {
+        let api = rmp_error("match instructor", AdminRmpError::NoPendingCandidate.into());
+
+        check!(api.code == ApiErrorCode::NotFound);
+        check!(api.message == "pending candidate not found for this instructor");
+    }
+
+    #[test]
+    fn test_confirmed_matches_map_to_conflict() {
+        let api = rmp_error(
+            "reject all candidates",
+            AdminRmpError::ConfirmedMatches.into(),
+        );
+
+        check!(api.code == ApiErrorCode::Conflict);
+        check!(api.message == "cannot reject instructor with confirmed matches -- unmatch first");
+    }
+
+    #[test]
+    fn test_untyped_error_stays_internal() {
+        let api = rmp_error("reject all candidates", anyhow::anyhow!("connection reset"));
+
+        check!(api.code == ApiErrorCode::InternalError);
+        check!(api.message == "reject all candidates failed");
+    }
+
+    #[test]
+    fn test_accepted_candidate_has_no_blocked_reason() {
+        check!(explain_block(&candidate("accepted", None, 0.0)) == None);
+    }
+
+    #[test]
+    fn test_claimed_candidate_names_the_holder() {
+        let reason = explain_block(&candidate("pending", Some("Fictional, Bryn"), 1.0));
+        check!(reason == Some("Already linked to Fictional, Bryn".to_string()));
+    }
+
+    #[test]
+    fn test_weak_subject_evidence_is_explained() {
+        let reason = explain_block(&candidate("pending", None, 0.4));
+        check!(reason.unwrap().starts_with("Subject not confirmed:"));
+    }
+
+    #[test]
+    fn test_strong_subject_evidence_falls_back_to_shared_name() {
+        let reason = explain_block(&candidate("pending", None, 1.0));
+        check!(reason == Some("Held for review: another professor shares this name".to_string()));
+    }
 }

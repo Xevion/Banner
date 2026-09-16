@@ -809,3 +809,19 @@ pub async fn resolve_instructor_identifier(
 
     Ok(row.and_then(|r| r.slug.map(|slug| (r.id, slug))))
 }
+
+/// When this instructor's composite score was last computed.
+///
+/// The score is the most frequently changing part of a profile, so it stands in
+/// for profile freshness when building an ETag.
+pub async fn get_score_computed_at(
+    pool: &PgPool,
+    instructor_id: i32,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    sqlx::query_scalar("SELECT computed_at FROM instructor_scores WHERE instructor_id = $1")
+        .bind(instructor_id)
+        .fetch_optional(pool)
+        .await
+        .context("failed to fetch instructor score timestamp")
+        .map(Option::flatten)
+}

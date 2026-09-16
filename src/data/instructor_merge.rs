@@ -10,6 +10,22 @@ use std::collections::{HashMap, HashSet};
 use tracing::{debug, info};
 use ts_rs::TS;
 
+/// Domain errors for instructor merge operations.
+///
+/// The web layer downcasts `anyhow::Error` to this type to decide HTTP status codes
+/// instead of fragile string matching.
+#[derive(Debug, thiserror::Error)]
+pub enum MergeError {
+    #[error("cannot merge an instructor into itself")]
+    SelfMerge,
+    #[error("both instructors must exist to merge")]
+    MissingInstructor,
+    #[error("no other instructor holds this RMP profile")]
+    NoClaimant,
+    #[error("records name different people; merge them manually if they are the same")]
+    DifferentPeople,
+}
+
 /// How much evidence there is that two records are the same person.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -230,7 +246,7 @@ pub async fn merge_instructors(
     decided_by: Option<i64>,
 ) -> Result<()> {
     if survivor_id == loser_id {
-        return Err(anyhow!("cannot merge an instructor into itself"));
+        return Err(MergeError::SelfMerge.into());
     }
 
     let mut tx = pool.begin().await.context("failed to begin merge")?;
@@ -245,7 +261,7 @@ pub async fn merge_instructors(
     .context("failed to load merge participants")?;
 
     if sides.len() != 2 {
-        return Err(anyhow!("both instructors must exist to merge"));
+        return Err(MergeError::MissingInstructor.into());
     }
 
     // Course links are keyed on (course_id, instructor_id); both records can
@@ -387,7 +403,7 @@ pub async fn merge_with_claimant(
     .context("failed to find the claiming instructor")?;
 
     let Some((claimant_id,)) = claimant else {
-        return Err(anyhow!("no other instructor holds this RMP profile"));
+        return Err(MergeError::NoClaimant.into());
     };
 
     let names: Vec<(i32, String, Option<String>, i64)> = sqlx::query_as(
@@ -401,12 +417,10 @@ pub async fn merge_with_claimant(
     .context("failed to load merge participants")?;
 
     if names.len() != 2 {
-        return Err(anyhow!("both instructors must exist to merge"));
+        return Err(MergeError::MissingInstructor.into());
     }
     if names[0].1 != names[1].1 {
-        return Err(anyhow!(
-            "records name different people; merge them manually if they are the same"
-        ));
+        return Err(MergeError::DifferentPeople.into());
     }
 
     let staff = |email: &Option<String>| {

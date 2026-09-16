@@ -43,12 +43,12 @@ pub async fn get_instructor(
     }
 
     // Build ETag from instructor score timestamp (most frequently changing data)
-    let score_ts: Option<chrono::DateTime<chrono::Utc>> =
-        sqlx::query_scalar("SELECT computed_at FROM instructor_scores WHERE instructor_id = $1")
-            .bind(instructor_id)
-            .fetch_optional(&state.db_pool)
-            .await
-            .unwrap_or(None);
+    let score_ts = data::instructors::get_score_computed_at(&state.db_pool, instructor_id)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(instructor_id, error = ?e, "Failed to read score timestamp for ETag");
+            None
+        });
 
     let etag = format!("\"i:{}:{}\"", slug, score_ts.map_or(0, |ts| ts.timestamp()));
 

@@ -6,10 +6,19 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, trace};
 use ts_rs::TS;
 
-use crate::data::instructor_merge::{self, DuplicatePair, MergeStats};
+use crate::data::instructor_merge::{self, DuplicatePair, MergeError, MergeStats};
 use crate::state::AppState;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
+
+/// Every merge failure names something the caller can correct, so all of them
+/// are 400s; anything else is a genuine fault and stays a generic 500.
+fn merge_error(context: &str, e: anyhow::Error) -> ApiError {
+    match e.downcast_ref::<MergeError>() {
+        Some(err) => ApiError::bad_request(err.to_string()),
+        None => db_error(context, e),
+    }
+}
 
 #[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -60,14 +69,7 @@ pub async fn merge(
         Some(user.discord_id),
     )
     .await
-    .map_err(|e| {
-        let msg = format!("{e:#}");
-        if msg.contains("must exist") || msg.contains("into itself") {
-            ApiError::bad_request(msg)
-        } else {
-            db_error("merge instructors", e)
-        }
-    })?;
+    .map_err(|e| merge_error("merge instructors", e))?;
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
@@ -103,14 +105,7 @@ pub async fn merge_claimant(
         Some(user.discord_id),
     )
     .await
-    .map_err(|e| {
-        let msg = format!("{e:#}");
-        if msg.contains("no other instructor") || msg.contains("different people") {
-            ApiError::bad_request(msg)
-        } else {
-            db_error("merge with claimant", e)
-        }
-    })?;
+    .map_err(|e| merge_error("merge with claimant", e))?;
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
@@ -145,4 +140,62 @@ pub async fn merge_all(
     );
 
     Ok(Json(stats))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::web::error::ApiErrorCode;
+    use assert2::check;
+
+    #[test]
+    fn test_self_merge_maps_to_bad_request() {
+        let api = merge_error("merge instructors", MergeError::SelfMerge.into());
+
+        check!(api.code == ApiErrorCode::BadRequest);
+        check!(api.message == "cannot merge an instructor into itself");
+    }
+
+    /// The message must survive the data layer annotating the path it failed on.
+    #[test]
+    fn test_missing_instructor_maps_to_bad_request() {
+        let err = anyhow::Error::from(MergeError::MissingInstructor).context("merging");
+        let api = merge_error("merge instructors", err);
+
+        check!(api.code == ApiErrorCode::BadRequest);
+        check!(api.message == "both instructors must exist to merge");
+    }
+
+    #[test]
+    fn test_claimant_errors_map_to_bad_request() {
+        let api = merge_error("merge with claimant", MergeError::NoClaimant.into());
+        check!(api.code == ApiErrorCode::BadRequest);
+        check!(api.message == "no other instructor holds this RMP profile");
+
+        let api = merge_error("merge with claimant", MergeError::DifferentPeople.into());
+        check!(api.code == ApiErrorCode::BadRequest);
+        check!(
+            api.message
+                == "records name different people; merge them manually if they are the same"
+        );
+    }
+
+    /// One failure reads the same whichever endpoint surfaced it.
+    #[test]
+    fn test_missing_instructor_reads_the_same_from_either_endpoint() {
+        let direct = merge_error("merge instructors", MergeError::MissingInstructor.into());
+        let claimant = merge_error("merge with claimant", MergeError::MissingInstructor.into());
+
+        check!(direct.code == claimant.code);
+        check!(direct.message == claimant.message);
+        check!(claimant.code == ApiErrorCode::BadRequest);
+    }
+
+    #[test]
+    fn test_untyped_failure_stays_internal() {
+        let api = merge_error("merge with claimant", anyhow::anyhow!("connection reset"));
+
+        check!(api.code == ApiErrorCode::InternalError);
+        check!(api.message == "merge with claimant failed");
+    }
 }

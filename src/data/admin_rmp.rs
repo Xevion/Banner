@@ -3,7 +3,7 @@
 //! Extracts all SQL from the web admin handlers into pure data functions
 //! that return `anyhow::Result`. The web layer handles HTTP concerns only.
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use serde::Serialize;
 use sqlx::{AssertSqlSafe, PgPool};
 use tracing::warn;
@@ -12,6 +12,29 @@ use ts_rs::TS;
 use crate::data::escape_like;
 use crate::data::models::RmpMatchStatus;
 use crate::data::rmp_matching::ScoreBreakdown;
+
+/// Domain errors for RMP matching admin operations.
+///
+/// The web layer downcasts `anyhow::Error` to this type to decide HTTP status codes
+/// instead of fragile string matching.
+#[derive(Debug, thiserror::Error)]
+pub enum AdminRmpError {
+    #[error("instructor not found")]
+    NoSuchInstructor,
+    #[error("pending candidate not found for this instructor")]
+    NoPendingCandidate,
+    #[error(
+        "RMP profile already linked to instructor {display_name} ({}, #{instructor_id})",
+        .email.as_deref().unwrap_or("no email")
+    )]
+    AlreadyLinked {
+        instructor_id: i32,
+        display_name: String,
+        email: Option<String>,
+    },
+    #[error("cannot reject instructor with confirmed matches -- unmatch first")]
+    ConfirmedMatches,
+}
 
 /// A top-candidate summary shown in the instructor list view.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -135,6 +158,7 @@ pub struct CandidateResponse {
     /// Instructor already holding this RMP profile, if any.
     pub claimed_by: Option<String>,
     /// Why this candidate was not linked automatically.
+    #[sqlx(default)]
     pub blocked_reason: Option<String>,
 }
 
@@ -402,29 +426,9 @@ pub async fn list_instructors(
     })
 }
 
-/// Describe why a candidate is still waiting, in the reviewer's terms.
-fn explain_block(candidate: &CandidateResponse) -> Option<String> {
-    if candidate.status == "accepted" {
-        return None;
-    }
-    if let Some(holder) = &candidate.claimed_by {
-        return Some(format!("Already linked to {holder}"));
-    }
-    let subject = candidate
-        .score_breakdown
-        .as_ref()
-        .map(|b| b.0.subject)
-        .unwrap_or(0.0);
-    if subject < 1.0 {
-        return Some(
-            "Subject not confirmed: neither the department nor the reviewed courses match what this instructor teaches"
-                .to_string(),
-        );
-    }
-    Some("Held for review: another professor shares this name".to_string())
-}
-
 /// Fetch full instructor detail with candidates and linked profiles.
+///
+/// `blocked_reason` is left empty; the web layer fills in reviewer-facing copy.
 pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
     let instructor: Option<(i32, String, Option<String>, String)> = sqlx::query_as(
         "SELECT id, display_name, email, rmp_match_status FROM instructors WHERE id = $1",
@@ -434,9 +438,8 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     .await
     .context("failed to fetch instructor")?;
 
-    let (inst_id, display_name, email, rmp_match_status) = instructor
-        .ok_or_else(|| anyhow!("instructor not found"))
-        .context("instructor lookup")?;
+    let (inst_id, display_name, email, rmp_match_status) =
+        instructor.ok_or(AdminRmpError::NoSuchInstructor)?;
 
     let subjects: Vec<(String,)> = sqlx::query_as(
         "SELECT DISTINCT c.subject FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = $1 ORDER BY c.subject",
@@ -481,8 +484,7 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
                   FROM instructor_rmp_links l2
                   JOIN instructors i2 ON i2.id = l2.instructor_id
                  WHERE l2.rmp_legacy_id = mc.rmp_legacy_id
-                   AND l2.instructor_id <> $1) AS claimed_by,
-               NULL::text AS blocked_reason
+                   AND l2.instructor_id <> $1) AS claimed_by
         FROM rmp_match_candidates mc
         JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id
         WHERE mc.instructor_id = $1
@@ -493,14 +495,6 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     .fetch_all(pool)
     .await
     .context("failed to fetch candidates")?;
-
-    let candidates: Vec<CandidateResponse> = candidates
-        .into_iter()
-        .map(|mut c| {
-            c.blocked_reason = explain_block(&c);
-            c
-        })
-        .collect();
 
     let current_matches = sqlx::query_as::<_, LinkedRmpProfile>(
         r#"
@@ -551,9 +545,8 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
 
 /// Accept a candidate match for an instructor.
 ///
-/// Returns `Ok(())` on success, `Err` with context on failure.
-/// Returns `MatchConflict` details via the error if the RMP profile
-/// is already linked to a different instructor.
+/// Fails with [`AdminRmpError::AlreadyLinked`] if the RMP profile already belongs
+/// to a different instructor.
 pub async fn accept_candidate(
     pool: &PgPool,
     instructor_id: i32,
@@ -571,7 +564,7 @@ pub async fn accept_candidate(
     .context("failed to check candidate")?;
 
     if candidate.is_none() {
-        return Err(anyhow!("pending candidate not found for this instructor"));
+        return Err(AdminRmpError::NoPendingCandidate.into());
     }
 
     // Check if this RMP profile is already linked to a different instructor
@@ -588,7 +581,6 @@ pub async fn accept_candidate(
     .context("failed to check rmp uniqueness")?;
 
     if let Some((other_id, other_name, other_email)) = conflict {
-        let email = other_email.unwrap_or_else(|| "no email".to_string());
         // Reaching this point means a candidate was offered that could never be
         // accepted, so the queue showed the reviewer a dead end.
         warn!(
@@ -597,10 +589,12 @@ pub async fn accept_candidate(
             holder_id = other_id,
             "Unacceptable RMP candidate was offered for review"
         );
-        return Err(anyhow!(
-            "RMP profile already linked to instructor {other_name} ({email}, #{other_id})"
-        ))
-        .context("conflict");
+        return Err(AdminRmpError::AlreadyLinked {
+            instructor_id: other_id,
+            display_name: other_name,
+            email: other_email,
+        }
+        .into());
     }
 
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
@@ -695,12 +689,10 @@ pub async fn reject_all_candidates(
             .await
             .context("failed to fetch instructor status")?;
 
-    let (status,) = current_status.ok_or_else(|| anyhow!("instructor not found"))?;
+    let (status,) = current_status.ok_or(AdminRmpError::NoSuchInstructor)?;
 
     if status == "confirmed" {
-        return Err(anyhow!(
-            "cannot reject instructor with confirmed matches -- unmatch first"
-        ));
+        return Err(AdminRmpError::ConfirmedMatches.into());
     }
 
     sqlx::query("UPDATE instructors SET rmp_match_status = 'rejected' WHERE id = $1")

@@ -1,5 +1,6 @@
 mod helpers;
 
+use banner::data::admin_rmp::{AdminRmpError, accept_candidate, reject_all_candidates};
 use banner::data::rmp::unmatch_instructor;
 use sqlx::PgPool;
 
@@ -98,5 +99,93 @@ async fn unmatch_resets_accepted_candidates_to_pending(pool: PgPool) {
     assert_eq!(
         instructor_status, "unmatched",
         "instructor should be unmatched"
+    );
+}
+
+/// Accepting a candidate whose RMP profile another instructor already holds must
+/// name that instructor in a typed error, not in a formatted message.
+#[sqlx::test]
+async fn accept_candidate_reports_the_holder_when_the_profile_is_taken(pool: PgPool) {
+    let (claimant_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email) \
+         VALUES ('Fictional, Bryn', 'bryn@utsa.edu') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to create claiming instructor");
+
+    let (instructor_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email) \
+         VALUES ('Fictional, Bryn', 'bryn@my.utsa.edu') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to create instructor");
+
+    sqlx::query(
+        "INSERT INTO rmp_professors (legacy_id, graphql_id, first_name, last_name, num_ratings) \
+         VALUES (9999998, 'taken-graphql-id', 'Bryn', 'Fictional', 12)",
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to create rmp professor");
+
+    sqlx::query(
+        "INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source) \
+         VALUES ($1, 9999998, 'manual')",
+    )
+    .bind(claimant_id)
+    .execute(&pool)
+    .await
+    .expect("failed to create link");
+
+    sqlx::query(
+        "INSERT INTO rmp_match_candidates (instructor_id, rmp_legacy_id, score, status) \
+         VALUES ($1, 9999998, 0.9, 'pending')",
+    )
+    .bind(instructor_id)
+    .execute(&pool)
+    .await
+    .expect("failed to create candidate");
+
+    let err = accept_candidate(&pool, instructor_id, 9999998, 1)
+        .await
+        .expect_err("accepting a taken profile should fail");
+
+    match err.downcast_ref::<AdminRmpError>() {
+        Some(AdminRmpError::AlreadyLinked {
+            instructor_id: holder,
+            display_name,
+            email,
+        }) => {
+            assert_eq!(*holder, claimant_id);
+            assert_eq!(display_name, "Fictional, Bryn");
+            assert_eq!(email.as_deref(), Some("bryn@utsa.edu"));
+        }
+        other => panic!("expected AlreadyLinked, got {other:?}"),
+    }
+}
+
+/// An instructor with a confirmed match cannot be rejected wholesale.
+#[sqlx::test]
+async fn reject_all_refuses_an_instructor_with_confirmed_matches(pool: PgPool) {
+    let (instructor_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email, rmp_match_status) \
+         VALUES ('Test, Instructor', 'test@utsa.edu', 'confirmed') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to create instructor");
+
+    let err = reject_all_candidates(&pool, instructor_id, 1)
+        .await
+        .expect_err("rejecting a confirmed instructor should fail");
+
+    assert!(
+        matches!(
+            err.downcast_ref::<AdminRmpError>(),
+            Some(AdminRmpError::ConfirmedMatches)
+        ),
+        "expected ConfirmedMatches, got {err:?}"
     );
 }

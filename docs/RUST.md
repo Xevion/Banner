@@ -74,6 +74,30 @@ crossing the boundary forces you to name the failure.
 - `OptionNotFoundExt::or_not_found(entity, id)` turns `None` into a 404.
 - `SqlxResultExt::conflict_on_unique(msg)` turns a PostgreSQL `23505` violation into a 409.
 
+When a data-layer failure needs a specific status or carries structured detail, give the
+module a `thiserror` enum and downcast it in the handler rather than matching on message
+text. `AdminRmpError`, `MergeError` and `BluebookError` follow this shape.
+
+```rust
+// Data layer: a named failure, with the conflicting row as data
+#[derive(Debug, thiserror::Error)]
+pub enum AdminRmpError {
+    #[error("instructor not found")]
+    NoSuchInstructor,
+    #[error("RMP profile already linked to {display_name}")]
+    AlreadyLinked { instructor_id: i32, display_name: String },
+}
+
+// Web layer: downcast, then map each variant to its status
+match err.downcast::<AdminRmpError>() {
+    Ok(AdminRmpError::NoSuchInstructor) => ApiError::not_found("Instructor not found"),
+    Ok(e @ AdminRmpError::AlreadyLinked { .. }) => ApiError::conflict(e.to_string()),
+    Err(other) => db_error(context, other),
+}
+```
+
+Downcasting survives an added `.context()`, so the data layer can still annotate the path.
+
 ```rust
 // Data layer: anyhow::Result plus context
 pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
