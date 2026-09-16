@@ -125,6 +125,55 @@ jobs:
       - name: Run tests
         run: cargo nextest run --no-default-features
 
+      - name: Install sqlx-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sqlx-cli
+
+      # A query-text change already fails the offline build on a hash mismatch.
+      # This catches the other half: a migration that changes a column's type or
+      # nullability while every query stays byte-identical.
+      - name: Verify .sqlx matches the live schema
+        env:
+          SQLX_OFFLINE: "false"
+        run: |
+          cargo sqlx migrate run
+          cargo sqlx prepare --check
+
+  bindings-check:
+    name: Bindings Up To Date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SQLX_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y mold
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      - name: Regenerate bindings
+        run: bunx @xevion/tempo bindings
+
+      # Staged rather than a bare diff so an added or deleted binding counts too.
+      - name: Fail if the committed bindings are stale
+        run: |
+          git add -A web/src/lib/bindings
+          git diff --cached --exit-code -- web/src/lib/bindings
+
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
