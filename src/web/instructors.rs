@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::response::Json;
 
 use crate::data;
-use crate::data::instructors::{IdentifierKind, PublicInstructorListParams, classify_identifier};
+use crate::data::instructors::PublicInstructorListParams;
 use crate::state::AppState;
 use crate::web::courses::{CourseResponse, build_course_response};
 use crate::web::error::{ApiError, OptionNotFoundExt, db_error};
@@ -38,7 +38,7 @@ pub async fn get_instructor(
             .or_not_found("Instructor", &raw)?;
 
     // Non-canonical identifier: redirect to the canonical slug URL
-    if !matches!(classify_identifier(&raw), IdentifierKind::Slug) {
+    if raw != slug {
         return Ok(Redirect::permanent(&format!("/api/instructors/{slug}")).into_response());
     }
 
@@ -103,7 +103,7 @@ pub async fn get_instructor_sections(
 
     // Non-canonical: redirect, preserving the raw ?term= value so the redirect
     // target can still resolve "fall2025"-style aliases.
-    if !matches!(classify_identifier(&raw), IdentifierKind::Slug) {
+    if raw != slug {
         let uri = format!("/api/instructors/{slug}/sections?term={}", params.term);
         return Ok(Redirect::permanent(&uri).into_response());
     }

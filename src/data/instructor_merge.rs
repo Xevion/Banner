@@ -6,7 +6,7 @@
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::{debug, info};
 use ts_rs::TS;
 
@@ -27,6 +27,14 @@ impl DuplicateTier {
     /// Whether this tier may merge without a human confirming it.
     pub fn is_auto_mergeable(self) -> bool {
         matches!(self, Self::SameAccount)
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::SameAccount => "same_account",
+            Self::MissingEmail => "missing_email",
+            Self::DifferentAccount => "different_account",
+        }
     }
 }
 
@@ -87,6 +95,16 @@ fn status_rank(status: &str) -> u8 {
     }
 }
 
+/// One participant in a merge, as the transaction needs it.
+#[derive(sqlx::FromRow)]
+struct MergeSide {
+    id: i32,
+    rmp_match_status: String,
+    email: Option<String>,
+    display_name: String,
+    slug: Option<String>,
+}
+
 #[derive(sqlx::FromRow)]
 struct InstructorRow {
     id: i32,
@@ -130,8 +148,8 @@ fn pick_survivor<'a>(
 }
 
 /// Classify a pair by how strongly the two records are tied together.
-fn classify(a: &InstructorRow, b: &InstructorRow) -> DuplicateTier {
-    match (a.email.as_deref(), b.email.as_deref()) {
+fn classify(a: Option<&str>, b: Option<&str>) -> DuplicateTier {
+    match (a, b) {
         (Some(x), Some(y)) if canonical_email(x) == canonical_email(y) => {
             DuplicateTier::SameAccount
         }
@@ -183,7 +201,7 @@ pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
                 let (survivor, loser) = pick_survivor(a, b);
                 let subjects_overlap = survivor.subjects.iter().any(|s| loser.subjects.contains(s));
                 pairs.push(DuplicatePair {
-                    tier: classify(a, b),
+                    tier: classify(a.email.as_deref(), b.email.as_deref()),
                     survivor: survivor.into(),
                     loser: loser.into(),
                     subjects_overlap,
@@ -205,19 +223,26 @@ pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
 ///
 /// Every dependent row moves across; rows that would collide with one the
 /// survivor already has are dropped rather than duplicated.
-pub async fn merge_instructors(pool: &PgPool, survivor_id: i32, loser_id: i32) -> Result<()> {
+pub async fn merge_instructors(
+    pool: &PgPool,
+    survivor_id: i32,
+    loser_id: i32,
+    decided_by: Option<i64>,
+) -> Result<()> {
     if survivor_id == loser_id {
         return Err(anyhow!("cannot merge an instructor into itself"));
     }
 
     let mut tx = pool.begin().await.context("failed to begin merge")?;
 
-    let sides: Vec<(i32, String, Option<String>)> =
-        sqlx::query_as("SELECT id, rmp_match_status, email FROM instructors WHERE id = ANY($1)")
-            .bind(vec![survivor_id, loser_id])
-            .fetch_all(&mut *tx)
-            .await
-            .context("failed to load merge participants")?;
+    let sides: Vec<MergeSide> = sqlx::query_as(
+        "SELECT id, rmp_match_status, email, display_name, slug \
+         FROM instructors WHERE id = ANY($1)",
+    )
+    .bind(vec![survivor_id, loser_id])
+    .fetch_all(&mut *tx)
+    .await
+    .context("failed to load merge participants")?;
 
     if sides.len() != 2 {
         return Err(anyhow!("both instructors must exist to merge"));
@@ -280,25 +305,54 @@ pub async fn merge_instructors(pool: &PgPool, survivor_id: i32, loser_id: i32) -
             .context("failed to clear loser rows")?;
     }
 
-    let survivor = sides.iter().find(|(id, _, _)| *id == survivor_id);
-    let loser = sides.iter().find(|(id, _, _)| *id == loser_id);
-    if let (Some((_, s_status, s_email)), Some((_, l_status, l_email))) = (survivor, loser) {
-        let status = if status_rank(l_status) > status_rank(s_status) {
-            l_status
-        } else {
-            s_status
-        };
-        // Keep an address if the survivor lacked one.
-        let email = s_email.clone().or_else(|| l_email.clone());
+    let survivor = sides
+        .iter()
+        .find(|s| s.id == survivor_id)
+        .ok_or_else(|| anyhow!("survivor missing from merge participants"))?;
+    let loser = sides
+        .iter()
+        .find(|s| s.id == loser_id)
+        .ok_or_else(|| anyhow!("loser missing from merge participants"))?;
 
-        sqlx::query("UPDATE instructors SET rmp_match_status = $1, email = $2 WHERE id = $3")
-            .bind(status)
-            .bind(email)
-            .bind(survivor_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to update survivor")?;
-    }
+    let status = if status_rank(&loser.rmp_match_status) > status_rank(&survivor.rmp_match_status) {
+        &loser.rmp_match_status
+    } else {
+        &survivor.rmp_match_status
+    };
+    // Keep an address if the survivor lacked one.
+    let email = survivor.email.clone().or_else(|| loser.email.clone());
+
+    sqlx::query("UPDATE instructors SET rmp_match_status = $1, email = $2 WHERE id = $3")
+        .bind(status)
+        .bind(email)
+        .bind(survivor_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to update survivor")?;
+
+    // Anything the loser had already absorbed must follow it across, or deleting
+    // the loser would cascade those records away and let the scrape rebuild them.
+    sqlx::query("UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2")
+        .bind(survivor_id)
+        .bind(loser_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to move earlier merges")?;
+
+    sqlx::query(
+        "INSERT INTO instructor_merges \
+             (survivor_id, absorbed_email, absorbed_display_name, absorbed_slug, tier, decided_by) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(survivor_id)
+    .bind(loser.email.as_deref())
+    .bind(&loser.display_name)
+    .bind(loser.slug.as_deref())
+    .bind(classify(survivor.email.as_deref(), loser.email.as_deref()).as_str())
+    .bind(decided_by)
+    .execute(&mut *tx)
+    .await
+    .context("failed to record the merge")?;
 
     sqlx::query("DELETE FROM instructors WHERE id = $1")
         .bind(loser_id)
@@ -321,6 +375,7 @@ pub async fn merge_with_claimant(
     pool: &PgPool,
     instructor_id: i32,
     rmp_legacy_id: i32,
+    decided_by: Option<i64>,
 ) -> Result<(i32, i32)> {
     let claimant: Option<(i32,)> = sqlx::query_as(
         "SELECT instructor_id FROM instructor_rmp_links \
@@ -367,8 +422,54 @@ pub async fn merge_with_claimant(
         (names[1].0, names[0].0)
     };
 
-    merge_instructors(pool, survivor, loser).await?;
+    merge_instructors(pool, survivor, loser, decided_by).await?;
     Ok((survivor, loser))
+}
+
+/// Resolve absorbed identities to the record that now represents them.
+///
+/// Returns canonical address -> survivor for the addresses given, and display
+/// name -> survivor for absorbed records that never carried one.
+pub async fn resolve_absorbed(
+    emails: &[String],
+    display_names: &[String],
+    conn: &mut sqlx::PgConnection,
+) -> Result<(HashMap<String, i32>, HashMap<String, i32>)> {
+    // Absorbed addresses are stored as scraped, so both spellings of each
+    // account have to be asked for.
+    let mut variants: HashSet<String> = HashSet::new();
+    for email in emails {
+        let canon = canonical_email(email);
+        if let Some((local, domain)) = canon.split_once('@') {
+            variants.insert(format!("{local}@my.{domain}"));
+        }
+        variants.insert(email.to_lowercase());
+        variants.insert(canon);
+    }
+    let variants: Vec<String> = variants.into_iter().collect();
+
+    let rows: Vec<(Option<String>, String, i32)> = sqlx::query_as(
+        "SELECT absorbed_email, absorbed_display_name, survivor_id FROM instructor_merges \
+         WHERE (absorbed_email IS NOT NULL AND absorbed_email = ANY($1)) \
+            OR (absorbed_email IS NULL AND absorbed_display_name = ANY($2) \
+                AND NOT EXISTS (SELECT 1 FROM instructors i \
+                    WHERE i.email IS NULL AND i.display_name = absorbed_display_name))",
+    )
+    .bind(&variants)
+    .bind(display_names)
+    .fetch_all(&mut *conn)
+    .await
+    .context("failed to resolve absorbed instructors")?;
+
+    let mut by_email = HashMap::new();
+    let mut by_name = HashMap::new();
+    for (email, name, survivor) in rows {
+        match email {
+            Some(email) => by_email.insert(canonical_email(&email), survivor),
+            None => by_name.insert(name, survivor),
+        };
+    }
+    Ok((by_email, by_name))
 }
 
 /// Merge every pair whose tier needs no human confirmation.
@@ -381,7 +482,7 @@ pub async fn auto_merge_duplicates(pool: &PgPool) -> Result<MergeStats> {
             stats.skipped += 1;
             continue;
         }
-        match merge_instructors(pool, pair.survivor.id, pair.loser.id).await {
+        match merge_instructors(pool, pair.survivor.id, pair.loser.id, None).await {
             Ok(()) => stats.merged += 1,
             Err(e) => {
                 stats.skipped += 1;

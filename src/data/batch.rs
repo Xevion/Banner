@@ -903,12 +903,24 @@ async fn upsert_instructors(
     let mut by_email = HashMap::new();
     let mut by_display_name = HashMap::new();
 
+    // A merged-away identity resolves to its survivor instead of being reinserted.
+    let (absorbed_emails, absorbed_names) =
+        crate::data::instructor_merge::resolve_absorbed(&e_emails, &ne_display_names, &mut *conn)
+            .await?;
+
     // Phase 1: Upsert instructors with email
     if !e_display_names.is_empty() {
         // UTSA hands one person both a student and a staff address. Resolve each
         // incoming address to the row that already holds the account, so the
         // same person does not get a second record.
         let stored_by_canonical = existing_emails_by_canonical(&e_emails, &mut *conn).await?;
+
+        // Both spellings of one account share a canonical form, so a survivor
+        // matches the tombstone of the twin it absorbed. A live row always wins.
+        let absorbed_emails: HashMap<String, i32> = absorbed_emails
+            .into_iter()
+            .filter(|(canon, _)| !stored_by_canonical.contains_key(canon))
+            .collect();
 
         // Both spellings can also arrive together in one batch, with no row yet
         // for either. Pick one representative, favouring the staff address.
@@ -946,6 +958,9 @@ async fn upsert_instructors(
         let mut u_first_names: Vec<Option<String>> = Vec::new();
         let mut u_last_names: Vec<Option<String>> = Vec::new();
         for (idx, email) in resolved.iter().enumerate() {
+            if absorbed_emails.contains_key(&canonical_email(&e_emails[idx])) {
+                continue;
+            }
             if seen_resolved.insert(email.clone()) {
                 u_emails.push(email.clone());
                 u_display_names.push(e_display_names[idx].clone());
@@ -996,12 +1011,33 @@ async fn upsert_instructors(
             .iter()
             .zip(resolved.iter())
             .filter_map(|(original, stored)| {
+                if let Some(survivor) = absorbed_emails.get(&canonical_email(original)) {
+                    return Some((original.clone(), *survivor));
+                }
                 by_stored.get(stored).map(|id| (original.clone(), *id))
             })
             .collect();
     }
 
     // Phase 2: Upsert instructors without email
+    by_display_name.extend(absorbed_names.iter().map(|(n, id)| (n.clone(), *id)));
+    let (ne_display_names, ne_first_names, ne_last_names) = {
+        let keep: Vec<usize> = (0..ne_display_names.len())
+            .filter(|&i| !absorbed_names.contains_key(&ne_display_names[i]))
+            .collect();
+        (
+            keep.iter()
+                .map(|&i| ne_display_names[i].clone())
+                .collect::<Vec<_>>(),
+            keep.iter()
+                .map(|&i| ne_first_names[i].clone())
+                .collect::<Vec<_>>(),
+            keep.iter()
+                .map(|&i| ne_last_names[i].clone())
+                .collect::<Vec<_>>(),
+        )
+    };
+
     if !ne_display_names.is_empty() {
         let first_name_refs: Vec<Option<&str>> =
             ne_first_names.iter().map(|s| s.as_deref()).collect();
@@ -1032,7 +1068,7 @@ async fn upsert_instructors(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {}", e))?;
 
-        by_display_name = rows.into_iter().map(|(id, name)| (name, id)).collect();
+        by_display_name.extend(rows.into_iter().map(|(id, name)| (name, id)));
     }
 
     Ok(InstructorLookup {

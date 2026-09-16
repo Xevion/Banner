@@ -792,5 +792,20 @@ pub async fn resolve_instructor_identifier(
         }
     };
 
+    // A merged-away record keeps its published URL, which no longer names a row.
+    let row = match row {
+        Some(row) => Some(row),
+        None => {
+            sqlx::query_as(
+                "SELECT i.id, i.slug FROM instructor_merges m \
+                 JOIN instructors i ON i.id = m.survivor_id \
+                 WHERE m.absorbed_slug = $1",
+            )
+            .bind(raw)
+            .fetch_optional(pool)
+            .await?
+        }
+    };
+
     Ok(row.and_then(|r| r.slug.map(|slug| (r.id, slug))))
 }

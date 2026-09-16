@@ -486,3 +486,242 @@ async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
         "different accounts must remain separate records"
     );
 }
+
+/// A tombstone speaks only for an identity whose row is gone. Both spellings of
+/// one account share a canonical form, so the survivor must not match the
+/// tombstone left by its own absorbed twin and stop taking updates.
+#[sqlx::test]
+async fn test_survivor_still_takes_updates_after_absorbing_its_twin(pool: PgPool) {
+    let mut a = helpers::make_course("20017", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Dara",
+        Some("dara.fictional@utsa.edu"),
+        20017,
+        "202510",
+    )];
+    batch_upsert_courses(&[a], &pool).await.unwrap();
+
+    let survivor: (i32,) = sqlx::query_as("SELECT id FROM instructors LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        "INSERT INTO instructor_merges \
+             (survivor_id, absorbed_email, absorbed_display_name, tier) \
+         VALUES ($1, 'dara.fictional@my.utsa.edu', 'Fictional, Dara', 'same_account')",
+    )
+    .bind(survivor.0)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut renamed =
+        helpers::make_course("20018", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    renamed.faculty = vec![helpers::make_faculty(
+        "Fictional, Dara Q",
+        Some("dara.fictional@utsa.edu"),
+        20018,
+        "202520",
+    )];
+    batch_upsert_courses(&[renamed], &pool).await.unwrap();
+
+    let rows: Vec<(i32, String)> = sqlx::query_as("SELECT id, display_name FROM instructors")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1, "no new record should appear");
+    assert_eq!(
+        rows[0].1, "Fictional, Dara Q",
+        "the live record must keep taking updates from the scrape"
+    );
+}
+
+/// A merge is a decision about identity, so a later scrape must honour it
+/// rather than recreating the record it absorbed.
+#[sqlx::test]
+async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) {
+    let mut a = helpers::make_course("20007", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Aster",
+        Some("abc123@my.utsa.edu"),
+        20007,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course("20008", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Fictional, Aster",
+        Some("aster.fictional@utsa.edu"),
+        20008,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b], &pool).await.unwrap();
+
+    let ids: Vec<(i32, Option<String>)> =
+        sqlx::query_as("SELECT id, email FROM instructors ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(ids.len(), 2, "distinct accounts start as separate records");
+
+    let survivor = ids[0].0;
+    let absorbed = ids[1].0;
+    banner::data::instructor_merge::merge_instructors(&pool, survivor, absorbed, None)
+        .await
+        .unwrap();
+
+    // The absorbed address comes back on the next scrape.
+    let mut again =
+        helpers::make_course("20009", "202520", "AST", "2013", "Planets", (5, 30, 0, 0));
+    again.faculty = vec![helpers::make_faculty(
+        "Fictional, Aster",
+        Some("aster.fictional@utsa.edu"),
+        20009,
+        "202520",
+    )];
+    batch_upsert_courses(&[again], &pool).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 1, "the merge must survive a rescrape");
+
+    let landed: (i32,) = sqlx::query_as(
+        "SELECT ci.instructor_id FROM course_instructors ci \
+         JOIN courses c ON c.id = ci.course_id WHERE c.crn = '20009'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        landed.0, survivor,
+        "the new section belongs to the survivor"
+    );
+}
+
+/// Records with no address are keyed on the display name, and a merge of one
+/// has to hold on the same key.
+#[sqlx::test]
+async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
+    let mut a = helpers::make_course("20010", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Bryn",
+        None,
+        20010,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course("20011", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Fictional, Bryn Q",
+        Some("bryn.fictional@utsa.edu"),
+        20011,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b], &pool).await.unwrap();
+
+    let ids: Vec<(i32,)> =
+        sqlx::query_as("SELECT id FROM instructors WHERE email IS NULL ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let nameless = ids[0].0;
+    let survivor: (i32,) =
+        sqlx::query_as("SELECT id FROM instructors WHERE email IS NOT NULL LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    banner::data::instructor_merge::merge_instructors(&pool, survivor.0, nameless, None)
+        .await
+        .unwrap();
+
+    let mut again = helpers::make_course("20012", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![helpers::make_faculty(
+        "Fictional, Bryn",
+        None,
+        20012,
+        "202520",
+    )];
+    batch_upsert_courses(&[again], &pool).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors WHERE email IS NULL")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 0, "the absorbed nameless record must not return");
+}
+
+/// Merging a survivor onward must carry what it had already absorbed, or the
+/// first decision is quietly dropped.
+#[sqlx::test]
+async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
+    let mut a = helpers::make_course("20013", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Cyrus",
+        Some("xyz789@my.utsa.edu"),
+        20013,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course("20014", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Fictional, Cyrus",
+        Some("cyrus.fictional@utsa.edu"),
+        20014,
+        "202510",
+    )];
+
+    let mut c = helpers::make_course("20015", "202510", "AST", "3013", "Galaxies", (5, 30, 0, 0));
+    c.faculty = vec![helpers::make_faculty(
+        "Fictional, Cyrus",
+        Some("cyrus.fictional2@utsa.edu"),
+        20015,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b, c], &pool).await.unwrap();
+
+    let ids: Vec<(i32,)> = sqlx::query_as("SELECT id FROM instructors ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(ids.len(), 3);
+    let (first, second, third) = (ids[0].0, ids[1].0, ids[2].0);
+
+    banner::data::instructor_merge::merge_instructors(&pool, second, first, None)
+        .await
+        .unwrap();
+    banner::data::instructor_merge::merge_instructors(&pool, third, second, None)
+        .await
+        .unwrap();
+
+    // The address absorbed by the first merge returns on a later scrape.
+    let mut again = helpers::make_course("20016", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![helpers::make_faculty(
+        "Fictional, Cyrus",
+        Some("xyz789@my.utsa.edu"),
+        20016,
+        "202520",
+    )];
+    batch_upsert_courses(&[again], &pool).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 1, "both merges must still hold");
+
+    let landed: (i32,) = sqlx::query_as(
+        "SELECT ci.instructor_id FROM course_instructors ci \
+         JOIN courses c ON c.id = ci.course_id WHERE c.crn = '20016'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(landed.0, third, "the section lands on the final survivor");
+}

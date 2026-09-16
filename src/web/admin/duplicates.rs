@@ -49,20 +49,25 @@ pub async fn list_duplicates(
 /// `POST /api/admin/instructors/merge` -- Fold one instructor record into another.
 #[instrument(skip_all, fields(survivor_id, loser_id))]
 pub async fn merge(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     Json(body): Json<MergeBody>,
 ) -> Result<Json<MergeResponse>, ApiError> {
-    instructor_merge::merge_instructors(&state.db_pool, body.survivor_id, body.loser_id)
-        .await
-        .map_err(|e| {
-            let msg = format!("{e:#}");
-            if msg.contains("must exist") || msg.contains("into itself") {
-                ApiError::bad_request(msg)
-            } else {
-                db_error("merge instructors", e)
-            }
-        })?;
+    instructor_merge::merge_instructors(
+        &state.db_pool,
+        body.survivor_id,
+        body.loser_id,
+        Some(user.discord_id),
+    )
+    .await
+    .map_err(|e| {
+        let msg = format!("{e:#}");
+        if msg.contains("must exist") || msg.contains("into itself") {
+            ApiError::bad_request(msg)
+        } else {
+            db_error("merge instructors", e)
+        }
+    })?;
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
@@ -86,22 +91,26 @@ pub struct MergeClaimantBody {
 /// candidate by merging this record into the one already holding the profile.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn merge_claimant(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<i32>,
     Json(body): Json<MergeClaimantBody>,
 ) -> Result<Json<MergeResponse>, ApiError> {
-    let (survivor, loser) =
-        instructor_merge::merge_with_claimant(&state.db_pool, id, body.rmp_legacy_id)
-            .await
-            .map_err(|e| {
-                let msg = format!("{e:#}");
-                if msg.contains("no other instructor") || msg.contains("different people") {
-                    ApiError::bad_request(msg)
-                } else {
-                    db_error("merge with claimant", e)
-                }
-            })?;
+    let (survivor, loser) = instructor_merge::merge_with_claimant(
+        &state.db_pool,
+        id,
+        body.rmp_legacy_id,
+        Some(user.discord_id),
+    )
+    .await
+    .map_err(|e| {
+        let msg = format!("{e:#}");
+        if msg.contains("no other instructor") || msg.contains("different people") {
+            ApiError::bad_request(msg)
+        } else {
+            db_error("merge with claimant", e)
+        }
+    })?;
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
