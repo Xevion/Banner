@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{info, trace, warn};
 
-use crate::services::{Service, ServiceResult, run_service};
+use crate::runtime::{Service, ServiceResult, run_service};
 
 /// Manages multiple services and their lifecycle
 pub struct ServiceManager {

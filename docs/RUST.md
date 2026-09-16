@@ -10,7 +10,7 @@ Strict layering for data integrity:
 
 ```
 web/ (HTTP handlers)
-  -> services/ (business logic, background tasks)
+  -> services/ (business logic)
     -> data/ (database access, domain queries)
       -> DB (PostgreSQL via SQLx)
 ```
@@ -39,8 +39,8 @@ src/
 +-- db/           # Pool initialization, migrations, DbContext
 +-- events/       # Event buffer and publishing
 +-- rmp/          # RateMyProfessors GraphQL client
++-- runtime/      # Process supervision: Service trait, ServiceManager, shutdown
 +-- scraper/      # Scheduler + Worker, job queue processing
-+-- services/     # Service orchestration, startup/shutdown
 +-- state.rs      # AppState (Arc-wrapped)
 +-- utils/        # Shared utilities
 +-- web/          # HTTP routes, extractors, auth, WebSocket

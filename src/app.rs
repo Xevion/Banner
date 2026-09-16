@@ -1,14 +1,14 @@
 use crate::banner::BannerApi;
 use crate::cli::ServiceName;
 use crate::config::Config;
+use crate::runtime::bot::BotService;
+use crate::runtime::manager::ServiceManager;
+use crate::runtime::metrics::MetricsService;
+use crate::runtime::notifications::NotificationService;
+use crate::runtime::ssr::SsrService;
+use crate::runtime::web::WebService;
 use crate::scraper::ScraperService;
 use crate::scraper::scheduler::KV_TERM_SYNC;
-use crate::services::bot::BotService;
-use crate::services::manager::ServiceManager;
-use crate::services::metrics::MetricsService;
-use crate::services::notifications::NotificationService;
-use crate::services::ssr::SsrService;
-use crate::services::web::WebService;
 use crate::state::AppState;
 use crate::utils::fmt_duration;
 use crate::web::auth::AuthConfig;
@@ -326,7 +326,7 @@ impl App {
 
     /// Run the application and handle shutdown signals
     pub async fn run(self) -> ExitCode {
-        use crate::services::signals::handle_shutdown_signals;
+        use crate::runtime::signals::handle_shutdown_signals;
         handle_shutdown_signals(self.service_manager, self.config.shutdown_timeout).await
     }
 

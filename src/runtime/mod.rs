@@ -1,3 +1,6 @@
+//! Supervision of long-running processes: the `Service` trait, `ServiceManager`,
+//! graceful shutdown.
+
 use crate::utils::fmt_duration;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};

@@ -6,7 +6,7 @@ pub mod worker;
 use crate::banner::BannerApi;
 use crate::data::DbContext;
 use crate::data::events::EventBuffer;
-use crate::services::Service;
+use crate::runtime::Service;
 use crate::state::ReferenceCache;
 use crate::state::{ServiceStatus, ServiceStatusRegistry};
 use crate::telemetry;
