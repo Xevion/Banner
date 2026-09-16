@@ -108,21 +108,10 @@ pub fn canonical_email(email: &str) -> String {
     format!("{local}@{}", domain.strip_prefix("my.").unwrap_or(domain))
 }
 
-/// Rank of a match status, so a merge keeps the most deliberate one.
-fn status_rank(status: &str) -> u8 {
-    match status {
-        "confirmed" => 4,
-        "auto" => 3,
-        "pending" => 2,
-        _ => 1,
-    }
-}
-
 /// One participant in a merge, as the transaction needs it.
 #[derive(sqlx::FromRow)]
 struct MergeSide {
     id: i32,
-    rmp_match_status: String,
     email: Option<String>,
     display_name: String,
     slug: Option<String>,
@@ -182,11 +171,12 @@ fn classify(a: Option<&str>, b: Option<&str>) -> DuplicateTier {
 }
 
 const INSTRUCTOR_PAIR_SELECT: &str = r#"
-    SELECT i.id, i.display_name, i.email, i.rmp_match_status,
+    SELECT i.id, i.display_name, i.email, ms.status AS rmp_match_status,
            COALESCE(ci.course_count, 0) AS course_count,
            COALESCE(ci.subjects, '{}') AS subjects,
            COALESCE(rl.legacy_ids, '{}') AS rmp_legacy_ids
     FROM instructors i
+    JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
     LEFT JOIN LATERAL (
         SELECT COUNT(*) AS course_count,
                ARRAY_AGG(DISTINCT c.subject) AS subjects
@@ -364,14 +354,12 @@ pub async fn merge_instructors(
 
     let mut tx = pool.begin().await.context("failed to begin merge")?;
 
-    let sides: Vec<MergeSide> = sqlx::query_as(
-        "SELECT id, rmp_match_status, email, display_name, slug \
-         FROM instructors WHERE id = ANY($1)",
-    )
-    .bind(vec![survivor_id, loser_id])
-    .fetch_all(&mut *tx)
-    .await
-    .context("failed to load merge participants")?;
+    let sides: Vec<MergeSide> =
+        sqlx::query_as("SELECT id, email, display_name, slug FROM instructors WHERE id = ANY($1)")
+            .bind(vec![survivor_id, loser_id])
+            .fetch_all(&mut *tx)
+            .await
+            .context("failed to load merge participants")?;
 
     if sides.len() != 2 {
         return Err(MergeError::MissingInstructor.into());
@@ -458,16 +446,10 @@ pub async fn merge_instructors(
         .find(|s| s.id == loser_id)
         .ok_or_else(|| anyhow!("loser missing from merge participants"))?;
 
-    let status = if status_rank(&loser.rmp_match_status) > status_rank(&survivor.rmp_match_status) {
-        &loser.rmp_match_status
-    } else {
-        &survivor.rmp_match_status
-    };
     // Keep an address if the survivor lacked one.
     let email = survivor.email.clone().or_else(|| loser.email.clone());
 
-    sqlx::query("UPDATE instructors SET rmp_match_status = $1, email = $2 WHERE id = $3")
-        .bind(status)
+    sqlx::query("UPDATE instructors SET email = $1 WHERE id = $2")
         .bind(email)
         .bind(survivor_id)
         .execute(&mut *tx)
@@ -693,12 +675,5 @@ mod tests {
         assert_eq!(ordered_pair(7, 3), Some((3, 7)));
         assert_eq!(ordered_pair(3, 7), Some((3, 7)));
         assert_eq!(ordered_pair(3, 3), None);
-    }
-
-    #[test]
-    fn test_status_rank_prefers_human_decisions() {
-        assert!(status_rank("confirmed") > status_rank("auto"));
-        assert!(status_rank("auto") > status_rank("pending"));
-        assert!(status_rank("pending") > status_rank("unmatched"));
     }
 }

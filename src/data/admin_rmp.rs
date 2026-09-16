@@ -255,7 +255,7 @@ pub async fn list_instructors(
     let sort_clause = match filter.sort.as_deref() {
         Some("name_asc") => "i.display_name ASC",
         Some("name_desc") => "i.display_name DESC",
-        Some("status") => "i.rmp_match_status ASC, i.display_name ASC",
+        Some("status") => "ms.status ASC, i.display_name ASC",
         _ => "tc.score DESC NULLS LAST, i.display_name ASC",
     };
 
@@ -265,7 +265,7 @@ pub async fn list_instructors(
 
     if filter.status.is_some() {
         bind_idx += 1;
-        conditions.push(format!("i.rmp_match_status = ${bind_idx}"));
+        conditions.push(format!("ms.status = ${bind_idx}"));
     }
     if filter.search.is_some() {
         bind_idx += 1;
@@ -286,7 +286,7 @@ pub async fn list_instructors(
     let query_str = format!(
         r#"
         SELECT
-            i.id, i.display_name, i.email, i.rmp_match_status,
+            i.id, i.display_name, i.email, ms.status AS rmp_match_status,
             (SELECT COUNT(*) FROM instructor_rmp_links irl WHERE irl.instructor_id = i.id) as rmp_link_count,
             tc.rmp_legacy_id as top_candidate_rmp_id,
             tc.score as top_candidate_score,
@@ -304,6 +304,7 @@ pub async fn list_instructors(
             (SELECT ARRAY_AGG(DISTINCT t.year ORDER BY t.year) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id JOIN terms t ON t.code = c.term_code WHERE ci.instructor_id = i.id) as teaching_years,
             (SELECT ARRAY_AGG(DISTINCT c.subject ORDER BY c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as subjects_taught
         FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
         LEFT JOIN LATERAL (
             SELECT mc.rmp_legacy_id, mc.score, mc.score_breakdown
             FROM rmp_match_candidates mc
@@ -349,7 +350,8 @@ pub async fn list_instructors(
 
     // Aggregate stats (unfiltered)
     let stats_rows = sqlx::query_as::<_, StatusCount>(
-        "SELECT rmp_match_status, COUNT(*) as count FROM instructors GROUP BY rmp_match_status",
+        "SELECT status AS rmp_match_status, COUNT(*) as count \
+         FROM instructor_rmp_match_status GROUP BY status",
     )
     .fetch_all(pool)
     .await
@@ -431,7 +433,10 @@ pub async fn list_instructors(
 /// `blocked_reason` is left empty; the web layer fills in reviewer-facing copy.
 pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
     let instructor: Option<(i32, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT id, display_name, email, rmp_match_status FROM instructors WHERE id = $1",
+        "SELECT i.id, i.display_name, i.email, ms.status \
+         FROM instructors i \
+         JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id \
+         WHERE i.id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -609,12 +614,6 @@ pub async fn accept_candidate(
     .await
     .context("failed to insert rmp link")?;
 
-    sqlx::query("UPDATE instructors SET rmp_match_status = 'confirmed' WHERE id = $1")
-        .bind(instructor_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to update instructor match status")?;
-
     sqlx::query(
         "UPDATE rmp_match_candidates SET status = 'accepted', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND rmp_legacy_id = $3",
     )
@@ -654,19 +653,6 @@ pub async fn reject_candidate(
     .await
     .context("failed to reject candidate")?;
 
-    // Rejecting the last open candidate leaves nothing to review, so the
-    // instructor must not keep sitting in the pending queue.
-    sqlx::query(
-        "UPDATE instructors i SET rmp_match_status = 'rejected' \
-         WHERE i.id = $1 AND i.rmp_match_status = 'pending' \
-           AND NOT EXISTS (SELECT 1 FROM rmp_match_candidates mc \
-                           WHERE mc.instructor_id = i.id AND mc.status = 'pending')",
-    )
-    .bind(instructor_id)
-    .execute(&mut *tx)
-    .await
-    .context("failed to clear instructor pending status")?;
-
     tx.commit().await.context("failed to commit rejection")?;
 
     Ok(result.rows_affected() > 0)
@@ -683,7 +669,7 @@ pub async fn reject_all_candidates(
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
 
     let current_status: Option<(String,)> =
-        sqlx::query_as("SELECT rmp_match_status FROM instructors WHERE id = $1")
+        sqlx::query_as("SELECT status FROM instructor_rmp_match_status WHERE instructor_id = $1")
             .bind(instructor_id)
             .fetch_optional(&mut *tx)
             .await
@@ -694,12 +680,6 @@ pub async fn reject_all_candidates(
     if status == "confirmed" {
         return Err(AdminRmpError::ConfirmedMatches.into());
     }
-
-    sqlx::query("UPDATE instructors SET rmp_match_status = 'rejected' WHERE id = $1")
-        .bind(instructor_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to update instructor status")?;
 
     sqlx::query(
         "UPDATE rmp_match_candidates SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND status = 'pending'",

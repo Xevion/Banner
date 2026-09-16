@@ -51,13 +51,6 @@ async fn unmatch_resets_accepted_candidates_to_pending(pool: PgPool) {
     .await
     .expect("failed to create link");
 
-    // ARRANGE: Update instructor status to 'confirmed'
-    sqlx::query("UPDATE instructors SET rmp_match_status = 'confirmed' WHERE id = $1")
-        .bind(instructor_id)
-        .execute(&pool)
-        .await
-        .expect("failed to update instructor status");
-
     // ACT: Unmatch the specific RMP profile
     unmatch_instructor(&pool, instructor_id, Some(rmp_legacy_id))
         .await
@@ -87,16 +80,16 @@ async fn unmatch_resets_accepted_candidates_to_pending(pool: PgPool) {
             .expect("failed to count links");
     assert_eq!(link_count, 0, "link should be deleted");
 
-    // ASSERT: Instructor status should be unmatched
+    // ASSERT: the candidate this reopened puts the instructor back in the queue
     let (instructor_status,): (String,) =
-        sqlx::query_as("SELECT rmp_match_status FROM instructors WHERE id = $1")
+        sqlx::query_as("SELECT status FROM instructor_rmp_match_status WHERE instructor_id = $1")
             .bind(instructor_id)
             .fetch_one(&pool)
             .await
             .expect("failed to fetch instructor status");
     assert_eq!(
-        instructor_status, "unmatched",
-        "instructor should be unmatched"
+        instructor_status, "pending",
+        "reopened candidate should return the instructor to review"
     );
 }
 
@@ -168,12 +161,30 @@ async fn accept_candidate_reports_the_holder_when_the_profile_is_taken(pool: PgP
 #[sqlx::test]
 async fn reject_all_refuses_an_instructor_with_confirmed_matches(pool: PgPool) {
     let (instructor_id,): (i32,) = sqlx::query_as(
-        "INSERT INTO instructors (display_name, email, rmp_match_status) \
-         VALUES ('Test, Instructor', 'test@utsa.edu', 'confirmed') RETURNING id",
+        "INSERT INTO instructors (display_name, email) \
+         VALUES ('Test, Instructor', 'test@utsa.edu') RETURNING id",
     )
     .fetch_one(&pool)
     .await
     .expect("failed to create instructor");
+
+    sqlx::query(
+        "INSERT INTO rmp_professors (legacy_id, graphql_id, first_name, last_name, num_ratings) \
+         VALUES (9999998, 'confirmed-graphql-id', 'Test', 'Professor', 10)",
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to create rmp professor");
+
+    // A hand-made link is what makes the instructor confirmed.
+    sqlx::query(
+        "INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source) \
+         VALUES ($1, 9999998, 'manual')",
+    )
+    .bind(instructor_id)
+    .execute(&pool)
+    .await
+    .expect("failed to create link");
 
     let err = reject_all_candidates(&pool, instructor_id, 1)
         .await

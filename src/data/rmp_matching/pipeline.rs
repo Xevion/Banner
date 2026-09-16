@@ -133,10 +133,11 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
     let cleared = clear_previous_run(&mut tx).await?;
 
-    // 'confirmed' and 'rejected' are manual decisions -- never touch them.
+    // 'confirmed' and 'rejected' are human decisions -- never touch them.
     let instructors: Vec<(i32, String)> = sqlx::query_as(
-        "SELECT id, display_name FROM instructors \
-         WHERE rmp_match_status NOT IN ('confirmed', 'rejected')",
+        "SELECT i.id, i.display_name FROM instructors i \
+         JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id \
+         WHERE ms.status NOT IN ('confirmed', 'rejected')",
     )
     .fetch_all(&mut *tx)
     .await
@@ -253,7 +254,6 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         .copied()
         .collect();
     let pending_review = pending_instructor_ids.len();
-    mark_pending(&mut tx, &pending_instructor_ids).await?;
 
     tx.commit().await?;
     crate::data::rmp::refresh_rmp_summary(db_pool).await?;
@@ -298,14 +298,6 @@ async fn clear_previous_run(conn: &mut PgConnection) -> Result<ClearedState> {
         .await
         .context("failed to delete non-manual rmp links")?
         .rows_affected() as usize;
-
-    sqlx::query(
-        "UPDATE instructors SET rmp_match_status = 'unmatched' \
-         WHERE rmp_match_status NOT IN ('confirmed', 'rejected')",
-    )
-    .execute(&mut *conn)
-    .await
-    .context("failed to reset instructor match statuses to unmatched")?;
 
     Ok(ClearedState { candidates, links })
 }
@@ -812,46 +804,5 @@ async fn insert_auto_links(
     .await
     .context("failed to update auto-accepted candidates")?;
 
-    if !linked_instructor_ids.is_empty() {
-        sqlx::query(
-            r#"
-            UPDATE instructors i
-            SET rmp_match_status = 'auto'
-            FROM UNNEST($1::int4[]) AS v(instructor_id)
-            WHERE i.id = v.instructor_id
-            "#,
-        )
-        .bind(&linked_instructor_ids)
-        .execute(&mut *conn)
-        .await
-        .context("failed to update instructor status to auto")?;
-    }
-
     Ok(linked_instructor_ids)
-}
-
-/// Move instructors that only gathered candidates into the review queue.
-async fn mark_pending(conn: &mut PgConnection, instructor_ids: &[i32]) -> Result<()> {
-    if instructor_ids.is_empty() {
-        return Ok(());
-    }
-
-    sqlx::query(
-        r#"
-        UPDATE instructors i
-        SET rmp_match_status = 'pending'
-        FROM UNNEST($1::int4[]) AS v(instructor_id)
-        WHERE i.id = v.instructor_id
-          AND i.rmp_match_status = 'unmatched'
-          AND NOT EXISTS (
-              SELECT 1 FROM instructor_rmp_links l WHERE l.instructor_id = i.id
-          )
-        "#,
-    )
-    .bind(instructor_ids)
-    .execute(&mut *conn)
-    .await
-    .context("failed to update instructor status to pending")?;
-
-    Ok(())
 }

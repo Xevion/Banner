@@ -25,7 +25,7 @@ async fn rmp_corpus_regenerate_reports_outcome_mix() {
         .expect("generate candidates");
 
     let statuses: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT rmp_match_status, COUNT(*) FROM instructors GROUP BY 1 ORDER BY 2 DESC",
+        "SELECT status, COUNT(*) FROM instructor_rmp_match_status GROUP BY 1 ORDER BY 2 DESC",
     )
     .fetch_all(&pool)
     .await

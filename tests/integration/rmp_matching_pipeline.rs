@@ -5,8 +5,7 @@
 //! surfacing as a wrong instructor on a live profile.
 
 use crate::helpers::{
-    insert_instructor, insert_instructor_with_status, insert_rmp_professor, insert_rmp_review,
-    insert_taught_course,
+    insert_instructor, insert_rmp_professor, insert_rmp_review, insert_taught_course,
 };
 use assert2::check;
 use banner::data::rmp_matching::generate_candidates;
@@ -55,7 +54,7 @@ async fn candidate_review_data(
 
 async fn match_status(pool: &PgPool, instructor_id: i32) -> String {
     let (status,): (String,) =
-        sqlx::query_as("SELECT rmp_match_status FROM instructors WHERE id = $1")
+        sqlx::query_as("SELECT status FROM instructor_rmp_match_status WHERE instructor_id = $1")
             .bind(instructor_id)
             .fetch_one(pool)
             .await
@@ -230,9 +229,7 @@ async fn contested_profile_links_once_to_the_heavier_load(pool: PgPool) {
 /// off limits to any other instructor that would otherwise auto-link to it.
 #[sqlx::test]
 async fn manual_link_survives_and_blocks_rival_claims(pool: PgPool) {
-    let owner =
-        insert_instructor_with_status(&pool, "Ellis, Ronald", Some("ron.a@utsa.edu"), "confirmed")
-            .await;
+    let owner = insert_instructor(&pool, "Ellis, Ronald", Some("ron.a@utsa.edu")).await;
     let rival = insert_instructor(&pool, "Ellis, Ronald", Some("ron.b@utsa.edu")).await;
     insert_taught_course(&pool, rival, "CS", "10001").await;
     insert_rmp_professor(&pool, 1005, "Ronald", "Ellis", Some("Computer Science"), 30).await;
@@ -293,8 +290,8 @@ async fn rejected_candidate_survives_regeneration_unscored(pool: PgPool) {
     check!(status == "rejected");
     check!(close(score, 0.9));
 
-    // No candidate means no review queue entry either.
-    check!(match_status(&pool, instructor).await == "unmatched");
+    // Nothing is left open, so the instructor reads as settled, not untouched.
+    check!(match_status(&pool, instructor).await == "rejected");
 }
 
 /// RMP holds duplicate profiles for one person; linking all of them is intended.
@@ -487,8 +484,7 @@ async fn distinct_people_sharing_a_name_defer_to_review(pool: PgPool) {
 /// from a previous run that no longer matches disappears.
 #[sqlx::test]
 async fn stale_auto_state_is_cleared_before_rescoring(pool: PgPool) {
-    let instructor =
-        insert_instructor_with_status(&pool, "Zhao, Peng", Some("zhao@utsa.edu"), "auto").await;
+    let instructor = insert_instructor(&pool, "Zhao, Peng", Some("zhao@utsa.edu")).await;
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1011, "Someone", "Else", Some("Computer Science"), 20).await;
     sqlx::query(
@@ -546,9 +542,7 @@ async fn mixed_fixture_holds_link_and_acceptance_invariants(pool: PgPool) {
     let loser = insert_instructor(&pool, "Ellis, Ronald", Some("ron.b@utsa.edu")).await;
     let duplicated = insert_instructor(&pool, "Nguyen, Minh", Some("nguyen@utsa.edu")).await;
     let refused = insert_instructor(&pool, "Garcia, Maria", Some("garcia@utsa.edu")).await;
-    let owner =
-        insert_instructor_with_status(&pool, "Zhao, Peng", Some("peng.a@utsa.edu"), "confirmed")
-            .await;
+    let owner = insert_instructor(&pool, "Zhao, Peng", Some("peng.a@utsa.edu")).await;
     let rival = insert_instructor(&pool, "Zhao, Peng", Some("peng.b@utsa.edu")).await;
 
     insert_taught_course(&pool, winner, "CS", "10001").await;
@@ -601,6 +595,7 @@ async fn mixed_fixture_holds_link_and_acceptance_invariants(pool: PgPool) {
     check!(stats.pending_review == 2);
     check!(match_status(&pool, loser).await == "pending");
     check!(match_status(&pool, rival).await == "pending");
-    check!(match_status(&pool, refused).await == "unmatched");
+    // Its one candidate was turned down, so it is settled rather than untouched.
+    check!(match_status(&pool, refused).await == "rejected");
     check!(match_status(&pool, owner).await == "confirmed");
 }

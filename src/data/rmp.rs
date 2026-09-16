@@ -93,8 +93,7 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
 
 /// Unmatch an instructor from an RMP profile.
 ///
-/// Removes the link from `instructor_rmp_links` and updates the instructor's
-/// `rmp_match_status` to 'unmatched' if no links remain.
+/// Removes the link from `instructor_rmp_links`.
 ///
 /// If `rmp_legacy_id` is `Some`, removes only that specific link.
 /// If `None`, removes all links for the instructor.
@@ -121,23 +120,6 @@ pub async fn unmatch_instructor(
             .execute(&mut *tx)
             .await
             .context("failed to delete all rmp links for instructor")?;
-    }
-
-    // Check if any links remain
-    let (remaining,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM instructor_rmp_links WHERE instructor_id = $1")
-            .bind(instructor_id)
-            .fetch_one(&mut *tx)
-            .await
-            .context("failed to count remaining rmp links for instructor")?;
-
-    // Update instructor status if no links remain
-    if remaining == 0 {
-        sqlx::query("UPDATE instructors SET rmp_match_status = 'unmatched' WHERE id = $1")
-            .bind(instructor_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to update instructor rmp match status to unmatched")?;
     }
 
     // Reset accepted candidates back to pending when unmatching

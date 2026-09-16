@@ -229,23 +229,11 @@ pub async fn insert_scrape_job(
 ///
 /// `email` must be unique when present; rows without one are unique by name.
 pub async fn insert_instructor(pool: &PgPool, display_name: &str, email: Option<&str>) -> i32 {
-    insert_instructor_with_status(pool, display_name, email, "unmatched").await
-}
-
-/// Insert an instructor row with an explicit `rmp_match_status`.
-pub async fn insert_instructor_with_status(
-    pool: &PgPool,
-    display_name: &str,
-    email: Option<&str>,
-    status: &str,
-) -> i32 {
     let (id,): (i32,) = sqlx::query_as(
-        "INSERT INTO instructors (display_name, email, rmp_match_status)
-         VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO instructors (display_name, email) VALUES ($1, $2) RETURNING id",
     )
     .bind(display_name)
     .bind(email)
-    .bind(status)
     .fetch_one(pool)
     .await
     .expect("insert_instructor failed");
