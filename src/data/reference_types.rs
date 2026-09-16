@@ -22,19 +22,12 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Parse failure for Tier 1 enums that reject unknown codes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unknown {category} code: '{code}'")]
 pub struct ParseError {
     pub code: String,
     pub category: &'static str,
 }
-
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unknown {} code: '{}'", self.category, self.code)
-    }
-}
-
-impl std::error::Error for ParseError {}
 
 /// Generates a Tier 2 reference-data enum with an `Unknown` fallback variant.
 ///

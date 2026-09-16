@@ -34,8 +34,8 @@ async fn test_recorded_entry_round_trips_its_detail() {
         .await
         .expect("failed to list entries");
 
-    assert_eq!(page.total, 1);
-    let entry = &page.entries[0];
+    assert_eq!(page.total.get(), 1);
+    let entry = &page.items[0];
     assert_eq!(entry.action, "instructor_merge");
     assert_eq!(entry.entity_type, "instructor");
     assert_eq!(entry.entity_id.as_deref(), Some("41"));
@@ -62,8 +62,8 @@ async fn test_untargeted_action_records_a_null_entity_id() {
 
     let page = list(&pool, &AdminAuditFilter::default()).await.unwrap();
 
-    assert_eq!(page.entries[0].entity_id, None);
-    assert!(page.entries[0].related_ids.is_empty());
+    assert_eq!(page.items[0].entity_id, None);
+    assert!(page.items[0].related_ids.is_empty());
 }
 
 #[tokio::test]
@@ -82,8 +82,8 @@ async fn test_every_action_records_and_lists_under_its_own_name() {
         };
         let page = list(&pool, &filter).await.unwrap();
 
-        assert_eq!(page.total, 1, "expected one entry for {action:?}");
-        assert_eq!(page.entries[0].entity_type, action.entity().as_ref());
+        assert_eq!(page.total.get(), 1, "expected one entry for {action:?}");
+        assert_eq!(page.items[0].entity_type, action.entity().as_ref());
     }
 }
 
@@ -115,8 +115,8 @@ async fn test_listing_filters_by_actor() {
     };
     let page = list(&pool, &filter).await.unwrap();
 
-    assert_eq!(page.total, 1);
-    assert_eq!(page.entries[0].actor_username, "second");
+    assert_eq!(page.total.get(), 1);
+    assert_eq!(page.items[0].actor_username, "second");
 }
 
 #[tokio::test]
@@ -147,8 +147,8 @@ async fn test_listing_filters_by_entity_type() {
     };
     let page = list(&pool, &filter).await.unwrap();
 
-    assert_eq!(page.total, 1);
-    assert_eq!(page.entries[0].entity_id.as_deref(), Some("202610"));
+    assert_eq!(page.total.get(), 1);
+    assert_eq!(page.items[0].entity_id.as_deref(), Some("202610"));
 }
 
 /// Asking what happened to one instructor must find merges it lost as well as won.
@@ -180,8 +180,8 @@ async fn test_listing_by_entity_id_matches_the_other_side_of_a_pair() {
     };
     let page = list(&pool, &filter).await.unwrap();
 
-    assert_eq!(page.total, 1);
-    assert_eq!(page.entries[0].action, "instructor_merge");
+    assert_eq!(page.total.get(), 1);
+    assert_eq!(page.items[0].action, "instructor_merge");
 }
 
 #[tokio::test]
@@ -211,16 +211,16 @@ async fn test_listing_filters_by_time_range() {
         ..AdminAuditFilter::default()
     };
     let page = list(&pool, &since).await.unwrap();
-    assert_eq!(page.total, 1);
-    assert_eq!(page.entries[0].id, second.id);
+    assert_eq!(page.total.get(), 1);
+    assert_eq!(page.items[0].id, second.id);
 
     let until = AdminAuditFilter {
         until: Some(second.created_at),
         ..AdminAuditFilter::default()
     };
     let page = list(&pool, &until).await.unwrap();
-    assert_eq!(page.total, 1);
-    assert_eq!(page.entries[0].id, first.id);
+    assert_eq!(page.total.get(), 1);
+    assert_eq!(page.items[0].id, first.id);
 }
 
 #[tokio::test]
@@ -244,9 +244,9 @@ async fn test_listing_paginates_newest_first() {
     };
     let first = list(&pool, &filter).await.unwrap();
 
-    assert_eq!(first.total, 3);
-    assert_eq!(first.entries.len(), 2);
-    assert_eq!(first.entries[0].entity_id.as_deref(), Some("202630"));
+    assert_eq!(first.total.get(), 3);
+    assert_eq!(first.items.len(), 2);
+    assert_eq!(first.items[0].entity_id.as_deref(), Some("202630"));
 
     let second = list(
         &pool,
@@ -259,8 +259,8 @@ async fn test_listing_paginates_newest_first() {
     .await
     .unwrap();
 
-    assert_eq!(second.entries.len(), 1);
-    assert_eq!(second.entries[0].entity_id.as_deref(), Some("202610"));
+    assert_eq!(second.items.len(), 1);
+    assert_eq!(second.items[0].entity_id.as_deref(), Some("202610"));
 }
 
 /// The action has already committed by the time it is audited, so a broken

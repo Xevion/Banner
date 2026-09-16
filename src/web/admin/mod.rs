@@ -24,7 +24,7 @@ use crate::state::AppState;
 use crate::state::ServiceStatus;
 use crate::web::audit::{AuditLogEntry, AuditLogResponse};
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt};
 use crate::web::ws::ScrapeJobDto;
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -65,19 +65,19 @@ pub async fn admin_status(
 ) -> Result<Json<AdminStatusResponse>, ApiError> {
     let user_count = crate::data::users::count_all(&state.db_pool)
         .await
-        .map_err(|e| db_error("count users", e))?;
+        .db_context("count users")?;
 
     let session_count = crate::data::sessions::count_active(&state.db_pool)
         .await
-        .map_err(|e| db_error("count sessions", e))?;
+        .db_context("count sessions")?;
 
     let course_count = crate::data::courses::count_all(&state.db_pool)
         .await
-        .map_err(|e| db_error("count courses", e))?;
+        .db_context("count courses")?;
 
     let scrape_job_count = crate::data::scrape_jobs::count_all(&state.db_pool)
         .await
-        .map_err(|e| db_error("count scrape jobs", e))?;
+        .db_context("count scrape jobs")?;
 
     let services: Vec<AdminServiceInfo> = state
         .service_statuses
@@ -112,7 +112,7 @@ pub async fn list_users(
 ) -> Result<Json<Vec<User>>, ApiError> {
     let users = crate::data::users::list_users(&state.db_pool)
         .await
-        .map_err(|e| db_error("list users", e))?;
+        .db_context("list users")?;
 
     trace!(count = users.len(), "Listed users");
 
@@ -134,7 +134,7 @@ pub async fn set_user_admin(
 ) -> Result<Json<User>, ApiError> {
     let user = crate::data::users::set_admin(&state.db_pool, discord_id, body.is_admin)
         .await
-        .map_err(|e| db_error("set admin status", e))?
+        .db_context("set admin status")?
         .ok_or_else(|| ApiError::not_found("User not found"))?;
 
     action_log::record(
@@ -161,7 +161,7 @@ pub async fn list_scrape_jobs(
 ) -> Result<Json<ScrapeJobsResponse>, ApiError> {
     let rows = crate::data::scrape_jobs::list_ordered(&state.db_pool, 100)
         .await
-        .map_err(|e| db_error("list scrape jobs", e))?;
+        .db_context("list scrape jobs")?;
 
     let jobs: Vec<ScrapeJobDto> = rows.iter().map(ScrapeJobDto::from).collect();
 
@@ -192,7 +192,7 @@ pub async fn list_audit_log(
 ) -> Result<Response, ApiError> {
     let rows = crate::data::audit::list_recent(&state.db_pool, 200)
         .await
-        .map_err(|e| db_error("list audit log", e))?;
+        .db_context("list audit log")?;
 
     // Determine the latest timestamp across all rows (query is DESC so first row is newest)
     let latest = rows.first().map(|r| r.timestamp);

@@ -3,6 +3,7 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use extension_traits::extension;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -125,29 +126,30 @@ pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
     ApiError::internal_error(format!("{} failed", context))
 }
 
-/// Extension trait for `Option<T>` to convert `None` into a 404 [`ApiError`].
-pub trait OptionNotFoundExt<T> {
-    /// Convert `None` into [`ApiError::not_found`] with a message like
-    /// `"Course 'CRN-12345' not found"`.
-    fn or_not_found(self, entity: &str, id: impl std::fmt::Display) -> Result<T, ApiError>;
+/// Name what the handler was doing, so a data-layer failure reports it.
+#[extension(pub trait DbResultExt)]
+impl<T> Result<T, anyhow::Error> {
+    /// Convert a data-layer failure into a 500 that names the operation.
+    fn db_context(self, context: &str) -> Result<T, ApiError> {
+        self.map_err(|e| db_error(context, e))
+    }
 }
 
-impl<T> OptionNotFoundExt<T> for Option<T> {
+#[extension(pub trait OptionNotFoundExt)]
+impl<T> Option<T> {
+    /// Convert `None` into [`ApiError::not_found`] with a message like
+    /// `"Course 'CRN-12345' not found"`.
     fn or_not_found(self, entity: &str, id: impl std::fmt::Display) -> Result<T, ApiError> {
         self.ok_or_else(|| ApiError::not_found(format!("{entity} '{id}' not found")))
     }
 }
 
-/// Extension trait for `Result<T, sqlx::Error>` to handle unique constraint violations.
 #[allow(dead_code)]
-pub trait SqlxResultExt<T> {
+#[extension(pub trait SqlxResultExt)]
+impl<T> Result<T, sqlx::Error> {
     /// Convert a PostgreSQL unique-constraint violation (`23505`) into
     /// [`ApiError::conflict`] with the given message. All other errors
     /// become an internal error via [`db_error`]; `Ok` values pass through.
-    fn conflict_on_unique(self, message: impl Into<String>) -> Result<T, ApiError>;
-}
-
-impl<T> SqlxResultExt<T> for Result<T, sqlx::Error> {
     fn conflict_on_unique(self, message: impl Into<String>) -> Result<T, ApiError> {
         match self {
             Ok(val) => Ok(val),

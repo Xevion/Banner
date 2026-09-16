@@ -15,7 +15,7 @@ use crate::data::models::{RmpCandidateStatus, RmpMatchStatus};
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt, db_error};
 
 // Re-export response types so existing imports from `web::admin::rmp::*` still work.
 pub use crate::data::admin_rmp::{InstructorDetailResponse, ListInstructorsResponse, RescoreResponse};
@@ -121,7 +121,7 @@ pub async fn list_instructors(
 
     let response = admin_rmp::list_instructors(&state.db_pool, &filter)
         .await
-        .map_err(|e| db_error("list instructors", e))?;
+        .db_context("list instructors")?;
 
     Ok(Json(response))
 }
@@ -169,7 +169,7 @@ pub async fn match_instructor(
 
     let detail = admin_rmp::get_instructor_detail(&state.db_pool, id)
         .await
-        .map_err(|e| db_error("get instructor after match", e))?;
+        .db_context("get instructor after match")?;
 
     Ok(Json(explain_candidates(detail)))
 }
@@ -184,7 +184,7 @@ pub async fn reject_candidate(
 ) -> Result<Json<OkResponse>, ApiError> {
     let found = admin_rmp::reject_candidate(&state.db_pool, id, body.rmp_legacy_id, user.discord_id)
         .await
-        .map_err(|e| db_error("reject candidate", e))?;
+        .db_context("reject candidate")?;
 
     if !found {
         return Err(ApiError::not_found("pending candidate not found"));
@@ -248,14 +248,14 @@ pub async fn unmatch_instructor(
 
     if !admin_rmp::instructor_exists(&state.db_pool, id)
         .await
-        .map_err(|e| db_error("check instructor", e))?
+        .db_context("check instructor")?
     {
         return Err(ApiError::not_found("instructor not found"));
     }
 
     crate::data::rmp::unmatch_instructor(&state.db_pool, id, rmp_legacy_id)
         .await
-        .map_err(|e| db_error("unmatch instructor", e))?;
+        .db_context("unmatch instructor")?;
 
     action_log::record(
         &state.db_pool,
@@ -277,9 +277,7 @@ pub async fn rescore(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
 ) -> Result<Json<RescoreResponse>, ApiError> {
-    let stats = admin_rmp::rescore(&state.db_pool)
-        .await
-        .map_err(|e| db_error("rescore", e))?;
+    let stats = admin_rmp::rescore(&state.db_pool).await.db_context("rescore")?;
 
     info!(
         total_processed = stats.total_processed,

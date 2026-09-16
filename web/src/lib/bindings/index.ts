@@ -4,7 +4,6 @@
 export type { ActionLogParams } from "./ActionLogParams";
 export type { AdminAction } from "./AdminAction";
 export type { AdminAuditEntry } from "./AdminAuditEntry";
-export type { AdminAuditPage } from "./AdminAuditPage";
 export type { AdminEntity } from "./AdminEntity";
 export type { AdminServiceInfo } from "./AdminServiceInfo";
 export type { AdminStatusResponse } from "./AdminStatusResponse";

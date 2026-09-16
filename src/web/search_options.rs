@@ -10,7 +10,7 @@ use crate::data;
 
 use crate::state::AppState;
 use crate::web::courses::{CodeDescription, TermResponse, code_to_filter_value};
-use crate::web::error::{ApiError, ApiErrorCode, db_error};
+use crate::web::error::{ApiError, ApiErrorCode, DbResultExt, db_error};
 use crate::web::routes::{cache, with_cache_control};
 
 /// Response for the consolidated search-options endpoint.
@@ -94,7 +94,7 @@ pub(super) async fn get_search_options(
         // Fetch available terms to get the default (latest)
         let terms = data::terms::get_all_terms(&state.db_pool)
             .await
-            .map_err(|e| db_error("Get terms for default", e))?;
+            .db_context("Get terms for default")?;
 
         let first_term: Term = terms
             .first()
@@ -120,7 +120,7 @@ pub(super) async fn get_search_options(
         data::courses::get_subjects_by_enrollment(&state.db_pool, &term_code),
         data::courses::get_filter_ranges(&state.db_pool, &term_code),
     )
-    .map_err(|e| db_error("Search options", e))?;
+    .db_context("Search options")?;
 
     let terms: Vec<TermResponse> = all_terms
         .into_iter()

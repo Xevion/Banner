@@ -217,7 +217,7 @@ The enum then binds and decodes directly, a macro query names it with
 
 List endpoints return `Page<T>` (`src/data/models.rs`): `items`, `total`, `page`,
 `per_page`. Responses that carry extra aggregates nest it as a `page` field rather than
-inventing a second envelope shape. `AdminAuditPage` is the one holdout and should move.
+inventing a second envelope shape. There is no second shape; add none.
 
 ## Serialization
 

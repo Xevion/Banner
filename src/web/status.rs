@@ -12,7 +12,7 @@ use ts_rs::TS;
 
 use crate::state::{AppState, ServiceStatus};
 use crate::utils::fmt_duration;
-use crate::web::error::{ApiError, ApiErrorCode, db_error};
+use crate::web::error::{ApiError, ApiErrorCode, DbResultExt};
 
 fn default_metrics_limit() -> i32 {
     500
@@ -191,7 +191,7 @@ pub(super) async fn metrics(
         let resolved = Term::resolve_to_code(term).unwrap_or_else(|| term.to_string());
         crate::data::courses::get_id_by_crn(&state.db_pool, &resolved, crn)
             .await
-            .map_err(|e| db_error("Course lookup for metrics", e))?
+            .db_context("Course lookup for metrics")?
     } else {
         None
     };
@@ -199,11 +199,11 @@ pub(super) async fn metrics(
     let metrics = if let Some(cid) = course_id {
         crate::data::metrics::list_for_course(&state.db_pool, cid, since, limit)
             .await
-            .map_err(|e| db_error("Metrics query", e))?
+            .db_context("Metrics query")?
     } else {
         crate::data::metrics::list_all(&state.db_pool, since, limit)
             .await
-            .map_err(|e| db_error("Metrics query", e))?
+            .db_context("Metrics query")?
     };
 
     let count = metrics.len();

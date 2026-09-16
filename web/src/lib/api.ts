@@ -2,7 +2,7 @@ import { browser } from "$app/environment";
 import { authStore } from "$lib/auth.svelte";
 import type {
   ActionLogParams,
-  AdminAuditPage,
+  AdminAuditEntry,
   AdminStatusResponse,
   ApiError,
   ApiErrorCode,
@@ -424,9 +424,9 @@ export class BannerApiClient {
 
   async getAdminActionLog(
     params?: ActionLogParams
-  ): Promise<Result<AdminAuditPage, ApiErrorClass>> {
+  ): Promise<Result<Page<AdminAuditEntry>, ApiErrorClass>> {
     const qs = params ? toURLSearchParams(params).toString() : "";
-    return this.request<AdminAuditPage>(`/admin/action-log${qs ? `?${qs}` : ""}`);
+    return this.request<Page<AdminAuditEntry>>(`/admin/action-log${qs ? `?${qs}` : ""}`);
   }
 
   async getTimeline(ranges: TimelineRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {

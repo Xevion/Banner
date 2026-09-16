@@ -7,7 +7,7 @@ use crate::data;
 use crate::data::instructors::PublicInstructorListParams;
 use crate::state::AppState;
 use crate::web::courses::{CourseResponse, build_course_response};
-use crate::web::error::{ApiError, OptionNotFoundExt, db_error};
+use crate::web::error::{ApiError, DbResultExt, OptionNotFoundExt};
 
 /// `GET /api/instructors`
 pub async fn list_instructors(
@@ -17,7 +17,7 @@ pub async fn list_instructors(
     use crate::web::routes::{cache, with_cache_control};
     let result = data::instructors::list_public_instructors(&state.db_pool, &params)
         .await
-        .map_err(|e| db_error("List instructors", e))?;
+        .db_context("List instructors")?;
     Ok(with_cache_control(result, cache::REFERENCE))
 }
 
@@ -33,7 +33,7 @@ pub async fn get_instructor(
 
     let (instructor_id, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
         .await
-        .map_err(|e| db_error("Resolve instructor", e))?
+        .db_context("Resolve instructor")?
         .or_not_found("Instructor", &raw)?;
 
     // Non-canonical identifier: redirect to the canonical slug URL
@@ -65,7 +65,7 @@ pub async fn get_instructor(
 
     let profile = data::instructors::get_public_instructor_by_slug(&state.db_pool, &slug)
         .await
-        .map_err(|e| db_error("Get instructor", e))?
+        .db_context("Get instructor")?
         .or_not_found("Instructor", &slug)?;
 
     let mut resp = Json(profile).into_response();
@@ -92,7 +92,7 @@ pub async fn get_instructor_sections(
 
     let (instructor_id, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
         .await
-        .map_err(|e| db_error("Resolve instructor", e))?
+        .db_context("Resolve instructor")?
         .or_not_found("Instructor", &raw)?;
 
     // Non-canonical: redirect, preserving the raw ?term= value so the redirect
@@ -106,7 +106,7 @@ pub async fn get_instructor_sections(
 
     let courses = data::instructors::get_instructor_sections(&state.db_pool, instructor_id, &term_code)
         .await
-        .map_err(|e| db_error("Instructor sections", e))?;
+        .db_context("Instructor sections")?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
     let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)

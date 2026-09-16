@@ -12,7 +12,8 @@ use sqlx::{AssertSqlSafe, PgPool};
 use strum::{AsRefStr, VariantArray};
 use ts_rs::TS;
 
-use crate::data::models::User;
+use crate::data::models::{Page, User};
+use crate::data::unsigned::Count;
 
 const DEFAULT_PER_PAGE: i32 = 50;
 const MAX_PER_PAGE: i32 = 200;
@@ -135,18 +136,6 @@ pub struct AdminAuditEntry {
     pub detail: Json<serde_json::Value>,
 }
 
-/// A page of entries, with the unpaginated total behind it.
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct AdminAuditPage {
-    pub entries: Vec<AdminAuditEntry>,
-    #[ts(as = "i32")]
-    pub total: i64,
-    pub page: i32,
-    pub per_page: i32,
-}
-
 /// Every filter is optional; `None` disables that clause.
 #[derive(Debug, Clone)]
 pub struct AdminAuditFilter {
@@ -216,7 +205,7 @@ pub async fn insert(
 }
 
 /// Fetch one page of entries, newest first.
-pub async fn list(pool: &PgPool, filter: &AdminAuditFilter) -> Result<AdminAuditPage> {
+pub async fn list(pool: &PgPool, filter: &AdminAuditFilter) -> Result<Page<AdminAuditEntry>> {
     let per_page = filter.per_page.clamp(1, MAX_PER_PAGE);
     let page = filter.page.max(1);
     let action = filter.action.as_ref().map(AsRef::as_ref);
@@ -253,9 +242,9 @@ pub async fn list(pool: &PgPool, filter: &AdminAuditFilter) -> Result<AdminAudit
     .await
     .context("failed to list admin audit entries")?;
 
-    Ok(AdminAuditPage {
-        entries,
-        total: total.0,
+    Ok(Page {
+        items: entries,
+        total: Count::try_from(total.0)?,
         page,
         per_page,
     })

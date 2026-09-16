@@ -17,7 +17,7 @@ use crate::data::reference_types::{Attribute, Campus, FilterValue, Instructional
 use crate::data::unsigned::Count;
 use crate::data::{self, models};
 use crate::state::AppState;
-use crate::web::error::{ApiError, ApiErrorCode, OptionNotFoundExt, db_error};
+use crate::web::error::{ApiError, ApiErrorCode, DbResultExt, OptionNotFoundExt};
 use crate::web::routes::{cache, with_cache_control};
 
 fn default_page() -> i32 {
@@ -144,7 +144,7 @@ pub(super) async fn course_trends(
 
     let rows = data::metrics::list_trends_for_courses(&state.db_pool, &term_code, &body.crns, TREND_BUCKETS)
         .await
-        .map_err(|e| db_error("Course trends query", e))?;
+        .db_context("Course trends query")?;
 
     for row in rows {
         trends.entry(row.crn).or_default().push(TrendSample {
@@ -491,7 +491,7 @@ pub(super) async fn search_courses(
 
     let (courses, total_count) = data::courses::search_courses(&state.db_pool, &filter, per_page, offset, &sort)
         .await
-        .map_err(|e| db_error("Course search", e))?;
+        .db_context("Course search")?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
     let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
@@ -532,7 +532,7 @@ pub(super) async fn get_course(
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term_code)
         .await
-        .map_err(|e| db_error("Course lookup", e))?
+        .db_context("Course lookup")?
         .or_not_found("Course", &crn)?;
 
     // ETag based on term, CRN, and last scrape timestamp
@@ -580,7 +580,7 @@ pub(super) async fn get_related_sections(
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let courses = data::courses::get_related_sections(&state.db_pool, &term_code, &subject, &course_number)
         .await
-        .map_err(|e| db_error("Related sections lookup", e))?;
+        .db_context("Related sections lookup")?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
     let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)

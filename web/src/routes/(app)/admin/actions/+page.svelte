@@ -22,7 +22,7 @@ import type { PageProps } from "./$types";
 let { data }: PageProps = $props();
 
 const draft = $derived(data.filters);
-const entries = $derived(data.log?.entries ?? []);
+const entries = $derived(data.log?.items ?? []);
 const total = $derived(data.log?.total ?? 0);
 const activeFilters = $derived(countActiveFilters(data.filters));
 const now = new Date();

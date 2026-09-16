@@ -16,7 +16,7 @@ use crate::data::models::BluebookLinkStatus;
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt, db_error};
 
 pub use crate::data::admin_bluebook::{BluebookLinkDetail, BluebookMatchResponse, ListBluebookLinksResponse};
 
@@ -103,7 +103,7 @@ pub async fn list_links(
 
     let response = admin_bluebook::list_links(&state.db_pool, &filter)
         .await
-        .map_err(|e| db_error("list bluebook links", e))?;
+        .db_context("list bluebook links")?;
 
     Ok(Json(response))
 }
@@ -210,7 +210,7 @@ pub async fn run_matching(
 ) -> Result<Json<BluebookMatchResponse>, ApiError> {
     let response = admin_bluebook::run_auto_matching(&state.db_pool)
         .await
-        .map_err(|e| db_error("bluebook auto-matching", e))?;
+        .db_context("bluebook auto-matching")?;
 
     info!(
         total_names = response.total_names,

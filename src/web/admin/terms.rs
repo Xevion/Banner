@@ -16,7 +16,7 @@ use crate::data::terms::{self, DbTerm, SyncResult};
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt};
 
 const SLOW_OP_THRESHOLD: Duration = Duration::from_secs(1);
 
@@ -62,7 +62,7 @@ pub async fn list_terms(_admin: AdminUser, State(state): State<AppState>) -> Res
 
     let terms = terms::get_all_terms(&state.db_pool)
         .await
-        .map_err(|e| db_error("Failed to fetch terms", e))?;
+        .db_context("Failed to fetch terms")?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "list_terms");
 
@@ -81,7 +81,7 @@ pub async fn enable_term(
 
     let found = terms::enable_scraping(&state.db_pool, &code)
         .await
-        .map_err(|e| db_error("Failed to enable scraping", e))?;
+        .db_context("Failed to enable scraping")?;
 
     if !found {
         return Err(ApiError::not_found("Term not found"));
@@ -98,7 +98,7 @@ pub async fn enable_term(
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
         .await
-        .map_err(|e| db_error("Failed to fetch updated term", e))?;
+        .db_context("Failed to fetch updated term")?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "enable_term");
 
@@ -118,7 +118,7 @@ pub async fn disable_term(
 
     let found = terms::disable_scraping(&state.db_pool, &code)
         .await
-        .map_err(|e| db_error("Failed to disable scraping", e))?;
+        .db_context("Failed to disable scraping")?;
 
     if !found {
         return Err(ApiError::not_found("Term not found"));
@@ -135,7 +135,7 @@ pub async fn disable_term(
 
     let term = terms::get_term_by_code(&state.db_pool, &code)
         .await
-        .map_err(|e| db_error("Failed to fetch updated term", e))?;
+        .db_context("Failed to fetch updated term")?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "disable_term");
 
@@ -156,7 +156,7 @@ pub async fn sync_terms(_admin: AdminUser, State(state): State<AppState>) -> Res
 
     let result = terms::sync_terms_from_banner(&state.db_pool, banner_terms)
         .await
-        .map_err(|e| db_error("Failed to sync terms to database", e))?;
+        .db_context("Failed to sync terms to database")?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "sync_terms");
 

@@ -9,7 +9,7 @@ use ts_rs::TS;
 use crate::data;
 use crate::data::courses::{CourseSuggestion, InstructorSuggestion};
 use crate::state::AppState;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt};
 use crate::web::routes::{cache, with_cache_control};
 
 fn default_suggest_limit() -> i32 {
@@ -72,7 +72,7 @@ pub(super) async fn suggest(
         data::courses::suggest_courses(&state.db_pool, &term_code, q, limit),
         data::courses::suggest_instructors(&state.db_pool, &term_code, q, limit),
     )
-    .map_err(|e| db_error("Suggest query", e))?;
+    .db_context("Suggest query")?;
 
     Ok(with_cache_control(
         SuggestResponse { courses, instructors },
@@ -102,7 +102,7 @@ pub(super) async fn suggest_instructors(
 
     let instructors = data::courses::suggest_instructors_global(&state.db_pool, term_code.as_deref(), q, limit)
         .await
-        .map_err(|e| db_error("Suggest instructors", e))?;
+        .db_context("Suggest instructors")?;
 
     Ok(with_cache_control(instructors, cache::REFERENCE))
 }
@@ -122,7 +122,7 @@ pub(super) async fn resolve_instructors(
 
     let rows = data::instructors::resolve_instructor_slugs(&state.db_pool, &params.slug)
         .await
-        .map_err(|e| db_error("Resolve instructor slugs", e))?;
+        .db_context("Resolve instructor slugs")?;
 
     let map: HashMap<String, String> = rows.into_iter().collect();
     Ok(with_cache_control(map, cache::REFERENCE))

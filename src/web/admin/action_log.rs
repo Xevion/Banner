@@ -10,11 +10,11 @@ use sqlx::PgPool;
 use tracing::{error, instrument};
 use ts_rs::TS;
 
-use crate::data::admin_audits::{self, AdminAction, AdminAuditFilter, AdminAuditPage, AdminEntity, Target};
+use crate::data::admin_audits::{self, AdminAction, AdminAuditEntry, AdminAuditFilter, AdminEntity, Target};
 use crate::data::models::User;
 use crate::state::AppState;
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt};
 
 /// Append an audit entry, logging and continuing when the write fails.
 ///
@@ -97,12 +97,12 @@ pub async fn list_action_log(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
     Query(params): Query<ActionLogParams>,
-) -> Result<Json<AdminAuditPage>, ApiError> {
+) -> Result<Json<crate::data::models::Page<AdminAuditEntry>>, ApiError> {
     let filter = params.into_filter()?;
 
     let page = admin_audits::list(&state.db_pool, &filter)
         .await
-        .map_err(|e| db_error("list admin action log", e))?;
+        .db_context("list admin action log")?;
 
     Ok(Json(page))
 }

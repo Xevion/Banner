@@ -1,8 +1,8 @@
 //! Database operations for the `reference_data` table (code->description lookups).
 
 use crate::data::models::ReferenceData;
+use crate::data::names::decode_html_entities;
 use anyhow::{Context, Result};
-use html_escape::decode_html_entities;
 use sqlx::PgPool;
 
 /// Batch upsert reference data entries.
@@ -13,10 +13,7 @@ pub async fn batch_upsert(pool: &PgPool, entries: &[ReferenceData]) -> Result<()
 
     let categories: Vec<&str> = entries.iter().map(|e| e.category.as_str()).collect();
     let codes: Vec<&str> = entries.iter().map(|e| e.code.as_str()).collect();
-    let descriptions: Vec<String> = entries
-        .iter()
-        .map(|e| decode_html_entities(&e.description).into_owned())
-        .collect();
+    let descriptions: Vec<String> = entries.iter().map(|e| decode_html_entities(&e.description)).collect();
 
     sqlx::query(
         r#"

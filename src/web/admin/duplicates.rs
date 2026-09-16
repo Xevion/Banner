@@ -12,7 +12,7 @@ use crate::data::instructor_merge::{self, DuplicatePair, MergeError, MergeStats}
 use crate::state::AppState;
 use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
-use crate::web::error::{ApiError, db_error};
+use crate::web::error::{ApiError, DbResultExt, db_error};
 
 /// Every merge failure names something the caller can correct, so all of them
 /// are 400s; anything else is a genuine fault and stays a generic 500.
@@ -88,11 +88,11 @@ pub async fn list_duplicates(
 ) -> Result<Json<DuplicatesResponse>, ApiError> {
     let pairs = instructor_merge::find_duplicate_pairs(&state.db_pool)
         .await
-        .map_err(|e| db_error("list duplicate instructors", e))?;
+        .db_context("list duplicate instructors")?;
 
     let dismissed = instructor_merge::find_dismissed_pairs(&state.db_pool)
         .await
-        .map_err(|e| db_error("list dismissed instructor pairs", e))?;
+        .db_context("list dismissed instructor pairs")?;
 
     trace!(
         count = pairs.len(),
@@ -138,7 +138,7 @@ pub async fn merge(
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
-        .map_err(|e| db_error("refresh rmp summary", e))?;
+        .db_context("refresh rmp summary")?;
 
     info!(
         survivor_id = body.survivor_id,
@@ -188,7 +188,7 @@ pub async fn merge_claimant(
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
-        .map_err(|e| db_error("refresh rmp summary", e))?;
+        .db_context("refresh rmp summary")?;
 
     info!(
         survivor,
@@ -208,7 +208,7 @@ pub async fn merge_all(
 ) -> Result<Json<MergeStats>, ApiError> {
     let stats = instructor_merge::auto_merge_duplicates(&state.db_pool, Some(user.discord_id))
         .await
-        .map_err(|e| db_error("merge duplicate instructors", e))?;
+        .db_context("merge duplicate instructors")?;
 
     action_log::record(
         &state.db_pool,
@@ -221,7 +221,7 @@ pub async fn merge_all(
 
     crate::data::rmp::refresh_rmp_summary(&state.db_pool)
         .await
-        .map_err(|e| db_error("refresh rmp summary", e))?;
+        .db_context("refresh rmp summary")?;
 
     info!(
         merged = stats.merged,
