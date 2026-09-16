@@ -121,8 +121,8 @@ pub async fn match_instructor(
             let msg = format!("{e:#}");
             if msg.contains("pending candidate not found") {
                 ApiError::not_found("pending candidate not found for this instructor")
-            } else if msg.contains("already linked to instructor") {
-                ApiError::conflict("RMP profile already linked to another instructor")
+            } else if let Some((_, detail)) = msg.split_once("RMP profile already linked to ") {
+                ApiError::conflict(format!("RMP profile already linked to {detail}"))
             } else {
                 db_error("match instructor", e)
             }

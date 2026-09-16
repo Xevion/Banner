@@ -527,8 +527,11 @@ pub async fn accept_candidate(
     }
 
     // Check if this RMP profile is already linked to a different instructor
-    let conflict: Option<(i32,)> = sqlx::query_as(
-        "SELECT instructor_id FROM instructor_rmp_links WHERE rmp_legacy_id = $1 AND instructor_id != $2",
+    let conflict: Option<(i32, String, Option<String>)> = sqlx::query_as(
+        "SELECT i.id, i.display_name, i.email \
+         FROM instructor_rmp_links l \
+         JOIN instructors i ON i.id = l.instructor_id \
+         WHERE l.rmp_legacy_id = $1 AND l.instructor_id != $2",
     )
     .bind(rmp_legacy_id)
     .bind(instructor_id)
@@ -536,9 +539,10 @@ pub async fn accept_candidate(
     .await
     .context("failed to check rmp uniqueness")?;
 
-    if let Some((other_id,)) = conflict {
+    if let Some((other_id, other_name, other_email)) = conflict {
+        let email = other_email.unwrap_or_else(|| "no email".to_string());
         return Err(anyhow!(
-            "RMP profile already linked to instructor {other_id}"
+            "RMP profile already linked to instructor {other_name} ({email}, #{other_id})"
         ))
         .context("conflict");
     }
