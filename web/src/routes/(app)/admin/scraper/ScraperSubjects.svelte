@@ -1,6 +1,6 @@
 <script lang="ts">
 import { client } from "$lib/api";
-import type { SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
+import type { ScheduleState, SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import SortableHeader from "$lib/components/SortableHeader.svelte";
 import TableSkeleton from "$lib/components/TableSkeleton.svelte";
@@ -93,9 +93,9 @@ const columns: ColumnDef<AppTableFeatures, SubjectSummary>[] = [
     header: "Scrape in",
     enableSorting: true,
     sortFn: (a, b) => {
-      const order: Record<string, number> = { eligible: 0, cooldown: 1, paused: 2, read_only: 3 };
-      const sa = order[a.original.scheduleState] ?? 4;
-      const sb = order[b.original.scheduleState] ?? 4;
+      const order: Record<ScheduleState, number> = { eligible: 0, cooldown: 1, paused: 2 };
+      const sa = order[a.original.scheduleState];
+      const sb = order[b.original.scheduleState];
       if (sa !== sb) return sa - sb;
       return (
         (a.original.cooldownRemainingSecs ?? Infinity) -
@@ -199,8 +199,6 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
   <td class="px-3 py-1.5">
     {#if subject.scheduleState === "paused"}
       <span class="text-orange-600 dark:text-orange-400">paused</span>
-    {:else if subject.scheduleState === "read_only"}
-      <span class="text-muted-foreground">read only</span>
     {:else if subject.nextEligibleAt}
       {@const remainingMs = new Date(subject.nextEligibleAt).getTime() - now.getTime()}
       {#if remainingMs >= 1000}

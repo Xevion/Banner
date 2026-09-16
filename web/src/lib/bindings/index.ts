@@ -80,6 +80,7 @@ export type { RmpBrief } from "./RmpBrief";
 export type { RmpCandidateStatus } from "./RmpCandidateStatus";
 export type { RmpFull } from "./RmpFull";
 export type { RmpMatchStatus } from "./RmpMatchStatus";
+export type { ScheduleState } from "./ScheduleState";
 export type { ScoreBreakdown } from "./ScoreBreakdown";
 export type { ScrapeJobDto } from "./ScrapeJobDto";
 export type { ScrapeJobEvent } from "./ScrapeJobEvent";

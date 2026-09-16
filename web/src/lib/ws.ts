@@ -11,6 +11,7 @@ import type {
   StreamServerMessage,
   StreamSnapshot,
 } from "$lib/bindings";
+import { exponential, jitter } from "true-myth/task/delay";
 import * as v from "valibot";
 
 export type ConnectionState = "connected" | "reconnecting" | "disconnected";
@@ -71,6 +72,7 @@ export class StreamClient {
   private ws: WebSocket | null = null;
   private _connectionState: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
+  private backoff: Iterator<number, number> = exponential({ from: 1000 });
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private requestSeq = 1;
@@ -128,6 +130,7 @@ export class StreamClient {
     this.ws.onopen = () => {
       this._connectionState = "connected";
       this.reconnectAttempts = 0;
+      this.backoff = exponential({ from: 1000 });
       this.subById.clear();
       this.pendingRequests.clear();
       for (const spec of this.subscriptions) {
@@ -181,6 +184,7 @@ export class StreamClient {
     }
     this.closeExisting();
     this.reconnectAttempts = 0;
+    this.backoff = exponential({ from: 1000 });
     this._connectionState = "reconnecting";
     this.notifyStateListeners();
     this.connect();
@@ -322,7 +326,10 @@ export class StreamClient {
     this._connectionState = "reconnecting";
     this.notifyStateListeners();
 
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY);
+    const step = Math.min(this.backoff.next().value, MAX_RECONNECT_DELAY);
+    // Full jitter: a client waits somewhere in [0, step] rather than every client
+    // reconnecting on the same tick after a deploy.
+    const delay = jitter(step / 2);
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {

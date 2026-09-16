@@ -82,7 +82,7 @@ jobs:
 
       - name: Lint
         working-directory: web
-        run: bun run lint
+        run: bun run lint:ci
 
   rust-tests:
     name: Rust Tests

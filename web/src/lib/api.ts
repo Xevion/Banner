@@ -304,7 +304,7 @@ export class BannerApiClient {
     options?: RequestOptions
   ): Promise<Result<T, ApiErrorClass>> {
     const result = await this.checked(await this.send(endpoint, options));
-    if (result.isErr) return err(result.error);
+    if (result.isErr) return result.cast<T>();
     return ok((await result.value.json()) as T);
   }
 
@@ -363,11 +363,9 @@ export class BannerApiClient {
       return ok(cached.data);
     }
     const url = term ? `/search-options?term=${encodeURIComponent(term)}` : "/search-options";
-    const result = await this.request<SearchOptionsResponse>(url);
-    if (browser && result.isOk) {
-      _searchOptionsCache.set(cacheKey, { data: result.value, fetchedAt: Date.now() });
-    }
-    return result;
+    return (await this.request<SearchOptionsResponse>(url)).inspect((data) => {
+      if (browser) _searchOptionsCache.set(cacheKey, { data, fetchedAt: Date.now() });
+    });
   }
 
   // Public instructor endpoints

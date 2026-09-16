@@ -200,7 +200,7 @@ pub struct SubjectSummary {
     pub subject_description: Option<String>,
     #[ts(type = "number")]
     pub tracked_course_count: i64,
-    pub schedule_state: String,
+    pub schedule_state: crate::data::scraper_stats::ScheduleState,
     #[ts(type = "number")]
     pub current_interval_secs: u64,
     pub time_multiplier: u32,

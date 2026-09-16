@@ -12,13 +12,37 @@ use crate::data::events::EventBuffer;
 use crate::scraper::adaptive::{self, SubjectSchedule, SubjectStats};
 use crate::state::ReferenceCache;
 
+/// Why a subject is or is not due for a scrape, derived rather than stored.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    ts_rs::TS,
+    strum::AsRefStr,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::VariantArray,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[ts(export)]
+pub enum ScheduleState {
+    Eligible,
+    Cooldown,
+    Paused,
+}
+
 /// A scraper subject with computed schedule state, suitable for admin dashboards.
 #[derive(Debug, Clone)]
 pub struct SubjectData {
     pub subject: String,
     pub subject_description: Option<String>,
     pub tracked_course_count: i64,
-    pub schedule_state: String,
+    pub schedule_state: ScheduleState,
     pub current_interval_secs: u64,
     pub time_multiplier: u32,
     pub last_scraped: chrono::DateTime<chrono::Utc>,
@@ -119,9 +143,9 @@ pub async fn compute_subjects(
             let base_interval = adaptive::compute_base_interval(&stats);
 
             let schedule_state = match &schedule {
-                SubjectSchedule::Eligible(_) => "eligible",
-                SubjectSchedule::Cooldown(_) => "cooldown",
-                SubjectSchedule::Paused => "paused",
+                SubjectSchedule::Eligible(_) => ScheduleState::Eligible,
+                SubjectSchedule::Cooldown(_) => ScheduleState::Cooldown,
+                SubjectSchedule::Paused => ScheduleState::Paused,
             };
 
             let current_interval_secs = base_interval.as_secs() * multiplier as u64;
@@ -146,7 +170,7 @@ pub async fn compute_subjects(
                 subject: stats.subject,
                 subject_description,
                 tracked_course_count,
-                schedule_state: schedule_state.to_string(),
+                schedule_state,
                 current_interval_secs,
                 time_multiplier: multiplier,
                 last_scraped: stats.last_completed,
