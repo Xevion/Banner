@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { CandidateResponse } from "$lib/bindings";
 import { formatYearRange, ratingStyle, rmpUrl } from "$lib/course";
-import { Check, ExternalLink, LoaderCircle, X, XCircle } from "@lucide/svelte";
+import { Check, ExternalLink, Info, LoaderCircle, Merge, X, XCircle } from "@lucide/svelte";
 import ScoreBreakdown from "./ScoreBreakdown.svelte";
 
 let {
@@ -14,6 +14,8 @@ let {
   onmatch,
   onreject,
   onunmatch,
+  onmerge,
+  canMerge = false,
 }: {
   candidate: CandidateResponse;
   isMatched?: boolean;
@@ -24,12 +26,16 @@ let {
   onmatch?: () => void;
   onreject?: () => void;
   onunmatch?: () => void;
+  onmerge?: () => void;
+  canMerge?: boolean;
 } = $props();
 
 const isPending = $derived(!isMatched && !isRejected);
+const isClaimed = $derived(candidate.claimedBy != null);
 const isMatchLoading = $derived(actionLoading === `match-${candidate.rmpLegacyId}`);
 const isRejectLoading = $derived(actionLoading === `reject-${candidate.rmpLegacyId}`);
 const isUnmatchLoading = $derived(actionLoading === `unmatch-${candidate.rmpLegacyId}`);
+const isMergeLoading = $derived(actionLoading === `merge-${candidate.rmpLegacyId}`);
 </script>
 
 <div
@@ -63,6 +69,33 @@ const isUnmatchLoading = $derived(actionLoading === `unmatch-${candidate.rmpLega
       {#if candidate.department}
         <div class="text-xs text-muted-foreground mt-0.5">{candidate.department}</div>
       {/if}
+      {#if isPending && candidate.blockedReason}
+        <div class="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-500">
+          <Info size={12} class="mt-0.5 shrink-0" />
+          <span>{candidate.blockedReason}</span>
+        </div>
+      {/if}
+      {#if isPending && isClaimed && canMerge}
+        <button
+          onclick={(e) => {
+            e.stopPropagation();
+            onmerge?.();
+          }}
+          {disabled}
+          class="mt-1.5 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 cursor-pointer"
+        >
+          {#if isMergeLoading}
+            <LoaderCircle size={12} class="animate-spin" />
+          {:else}
+            <Merge size={12} />
+          {/if}
+          Merge these records
+        </button>
+      {:else if isPending && isClaimed}
+        <div class="mt-1 text-xs text-muted-foreground">
+          Different names, so this is not a duplicate. Reject it, or unmatch the other record first.
+        </div>
+      {/if}
     </div>
 
     <div class="flex items-center gap-0.5 shrink-0">
@@ -83,7 +116,7 @@ const isUnmatchLoading = $derived(actionLoading === `unmatch-${candidate.rmpLega
           {/if}
           Unmatch
         </button>
-      {:else if isPending}
+      {:else if isPending && !isClaimed}
         <button
           onclick={(e) => {
             e.stopPropagation();
@@ -99,6 +132,8 @@ const isUnmatchLoading = $derived(actionLoading === `unmatch-${candidate.rmpLega
             <Check size={14} />
           {/if}
         </button>
+      {/if}
+      {#if isPending}
         <button
           onclick={(e) => {
             e.stopPropagation();

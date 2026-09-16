@@ -11,6 +11,7 @@ pub mod course_types;
 pub mod courses;
 pub mod events;
 pub mod health;
+pub mod instructor_merge;
 pub mod instructors;
 pub mod kv;
 pub mod metrics;

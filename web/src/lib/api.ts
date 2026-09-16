@@ -11,6 +11,7 @@ import type {
   BluebookSyncTriggerResponse,
   CodeDescription,
   CourseResponse,
+  DuplicatesResponse,
   InstructorDetailResponse,
   InstructorSuggestion,
   ListBluebookLinksParams,
@@ -18,6 +19,8 @@ import type {
   ListInstructorsParams as ListInstructorsParamsGenerated,
   ListInstructorsResponse,
   MatchBody,
+  MergeResponse,
+  MergeStats,
   MetricsParams as MetricsParamsGenerated,
   MetricsResponse,
   PublicInstructorListResponse,
@@ -491,6 +494,36 @@ export class BannerApiClient {
     return this.requestVoid(`/admin/instructors/${id}/unmatch`, {
       method: "POST",
       ...(rmpLegacyId !== undefined ? { body: { rmpLegacyId } satisfies MatchBody } : {}),
+    });
+  }
+
+  async getInstructorDuplicates(): Promise<Result<DuplicatesResponse, ApiErrorClass>> {
+    return this.request<DuplicatesResponse>("/admin/instructors/duplicates");
+  }
+
+  async mergeInstructors(
+    survivorId: number,
+    loserId: number
+  ): Promise<Result<MergeResponse, ApiErrorClass>> {
+    return this.request<MergeResponse>("/admin/instructors/merge", {
+      method: "POST",
+      body: { survivorId, loserId },
+    });
+  }
+
+  async mergeWithClaimant(
+    instructorId: number,
+    rmpLegacyId: number
+  ): Promise<Result<MergeResponse, ApiErrorClass>> {
+    return this.request<MergeResponse>(`/admin/instructors/${instructorId}/merge-claimant`, {
+      method: "POST",
+      body: { rmpLegacyId },
+    });
+  }
+
+  async mergeAllDuplicates(): Promise<Result<MergeStats, ApiErrorClass>> {
+    return this.request<MergeStats>("/admin/instructors/merge-duplicates", {
+      method: "POST",
     });
   }
 

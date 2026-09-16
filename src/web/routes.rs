@@ -116,6 +116,19 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/admin/scrape-jobs", get(admin::list_scrape_jobs))
         .route("/admin/audit-log", get(admin::list_audit_log))
         .route("/admin/instructors", get(admin::rmp::list_instructors))
+        .route(
+            "/admin/instructors/duplicates",
+            get(admin::duplicates::list_duplicates),
+        )
+        .route("/admin/instructors/merge", post(admin::duplicates::merge))
+        .route(
+            "/admin/instructors/{id}/merge-claimant",
+            post(admin::duplicates::merge_claimant),
+        )
+        .route(
+            "/admin/instructors/merge-duplicates",
+            post(admin::duplicates::merge_all),
+        )
         .route("/admin/instructors/{id}", get(admin::rmp::get_instructor))
         .route(
             "/admin/instructors/{id}/match",

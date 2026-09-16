@@ -353,3 +353,136 @@ async fn test_batch_upsert_no_change_no_audit(pool: PgPool) {
         "identical re-upsert should only have the baseline metric"
     );
 }
+
+/// One person reached through both UTSA domains must resolve to a single row.
+#[sqlx::test]
+async fn test_upsert_instructors_merges_student_and_staff_domains(pool: PgPool) {
+    let mut first = helpers::make_course(
+        "20001",
+        "202510",
+        "SPN",
+        "1014",
+        "Elementary",
+        (5, 30, 0, 0),
+    );
+    first.faculty = vec![helpers::make_faculty(
+        "Cano, Lilian",
+        Some("lilian.cano@my.utsa.edu"),
+        20001,
+        "202510",
+    )];
+
+    let mut second = helpers::make_course(
+        "20002",
+        "202520",
+        "SPN",
+        "2013",
+        "Intermediate",
+        (5, 30, 0, 0),
+    );
+    second.faculty = vec![helpers::make_faculty(
+        "Cano, Lilian",
+        Some("lilian.cano@utsa.edu"),
+        20002,
+        "202520",
+    )];
+
+    batch_upsert_courses(&[first], &pool).await.unwrap();
+    batch_upsert_courses(&[second], &pool).await.unwrap();
+
+    let rows: Vec<(i32, String)> =
+        sqlx::query_as("SELECT id, display_name FROM instructors ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(
+        rows.len(),
+        1,
+        "both domains should resolve to one instructor, got {rows:?}"
+    );
+
+    let sections: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM course_instructors WHERE instructor_id = $1")
+            .bind(rows[0].0)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        sections.0, 2,
+        "both sections should land on the same record"
+    );
+}
+
+/// Both spellings arriving in one batch must not collide in the upsert.
+#[sqlx::test]
+async fn test_upsert_instructors_handles_both_domains_in_one_batch(pool: PgPool) {
+    let mut a = helpers::make_course(
+        "20003",
+        "202510",
+        "SPN",
+        "1014",
+        "Elementary",
+        (5, 30, 0, 0),
+    );
+    a.faculty = vec![helpers::make_faculty(
+        "Cano, Lilian",
+        Some("lilian.cano@my.utsa.edu"),
+        20003,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course(
+        "20004",
+        "202510",
+        "SPN",
+        "2013",
+        "Intermediate",
+        (5, 30, 0, 0),
+    );
+    b.faculty = vec![helpers::make_faculty(
+        "Cano, Lilian",
+        Some("lilian.cano@utsa.edu"),
+        20004,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b], &pool).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 1);
+}
+
+/// Distinct accounts that merely share a name must stay separate.
+#[sqlx::test]
+async fn test_upsert_instructors_keeps_distinct_accounts_apart(pool: PgPool) {
+    let mut a = helpers::make_course("20005", "202510", "BIO", "1404", "Biology", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Thompson, Patricia",
+        Some("iki700@my.utsa.edu"),
+        20005,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course("20006", "202510", "HIS", "1043", "History", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Thompson, Patricia",
+        Some("patricia.thompson@utsa.edu"),
+        20006,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b], &pool).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        count.0, 2,
+        "different accounts must remain separate records"
+    );
+}

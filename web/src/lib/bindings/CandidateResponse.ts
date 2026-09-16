@@ -12,4 +12,12 @@ reviewSubjects: Array<string>,
 /**
  * Distinct years in which this professor received reviews.
  */
-reviewYears: Array<number>, };
+reviewYears: Array<number>, 
+/**
+ * Instructor already holding this RMP profile, if any.
+ */
+claimedBy: string | null, 
+/**
+ * Why this candidate was not linked automatically.
+ */
+blockedReason: string | null, };

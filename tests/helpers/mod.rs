@@ -224,3 +224,22 @@ pub async fn insert_scrape_job(
 
     id
 }
+
+/// Build a `FacultyItem` for instructor upsert tests.
+pub fn make_faculty(
+    display_name: &str,
+    email: Option<&str>,
+    crn: u32,
+    term: &str,
+) -> banner::banner::models::meetings::FacultyItem {
+    banner::banner::models::meetings::FacultyItem {
+        banner_id: format!("@{crn}"),
+        category: None,
+        class: "net.hedtech.banner.student.schedule.SectionSessionAssignmentDecorator".to_owned(),
+        course_reference_number: crn,
+        display_name: Some(display_name.to_owned()),
+        email_address: email.map(str::to_owned),
+        primary_indicator: true,
+        term: term.to_owned(),
+    }
+}

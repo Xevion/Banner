@@ -20,7 +20,7 @@ import { formatInstructorName, formatYearRange, ratingStyle } from "$lib/course"
 import { themeStore } from "$lib/stores/theme.svelte";
 import type { FilterCard, MatchColumn, ProgressSegment, StatusBadge } from "$lib/ui";
 import { getBadge } from "$lib/ui";
-import { Check, LoaderCircle, X } from "@lucide/svelte";
+import { Check, LoaderCircle, TriangleAlert, X } from "@lucide/svelte";
 import { onDestroy, untrack } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 import { fade } from "svelte/transition";
@@ -223,6 +223,19 @@ async function handleMatch(instructorId: number, rmpLegacyId: number) {
   actionLoading = null;
 }
 
+/// Resolve a candidate blocked by a duplicate record by folding the two together.
+async function handleMergeClaimant(instructorId: number, rmpLegacyId: number) {
+  actionLoading = `merge-${rmpLegacyId}`;
+  const result = await client.mergeWithClaimant(instructorId, rmpLegacyId);
+  if (result.isErr) {
+    expand.error = result.error.message;
+  } else {
+    expand.collapse();
+    await fetchInstructors();
+  }
+  actionLoading = null;
+}
+
 async function handleReject(instructorId: number, rmpLegacyId: number) {
   actionLoading = `reject-${rmpLegacyId}`;
   const result = await client.rejectCandidate(instructorId, rmpLegacyId);
@@ -421,11 +434,24 @@ function formatScore(score: number): string {
     {/if}
   </td>
   <td class="px-4 py-2.5">
-    <span
-      class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-300 {badge.classes}"
-    >
-      {badge.label}
-    </span>
+    <div class="flex items-center gap-1.5">
+      <span
+        class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-300 {badge.classes}"
+      >
+        {badge.label}
+      </span>
+      {#if instructor.rmpMatchStatus !== "pending" && instructor.candidateCount > 0}
+        <SimpleTooltip
+          text="{instructor.candidateCount} candidate{instructor.candidateCount === 1 ? '' : 's'} still open"
+        >
+          <span
+            class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+          >
+            {instructor.candidateCount} open
+          </span>
+        </SimpleTooltip>
+      {/if}
+    </div>
   </td>
   <td class="px-4 py-2.5">
     {#if instructor.topCandidate}
@@ -447,13 +473,17 @@ function formatScore(score: number): string {
       <span class="text-muted-foreground text-xs">No candidates</span>
     {/if}
   </td>
-  <td class="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+  <td class="px-4 py-2.5 text-center tabular-nums {instructor.candidateCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}">
     {instructor.candidateCount}
   </td>
 {/snippet}
 
 {#snippet actions(instructor: InstructorListItem)}
-  {#if instructor.topCandidate && (instructor.rmpMatchStatus === "unmatched" || instructor.rmpMatchStatus === "pending")}
+  {#if instructor.topCandidate?.claimedBy}
+    <SimpleTooltip text="Already linked to {instructor.topCandidate.claimedBy}. Merge the duplicate records instead.">
+      <TriangleAlert size={14} class="text-amber-600 dark:text-amber-500" />
+    </SimpleTooltip>
+  {:else if instructor.topCandidate && (instructor.rmpMatchStatus === "unmatched" || instructor.rmpMatchStatus === "pending")}
     <button
       onclick={(e) => {
         e.stopPropagation();
@@ -585,6 +615,8 @@ function formatScore(score: number): string {
               onmatch={() => handleMatch(detail.instructor.id, candidate.rmpLegacyId)}
               onreject={() => handleReject(detail.instructor.id, candidate.rmpLegacyId)}
               onunmatch={() => handleUnmatch(detail.instructor.id, candidate.rmpLegacyId)}
+              onmerge={() => handleMergeClaimant(detail.instructor.id, candidate.rmpLegacyId)}
+              canMerge={candidate.claimedBy === detail.instructor.displayName}
             />
           {/each}
         </div>

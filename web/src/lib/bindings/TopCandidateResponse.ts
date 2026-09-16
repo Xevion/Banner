@@ -4,4 +4,8 @@ import type { ScoreBreakdown } from "./ScoreBreakdown";
 /**
  * A top-candidate summary shown in the instructor list view.
  */
-export type TopCandidateResponse = { rmpLegacyId: number, score: number | null, scoreBreakdown: ScoreBreakdown | null, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, numRatings: number | null, };
+export type TopCandidateResponse = { rmpLegacyId: number, score: number | null, scoreBreakdown: ScoreBreakdown | null, firstName: string | null, lastName: string | null, department: string | null, avgRating: number | null, numRatings: number | null, 
+/**
+ * Instructor already holding this profile, when it is not this one.
+ */
+claimedBy: string | null, };

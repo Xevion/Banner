@@ -3,6 +3,7 @@
 use crate::banner::Course;
 use crate::banner::models::meetings::{FacultyItem, TimeRange};
 use crate::data::course_types::{DateRange, MeetingLocation};
+use crate::data::instructor_merge::canonical_email;
 use crate::data::models::{DayOfWeek, DbMeetingTime, UpsertCounts};
 use crate::data::names::{decode_html_entities, parse_banner_name};
 use crate::data::unsigned::Count;
@@ -813,6 +814,46 @@ impl InstructorLookup {
     }
 }
 
+/// Map each incoming account to the address already stored for it.
+///
+/// Looks up both the staff and student spelling of every address so an existing
+/// record is found whichever form the scrape reported.
+async fn existing_emails_by_canonical(
+    emails: &[String],
+    conn: &mut PgConnection,
+) -> Result<HashMap<String, String>> {
+    let mut variants: HashSet<String> = HashSet::new();
+    for email in emails {
+        let canon = canonical_email(email);
+        if let Some((local, domain)) = canon.split_once('@') {
+            variants.insert(format!("{local}@my.{domain}"));
+        }
+        variants.insert(email.clone());
+        variants.insert(canon);
+    }
+    let variants: Vec<String> = variants.into_iter().collect();
+
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT email FROM instructors WHERE email = ANY($1)")
+            .bind(&variants)
+            .fetch_all(conn)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
+
+    let mut stored: HashMap<String, String> = HashMap::new();
+    for (email,) in rows {
+        let canon = canonical_email(&email);
+        // Prefer the staff address when both spellings are already on file.
+        let keep = stored
+            .get(&canon)
+            .is_none_or(|existing| existing.contains("@my."));
+        if keep {
+            stored.insert(canon, email);
+        }
+    }
+    Ok(stored)
+}
+
 /// Deduplicate and upsert all instructors from the batch.
 ///
 /// Two-phase upsert:
@@ -864,7 +905,60 @@ async fn upsert_instructors(
 
     // Phase 1: Upsert instructors with email
     if !e_display_names.is_empty() {
-        let email_refs: Vec<&str> = e_emails.iter().map(|s| s.as_str()).collect();
+        // UTSA hands one person both a student and a staff address. Resolve each
+        // incoming address to the row that already holds the account, so the
+        // same person does not get a second record.
+        let stored_by_canonical = existing_emails_by_canonical(&e_emails, &mut *conn).await?;
+
+        // Both spellings can also arrive together in one batch, with no row yet
+        // for either. Pick one representative, favouring the staff address.
+        let mut batch_pick: HashMap<String, String> = HashMap::new();
+        for email in &e_emails {
+            let canon = canonical_email(email);
+            if stored_by_canonical.contains_key(&canon) {
+                continue;
+            }
+            let replace = batch_pick
+                .get(&canon)
+                .is_none_or(|current| current.contains("@my."));
+            if replace {
+                batch_pick.insert(canon, email.clone());
+            }
+        }
+
+        let resolved: Vec<String> = e_emails
+            .iter()
+            .map(|email| {
+                let canon = canonical_email(email);
+                stored_by_canonical
+                    .get(&canon)
+                    .or_else(|| batch_pick.get(&canon))
+                    .cloned()
+                    .unwrap_or_else(|| email.clone())
+            })
+            .collect();
+
+        // Two incoming addresses can resolve to one row, and a conflicting
+        // upsert may not touch the same row twice in one statement.
+        let mut seen_resolved = HashSet::new();
+        let mut u_emails = Vec::new();
+        let mut u_display_names = Vec::new();
+        let mut u_first_names: Vec<Option<String>> = Vec::new();
+        let mut u_last_names: Vec<Option<String>> = Vec::new();
+        for (idx, email) in resolved.iter().enumerate() {
+            if seen_resolved.insert(email.clone()) {
+                u_emails.push(email.clone());
+                u_display_names.push(e_display_names[idx].clone());
+                u_first_names.push(e_first_names[idx].clone());
+                u_last_names.push(e_last_names[idx].clone());
+            }
+        }
+
+        let e_display_names = u_display_names;
+        let e_first_names = u_first_names;
+        let e_last_names = u_last_names;
+
+        let email_refs: Vec<&str> = u_emails.iter().map(|s| s.as_str()).collect();
         let first_name_refs: Vec<Option<&str>> =
             e_first_names.iter().map(|s| s.as_deref()).collect();
         let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
@@ -895,7 +989,16 @@ async fn upsert_instructors(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {}", e))?;
 
-        by_email = rows.into_iter().map(|(id, email)| (email, id)).collect();
+        let by_stored: HashMap<String, i32> = rows.into_iter().map(|(id, e)| (e, id)).collect();
+        // Callers look instructors up by the address the scrape reported, so
+        // every original address maps to the row that absorbed it.
+        by_email = e_emails
+            .iter()
+            .zip(resolved.iter())
+            .filter_map(|(original, stored)| {
+                by_stored.get(stored).map(|id| (original.clone(), *id))
+            })
+            .collect();
     }
 
     // Phase 2: Upsert instructors without email

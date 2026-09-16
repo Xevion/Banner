@@ -71,3 +71,52 @@ async fn rmp_corpus_regenerate_reports_outcome_mix() {
         "a candidate marked accepted must have a matching link"
     );
 }
+
+/// Exercises duplicate detection and the automatic merge against a snapshot.
+#[tokio::test]
+#[ignore = "mutates instructor rows; requires RMP_CORPUS_DATABASE_URL"]
+async fn rmp_corpus_merge_duplicate_instructors() {
+    use banner::data::instructor_merge::{
+        DuplicateTier, auto_merge_duplicates, find_duplicate_pairs,
+    };
+
+    let url = std::env::var("RMP_CORPUS_DATABASE_URL")
+        .expect("set RMP_CORPUS_DATABASE_URL to a scratch database restore");
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .expect("connect to corpus database");
+
+    let before = find_duplicate_pairs(&pool).await.expect("find duplicates");
+    let same_account = before
+        .iter()
+        .filter(|p| p.tier == DuplicateTier::SameAccount)
+        .count();
+    println!("pairs: {}, same-account: {same_account}", before.len());
+
+    let stats = auto_merge_duplicates(&pool)
+        .await
+        .expect("merge duplicates");
+    println!("{stats:?}");
+
+    let after = find_duplicate_pairs(&pool)
+        .await
+        .expect("re-find duplicates");
+    let remaining = after
+        .iter()
+        .filter(|p| p.tier == DuplicateTier::SameAccount)
+        .count();
+
+    let orphans: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM course_instructors ci \
+         WHERE NOT EXISTS (SELECT 1 FROM instructors i WHERE i.id = ci.instructor_id)",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count orphaned course links");
+
+    assert_eq!(stats.merged, same_account, "every safe pair should merge");
+    assert_eq!(remaining, 0, "no same-account duplicates should survive");
+    assert_eq!(orphans.0, 0, "merging must not orphan course links");
+}

@@ -25,6 +25,8 @@ pub struct TopCandidateResponse {
     pub department: Option<String>,
     pub avg_rating: Option<f32>,
     pub num_ratings: Option<i32>,
+    /// Instructor already holding this profile, when it is not this one.
+    pub claimed_by: Option<String>,
 }
 
 /// An instructor row in the paginated list.
@@ -129,6 +131,10 @@ pub struct CandidateResponse {
     pub review_subjects: Vec<String>,
     /// Distinct years in which this professor received reviews.
     pub review_years: Vec<i16>,
+    /// Instructor already holding this RMP profile, if any.
+    pub claimed_by: Option<String>,
+    /// Why this candidate was not linked automatically.
+    pub blocked_reason: Option<String>,
 }
 
 /// Full instructor detail with candidates and linked profiles.
@@ -190,6 +196,7 @@ struct InstructorRow {
     tc_department: Option<String>,
     tc_avg_rating: Option<f32>,
     tc_num_ratings: Option<i32>,
+    tc_claimed_by: Option<String>,
     candidate_count: Option<i64>,
     course_subject_count: Option<i64>,
     teaching_years: Option<Vec<i16>>,
@@ -264,6 +271,9 @@ pub async fn list_instructors(
             rp.department as tc_department,
             rp.avg_rating as tc_avg_rating,
             rp.num_ratings as tc_num_ratings,
+            (SELECT i2.display_name FROM instructor_rmp_links l2
+              JOIN instructors i2 ON i2.id = l2.instructor_id
+             WHERE l2.rmp_legacy_id = tc.rmp_legacy_id AND l2.instructor_id <> i.id) as tc_claimed_by,
             (SELECT COUNT(*) FROM rmp_match_candidates mc WHERE mc.instructor_id = i.id AND mc.status = 'pending') as candidate_count,
             (SELECT COUNT(DISTINCT c.subject) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = i.id) as course_subject_count,
             (SELECT ARRAY_AGG(DISTINCT t.year ORDER BY t.year) FROM course_instructors ci JOIN courses c ON c.id = ci.course_id JOIN terms t ON t.code = c.term_code WHERE ci.instructor_id = i.id) as teaching_years,
@@ -272,8 +282,8 @@ pub async fn list_instructors(
         LEFT JOIN LATERAL (
             SELECT mc.rmp_legacy_id, mc.score, mc.score_breakdown
             FROM rmp_match_candidates mc
-            WHERE mc.instructor_id = i.id AND mc.status = 'pending'
-            ORDER BY mc.score DESC
+            WHERE mc.instructor_id = i.id
+            ORDER BY (mc.status = 'accepted') DESC, mc.score DESC
             LIMIT 1
         ) tc ON true
         LEFT JOIN rmp_professors rp ON rp.legacy_id = tc.rmp_legacy_id
@@ -361,6 +371,7 @@ pub async fn list_instructors(
                 department: r.tc_department.clone(),
                 avg_rating: r.tc_avg_rating,
                 num_ratings: r.tc_num_ratings,
+                claimed_by: r.tc_claimed_by.clone(),
             });
 
             Ok(InstructorListItem {
@@ -388,6 +399,28 @@ pub async fn list_instructors(
         per_page,
         stats,
     })
+}
+
+/// Describe why a candidate is still waiting, in the reviewer's terms.
+fn explain_block(candidate: &CandidateResponse) -> Option<String> {
+    if candidate.status == "accepted" {
+        return None;
+    }
+    if let Some(holder) = &candidate.claimed_by {
+        return Some(format!("Already linked to {holder}"));
+    }
+    let subject = candidate
+        .score_breakdown
+        .as_ref()
+        .map(|b| b.0.subject)
+        .unwrap_or(0.0);
+    if subject < 1.0 {
+        return Some(
+            "Subject not confirmed: neither the department nor the reviewed courses match what this instructor teaches"
+                .to_string(),
+        );
+    }
+    Some("Held for review: another professor shares this name".to_string())
 }
 
 /// Fetch full instructor detail with candidates and linked profiles.
@@ -442,17 +475,31 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
         SELECT mc.id, mc.rmp_legacy_id, mc.score, mc.score_breakdown, mc.status,
                rp.first_name, rp.last_name, rp.department,
                rp.avg_rating, rp.avg_difficulty, rp.num_ratings, rp.would_take_again_pct,
-               mc.review_subjects, mc.review_years
+               mc.review_subjects, mc.review_years,
+               (SELECT i2.display_name
+                  FROM instructor_rmp_links l2
+                  JOIN instructors i2 ON i2.id = l2.instructor_id
+                 WHERE l2.rmp_legacy_id = mc.rmp_legacy_id
+                   AND l2.instructor_id <> $1) AS claimed_by,
+               NULL::text AS blocked_reason
         FROM rmp_match_candidates mc
         JOIN rmp_professors rp ON rp.legacy_id = mc.rmp_legacy_id
         WHERE mc.instructor_id = $1
-        ORDER BY mc.score DESC
+        ORDER BY (mc.status = 'accepted') DESC, mc.score DESC
         "#,
     )
     .bind(inst_id)
     .fetch_all(pool)
     .await
     .context("failed to fetch candidates")?;
+
+    let candidates: Vec<CandidateResponse> = candidates
+        .into_iter()
+        .map(|mut c| {
+            c.blocked_reason = explain_block(&c);
+            c
+        })
+        .collect();
 
     let current_matches = sqlx::query_as::<_, LinkedRmpProfile>(
         r#"
@@ -541,6 +588,14 @@ pub async fn accept_candidate(
 
     if let Some((other_id, other_name, other_email)) = conflict {
         let email = other_email.unwrap_or_else(|| "no email".to_string());
+        // Reaching this point means a candidate was offered that could never be
+        // accepted, so the queue showed the reviewer a dead end.
+        warn!(
+            instructor_id,
+            rmp_legacy_id,
+            holder_id = other_id,
+            "Unacceptable RMP candidate was offered for review"
+        );
         return Err(anyhow!(
             "RMP profile already linked to instructor {other_name} ({email}, #{other_id})"
         ))
@@ -592,15 +647,32 @@ pub async fn reject_candidate(
     rmp_legacy_id: i32,
     resolved_by: i64,
 ) -> Result<bool> {
+    let mut tx = pool.begin().await.context("failed to begin rejection")?;
+
     let result = sqlx::query(
         "UPDATE rmp_match_candidates SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE instructor_id = $2 AND rmp_legacy_id = $3 AND status = 'pending'",
     )
     .bind(resolved_by)
     .bind(instructor_id)
     .bind(rmp_legacy_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .context("failed to reject candidate")?;
+
+    // Rejecting the last open candidate leaves nothing to review, so the
+    // instructor must not keep sitting in the pending queue.
+    sqlx::query(
+        "UPDATE instructors i SET rmp_match_status = 'rejected' \
+         WHERE i.id = $1 AND i.rmp_match_status = 'pending' \
+           AND NOT EXISTS (SELECT 1 FROM rmp_match_candidates mc \
+                           WHERE mc.instructor_id = i.id AND mc.status = 'pending')",
+    )
+    .bind(instructor_id)
+    .execute(&mut *tx)
+    .await
+    .context("failed to clear instructor pending status")?;
+
+    tx.commit().await.context("failed to commit rejection")?;
 
     Ok(result.rows_affected() > 0)
 }
