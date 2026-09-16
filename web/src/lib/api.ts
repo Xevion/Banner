@@ -42,7 +42,7 @@ import type {
   TermSyncResponse,
   TermUpdateResponse,
   TermsListResponse,
-  TimeRange,
+  TimelineRange,
   TimelineRequest,
   TimelineResponse,
   TrendsRequest,
@@ -431,7 +431,7 @@ export class BannerApiClient {
     return this.request<AdminAuditPage>(`/admin/action-log${qs ? `?${qs}` : ""}`);
   }
 
-  async getTimeline(ranges: TimeRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {
+  async getTimeline(ranges: TimelineRange[]): Promise<Result<TimelineResponse, ApiErrorClass>> {
     return this.request<TimelineResponse>("/timeline", {
       method: "POST",
       body: { ranges } satisfies TimelineRequest,

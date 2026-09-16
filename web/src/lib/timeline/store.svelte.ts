@@ -1,5 +1,5 @@
 import { client } from "$lib/api";
-import type { TimeRange } from "$lib/bindings";
+import type { TimelineRange } from "$lib/bindings";
 /**
  * Reactive timeline data store with gap-aware on-demand loading.
  *
@@ -76,7 +76,7 @@ function mergeRange(ranges: Range[], added: Range): Range[] {
  * Converts gap ranges into the API request format.
  */
 async function fetchFromApi(gaps: Range[]): Promise<TimeSlot[]> {
-  const ranges: TimeRange[] = gaps.map(([start, end]) => ({
+  const ranges: TimelineRange[] = gaps.map(([start, end]) => ({
     start: new Date(start).toISOString(),
     end: new Date(end).toISOString(),
   }));

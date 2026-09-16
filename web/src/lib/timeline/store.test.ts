@@ -1,8 +1,8 @@
 import { type Result, err, ok } from "true-myth/result";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TimeRange, TimelineResponse } from "$lib/bindings";
+import type { TimelineRange, TimelineResponse } from "$lib/bindings";
 
-type GetTimeline = (ranges: TimeRange[]) => Promise<Result<TimelineResponse, Error>>;
+type GetTimeline = (ranges: TimelineRange[]) => Promise<Result<TimelineResponse, Error>>;
 
 const { getTimeline } = vi.hoisted(() => ({ getTimeline: vi.fn<GetTimeline>() }));
 vi.mock("$lib/api", () => ({ client: { getTimeline } }));
@@ -27,7 +27,7 @@ function response(slots: [number, Record<string, number>][]): TimelineResponse {
 }
 
 /** The ranges passed to the API on the nth call. */
-const rangesOf = (call: number): TimeRange[] => getTimeline.mock.calls[call][0];
+const rangesOf = (call: number): TimelineRange[] => getTimeline.mock.calls[call][0];
 
 /**
  * A 20-slot viewport starting at slot `n`. The store's 15 % buffer is exactly

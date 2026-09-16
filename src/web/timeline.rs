@@ -32,13 +32,13 @@ const MAX_TOTAL_SPAN: Duration = Duration::hours(168);
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TimelineRequest {
-    ranges: Vec<TimeRange>,
+    ranges: Vec<TimelineRange>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub struct TimeRange {
+pub struct TimelineRange {
     /// ISO-8601 UTC timestamp (e.g., "2024-01-15T10:30:00Z")
     #[ts(type = "string")]
     start: DateTime<Utc>,
