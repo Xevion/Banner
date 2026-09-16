@@ -133,9 +133,7 @@ pub(crate) async fn timeline(
         return Err(ApiError::bad_request("At least one range is required"));
     }
     if body.ranges.len() > MAX_RANGES {
-        return Err(ApiError::bad_request(format!(
-            "Too many ranges (max {MAX_RANGES})"
-        )));
+        return Err(ApiError::bad_request(format!("Too many ranges (max {MAX_RANGES})")));
     }
 
     let mut aligned: Vec<AlignedRange> = Vec::with_capacity(body.ranges.len());
@@ -195,23 +193,19 @@ pub(crate) async fn timeline(
             let mut subject_totals: BTreeMap<Arc<str>, i64> = BTreeMap::new();
 
             for course in &snapshot.courses {
-                let active = course.schedules.iter().any(|s| {
-                    s.active_during(local_date, wday_bit, slot_start_minutes, slot_end_minutes)
-                });
+                let active = course
+                    .schedules
+                    .iter()
+                    .any(|s| s.active_during(local_date, wday_bit, slot_start_minutes, slot_end_minutes));
                 if active {
-                    *subject_totals
-                        .entry(Arc::clone(&course.subject))
-                        .or_default() += i64::from(course.enrollment);
+                    *subject_totals.entry(Arc::clone(&course.subject)).or_default() += i64::from(course.enrollment);
                 }
             }
 
             all_subjects.extend(subject_totals.keys().map(Arc::clone));
 
             // Convert to String keys at the response boundary.
-            let subjects: BTreeMap<String, i64> = subject_totals
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect();
+            let subjects: BTreeMap<String, i64> = subject_totals.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
 
             TimelineSlot {
                 time: utc_time,

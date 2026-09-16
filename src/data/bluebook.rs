@@ -42,8 +42,7 @@ fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
         // Prefer the entry with more response data
         let existing_responses =
             entry.instructor_response_count.unwrap_or(0) + entry.course_response_count.unwrap_or(0);
-        let new_responses =
-            eval.instructor_response_count.unwrap_or(0) + eval.course_response_count.unwrap_or(0);
+        let new_responses = eval.instructor_response_count.unwrap_or(0) + eval.course_response_count.unwrap_or(0);
         if new_responses > existing_responses {
             *entry = eval;
         }
@@ -58,10 +57,7 @@ fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
 /// `ON CONFLICT DO UPDATE` cannot handle the same row appearing twice in one
 /// statement. On conflict, updates all evaluation fields and resets `scraped_at`.
 #[allow(dead_code)]
-pub async fn batch_upsert_bluebook_evaluations(
-    pool: &PgPool,
-    evaluations: &[BlueBookEvaluation],
-) -> Result<()> {
+pub async fn batch_upsert_bluebook_evaluations(pool: &PgPool, evaluations: &[BlueBookEvaluation]) -> Result<()> {
     if evaluations.is_empty() {
         return Ok(());
     }
@@ -74,15 +70,10 @@ pub async fn batch_upsert_bluebook_evaluations(
     let crns: Vec<&str> = deduped.iter().map(|e| e.crn.as_str()).collect();
     let terms: Vec<&str> = deduped.iter().map(|e| e.term.as_str()).collect();
     let instructor_names: Vec<&str> = deduped.iter().map(|e| e.instructor_name.as_str()).collect();
-    let instructor_ratings: Vec<Option<f32>> =
-        deduped.iter().map(|e| e.instructor_rating).collect();
-    let instructor_response_counts: Vec<Option<i32>> = deduped
-        .iter()
-        .map(|e| e.instructor_response_count)
-        .collect();
+    let instructor_ratings: Vec<Option<f32>> = deduped.iter().map(|e| e.instructor_rating).collect();
+    let instructor_response_counts: Vec<Option<i32>> = deduped.iter().map(|e| e.instructor_response_count).collect();
     let course_ratings: Vec<Option<f32>> = deduped.iter().map(|e| e.course_rating).collect();
-    let course_response_counts: Vec<Option<i32>> =
-        deduped.iter().map(|e| e.course_response_count).collect();
+    let course_response_counts: Vec<Option<i32>> = deduped.iter().map(|e| e.course_response_count).collect();
     let departments: Vec<Option<&str>> = deduped.iter().map(|e| e.department.as_deref()).collect();
 
     sqlx::query(
@@ -138,12 +129,11 @@ pub async fn batch_upsert_bluebook_evaluations(
 
 /// Load the last-scraped timestamp for every subject in `bluebook_subject_scrapes`.
 pub async fn get_all_subject_scrape_times(pool: &PgPool) -> Result<HashMap<String, DateTime<Utc>>> {
-    let rows = sqlx::query_as::<_, (String, DateTime<Utc>)>(
-        "SELECT subject, last_scraped_at FROM bluebook_subject_scrapes",
-    )
-    .fetch_all(pool)
-    .await
-    .context("Failed to load subject scrape times")?;
+    let rows =
+        sqlx::query_as::<_, (String, DateTime<Utc>)>("SELECT subject, last_scraped_at FROM bluebook_subject_scrapes")
+            .fetch_all(pool)
+            .await
+            .context("Failed to load subject scrape times")?;
 
     Ok(rows.into_iter().collect())
 }

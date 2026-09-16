@@ -68,11 +68,7 @@ pub struct ComputedStreamManager {
 
 impl ComputedStreamManager {
     /// Create manager and spawn background task.
-    pub fn new(
-        events: Arc<EventBuffer>,
-        pool: PgPool,
-        reference_cache: Arc<RwLock<ReferenceCache>>,
-    ) -> Self {
+    pub fn new(events: Arc<EventBuffer>, pool: PgPool, reference_cache: Arc<RwLock<ReferenceCache>>) -> Self {
         let (update_tx, _) = broadcast::channel(256);
         let (reg_tx, reg_rx) = mpsc::unbounded_channel();
 
@@ -81,13 +77,7 @@ impl ComputedStreamManager {
             reg_tx,
         };
 
-        tokio::spawn(run_manager_loop(
-            events,
-            pool,
-            reference_cache,
-            update_tx,
-            reg_rx,
-        ));
+        tokio::spawn(run_manager_loop(events, pool, reference_cache, update_tx, reg_rx));
 
         manager
     }
@@ -281,19 +271,8 @@ async fn recompute_stale(
                     Err(e) => warn!(%e, %period, ?term, "Failed to compute stats"),
                 }
             }
-            ComputedCacheKey::Timeseries {
-                period,
-                bucket,
-                term,
-            } => {
-                match scraper_stats::compute_timeseries(
-                    pool,
-                    period,
-                    Some(bucket.as_str()),
-                    term.as_deref(),
-                )
-                .await
-                {
+            ComputedCacheKey::Timeseries { period, bucket, term } => {
+                match scraper_stats::compute_timeseries(pool, period, Some(bucket.as_str()), term.as_deref()).await {
                     Ok((raw_points, _returned_period, _returned_bucket)) => {
                         let new_points: Vec<TimeseriesPoint> = raw_points
                             .into_iter()
@@ -358,10 +337,7 @@ async fn recompute_stale(
     }
 }
 
-fn compute_timeseries_delta(
-    old: &Option<Vec<TimeseriesPoint>>,
-    new: &[TimeseriesPoint],
-) -> Option<StreamDelta> {
+fn compute_timeseries_delta(old: &Option<Vec<TimeseriesPoint>>, new: &[TimeseriesPoint]) -> Option<StreamDelta> {
     let Some(old_points) = old else {
         return None; // First computation, send snapshot not delta
     };
@@ -369,12 +345,7 @@ fn compute_timeseries_delta(
     let old_map: HashMap<_, _> = old_points.iter().map(|p| (&p.timestamp, p)).collect();
     let changed: Vec<_> = new
         .iter()
-        .filter(|p| {
-            old_map
-                .get(&p.timestamp)
-                .map(|&old| old != *p)
-                .unwrap_or(true)
-        })
+        .filter(|p| old_map.get(&p.timestamp).map(|&old| old != *p).unwrap_or(true))
         .cloned()
         .collect();
 
@@ -385,10 +356,7 @@ fn compute_timeseries_delta(
     }
 }
 
-fn compute_subjects_delta(
-    old: &Option<Vec<SubjectSummary>>,
-    new: &[SubjectSummary],
-) -> Option<StreamDelta> {
+fn compute_subjects_delta(old: &Option<Vec<SubjectSummary>>, new: &[SubjectSummary]) -> Option<StreamDelta> {
     let Some(old_subjects) = old else {
         return None;
     };
@@ -398,12 +366,7 @@ fn compute_subjects_delta(
 
     let changed: Vec<_> = new
         .iter()
-        .filter(|s| {
-            old_map
-                .get(&s.subject)
-                .map(|&old| old != *s)
-                .unwrap_or(true)
-        })
+        .filter(|s| old_map.get(&s.subject).map(|&old| old != *s).unwrap_or(true))
         .cloned()
         .collect();
 

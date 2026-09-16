@@ -78,24 +78,24 @@ pub struct MeetingTime {
     pub begin_time: Option<String>, // HHMM, e.g 1000
     pub end_time: Option<String>,   // HHMM, e.g 1100
     pub category: String,           // unknown meaning, e.g. 01, 02, etc
-    pub class: String, // internal class name, e.g. net.hedtech.banner.general.overallMeetingTimeDecorator
-    pub monday: bool,  // true if the meeting time occurs on Monday
-    pub tuesday: bool, // true if the meeting time occurs on Tuesday
-    pub wednesday: bool, // true if the meeting time occurs on Wednesday
-    pub thursday: bool, // true if the meeting time occurs on Thursday
-    pub friday: bool,  // true if the meeting time occurs on Friday
-    pub saturday: bool, // true if the meeting time occurs on Saturday
-    pub sunday: bool,  // true if the meeting time occurs on Sunday
-    pub room: Option<String>, // e.g. 1.238
+    pub class: String,              // internal class name, e.g. net.hedtech.banner.general.overallMeetingTimeDecorator
+    pub monday: bool,               // true if the meeting time occurs on Monday
+    pub tuesday: bool,              // true if the meeting time occurs on Tuesday
+    pub wednesday: bool,            // true if the meeting time occurs on Wednesday
+    pub thursday: bool,             // true if the meeting time occurs on Thursday
+    pub friday: bool,               // true if the meeting time occurs on Friday
+    pub saturday: bool,             // true if the meeting time occurs on Saturday
+    pub sunday: bool,               // true if the meeting time occurs on Sunday
+    pub room: Option<String>,       // e.g. 1.238
     #[serde(deserialize_with = "deserialize_string_to_term")]
     pub term: Term, // e.g 202510
-    pub building: Option<String>, // e.g NPB
+    pub building: Option<String>,   // e.g NPB
     pub building_description: Option<String>, // e.g North Paseo Building
-    pub campus: Option<String>, // campus code, e.g 11
+    pub campus: Option<String>,     // campus code, e.g 11
     pub campus_description: Option<String>, // name of campus, e.g Main Campus
     pub course_reference_number: String, // CRN, e.g 27294
     pub credit_hour_session: Option<f64>, // e.g. 30
-    pub hours_week: Option<f64>, // e.g. 30
+    pub hours_week: Option<f64>,    // e.g. 30
     pub meeting_schedule_type: String, // e.g AFF
     pub meeting_type: Option<String>, // e.g HB, H2, H1, OS, OA, OH, ID, FF; null when not set by Banner
     pub meeting_type_description: Option<String>,
@@ -355,13 +355,7 @@ pub enum MeetingLocation {
 impl MeetingLocation {
     /// Create from raw MeetingTime data
     pub fn from_meeting_time(meeting_time: &MeetingTime) -> Self {
-        if let (
-            Some(campus),
-            Some(campus_description),
-            Some(building),
-            Some(building_description),
-            Some(room),
-        ) = (
+        if let (Some(campus), Some(campus_description), Some(building), Some(building_description), Some(room)) = (
             &meeting_time.campus,
             &meeting_time.campus_description,
             &meeting_time.building,
@@ -406,15 +400,11 @@ impl MeetingScheduleInfo {
         };
 
         let date_range =
-            DateRange::from_mm_dd_yyyy(&meeting_time.start_date, &meeting_time.end_date)
-                .unwrap_or_else(|| {
-                    // Fallback to current date if parsing fails
-                    let now = chrono::Utc::now().naive_utc().date();
-                    DateRange {
-                        start: now,
-                        end: now,
-                    }
-                });
+            DateRange::from_mm_dd_yyyy(&meeting_time.start_date, &meeting_time.end_date).unwrap_or_else(|| {
+                // Fallback to current date if parsing fails
+                let now = chrono::Utc::now().naive_utc().date();
+                DateRange { start: now, end: now }
+            });
         let meeting_type: MeetingType = meeting_time
             .meeting_type
             .as_deref()
@@ -458,12 +448,9 @@ impl MeetingScheduleInfo {
 
         // Mapper function to get the short string representation of the day of week
         let mapper = {
-            let ambiguous = self.days.intersects(
-                MeetingDays::Tuesday
-                    | MeetingDays::Thursday
-                    | MeetingDays::Saturday
-                    | MeetingDays::Sunday,
-            );
+            let ambiguous = self
+                .days
+                .intersects(MeetingDays::Tuesday | MeetingDays::Thursday | MeetingDays::Saturday | MeetingDays::Sunday);
 
             if ambiguous {
                 |day: &Weekday| day.to_short_string().to_string()
@@ -485,10 +472,7 @@ impl MeetingScheduleInfo {
                 building_description,
                 room,
                 ..
-            } => format!(
-                "{} | {} | {} {}",
-                campus, building_description, building, room
-            ),
+            } => format!("{} | {} | {} {}", campus, building_description, building, room),
         }
     }
 

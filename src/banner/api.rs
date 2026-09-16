@@ -29,10 +29,7 @@ pub struct BannerApi {
 
 impl BannerApi {
     /// Creates a new Banner API client with custom rate limiting configuration.
-    pub fn new_with_config(
-        base_url: String,
-        rate_limit_config: RateLimitingConfig,
-    ) -> Result<Self> {
+    pub fn new_with_config(base_url: String, rate_limit_config: RateLimitingConfig) -> Result<Self> {
         let rate_limiter = Arc::new(BannerRateLimiter::new(rate_limit_config));
 
         let http = ClientBuilder::new(
@@ -203,9 +200,7 @@ impl BannerApi {
                 "Search result path mode is none".to_string(),
             ));
         } else if search_result.data.is_none() {
-            return Err(BannerApiError::InvalidSession(
-                "Search result data is none".to_string(),
-            ));
+            return Err(BannerApiError::InvalidSession("Search result data is none".to_string()));
         }
 
         if !search_result.success {
@@ -222,23 +217,12 @@ impl BannerApi {
     /// Delegates to the session pool's HTTP client. Prefer calling this
     /// over `banner_api.sessions.get_terms()` -- terms are a session-independent
     /// resource and this method expresses that.
-    pub async fn get_terms(
-        &self,
-        search: &str,
-        page: i32,
-        max_results: i32,
-    ) -> Result<Vec<BannerTerm>> {
+    pub async fn get_terms(&self, search: &str, page: i32, max_results: i32) -> Result<Vec<BannerTerm>> {
         self.sessions.get_terms(search, page, max_results).await
     }
 
     /// Retrieves a list of subjects from the Banner API.
-    pub async fn get_subjects(
-        &self,
-        search: &str,
-        term: &str,
-        offset: i32,
-        max_results: i32,
-    ) -> Result<Vec<Pair>> {
+    pub async fn get_subjects(&self, search: &str, term: &str, offset: i32, max_results: i32) -> Result<Vec<Pair>> {
         self.get_list_endpoint("get_subject", search, term, offset, max_results)
             .await
     }
@@ -256,22 +240,16 @@ impl BannerApi {
 
     /// Retrieves part-of-term codes and descriptions.
     pub async fn get_parts_of_term(&self, term: &str) -> Result<Vec<Pair>> {
-        self.get_list_endpoint("get_partOfTerm", "", term, 1, 500)
-            .await
+        self.get_list_endpoint("get_partOfTerm", "", term, 1, 500).await
     }
 
     /// Retrieves section attribute codes and descriptions.
     pub async fn get_attributes(&self, term: &str) -> Result<Vec<Pair>> {
-        self.get_list_endpoint("get_attribute", "", term, 1, 500)
-            .await
+        self.get_list_endpoint("get_attribute", "", term, 1, 500).await
     }
 
     /// Retrieves meeting time information for a course.
-    pub async fn get_course_meeting_time(
-        &self,
-        term: &str,
-        crn: &str,
-    ) -> Result<Vec<MeetingScheduleInfo>> {
+    pub async fn get_course_meeting_time(&self, term: &str, crn: &str) -> Result<Vec<MeetingScheduleInfo>> {
         let url = format!("{}/searchResults/getFacultyMeetingTimes", self.base_url);
         let params = [("term", term), ("courseReferenceNumber", crn)];
 
@@ -284,10 +262,7 @@ impl BannerApi {
             .context("Failed to get meeting times")?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Failed to get meeting times: {}",
-                response.status()
-            ));
+            return Err(anyhow::anyhow!("Failed to get meeting times: {}", response.status()));
         } else if !response
             .headers()
             .get("Content-Type")
@@ -313,11 +288,7 @@ impl BannerApi {
             .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))
             .context("Failed to parse response")?;
 
-        Ok(response
-            .fmt
-            .into_iter()
-            .map(|m| m.schedule_info())
-            .collect())
+        Ok(response.fmt.into_iter().map(|m| m.schedule_info()).collect())
     }
 
     /// Performs a search for courses.
@@ -328,8 +299,7 @@ impl BannerApi {
         sort: &str,
         sort_descending: bool,
     ) -> Result<SearchResult, BannerApiError> {
-        self.perform_search(term, query, sort, sort_descending)
-            .await
+        self.perform_search(term, query, sort, sort_descending).await
     }
 
     /// Performs a search and paginates until every matching section is collected.
@@ -349,9 +319,7 @@ impl BannerApi {
 
         for _ in 0..SEARCH_MAX_PAGES {
             let page_query = query.clone().offset(offset).max_results(SEARCH_PAGE_SIZE);
-            let result = self
-                .perform_search(term, &page_query, sort, sort_descending)
-                .await?;
+            let result = self.perform_search(term, &page_query, sort, sort_descending).await?;
 
             let total_count = result.total_count;
             let page = result.data.unwrap_or_default();
@@ -368,33 +336,21 @@ impl BannerApi {
     }
 
     /// Retrieves a single course by CRN by issuing a minimal search
-    pub async fn get_course_by_crn(
-        &self,
-        term: &str,
-        crn: &str,
-    ) -> Result<Option<Course>, BannerApiError> {
+    pub async fn get_course_by_crn(&self, term: &str, crn: &str) -> Result<Option<Course>, BannerApiError> {
         debug!(term = term, crn = crn, "Looking up course by CRN");
 
-        let query = SearchQuery::new()
-            .course_reference_number(crn)
-            .max_results(1);
+        let query = SearchQuery::new().course_reference_number(crn).max_results(1);
 
-        let search_result = self
-            .perform_search(term, &query, "subjectDescription", false)
-            .await?;
+        let search_result = self.perform_search(term, &query, "subjectDescription", false).await?;
 
         // Additional validation for CRN search
-        if search_result.path_mode == Some("registration".to_string())
-            && search_result.data.is_none()
-        {
+        if search_result.path_mode == Some("registration".to_string()) && search_result.data.is_none() {
             return Err(BannerApiError::InvalidSession(
                 "Search result path mode is registration and data is none".to_string(),
             ));
         }
 
-        Ok(search_result
-            .data
-            .and_then(|courses| courses.into_iter().next()))
+        Ok(search_result.data.and_then(|courses| courses.into_iter().next()))
     }
 }
 
@@ -410,12 +366,7 @@ const SEARCH_MAX_PAGES: i32 = 40;
 /// Continues only while the last page came back full (more may remain) and the
 /// reported total has not been reached; a short page or reaching the total stops
 /// the loop.
-fn should_fetch_next_page(
-    collected: usize,
-    last_page_len: usize,
-    total_count: i32,
-    page_size: i32,
-) -> bool {
+fn should_fetch_next_page(collected: usize, last_page_len: usize, total_count: i32, page_size: i32) -> bool {
     let page_size = page_size.max(1) as usize;
     let total = total_count.max(0) as usize;
     last_page_len >= page_size && collected < total

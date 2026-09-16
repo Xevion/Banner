@@ -80,18 +80,14 @@ impl Default for ReferenceCache {
 impl ReferenceCache {
     /// Create an empty cache.
     pub fn new() -> Self {
-        Self {
-            data: HashMap::new(),
-        }
+        Self { data: HashMap::new() }
     }
 
     /// Build cache from a list of reference data entries.
     pub fn from_entries(entries: Vec<ReferenceData>) -> Self {
         let mut data: HashMap<String, HashMap<String, String>> = HashMap::new();
         for e in entries {
-            data.entry(e.category)
-                .or_default()
-                .insert(e.code, e.description);
+            data.entry(e.category).or_default().insert(e.code, e.description);
         }
         Self { data }
     }
@@ -163,8 +159,7 @@ impl AppState {
         let events = Arc::new(EventBuffer::new(1024));
         let schedule_cache = ScheduleCache::new(db_pool.clone());
         let reference_cache = Arc::new(RwLock::new(ReferenceCache::new()));
-        let computed_streams =
-            ComputedStreamManager::new(events.clone(), db_pool.clone(), reference_cache.clone());
+        let computed_streams = ComputedStreamManager::new(events.clone(), db_pool.clone(), reference_cache.clone());
         let ssr_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             // Bound a down/hung localhost SSR; well under the outer 60s layer.

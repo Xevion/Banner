@@ -31,11 +31,10 @@ pub async fn get_instructor(
     use axum::http::{HeaderValue, StatusCode, header};
     use axum::response::{IntoResponse, Redirect};
 
-    let (instructor_id, slug) =
-        data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
-            .await
-            .map_err(|e| db_error("Resolve instructor", e))?
-            .or_not_found("Instructor", &raw)?;
+    let (instructor_id, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
+        .await
+        .map_err(|e| db_error("Resolve instructor", e))?
+        .or_not_found("Instructor", &raw)?;
 
     // Non-canonical identifier: redirect to the canonical slug URL
     if raw != slug {
@@ -59,10 +58,8 @@ pub async fn get_instructor(
         let mut resp = StatusCode::NOT_MODIFIED.into_response();
         resp.headers_mut()
             .insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
-        resp.headers_mut().insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static(cache::DETAIL),
-        );
+        resp.headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache::DETAIL));
         return Ok(resp);
     }
 
@@ -74,10 +71,8 @@ pub async fn get_instructor(
     let mut resp = Json(profile).into_response();
     resp.headers_mut()
         .insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
-    resp.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static(cache::DETAIL),
-    );
+    resp.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache::DETAIL));
     Ok(resp)
 }
 
@@ -95,11 +90,10 @@ pub async fn get_instructor_sections(
     use crate::banner::models::terms::Term;
     use axum::response::{IntoResponse, Redirect};
 
-    let (instructor_id, slug) =
-        data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
-            .await
-            .map_err(|e| db_error("Resolve instructor", e))?
-            .or_not_found("Instructor", &raw)?;
+    let (instructor_id, slug) = data::instructors::resolve_instructor_identifier(&state.db_pool, &raw)
+        .await
+        .map_err(|e| db_error("Resolve instructor", e))?
+        .or_not_found("Instructor", &raw)?;
 
     // Non-canonical: redirect, preserving the raw ?term= value so the redirect
     // target can still resolve "fall2025"-style aliases.
@@ -108,22 +102,19 @@ pub async fn get_instructor_sections(
         return Ok(Redirect::permanent(&uri).into_response());
     }
 
-    let term_code =
-        Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
+    let term_code = Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
 
-    let courses =
-        data::instructors::get_instructor_sections(&state.db_pool, instructor_id, &term_code)
-            .await
-            .map_err(|e| db_error("Instructor sections", e))?;
+    let courses = data::instructors::get_instructor_sections(&state.db_pool, instructor_id, &term_code)
+        .await
+        .map_err(|e| db_error("Instructor sections", e))?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
-    let mut instructor_map =
-        data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!(error = %e, "Failed to fetch instructors for instructor sections");
-                Default::default()
-            });
+    let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(error = %e, "Failed to fetch instructors for instructor sections");
+            Default::default()
+        });
 
     let responses: Vec<CourseResponse> = courses
         .iter()

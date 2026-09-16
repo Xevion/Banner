@@ -75,15 +75,13 @@ mod tests {
 
     #[test]
     fn test_from_target_subject_valid() {
-        let result =
-            JobType::from_target_type_and_payload(TargetType::Subject, subject_payload("CS"));
+        let result = JobType::from_target_type_and_payload(TargetType::Subject, subject_payload("CS"));
         assert!(matches!(result, Ok(JobType::Subject(_))));
     }
 
     #[test]
     fn test_from_target_subject_empty_string() {
-        let result =
-            JobType::from_target_type_and_payload(TargetType::Subject, subject_payload(""));
+        let result = JobType::from_target_type_and_payload(TargetType::Subject, subject_payload(""));
         assert!(matches!(result, Ok(JobType::Subject(_))));
     }
 
@@ -106,8 +104,7 @@ mod tests {
 
     #[test]
     fn test_payload_shapes_round_trip() {
-        let payload: TargetPayload =
-            serde_json::from_value(json!({"subject": "CS", "term": "202620"})).unwrap();
+        let payload: TargetPayload = serde_json::from_value(json!({"subject": "CS", "term": "202620"})).unwrap();
         assert_eq!(payload.subject(), Some("CS"));
         assert_eq!(payload.term(), Some("202620"));
 
@@ -121,11 +118,7 @@ mod tests {
 
     #[test]
     fn test_from_target_unsupported_variants() {
-        let unsupported = [
-            TargetType::CourseRange,
-            TargetType::CrnList,
-            TargetType::SingleCrn,
-        ];
+        let unsupported = [TargetType::CourseRange, TargetType::CrnList, TargetType::SingleCrn];
         for target_type in unsupported {
             let result = JobType::from_target_type_and_payload(target_type, subject_payload("CS"));
             assert!(
@@ -146,18 +139,11 @@ mod tests {
         )
         .unwrap_err();
         let display = mismatch_err.to_string();
-        assert!(
-            display.contains("does not match target type"),
-            "got: {display}"
-        );
+        assert!(display.contains("does not match target type"), "got: {display}");
 
         let unsupported_err =
-            JobType::from_target_type_and_payload(TargetType::CrnList, subject_payload("CS"))
-                .unwrap_err();
+            JobType::from_target_type_and_payload(TargetType::CrnList, subject_payload("CS")).unwrap_err();
         let display = unsupported_err.to_string();
-        assert!(
-            display.contains("Unsupported target type"),
-            "got: {display}"
-        );
+        assert!(display.contains("Unsupported target type"), "got: {display}");
     }
 }

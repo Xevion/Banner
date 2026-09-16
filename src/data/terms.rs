@@ -73,12 +73,10 @@ pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
 /// Get terms with scraping enabled, ordered by code descending.
 #[allow(dead_code)] // Used by admin API and future features
 pub async fn get_enabled_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
-    let terms = sqlx::query_as::<_, DbTerm>(
-        "SELECT * FROM terms WHERE scrape_enabled = true ORDER BY code DESC",
-    )
-    .fetch_all(db_pool)
-    .await
-    .context("failed to fetch enabled terms")?;
+    let terms = sqlx::query_as::<_, DbTerm>("SELECT * FROM terms WHERE scrape_enabled = true ORDER BY code DESC")
+        .fetch_all(db_pool)
+        .await
+        .context("failed to fetch enabled terms")?;
 
     Ok(terms)
 }
@@ -130,12 +128,11 @@ async fn get_existing_term_codes(db_pool: &PgPool) -> Result<HashSet<String>> {
 ///
 /// Returns `true` if the term was found and updated, `false` if not found.
 pub async fn enable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
-    let result =
-        sqlx::query("UPDATE terms SET scrape_enabled = true, updated_at = now() WHERE code = $1")
-            .bind(code)
-            .execute(db_pool)
-            .await
-            .context("failed to enable scraping for term")?;
+    let result = sqlx::query("UPDATE terms SET scrape_enabled = true, updated_at = now() WHERE code = $1")
+        .bind(code)
+        .execute(db_pool)
+        .await
+        .context("failed to enable scraping for term")?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -144,12 +141,11 @@ pub async fn enable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
 ///
 /// Returns `true` if the term was found and updated, `false` if not found.
 pub async fn disable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
-    let result =
-        sqlx::query("UPDATE terms SET scrape_enabled = false, updated_at = now() WHERE code = $1")
-            .bind(code)
-            .execute(db_pool)
-            .await
-            .context("failed to disable scraping for term")?;
+    let result = sqlx::query("UPDATE terms SET scrape_enabled = false, updated_at = now() WHERE code = $1")
+        .bind(code)
+        .execute(db_pool)
+        .await
+        .context("failed to disable scraping for term")?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -208,10 +204,7 @@ fn parse_term_code(code: &str) -> Option<(i16, Season)> {
 ///
 /// # Returns
 /// A `SyncResult` with counts of inserted and updated terms.
-pub async fn sync_terms_from_banner(
-    db_pool: &PgPool,
-    banner_terms: Vec<BannerTerm>,
-) -> Result<SyncResult> {
+pub async fn sync_terms_from_banner(db_pool: &PgPool, banner_terms: Vec<BannerTerm>) -> Result<SyncResult> {
     if banner_terms.is_empty() {
         return Ok(SyncResult::default());
     }
@@ -295,10 +288,7 @@ pub async fn sync_terms_from_banner(
 
     // Log summary of skipped terms if any
     if result.skipped > 0 {
-        tracing::warn!(
-            skipped = result.skipped,
-            "Skipped terms with unrecognized format codes"
-        );
+        tracing::warn!(skipped = result.skipped, "Skipped terms with unrecognized format codes");
     }
 
     Ok(result)

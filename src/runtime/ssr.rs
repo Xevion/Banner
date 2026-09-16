@@ -33,9 +33,7 @@ impl SsrService {
 
     fn spawn(&self) -> Result<Child> {
         let mut parts = self.command.split_whitespace();
-        let program = parts
-            .next()
-            .ok_or_else(|| anyhow!("SSR_COMMAND is set but empty"))?;
+        let program = parts.next().ok_or_else(|| anyhow!("SSR_COMMAND is set but empty"))?;
         let args: Vec<&str> = parts.collect();
 
         // Bind all interfaces rather than loopback: the proxy target resolves
@@ -115,10 +113,7 @@ impl Service for SsrService {
         if let Some(shutdown_tx) = self.shutdown_tx.take() {
             let _ = shutdown_tx.send(());
         } else {
-            warn!(
-                service = "ssr",
-                "no shutdown channel, SSR may be killed abruptly"
-            );
+            warn!(service = "ssr", "no shutdown channel, SSR may be killed abruptly");
         }
         Ok(())
     }
@@ -130,11 +125,7 @@ mod tests {
     use assert2::check;
 
     fn service(command: &str) -> SsrService {
-        SsrService::new(
-            command.to_string(),
-            3001,
-            "http://localhost:8080".to_string(),
-        )
+        SsrService::new(command.to_string(), 3001, "http://localhost:8080".to_string())
     }
 
     #[tokio::test]
@@ -148,12 +139,7 @@ mod tests {
         let mut svc = service("true");
         let result = svc.run().await;
         check!(result.is_err());
-        check!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("exited unexpectedly")
-        );
+        check!(result.unwrap_err().to_string().contains("exited unexpectedly"));
     }
 
     #[tokio::test]

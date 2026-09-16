@@ -57,15 +57,11 @@ pub async fn search(
     }
 
     if let Some(keywords) = keywords {
-        let keyword_list: Vec<String> =
-            keywords.split_whitespace().map(|s| s.to_string()).collect();
+        let keyword_list: Vec<String> = keywords.split_whitespace().map(|s| s.to_string()).collect();
         query = query.keywords(keyword_list);
     }
 
-    query = query.max_results(
-        max.unwrap_or(MAX_FETCHED_RESULTS)
-            .clamp(1, MAX_FETCHED_RESULTS),
-    );
+    query = query.max_results(max.unwrap_or(MAX_FETCHED_RESULTS).clamp(1, MAX_FETCHED_RESULTS));
 
     let term = term.unwrap_or_else(|| Term::get_current().inner().to_string());
     let search_result = ctx
@@ -77,22 +73,14 @@ pub async fn search(
 
     let courses = search_result.data.unwrap_or_default();
     if courses.is_empty() {
-        ctx.say("No courses found with the specified criteria.")
-            .await?;
+        ctx.say("No courses found with the specified criteria.").await?;
         return Ok(());
     }
 
     // total_count is the server-side match count, which can exceed what was fetched.
     let total_results = search_result.total_count.max(courses.len() as i32) as usize;
 
-    pagination::paginate(
-        ctx,
-        &courses,
-        RESULTS_PER_PAGE,
-        total_results,
-        build_page_embed,
-    )
-    .await?;
+    pagination::paginate(ctx, &courses, RESULTS_PER_PAGE, total_results, build_page_embed).await?;
 
     info!("search command completed");
     Ok(())

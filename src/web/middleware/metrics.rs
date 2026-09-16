@@ -71,19 +71,13 @@ mod tests {
     use tower::ServiceExt;
 
     fn counter_label(snapshot: Snapshot, label: &str) -> Option<String> {
-        snapshot
-            .into_vec()
-            .into_iter()
-            .find_map(|(ck, _, _, value)| {
-                let key = ck.key();
-                match (key.name() == HTTP_REQUESTS, value) {
-                    (true, DebugValue::Counter(_)) => key
-                        .labels()
-                        .find(|l| l.key() == label)
-                        .map(|l| l.value().to_owned()),
-                    _ => None,
-                }
-            })
+        snapshot.into_vec().into_iter().find_map(|(ck, _, _, value)| {
+            let key = ck.key();
+            match (key.name() == HTTP_REQUESTS, value) {
+                (true, DebugValue::Counter(_)) => key.labels().find(|l| l.key() == label).map(|l| l.value().to_owned()),
+                _ => None,
+            }
+        })
     }
 
     /// Drives one request through `router` on this thread, so the thread-local recorder applies.

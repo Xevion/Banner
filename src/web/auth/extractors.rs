@@ -17,10 +17,7 @@ pub struct AuthUser(pub User);
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = (StatusCode, Json<serde_json::Value>);
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let token = parts
             .headers
             .get(header::COOKIE)
@@ -56,10 +53,7 @@ pub struct AdminUser(pub User);
 impl FromRequestParts<AppState> for AdminUser {
     type Rejection = (StatusCode, Json<serde_json::Value>);
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let AuthUser(user) = AuthUser::from_request_parts(parts, state).await?;
 
         if !user.is_admin {

@@ -26,12 +26,10 @@ fn merge_error(context: &str, e: anyhow::Error) -> ApiError {
 /// Read the dismissal list before a merge, since deleting the loser cascades
 /// its dismissals away and they would otherwise vanish unrecorded.
 async fn dismissals_before_merge(pool: &PgPool) -> Vec<DuplicatePair> {
-    instructor_merge::find_dismissed_pairs(pool)
-        .await
-        .unwrap_or_else(|e| {
-            warn!(error = %e, "Failed to read dismissals before merge");
-            Vec::new()
-        })
+    instructor_merge::find_dismissed_pairs(pool).await.unwrap_or_else(|e| {
+        warn!(error = %e, "Failed to read dismissals before merge");
+        Vec::new()
+    })
 }
 
 /// The instructors whose dismissals against `loser_id` the merge will erase.
@@ -169,14 +167,10 @@ pub async fn merge_claimant(
 ) -> Result<Json<MergeResponse>, ApiError> {
     let dismissals = dismissals_before_merge(&state.db_pool).await;
 
-    let (survivor, loser) = instructor_merge::merge_with_claimant(
-        &state.db_pool,
-        id,
-        body.rmp_legacy_id,
-        Some(user.discord_id),
-    )
-    .await
-    .map_err(|e| merge_error("merge with claimant", e))?;
+    let (survivor, loser) =
+        instructor_merge::merge_with_claimant(&state.db_pool, id, body.rmp_legacy_id, Some(user.discord_id))
+            .await
+            .map_err(|e| merge_error("merge with claimant", e))?;
 
     action_log::record(
         &state.db_pool,
@@ -246,14 +240,9 @@ pub async fn dismiss(
     State(state): State<AppState>,
     Json(body): Json<DismissBody>,
 ) -> Result<Json<MergeResponse>, ApiError> {
-    instructor_merge::dismiss_pair(
-        &state.db_pool,
-        body.first_id,
-        body.second_id,
-        Some(user.discord_id),
-    )
-    .await
-    .map_err(|e| merge_error("dismiss instructor pair", e))?;
+    instructor_merge::dismiss_pair(&state.db_pool, body.first_id, body.second_id, Some(user.discord_id))
+        .await
+        .map_err(|e| merge_error("dismiss instructor pair", e))?;
 
     action_log::record(
         &state.db_pool,
@@ -374,10 +363,7 @@ mod tests {
 
         let api = merge_error("merge with claimant", MergeError::DifferentPeople.into());
         check!(api.code == ApiErrorCode::BadRequest);
-        check!(
-            api.message
-                == "records name different people; merge them manually if they are the same"
-        );
+        check!(api.message == "records name different people; merge them manually if they are the same");
     }
 
     /// One failure reads the same whichever endpoint surfaced it.

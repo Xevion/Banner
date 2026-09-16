@@ -2,8 +2,7 @@
 //! profiles and writes candidates, auto-links and review statuses.
 
 use super::score::{
-    MIN_CANDIDATE_THRESHOLD, MatchScore, SCORE_EPSILON, ScoreBreakdown, compute_match_score,
-    extract_review_subjects,
+    MIN_CANDIDATE_THRESHOLD, MatchScore, SCORE_EPSILON, ScoreBreakdown, compute_match_score, extract_review_subjects,
 };
 use crate::data::names::{KeyOrigin, NameParts, matching_keys, parse_banner_name, parse_rmp_name};
 use crate::rmp::RmpCourseCode;
@@ -34,14 +33,7 @@ pub struct MatchingStats {
 }
 
 /// Candidate row tuple: (instructor_id, rmp_legacy_id, score, breakdown, review_subjects, review_years).
-type CandidateRow = (
-    i32,
-    i32,
-    f32,
-    sqlx::types::Json<ScoreBreakdown>,
-    Vec<String>,
-    Vec<i16>,
-);
+type CandidateRow = (i32, i32, f32, sqlx::types::Json<ScoreBreakdown>, Vec<String>, Vec<i16>);
 
 /// Raw row fetched from `rmp_professors` for the matching pipeline.
 #[derive(sqlx::FromRow)]
@@ -180,10 +172,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     for (instructor_id, display_name) in &instructors {
         let Some(instructor_parts) = parse_banner_name(display_name) else {
             skipped_unparseable += 1;
-            debug!(
-                instructor_id,
-                display_name, "Unparseable display name, skipping"
-            );
+            debug!(instructor_id, display_name, "Unparseable display name, skipping");
             continue;
         };
 
@@ -211,10 +200,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
     let mut inherited_count = 0usize;
     for (instructor_id, legacy_id, score) in inherited {
-        let uncontested = collected
-            .claimants
-            .get(&legacy_id)
-            .is_none_or(|ids| ids.len() == 1);
+        let uncontested = collected.claimants.get(&legacy_id).is_none_or(|ids| ids.len() == 1);
         if uncontested {
             auto_accept.push((instructor_id, legacy_id, score));
             inherited_count += 1;
@@ -323,20 +309,14 @@ async fn load_instructor_subjects(
 
     let mut subject_map: HashMap<i32, Vec<(String, u32)>> = HashMap::new();
     for (iid, subject, count) in rows {
-        subject_map
-            .entry(iid)
-            .or_default()
-            .push((subject, count.max(0) as u32));
+        subject_map.entry(iid).or_default().push((subject, count.max(0) as u32));
     }
 
     Ok(subject_map)
 }
 
 /// Total courses taught per instructor.
-async fn load_course_counts(
-    conn: &mut PgConnection,
-    instructor_ids: &[i32],
-) -> Result<HashMap<i32, i64>> {
+async fn load_course_counts(conn: &mut PgConnection, instructor_ids: &[i32]) -> Result<HashMap<i32, i64>> {
     let counts = sqlx::query_as(
         "SELECT instructor_id, COUNT(*) FROM course_instructors \
          WHERE instructor_id = ANY($1) GROUP BY instructor_id",
@@ -370,10 +350,7 @@ async fn load_review_data(conn: &mut PgConnection) -> Result<ReviewData> {
     let mut years: HashMap<i32, HashSet<i16>> = HashMap::new();
     for (legacy_id, class, year) in &rows {
         if let Some(class_str) = class {
-            let prefix: String = class_str
-                .chars()
-                .take_while(|c| c.is_alphabetic())
-                .collect();
+            let prefix: String = class_str.chars().take_while(|c| c.is_alphabetic()).collect();
             if !prefix.is_empty() {
                 *subjects
                     .entry(*legacy_id)
@@ -443,10 +420,7 @@ async fn build_name_index(conn: &mut PgConnection, reviews: &ReviewData) -> Resu
     }
 
     if rmp_parse_failures > 0 {
-        debug!(
-            count = rmp_parse_failures,
-            "RMP professors with unparseable names"
-        );
+        debug!(count = rmp_parse_failures, "RMP professors with unparseable names");
     }
 
     Ok(name_index)
@@ -476,12 +450,11 @@ fn collect_matched_profs<'a>(name_index: &'a NameIndex, parts: &NameParts) -> Ma
         let lookup = (ikey.last.clone(), ikey.first.clone());
         if let Some(bucket) = name_index.get(&lookup) {
             for prof in bucket {
-                let pair_origin =
-                    if ikey.origin == KeyOrigin::Primary && prof.key_origin == KeyOrigin::Primary {
-                        KeyOrigin::Primary
-                    } else {
-                        KeyOrigin::Nickname
-                    };
+                let pair_origin = if ikey.origin == KeyOrigin::Primary && prof.key_origin == KeyOrigin::Primary {
+                    KeyOrigin::Primary
+                } else {
+                    KeyOrigin::Nickname
+                };
 
                 let entry = best_origin.entry(prof.legacy_id).or_insert(pair_origin);
                 if pair_origin == KeyOrigin::Primary {
@@ -574,11 +547,7 @@ fn score_instructor(
 /// RMP often holds several profiles for one person, and the summary view
 /// aggregates them by rating weight, so linking all of them is correct.
 /// Two distinct people sharing a name is the case a human must settle.
-fn decide_auto_links(
-    instructor_id: i32,
-    scored: &[(i32, MatchScore)],
-    matched: &MatchedProfs<'_>,
-) -> AutoDecision {
+fn decide_auto_links(instructor_id: i32, scored: &[(i32, MatchScore)], matched: &MatchedProfs<'_>) -> AutoDecision {
     let candidate_count = matched.profs.len();
     let passing: Vec<&(i32, MatchScore)> = scored
         .iter()
@@ -598,9 +567,7 @@ fn decide_auto_links(
     if distinct_people.len() == 1 {
         let identified = distinct_people.iter().next().copied().cloned();
         for (legacy_id, ms) in passing {
-            decision
-                .accepted
-                .push((instructor_id, *legacy_id, ms.score));
+            decision.accepted.push((instructor_id, *legacy_id, ms.score));
         }
         // A confirmed profile establishes who this is, so RMP's other
         // profiles for the same name are the same person -- unless another
@@ -615,14 +582,9 @@ fn decide_auto_links(
                 if ms.breakdown.subject + SCORE_EPSILON < 0.5 {
                     continue;
                 }
-                let same_person = matched
-                    .profs
-                    .get(legacy_id)
-                    .is_some_and(|p| p.norm_name == name);
+                let same_person = matched.profs.get(legacy_id).is_some_and(|p| p.norm_name == name);
                 if same_person {
-                    decision
-                        .inherited
-                        .push((instructor_id, *legacy_id, ms.score));
+                    decision.inherited.push((instructor_id, *legacy_id, ms.score));
                 }
             }
         }
@@ -638,22 +600,13 @@ fn decide_auto_links(
 }
 
 /// Batch-insert the run's candidate rows and their review evidence.
-async fn insert_candidates(
-    conn: &mut PgConnection,
-    new_candidates: Vec<CandidateRow>,
-) -> Result<()> {
+async fn insert_candidates(conn: &mut PgConnection, new_candidates: Vec<CandidateRow>) -> Result<()> {
     if new_candidates.is_empty() {
         return Ok(());
     }
 
-    let c_instructor_ids: Vec<i32> = new_candidates
-        .iter()
-        .map(|(iid, _, _, _, _, _)| *iid)
-        .collect();
-    let c_legacy_ids: Vec<i32> = new_candidates
-        .iter()
-        .map(|(_, lid, _, _, _, _)| *lid)
-        .collect();
+    let c_instructor_ids: Vec<i32> = new_candidates.iter().map(|(iid, _, _, _, _, _)| *iid).collect();
+    let c_legacy_ids: Vec<i32> = new_candidates.iter().map(|(_, lid, _, _, _, _)| *lid).collect();
     let c_scores: Vec<f32> = new_candidates.iter().map(|(_, _, s, _, _, _)| *s).collect();
     let c_breakdowns: Vec<serde_json::Value> = new_candidates
         .iter()
@@ -737,9 +690,7 @@ fn resolve_best_claims(
             contested += 1;
         }
         let courses = course_count_map.get(&instructor_id).copied().unwrap_or(0);
-        let entry = best_claim
-            .entry(legacy_id)
-            .or_insert((instructor_id, score));
+        let entry = best_claim.entry(legacy_id).or_insert((instructor_id, score));
         let (best_iid, best_score) = *entry;
         let best_courses = course_count_map.get(&best_iid).copied().unwrap_or(0);
         if (score, courses, -instructor_id) > (best_score, best_courses, -best_iid) {
@@ -748,10 +699,7 @@ fn resolve_best_claims(
     }
 
     if contested > 0 || manual_skipped > 0 {
-        debug!(
-            contested,
-            manual_skipped, "Auto-link claims dropped before insert"
-        );
+        debug!(contested, manual_skipped, "Auto-link claims dropped before insert");
     }
 
     best_claim
@@ -759,10 +707,7 @@ fn resolve_best_claims(
 
 /// Insert the winning claims as auto links, returning the instructors that
 /// actually gained one. The insert may no-op on conflict.
-async fn insert_auto_links(
-    conn: &mut PgConnection,
-    best_claim: &HashMap<i32, (i32, f32)>,
-) -> Result<Vec<i32>> {
+async fn insert_auto_links(conn: &mut PgConnection, best_claim: &HashMap<i32, (i32, f32)>) -> Result<Vec<i32>> {
     if best_claim.is_empty() {
         return Ok(Vec::new());
     }

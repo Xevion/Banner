@@ -38,14 +38,7 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // TTh 10:30-11:45
         with_meetings(
-            make_course(
-                "10002",
-                term,
-                "CS",
-                "2200",
-                "Data Structures",
-                (25, 30, 0, 10),
-            ),
+            make_course("10002", term, "CS", "2200", "Data Structures", (25, 30, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
                     .days([false, true, false, true, false, false, false])
@@ -78,14 +71,7 @@ async fn insert_test_courses(pool: &PgPool) {
         ),
         // Saturday only 09:00-12:00
         with_meetings(
-            make_course(
-                "10005",
-                term,
-                "MUS",
-                "1050",
-                "Music Appreciation",
-                (40, 50, 0, 10),
-            ),
+            make_course("10005", term, "MUS", "1050", "Music Appreciation", (40, 50, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
                     .days([false, false, false, false, false, true, false])
@@ -95,14 +81,7 @@ async fn insert_test_courses(pool: &PgPool) {
             ],
         ),
         // No meetings (TBA)
-        make_course(
-            "10006",
-            term,
-            "ENG",
-            "1010",
-            "English Composition",
-            (25, 30, 0, 10),
-        ),
+        make_course("10006", term, "ENG", "1010", "English Composition", (25, 30, 0, 10)),
         // Two separate meetings: MWF 08:00-08:50 and TTh 10:00-11:15
         with_meetings(
             make_course("10007", term, "PHYS", "1600", "Physics I", (28, 35, 0, 5)),
@@ -149,23 +128,11 @@ async fn test_filter_single_day_monday() {
     let days = vec!["monday".to_owned()];
     let (crns, total) = search_by_days(&pool, Some(&days)).await;
 
-    assert_eq!(
-        total, 4,
-        "Expected 4 courses with Monday meetings, got {total}"
-    );
+    assert_eq!(total, 4, "Expected 4 courses with Monday meetings, got {total}");
     assert_eq!(crns.len(), 4, "Result count should match total: {crns:?}");
-    assert!(
-        crns.contains(&"10001".to_owned()),
-        "MWF course should match Monday"
-    );
-    assert!(
-        crns.contains(&"10003".to_owned()),
-        "MW course should match Monday"
-    );
-    assert!(
-        crns.contains(&"10004".to_owned()),
-        "Monday-only course should match"
-    );
+    assert!(crns.contains(&"10001".to_owned()), "MWF course should match Monday");
+    assert!(crns.contains(&"10003".to_owned()), "MW course should match Monday");
+    assert!(crns.contains(&"10004".to_owned()), "Monday-only course should match");
     assert!(
         crns.contains(&"10007".to_owned()),
         "PHYS with MWF meeting should match Monday"
@@ -192,15 +159,9 @@ async fn test_filter_single_day_saturday() {
     let days = vec!["saturday".to_owned()];
     let (crns, total) = search_by_days(&pool, Some(&days)).await;
 
-    assert_eq!(
-        total, 1,
-        "Expected 1 course with Saturday meeting, got {total}"
-    );
+    assert_eq!(total, 1, "Expected 1 course with Saturday meeting, got {total}");
     assert_eq!(crns.len(), 1, "Result count should match total: {crns:?}");
-    assert!(
-        crns.contains(&"10005".to_owned()),
-        "Saturday-only course should match"
-    );
+    assert!(crns.contains(&"10005".to_owned()), "Saturday-only course should match");
 }
 
 #[tokio::test]
@@ -208,22 +169,12 @@ async fn test_filter_multi_day_and_semantics() {
     let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
-    let days = vec![
-        "monday".to_owned(),
-        "wednesday".to_owned(),
-        "friday".to_owned(),
-    ];
+    let days = vec!["monday".to_owned(), "wednesday".to_owned(), "friday".to_owned()];
     let (crns, total) = search_by_days(&pool, Some(&days)).await;
 
-    assert_eq!(
-        total, 2,
-        "Expected 2 courses with MWF meetings, got {total}"
-    );
+    assert_eq!(total, 2, "Expected 2 courses with MWF meetings, got {total}");
     assert_eq!(crns.len(), 2, "Result count should match total: {crns:?}");
-    assert!(
-        crns.contains(&"10001".to_owned()),
-        "MWF course should match MWF filter"
-    );
+    assert!(crns.contains(&"10001".to_owned()), "MWF course should match MWF filter");
     assert!(
         crns.contains(&"10007".to_owned()),
         "PHYS with MWF meeting should match MWF filter"
@@ -246,15 +197,9 @@ async fn test_filter_tuesday_thursday() {
     let days = vec!["tuesday".to_owned(), "thursday".to_owned()];
     let (crns, total) = search_by_days(&pool, Some(&days)).await;
 
-    assert_eq!(
-        total, 2,
-        "Expected 2 courses with TTh meetings, got {total}"
-    );
+    assert_eq!(total, 2, "Expected 2 courses with TTh meetings, got {total}");
     assert_eq!(crns.len(), 2, "Result count should match total: {crns:?}");
-    assert!(
-        crns.contains(&"10002".to_owned()),
-        "TTh course should match TTh filter"
-    );
+    assert!(crns.contains(&"10002".to_owned()), "TTh course should match TTh filter");
     assert!(
         crns.contains(&"10007".to_owned()),
         "PHYS with TTh meeting should match TTh filter"
@@ -268,14 +213,9 @@ async fn test_no_day_filter_returns_all() {
 
     let (crns, total) = search_by_days(&pool, None).await;
 
-    assert_eq!(
-        total, 7,
-        "Expected all 7 courses when no day filter, got {total}"
-    );
+    assert_eq!(total, 7, "Expected all 7 courses when no day filter, got {total}");
     assert_eq!(crns.len(), 7, "Result count should match total: {crns:?}");
-    for expected_crn in [
-        "10001", "10002", "10003", "10004", "10005", "10006", "10007",
-    ] {
+    for expected_crn in ["10001", "10002", "10003", "10004", "10005", "10006", "10007"] {
         assert!(
             crns.contains(&expected_crn.to_owned()),
             "Course {expected_crn} should be present with no day filter"
@@ -316,9 +256,6 @@ async fn test_filter_nonexistent_day_combo() {
     let days = vec!["saturday".to_owned(), "sunday".to_owned()];
     let (crns, total) = search_by_days(&pool, Some(&days)).await;
 
-    assert_eq!(
-        total, 0,
-        "No course meets on both Saturday AND Sunday, got {total}"
-    );
+    assert_eq!(total, 0, "No course meets on both Saturday AND Sunday, got {total}");
     assert!(crns.is_empty(), "Should return no results: {crns:?}");
 }

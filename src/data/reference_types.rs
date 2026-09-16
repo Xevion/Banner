@@ -411,26 +411,11 @@ mod tests {
     fn instructional_method_filter_str_round_trip() {
         let cases = [
             ("InPerson", InstructionalMethod::InPerson),
-            (
-                "Online.Async",
-                InstructionalMethod::Online(OnlineVariant::Async),
-            ),
-            (
-                "Online.Sync",
-                InstructionalMethod::Online(OnlineVariant::Sync),
-            ),
-            (
-                "Online.Mixed",
-                InstructionalMethod::Online(OnlineVariant::Mixed),
-            ),
-            (
-                "Hybrid.Half",
-                InstructionalMethod::Hybrid(HybridVariant::Half),
-            ),
-            (
-                "Hybrid.OneThird",
-                InstructionalMethod::Hybrid(HybridVariant::OneThird),
-            ),
+            ("Online.Async", InstructionalMethod::Online(OnlineVariant::Async)),
+            ("Online.Sync", InstructionalMethod::Online(OnlineVariant::Sync)),
+            ("Online.Mixed", InstructionalMethod::Online(OnlineVariant::Mixed)),
+            ("Hybrid.Half", InstructionalMethod::Hybrid(HybridVariant::Half)),
+            ("Hybrid.OneThird", InstructionalMethod::Hybrid(HybridVariant::OneThird)),
             (
                 "Hybrid.TwoThirds",
                 InstructionalMethod::Hybrid(HybridVariant::TwoThirds),
@@ -440,27 +425,15 @@ mod tests {
         for (filter_str, expected) in cases {
             let parsed = InstructionalMethod::from_filter_str(filter_str).unwrap();
             assert_eq!(parsed, expected, "from_filter_str({filter_str:?})");
-            assert_eq!(
-                parsed.to_filter_str(),
-                filter_str,
-                "to_filter_str for {expected:?}"
-            );
+            assert_eq!(parsed.to_filter_str(), filter_str, "to_filter_str for {expected:?}");
         }
     }
 
     #[test]
     fn instructional_method_filter_str_rejects_invalid() {
         // Rejects unknown variant names and raw Banner codes alike (Tier 1)
-        assert_eq!(
-            InstructionalMethod::from_filter_str("Bogus")
-                .unwrap_err()
-                .code,
-            "Bogus"
-        );
-        assert_eq!(
-            InstructionalMethod::from_filter_str("FF").unwrap_err().code,
-            "FF"
-        );
+        assert_eq!(InstructionalMethod::from_filter_str("Bogus").unwrap_err().code, "Bogus");
+        assert_eq!(InstructionalMethod::from_filter_str("FF").unwrap_err().code, "FF");
     }
 
     #[test]
@@ -481,10 +454,7 @@ mod tests {
         }
 
         // Attribute -- spot-check (same macro)
-        assert_eq!(
-            Attribute::from_code("010", None),
-            Attribute::CoreCommunication
-        );
+        assert_eq!(Attribute::from_code("010", None), Attribute::CoreCommunication);
         assert_eq!(Attribute::from_code("HNRS", None), Attribute::Honors);
         assert_eq!(Attribute::Honors.to_code(), "HNRS");
 
@@ -514,27 +484,14 @@ mod tests {
             }
         );
 
-        assert_eq!(
-            Attribute::from_code("ZZZZ", Some("Custom")).to_code(),
-            "ZZZZ"
-        );
-        assert_eq!(
-            PartOfTerm::from_code("Q1", Some("Quarter 1")).to_code(),
-            "Q1"
-        );
+        assert_eq!(Attribute::from_code("ZZZZ", Some("Custom")).to_code(), "ZZZZ");
+        assert_eq!(PartOfTerm::from_code("Q1", Some("Quarter 1")).to_code(), "Q1");
     }
 
     #[test]
     fn tier2_filter_str_round_trip() {
         // Campus -- exhaustive
-        for s in [
-            "Main",
-            "Downtown",
-            "Southwest",
-            "Laredo",
-            "Internet",
-            "OnlinePrograms",
-        ] {
+        for s in ["Main", "Downtown", "Southwest", "Laredo", "Internet", "OnlinePrograms"] {
             assert_eq!(Campus::from_filter_str(s).unwrap().to_filter_str(), s);
         }
         // Attribute -- spot-check
@@ -580,10 +537,7 @@ mod tests {
         let fv: FilterValue<Campus> = FilterValue::Raw("XYZ".to_owned());
         let json = serde_json::to_string(&fv).unwrap();
         assert_eq!(json, r#""raw:XYZ""#);
-        assert_eq!(
-            serde_json::from_str::<FilterValue<Campus>>(&json).unwrap(),
-            fv
-        );
+        assert_eq!(serde_json::from_str::<FilterValue<Campus>>(&json).unwrap(), fv);
 
         // Tier 2 Unknown serializes as raw:
         let fv = FilterValue::Typed(Campus::Unknown {
@@ -610,21 +564,13 @@ mod tests {
     #[test]
     fn parse_filter_edge_cases() {
         // Tier 2: raw: prefix with empty code, with colons
-        assert_eq!(
-            Campus::parse_filter("raw:").unwrap(),
-            FilterValue::Raw(String::new())
-        );
+        assert_eq!(Campus::parse_filter("raw:").unwrap(), FilterValue::Raw(String::new()));
         assert_eq!(
             Campus::parse_filter("raw:a:b").unwrap(),
             FilterValue::Raw("a:b".to_owned())
         );
 
         // Tier 1: rejects raw: prefix entirely
-        assert_eq!(
-            InstructionalMethod::parse_filter("raw:FF")
-                .unwrap_err()
-                .code,
-            "raw:FF"
-        );
+        assert_eq!(InstructionalMethod::parse_filter("raw:FF").unwrap_err().code, "raw:FF");
     }
 }

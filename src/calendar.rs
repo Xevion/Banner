@@ -74,11 +74,7 @@ fn location_string(mt: &DbMeetingTime) -> String {
         .and_then(|loc| loc.building_description.as_deref())
         .or_else(|| mt.location.as_ref().and_then(|loc| loc.building.as_deref()))
         .unwrap_or("");
-    let room = mt
-        .location
-        .as_ref()
-        .and_then(|loc| loc.room.as_deref())
-        .unwrap_or("");
+    let room = mt.location.as_ref().and_then(|loc| loc.room.as_deref()).unwrap_or("");
     let combined = format!("{building} {room}").trim().to_string();
     if combined.is_empty() {
         "Online".to_string()
@@ -93,11 +89,7 @@ fn days_display(mt: &DbMeetingTime) -> String {
     if weekdays.is_empty() {
         return "TBA".to_string();
     }
-    weekdays
-        .iter()
-        .map(|d| ics_day_code(*d))
-        .collect::<Vec<_>>()
-        .join("")
+    weekdays.iter().map(|d| ics_day_code(*d)).collect::<Vec<_>>().join("")
 }
 
 /// Escape text for ICS property values.
@@ -112,9 +104,8 @@ fn escape_ics(text: &str) -> String {
 /// Find the nth occurrence of a weekday in a given month/year (1-based).
 fn nth_weekday_of_month(year: i32, month: u32, weekday: Weekday, n: u32) -> Option<NaiveDate> {
     let first = NaiveDate::from_ymd_opt(year, month, 1)?;
-    let days_ahead = (weekday.num_days_from_monday() as i64
-        - first.weekday().num_days_from_monday() as i64)
-        .rem_euclid(7) as u32;
+    let days_ahead =
+        (weekday.num_days_from_monday() as i64 - first.weekday().num_days_from_monday() as i64).rem_euclid(7) as u32;
     let day = 1 + days_ahead + 7 * (n - 1);
     NaiveDate::from_ymd_opt(year, month, day)
 }
@@ -188,16 +179,10 @@ fn holiday_exceptions(start: NaiveDate, end: NaiveDate, weekdays: &[Weekday]) ->
 }
 
 /// Names of excluded holidays (for user-facing messages).
-fn excluded_holiday_names(
-    start: NaiveDate,
-    end: NaiveDate,
-    exceptions: &[NaiveDate],
-) -> Vec<String> {
+fn excluded_holiday_names(start: NaiveDate, end: NaiveDate, exceptions: &[NaiveDate]) -> Vec<String> {
     let start_year = start.year();
     let end_year = end.year();
-    let all_holidays: Vec<_> = (start_year..=end_year)
-        .flat_map(compute_holidays_for_year)
-        .collect();
+    let all_holidays: Vec<_> = (start_year..=end_year).flat_map(compute_holidays_for_year).collect();
 
     let mut names = Vec::new();
     for (holiday_name, holiday_dates) in &all_holidays {
@@ -222,10 +207,7 @@ pub struct IcsResult {
 }
 
 /// Generate an ICS calendar file for a course.
-pub fn generate_ics(
-    course: &CalendarCourse,
-    meeting_times: &[DbMeetingTime],
-) -> Result<IcsResult, anyhow::Error> {
+pub fn generate_ics(course: &CalendarCourse, meeting_times: &[DbMeetingTime]) -> Result<IcsResult, anyhow::Error> {
     let mut ics = String::new();
     let mut all_excluded = Vec::new();
 
@@ -235,10 +217,7 @@ pub fn generate_ics(
     ics.push_str("PRODID:-//Banner Bot//Course Calendar//EN\r\n");
     ics.push_str("CALSCALE:GREGORIAN\r\n");
     ics.push_str("METHOD:PUBLISH\r\n");
-    ics.push_str(&format!(
-        "X-WR-CALNAME:{}\r\n",
-        escape_ics(&course.display_title())
-    ));
+    ics.push_str(&format!("X-WR-CALNAME:{}\r\n", escape_ics(&course.display_title())));
 
     for (index, mt) in meeting_times.iter().enumerate() {
         let (event, holidays) = generate_ics_event(course, mt, index)?;
@@ -309,11 +288,7 @@ fn generate_ics_event(
         "{}-{}-{}@banner-bot.local",
         course.crn,
         index,
-        start_date
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp()
+        start_date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp()
     );
 
     let mut event = String::new();
@@ -362,10 +337,7 @@ fn generate_ics_event(
 }
 
 /// Generate a Google Calendar "add event" URL for a single meeting time.
-pub fn generate_gcal_url(
-    course: &CalendarCourse,
-    mt: &DbMeetingTime,
-) -> Result<String, anyhow::Error> {
+pub fn generate_gcal_url(course: &CalendarCourse, mt: &DbMeetingTime) -> Result<String, anyhow::Error> {
     let start_date = mt.date_range.start;
     let end_date = mt.date_range.end;
 
@@ -376,11 +348,7 @@ pub fn generate_gcal_url(
         (Some(st), Some(et)) => {
             let s = start_date.and_time(st);
             let e = start_date.and_time(et);
-            format!(
-                "{}/{}",
-                s.format("%Y%m%dT%H%M%S"),
-                e.format("%Y%m%dT%H%M%S")
-            )
+            format!("{}/{}", s.format("%Y%m%dT%H%M%S"), e.format("%Y%m%dT%H%M%S"))
         }
         _ => {
             let s = start_date.format("%Y%m%d").to_string();
@@ -403,11 +371,7 @@ pub fn generate_gcal_url(
     let recur = if !weekdays.is_empty() && start_time.is_some() {
         let by_day: Vec<&str> = weekdays.iter().map(|d| ics_day_code(*d)).collect();
         let until = end_date.format("%Y%m%dT000000Z").to_string();
-        format!(
-            "RRULE:FREQ=WEEKLY;BYDAY={};UNTIL={}",
-            by_day.join(","),
-            until
-        )
+        format!("RRULE:FREQ=WEEKLY;BYDAY={};UNTIL={}", by_day.join(","), until)
     } else {
         String::new()
     };

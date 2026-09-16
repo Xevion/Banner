@@ -14,8 +14,8 @@ use sqlx::PgPool;
 
 use crate::banner::models::terms::{Season, Term};
 use crate::data::bluebook::{
-    BlueBookEvaluation, batch_upsert_bluebook_evaluations, get_all_subject_scrape_times,
-    get_subject_max_terms, mark_subject_scraped,
+    BlueBookEvaluation, batch_upsert_bluebook_evaluations, get_all_subject_scrape_times, get_subject_max_terms,
+    mark_subject_scraped,
 };
 
 #[allow(dead_code)]
@@ -215,9 +215,7 @@ impl BlueBookClient {
             }
 
             // Radio buttons and checkboxes: only include if checked
-            if (input_type == "radio" || input_type == "checkbox")
-                && input.attr("checked").is_none()
-            {
+            if (input_type == "radio" || input_type == "checkbox") && input.attr("checked").is_none() {
                 continue;
             }
 
@@ -249,11 +247,7 @@ impl BlueBookClient {
     }
 
     /// Build POST params: clone all form fields, then set __EVENTTARGET and override specified fields.
-    fn build_postback(
-        fields: &FormFields,
-        event_target: &str,
-        overrides: &[(&str, &str)],
-    ) -> Vec<(String, String)> {
+    fn build_postback(fields: &FormFields, event_target: &str, overrides: &[(&str, &str)]) -> Vec<(String, String)> {
         let mut params = fields.0.clone();
 
         // Set __EVENTTARGET (should already exist, but override it)
@@ -305,13 +299,11 @@ impl BlueBookClient {
     /// `"Computer Science (CS)"`. The parenthesized code is extracted as the subject code,
     /// and the 0-based `<li>` index is preserved (needed for the HiddenField POST value).
     fn parse_subjects(html: &Html) -> Vec<SubjectEntry> {
-        let li_sel = Selector::parse(
-            "#ctl00_MainContentSearchQuery_searchCriteriaEntry_CourseSubjectCombo_OptionList > li",
-        )
-        .unwrap();
+        let li_sel =
+            Selector::parse("#ctl00_MainContentSearchQuery_searchCriteriaEntry_CourseSubjectCombo_OptionList > li")
+                .unwrap();
 
-        static CODE_RE: LazyLock<regex::Regex> =
-            LazyLock::new(|| regex::Regex::new(r"\(([^)]+)\)\s*$").unwrap());
+        static CODE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\(([^)]+)\)\s*$").unwrap());
 
         let mut subjects = Vec::new();
 
@@ -334,11 +326,7 @@ impl BlueBookClient {
     }
 
     /// POST a search filtered by subject, returning the response HTML and updated form fields.
-    async fn search_subject(
-        &self,
-        subject: &SubjectEntry,
-        fields: &FormFields,
-    ) -> Result<(Html, FormFields)> {
+    async fn search_subject(&self, subject: &SubjectEntry, fields: &FormFields) -> Result<(Html, FormFields)> {
         tokio::time::sleep(self.delay).await;
 
         let index_str = subject.combo_index.to_string();
@@ -373,11 +361,7 @@ impl BlueBookClient {
     }
 
     /// POST to switch the term filter (CURRENT/ALL/PAST/FUTURE) and return the updated page.
-    async fn switch_term_filter(
-        &self,
-        filter: &str,
-        fields: &FormFields,
-    ) -> Result<(Html, FormFields)> {
+    async fn switch_term_filter(&self, filter: &str, fields: &FormFields) -> Result<(Html, FormFields)> {
         tokio::time::sleep(self.delay).await;
 
         let radio_index = match filter {
@@ -473,10 +457,7 @@ impl BlueBookClient {
                 None => continue,
             };
 
-            let cells: Vec<String> = table
-                .select(&td_sel)
-                .map(|td| td.text().collect::<String>())
-                .collect();
+            let cells: Vec<String> = table.select(&td_sel).map(|td| td.text().collect::<String>()).collect();
 
             // Need at least 9 cells: SemYr, CRN, Course.Section, Title, Instructor, InstEval, Textbooks, Syllabus, CourseEval
             if cells.len() < 9 {
@@ -497,8 +478,7 @@ impl BlueBookClient {
 
             // Course.Section: "CS 1083.001" -- extract course_number and section
             let course_section = cells[2].trim();
-            let (course_number, section) = match Self::parse_course_section(course_section, subject)
-            {
+            let (course_number, section) = match Self::parse_course_section(course_section, subject) {
                 Some(pair) => pair,
                 None => {
                     warn!(
@@ -514,8 +494,7 @@ impl BlueBookClient {
                 continue;
             }
 
-            let (instructor_rating, instructor_response_count) =
-                Self::parse_rating_cell(cells[5].trim());
+            let (instructor_rating, instructor_response_count) = Self::parse_rating_cell(cells[5].trim());
             let (course_rating, course_response_count) = Self::parse_rating_cell(cells[8].trim());
 
             // Skip rows with no evaluation data at all
@@ -523,9 +502,7 @@ impl BlueBookClient {
                 continue;
             }
 
-            let department = details
-                .get(i)
-                .and_then(|detail| Self::parse_department(*detail));
+            let department = details.get(i).and_then(|detail| Self::parse_department(*detail));
 
             evals.push(BlueBookEvaluation {
                 subject: subject.to_string(),
@@ -551,9 +528,8 @@ impl BlueBookClient {
     /// followed by the department text (e.g. "Department of Computer Science").
     /// This text appears in both surveyed and non-surveyed pane variants.
     fn parse_department(detail_pane: html_scraper::ElementRef<'_>) -> Option<String> {
-        static DEPT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-            regex::Regex::new(r"Dept:\s*(.+?)\s*(?:College:|Partial Term:)").unwrap()
-        });
+        static DEPT_RE: LazyLock<regex::Regex> =
+            LazyLock::new(|| regex::Regex::new(r"Dept:\s*(.+?)\s*(?:College:|Partial Term:)").unwrap());
 
         let text: String = detail_pane
             .text()
@@ -562,9 +538,7 @@ impl BlueBookClient {
             .collect::<Vec<_>>()
             .join(" ");
 
-        DEPT_RE
-            .captures(&text)
-            .map(|caps| caps[1].trim().to_string())
+        DEPT_RE.captures(&text).map(|caps| caps[1].trim().to_string())
     }
 
     /// Parse a course.section string like "CS 1083.001" into ("1083", "001").
@@ -590,19 +564,14 @@ impl BlueBookClient {
         // Skip the display prefix (which may differ from the ComboBox subject code)
         // by splitting on the first space.
         let Some((display_prefix, rest)) = raw.split_once(' ') else {
-            debug!(
-                normalized = raw,
-                subject, "parse_course_section: no space separator"
-            );
+            debug!(normalized = raw, subject, "parse_course_section: no space separator");
             return None;
         };
 
         if display_prefix != subject {
             debug!(
                 normalized = raw,
-                subject,
-                display_prefix,
-                "parse_course_section: display prefix differs from ComboBox subject code"
+                subject, display_prefix, "parse_course_section: display prefix differs from ComboBox subject code"
             );
         }
 
@@ -620,9 +589,7 @@ impl BlueBookClient {
         if !course_number.starts_with(|c: char| c.is_ascii_digit()) {
             debug!(
                 normalized = raw,
-                subject,
-                course_number,
-                "parse_course_section: course_number does not start with digit"
+                subject, course_number, "parse_course_section: course_number does not start with digit"
             );
             return None;
         }
@@ -640,22 +607,16 @@ impl BlueBookClient {
             return (None, None);
         }
 
-        let rating = text
-            .split('/')
-            .next()
-            .and_then(|s| s.trim().parse::<f32>().ok());
+        let rating = text.split('/').next().and_then(|s| s.trim().parse::<f32>().ok());
 
-        let response_count = RESPONSE_RE
-            .captures(text)
-            .and_then(|caps| caps[1].parse::<i32>().ok());
+        let response_count = RESPONSE_RE.captures(text).and_then(|caps| caps[1].parse::<i32>().ok());
 
         (rating, response_count)
     }
 
     /// Extract current page number and total pages from the pager text (e.g. "3 of 47").
     fn parse_page_info(html: &Html) -> Option<(u32, u32)> {
-        static PAGE_RE: LazyLock<regex::Regex> =
-            LazyLock::new(|| regex::Regex::new(r"(\d+)\s+of\s+(\d+)").unwrap());
+        static PAGE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(\d+)\s+of\s+(\d+)").unwrap());
 
         let pager_sel = Selector::parse("#ctl00_MainContent_mainContent1_topPagerPnl").unwrap();
         let pager = html.select(&pager_sel).next()?;
@@ -674,9 +635,7 @@ impl BlueBookClient {
     pub(crate) async fn scrape_all(&self, db_pool: &PgPool, force: bool) -> Result<u32> {
         let (subjects, initial_fields) = self.fetch_subjects().await?;
 
-        let scrape_times = get_all_subject_scrape_times(db_pool)
-            .await
-            .unwrap_or_default();
+        let scrape_times = get_all_subject_scrape_times(db_pool).await.unwrap_or_default();
         let max_terms = get_subject_max_terms(db_pool).await.unwrap_or_default();
         let current_term_code = Term::get_current().inner().to_string();
 
@@ -749,9 +708,7 @@ impl BlueBookClient {
                 Ok((html, fields)) => {
                     let page_evals = Self::parse_evaluations(&html, &subject.code);
                     subject_evals.extend(page_evals);
-                    let total_pages = Self::parse_page_info(&html)
-                        .map(|(_, total)| total)
-                        .unwrap_or(1);
+                    let total_pages = Self::parse_page_info(&html).map(|(_, total)| total).unwrap_or(1);
                     (total_pages, fields)
                 }
                 Err(e) => {
@@ -768,10 +725,7 @@ impl BlueBookClient {
 
             // Paginate through remaining pages
             for page in 2..=total_pages {
-                debug!(
-                    code = subject.code.as_str(),
-                    page, total_pages, "Fetching page"
-                );
+                debug!(code = subject.code.as_str(), page, total_pages, "Fetching page");
 
                 match self.next_page(&fields, true).await {
                     Ok((page_html, new_fields)) => {
@@ -848,8 +802,7 @@ mod tests {
     fn init_tracing() {
         let _ = tracing_subscriber::fmt()
             .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("banner::bluebook=debug")),
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("banner::bluebook=debug")),
             )
             .with_test_writer()
             .try_init();
@@ -873,18 +826,12 @@ mod tests {
 
     #[test]
     fn test_bluebook_season_from_str() {
-        assert_eq!(
-            BlueBookSeason::from_bluebook_str("Spr"),
-            Some(BlueBookSeason::Spring)
-        );
+        assert_eq!(BlueBookSeason::from_bluebook_str("Spr"), Some(BlueBookSeason::Spring));
         assert_eq!(
             BlueBookSeason::from_bluebook_str("Spring"),
             Some(BlueBookSeason::Spring)
         );
-        assert_eq!(
-            BlueBookSeason::from_bluebook_str("Sum"),
-            Some(BlueBookSeason::SummerI)
-        );
+        assert_eq!(BlueBookSeason::from_bluebook_str("Sum"), Some(BlueBookSeason::SummerI));
         assert_eq!(
             BlueBookSeason::from_bluebook_str("Sum I"),
             Some(BlueBookSeason::SummerI)
@@ -893,10 +840,7 @@ mod tests {
             BlueBookSeason::from_bluebook_str("Sum II"),
             Some(BlueBookSeason::SummerII)
         );
-        assert_eq!(
-            BlueBookSeason::from_bluebook_str("Fall"),
-            Some(BlueBookSeason::Fall)
-        );
+        assert_eq!(BlueBookSeason::from_bluebook_str("Fall"), Some(BlueBookSeason::Fall));
         assert_eq!(BlueBookSeason::from_bluebook_str("Winter"), None);
         assert_eq!(BlueBookSeason::from_bluebook_str(""), None);
     }
@@ -919,18 +863,12 @@ mod tests {
 
     #[test]
     fn test_normalize_term_summer_i() {
-        assert_eq!(
-            normalize_term("Sum I 2026"),
-            Some(term(2026, Season::Summer))
-        );
+        assert_eq!(normalize_term("Sum I 2026"), Some(term(2026, Season::Summer)));
     }
 
     #[test]
     fn test_normalize_term_summer_ii_collapses_to_summer() {
-        assert_eq!(
-            normalize_term("Sum II 2026"),
-            Some(term(2026, Season::Summer))
-        );
+        assert_eq!(normalize_term("Sum II 2026"), Some(term(2026, Season::Summer)));
     }
 
     #[test]
@@ -940,10 +878,7 @@ mod tests {
 
     #[test]
     fn test_normalize_term_spring_full() {
-        assert_eq!(
-            normalize_term("Spring 2025"),
-            Some(term(2025, Season::Spring))
-        );
+        assert_eq!(normalize_term("Spring 2025"), Some(term(2025, Season::Spring)));
     }
 
     #[test]
@@ -958,10 +893,7 @@ mod tests {
 
     #[test]
     fn test_normalize_term_whitespace() {
-        assert_eq!(
-            normalize_term("  Fall 2025  "),
-            Some(term(2025, Season::Fall))
-        );
+        assert_eq!(normalize_term("  Fall 2025  "), Some(term(2025, Season::Fall)));
     }
 
     #[test]
@@ -1092,11 +1024,7 @@ mod tests {
         );
         let html = Html::parse_document(&html_str);
         let evals = BlueBookClient::parse_evaluations(&html, "MAT");
-        assert_eq!(
-            evals.len(),
-            1,
-            "Should parse MAT course with non-breaking space"
-        );
+        assert_eq!(evals.len(), 1, "Should parse MAT course with non-breaking space");
         assert_eq!(evals[0].course_number, "1213");
         assert_eq!(evals[0].section, "001");
     }
@@ -1124,12 +1052,7 @@ mod tests {
         let html = Html::parse_document(html_str);
         let fields = BlueBookClient::extract_form_fields(&html).unwrap();
         assert_eq!(fields.0.len(), 3);
-        assert!(
-            fields
-                .0
-                .iter()
-                .any(|(n, v)| n == "__VIEWSTATE" && v == "abc123")
-        );
+        assert!(fields.0.iter().any(|(n, v)| n == "__VIEWSTATE" && v == "abc123"));
         assert!(fields.0.iter().any(|(n, _)| n == "__EVENTTARGET"));
         assert!(fields.0.iter().any(|(n, v)| n == "search" && v == "hello"));
     }
@@ -1189,11 +1112,7 @@ mod tests {
             ("__EVENTTARGET".to_string(), "".to_string()),
             ("field1".to_string(), "old".to_string()),
         ]);
-        let params = BlueBookClient::build_postback(
-            &fields,
-            "target",
-            &[("field1", "new"), ("field2", "added")],
-        );
+        let params = BlueBookClient::build_postback(&fields, "target", &[("field1", "new"), ("field2", "added")]);
         let f1 = params.iter().find(|(n, _)| n == "field1").unwrap();
         assert_eq!(f1.1, "new");
         let f2 = params.iter().find(|(n, _)| n == "field2").unwrap();
@@ -1204,11 +1123,7 @@ mod tests {
     fn test_build_postback_adds_missing_event_target() {
         let fields = FormFields(vec![("__VIEWSTATE".to_string(), "vs".to_string())]);
         let params = BlueBookClient::build_postback(&fields, "my_target", &[]);
-        assert!(
-            params
-                .iter()
-                .any(|(n, v)| n == "__EVENTTARGET" && v == "my_target")
-        );
+        assert!(params.iter().any(|(n, v)| n == "__EVENTTARGET" && v == "my_target"));
     }
 
     #[test]
@@ -1298,8 +1213,7 @@ mod tests {
     /// Each entry is (term, crn, course_section, title, instructor, inst_eval, course_eval, department).
     fn build_accordion_html(entries: &[AccordionEntry<'_>]) -> String {
         let mut html = String::from("<html><body>");
-        for (term, crn, course_section, title, instructor, inst_eval, course_eval, dept) in entries
-        {
+        for (term, crn, course_section, title, instructor, inst_eval, course_eval, dept) in entries {
             // Master pane (header)
             html.push_str(&format!(
                 r#"<div class="accordionMasterPane">
@@ -1358,10 +1272,7 @@ mod tests {
         assert_eq!(eval.instructor_response_count, Some(17));
         assert_eq!(eval.course_rating, Some(3.9));
         assert_eq!(eval.course_response_count, Some(17));
-        assert_eq!(
-            eval.department.as_deref(),
-            Some("Department of Computer Science")
-        );
+        assert_eq!(eval.department.as_deref(), Some("Department of Computer Science"));
     }
 
     #[test]
@@ -1379,10 +1290,7 @@ mod tests {
         let html = Html::parse_document(&html_str);
         let evals = BlueBookClient::parse_evaluations(&html, "CS");
 
-        assert!(
-            evals.is_empty(),
-            "Should skip rows where both ratings are n/a"
-        );
+        assert!(evals.is_empty(), "Should skip rows where both ratings are n/a");
     }
 
     #[test]
@@ -1555,10 +1463,7 @@ mod tests {
 
         let client = BlueBookClient::new();
         let (subjects, initial_fields) = client.fetch_subjects().await.unwrap();
-        let cs = subjects
-            .iter()
-            .find(|s| s.code == "CS")
-            .expect("CS subject must exist");
+        let cs = subjects.iter().find(|s| s.code == "CS").expect("CS subject must exist");
 
         // Search CS
         let (_html, fields) = client.search_subject(cs, &initial_fields).await.unwrap();
@@ -1572,10 +1477,7 @@ mod tests {
         let page1_evals = BlueBookClient::parse_evaluations(&html, "CS");
         let (current_page, total_pages) =
             BlueBookClient::parse_page_info(&html).expect("PAST results should have pager");
-        eprintln!(
-            "Page {current_page}/{total_pages}: {} evals",
-            page1_evals.len()
-        );
+        eprintln!("Page {current_page}/{total_pages}: {} evals", page1_evals.len());
         assert!(total_pages > 1, "CS PAST should have multiple pages");
 
         let mut all_evals = page1_evals;
@@ -1601,10 +1503,7 @@ mod tests {
             all_evals.extend(page_evals);
         }
 
-        eprintln!(
-            "Total evaluations from {pages_to_check} pages: {}",
-            all_evals.len()
-        );
+        eprintln!("Total evaluations from {pages_to_check} pages: {}", all_evals.len());
         assert!(
             !all_evals.is_empty(),
             "Should have evaluations from CS PAST pages (page 1 may be n/a Fall 2025, but later pages have Spr 2025+ data)"
@@ -1653,16 +1552,12 @@ mod tests {
     async fn test_live_scrape_all() {
         init_tracing();
 
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for this test");
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for this test");
         let db_pool = sqlx::PgPool::connect(&database_url).await.unwrap();
 
         let client = BlueBookClient::new();
         let total = client.scrape_all(&db_pool, false).await.unwrap();
         eprintln!("Total evaluations upserted: {total} (0 means all subjects failed)",);
-        assert!(
-            total > 0,
-            "Should collect at least some evaluations from the live site"
-        );
+        assert!(total > 0, "Should collect at least some evaluations from the live site");
     }
 }

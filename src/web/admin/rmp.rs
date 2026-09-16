@@ -18,17 +18,13 @@ use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
 
 // Re-export response types so existing imports from `web::admin::rmp::*` still work.
-pub use crate::data::admin_rmp::{
-    InstructorDetailResponse, ListInstructorsResponse, RescoreResponse,
-};
+pub use crate::data::admin_rmp::{InstructorDetailResponse, ListInstructorsResponse, RescoreResponse};
 
 /// Map an [`AdminRmpError`] to its HTTP status; anything else is a generic 500.
 fn rmp_error(context: &str, e: anyhow::Error) -> ApiError {
     match e.downcast::<AdminRmpError>() {
         Ok(err) => match err {
-            AdminRmpError::NoSuchInstructor | AdminRmpError::NoPendingCandidate => {
-                ApiError::not_found(err.to_string())
-            }
+            AdminRmpError::NoSuchInstructor | AdminRmpError::NoPendingCandidate => ApiError::not_found(err.to_string()),
             AdminRmpError::AlreadyLinked { .. } | AdminRmpError::ConfirmedMatches => {
                 ApiError::conflict(err.to_string())
             }
@@ -186,10 +182,9 @@ pub async fn reject_candidate(
     Path(id): Path<i32>,
     Json(body): Json<RejectCandidateBody>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    let found =
-        admin_rmp::reject_candidate(&state.db_pool, id, body.rmp_legacy_id, user.discord_id)
-            .await
-            .map_err(|e| db_error("reject candidate", e))?;
+    let found = admin_rmp::reject_candidate(&state.db_pool, id, body.rmp_legacy_id, user.discord_id)
+        .await
+        .map_err(|e| db_error("reject candidate", e))?;
 
     if !found {
         return Err(ApiError::not_found("pending candidate not found"));
@@ -271,11 +266,7 @@ pub async fn unmatch_instructor(
     )
     .await;
 
-    info!(
-        instructor_id = id,
-        ?rmp_legacy_id,
-        "instructor unmatched from RMP"
-    );
+    info!(instructor_id = id, ?rmp_legacy_id, "instructor unmatched from RMP");
 
     Ok(Json(OkResponse { ok: true }))
 }
@@ -310,11 +301,7 @@ mod tests {
     use crate::web::error::ApiErrorCode;
     use assert2::check;
 
-    fn candidate(
-        status: RmpCandidateStatus,
-        claimed_by: Option<&str>,
-        subject: f32,
-    ) -> CandidateResponse {
+    fn candidate(status: RmpCandidateStatus, claimed_by: Option<&str>, subject: f32) -> CandidateResponse {
         CandidateResponse {
             id: 1,
             rmp_legacy_id: 42,
@@ -349,10 +336,7 @@ mod tests {
         let api = rmp_error("match instructor", err);
 
         check!(api.code == ApiErrorCode::Conflict);
-        check!(
-            api.message
-                == "RMP profile already linked to instructor Fictional, Bryn (bryn@utsa.edu, #7)"
-        );
+        check!(api.message == "RMP profile already linked to instructor Fictional, Bryn (bryn@utsa.edu, #7)");
     }
 
     #[test]
@@ -365,10 +349,7 @@ mod tests {
 
         let api = rmp_error("match instructor", err);
 
-        check!(
-            api.message
-                == "RMP profile already linked to instructor Fictional, Bryn (no email, #7)"
-        );
+        check!(api.message == "RMP profile already linked to instructor Fictional, Bryn (no email, #7)");
     }
 
     #[test]
@@ -391,10 +372,7 @@ mod tests {
 
     #[test]
     fn test_confirmed_matches_map_to_conflict() {
-        let api = rmp_error(
-            "reject all candidates",
-            AdminRmpError::ConfirmedMatches.into(),
-        );
+        let api = rmp_error("reject all candidates", AdminRmpError::ConfirmedMatches.into());
 
         check!(api.code == ApiErrorCode::Conflict);
         check!(api.message == "cannot reject instructor with confirmed matches -- unmatch first");
@@ -415,11 +393,7 @@ mod tests {
 
     #[test]
     fn test_claimed_candidate_names_the_holder() {
-        let reason = explain_block(&candidate(
-            RmpCandidateStatus::Pending,
-            Some("Fictional, Bryn"),
-            1.0,
-        ));
+        let reason = explain_block(&candidate(RmpCandidateStatus::Pending, Some("Fictional, Bryn"), 1.0));
         check!(reason == Some("Already linked to Fictional, Bryn".to_string()));
     }
 

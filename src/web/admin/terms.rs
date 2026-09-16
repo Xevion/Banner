@@ -57,10 +57,7 @@ impl From<SyncResult> for TermSyncResponse {
 
 /// `GET /api/admin/terms` -- List all terms with their scraping status.
 #[instrument(skip_all)]
-pub async fn list_terms(
-    _admin: AdminUser,
-    State(state): State<AppState>,
-) -> Result<Json<TermsListResponse>, ApiError> {
+pub async fn list_terms(_admin: AdminUser, State(state): State<AppState>) -> Result<Json<TermsListResponse>, ApiError> {
     let start = Instant::now();
 
     let terms = terms::get_all_terms(&state.db_pool)
@@ -107,10 +104,7 @@ pub async fn enable_term(
 
     info!(term_code = %code, "term scraping enabled");
 
-    Ok(Json(TermUpdateResponse {
-        success: true,
-        term,
-    }))
+    Ok(Json(TermUpdateResponse { success: true, term }))
 }
 
 /// `POST /api/admin/terms/:code/disable` -- Disable scraping for a term.
@@ -147,18 +141,12 @@ pub async fn disable_term(
 
     info!(term_code = %code, "term scraping disabled");
 
-    Ok(Json(TermUpdateResponse {
-        success: true,
-        term,
-    }))
+    Ok(Json(TermUpdateResponse { success: true, term }))
 }
 
 /// `POST /api/admin/terms/sync` -- Manually sync terms from the Banner API.
 #[instrument(skip_all)]
-pub async fn sync_terms(
-    _admin: AdminUser,
-    State(state): State<AppState>,
-) -> Result<Json<TermSyncResponse>, ApiError> {
+pub async fn sync_terms(_admin: AdminUser, State(state): State<AppState>) -> Result<Json<TermSyncResponse>, ApiError> {
     let start = Instant::now();
 
     let banner_terms = state.banner_api.get_terms("", 1, 500).await.map_err(|e| {

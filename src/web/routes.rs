@@ -21,8 +21,7 @@ use crate::web::middleware::rate_limit::RateLimitLayer;
 use crate::web::middleware::request_id::RequestIdLayer;
 use crate::web::middleware::security_headers::SecurityHeadersLayer;
 use crate::web::{
-    admin, calendar, courses, csp_report, instructors, search_options, status, stream, suggest,
-    timeline,
+    admin, calendar, courses, csp_report, instructors, search_options, status, stream, suggest, timeline,
 };
 use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
 
@@ -47,10 +46,9 @@ pub mod cache {
 /// Wraps a JSON response with a `Cache-Control` header.
 pub fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -> Response {
     let mut response = Json(value).into_response();
-    response.headers_mut().insert(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static(header),
-    );
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, HeaderValue::from_static(header));
     response
 }
 
@@ -77,10 +75,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             "/courses/{term}/{subject}/{course_number}/sections",
             get(courses::get_related_sections),
         )
-        .route(
-            "/courses/{term}/{crn}/calendar.ics",
-            get(calendar::course_ics),
-        )
+        .route("/courses/{term}/{crn}/calendar.ics", get(calendar::course_ics))
         .route("/courses/{term}/{crn}/gcal", get(calendar::course_gcal))
         .route("/reference/{category}", get(search_options::get_reference))
         .route("/search-options", get(search_options::get_search_options))
@@ -109,27 +104,15 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
     let admin_router = Router::new()
         .route("/admin/status", get(admin::admin_status))
         .route("/admin/users", get(admin::list_users))
-        .route(
-            "/admin/users/{discord_id}/admin",
-            put(admin::set_user_admin),
-        )
+        .route("/admin/users/{discord_id}/admin", put(admin::set_user_admin))
         .route("/admin/scrape-jobs", get(admin::list_scrape_jobs))
         .route("/admin/audit-log", get(admin::list_audit_log))
         .route("/admin/action-log", get(admin::action_log::list_action_log))
         .route("/admin/instructors", get(admin::rmp::list_instructors))
-        .route(
-            "/admin/instructors/duplicates",
-            get(admin::duplicates::list_duplicates),
-        )
+        .route("/admin/instructors/duplicates", get(admin::duplicates::list_duplicates))
         .route("/admin/instructors/merge", post(admin::duplicates::merge))
-        .route(
-            "/admin/instructors/dismiss",
-            post(admin::duplicates::dismiss),
-        )
-        .route(
-            "/admin/instructors/undismiss",
-            post(admin::duplicates::undismiss),
-        )
+        .route("/admin/instructors/dismiss", post(admin::duplicates::dismiss))
+        .route("/admin/instructors/undismiss", post(admin::duplicates::undismiss))
         .route(
             "/admin/instructors/{id}/merge-claimant",
             post(admin::duplicates::merge_claimant),
@@ -139,32 +122,17 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             post(admin::duplicates::merge_all),
         )
         .route("/admin/instructors/{id}", get(admin::rmp::get_instructor))
-        .route(
-            "/admin/instructors/{id}/match",
-            post(admin::rmp::match_instructor),
-        )
+        .route("/admin/instructors/{id}/match", post(admin::rmp::match_instructor))
         .route(
             "/admin/instructors/{id}/reject-candidate",
             post(admin::rmp::reject_candidate),
         )
-        .route(
-            "/admin/instructors/{id}/reject-all",
-            post(admin::rmp::reject_all),
-        )
-        .route(
-            "/admin/instructors/{id}/unmatch",
-            post(admin::rmp::unmatch_instructor),
-        )
+        .route("/admin/instructors/{id}/reject-all", post(admin::rmp::reject_all))
+        .route("/admin/instructors/{id}/unmatch", post(admin::rmp::unmatch_instructor))
         .route("/admin/rmp/rescore", post(admin::rmp::rescore))
         .route("/admin/scraper/stats", get(admin::scraper::scraper_stats))
-        .route(
-            "/admin/scraper/timeseries",
-            get(admin::scraper::scraper_timeseries),
-        )
-        .route(
-            "/admin/scraper/subjects",
-            get(admin::scraper::scraper_subjects),
-        )
+        .route("/admin/scraper/timeseries", get(admin::scraper::scraper_timeseries))
+        .route("/admin/scraper/subjects", get(admin::scraper::scraper_subjects))
         .route(
             "/admin/scraper/subjects/{subject}",
             get(admin::scraper::scraper_subject_detail),
@@ -176,34 +144,20 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             "/admin/bluebook/links/{id}/approve",
             post(admin::bluebook::approve_link),
         )
-        .route(
-            "/admin/bluebook/links/{id}/reject",
-            post(admin::bluebook::reject_link),
-        )
-        .route(
-            "/admin/bluebook/links/{id}/assign",
-            post(admin::bluebook::assign_link),
-        )
+        .route("/admin/bluebook/links/{id}/reject", post(admin::bluebook::reject_link))
+        .route("/admin/bluebook/links/{id}/assign", post(admin::bluebook::assign_link))
         .route("/admin/bluebook/match", post(admin::bluebook::run_matching))
         .route("/admin/terms", get(admin::terms::list_terms))
         .route("/admin/terms/sync", post(admin::terms::sync_terms))
-        .route(
-            "/admin/terms/{code}/enable",
-            post(admin::terms::enable_term),
-        )
-        .route(
-            "/admin/terms/{code}/disable",
-            post(admin::terms::disable_term),
-        )
-        .layer(axum::middleware::map_response(
-            |mut resp: Response| async move {
-                resp.headers_mut().insert(
-                    axum::http::header::CACHE_CONTROL,
-                    HeaderValue::from_static(cache::ADMIN),
-                );
-                resp
-            },
-        ))
+        .route("/admin/terms/{code}/enable", post(admin::terms::enable_term))
+        .route("/admin/terms/{code}/disable", post(admin::terms::disable_term))
+        .layer(axum::middleware::map_response(|mut resp: Response| async move {
+            resp.headers_mut().insert(
+                axum::http::header::CACHE_CONTROL,
+                HeaderValue::from_static(cache::ADMIN),
+            );
+            resp
+        }))
         .with_state(app_state.clone());
 
     use crate::web::sitemap;
@@ -214,10 +168,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/robots.txt", get(robots_txt))
         .route("/sitemap.xml", get(sitemap::sitemap_index))
         .route("/sitemap-static.xml", get(sitemap::sitemap_static))
-        .route(
-            "/sitemap-instructors.xml",
-            get(sitemap::sitemap_instructors),
-        )
+        .route("/sitemap-instructors.xml", get(sitemap::sitemap_instructors))
         .route("/sitemap-courses-{rest}", get(sitemap::sitemap_courses))
         .route("/sitemap-subjects.xml", get(sitemap::sitemap_subjects))
         .nest("/api", api_router)
@@ -244,10 +195,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         // Per-IP rate limiting (burst + sustained + long-term, multi-layer).
         // Inside compression so 429 responses get compressed too.
         RateLimitLayer::new(rate_limit_state),
-        TimeoutLayer::with_status_code(
-            axum::http::StatusCode::REQUEST_TIMEOUT,
-            Duration::from_secs(60),
-        ),
+        TimeoutLayer::with_status_code(axum::http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)),
     ))
 }
 
@@ -297,10 +245,7 @@ async fn ssr_fallback(
         // SvelteKit assets under _app/ that don't exist are a hard 404
         let trimmed = path.trim_start_matches('/');
         if trimmed.starts_with("_app/") || trimmed.starts_with("assets/") {
-            return labelled(
-                (StatusCode::NOT_FOUND, "Asset not found").into_response(),
-                "asset_404",
-            );
+            return labelled((StatusCode::NOT_FOUND, "Asset not found").into_response(), "asset_404");
         }
     }
 

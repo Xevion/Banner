@@ -7,23 +7,17 @@ use tokio::signal;
 use tracing::{error, info, warn};
 
 /// Handle application shutdown signals and graceful shutdown
-pub async fn handle_shutdown_signals(
-    mut service_manager: ServiceManager,
-    shutdown_timeout: Duration,
-) -> ExitCode {
+pub async fn handle_shutdown_signals(mut service_manager: ServiceManager, shutdown_timeout: Duration) -> ExitCode {
     // Set up signal handling for both SIGINT (Ctrl+C) and SIGTERM
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to install CTRL+C signal handler");
+        signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
         info!("received ctrl+c, gracefully shutting down...");
     };
 
     #[cfg(unix)]
     let sigterm = async {
         use tokio::signal::unix::{SignalKind, signal};
-        let mut sigterm_stream =
-            signal(SignalKind::terminate()).expect("Failed to install SIGTERM signal handler");
+        let mut sigterm_stream = signal(SignalKind::terminate()).expect("Failed to install SIGTERM signal handler");
         sigterm_stream.recv().await;
         info!("received SIGTERM, gracefully shutting down...");
     };

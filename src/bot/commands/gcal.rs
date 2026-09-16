@@ -9,10 +9,7 @@ use url::Url;
 
 /// Generate a link to create a Google Calendar event for a course
 #[poise::command(slash_command)]
-pub async fn gcal(
-    ctx: Context<'_>,
-    #[description = "Course Reference Number (CRN)"] crn: i32,
-) -> Result<(), Error> {
+pub async fn gcal(ctx: Context<'_>, #[description = "Course Reference Number (CRN)"] crn: i32) -> Result<(), Error> {
     let user = ctx.author();
     info!(source = user.name, target = crn, "gcal command invoked");
 
@@ -62,9 +59,7 @@ pub async fn gcal(
     ctx.say(
         response
             .iter()
-            .map(|LinkDetail { link, detail }| {
-                format!("[Add to Google Calendar](<{link}>) ({detail})")
-            })
+            .map(|LinkDetail { link, detail }| format!("[Add to Google Calendar](<{link}>) ({detail})"))
             .collect::<Vec<String>>()
             .join("\n"),
     )
@@ -75,19 +70,12 @@ pub async fn gcal(
 }
 
 /// Generate Google Calendar URL for a course
-fn generate_gcal_url(
-    course: &Course,
-    meeting_time: &MeetingScheduleInfo,
-) -> Result<String, anyhow::Error> {
+fn generate_gcal_url(course: &Course, meeting_time: &MeetingScheduleInfo) -> Result<String, anyhow::Error> {
     let course_text = course.display_title();
 
     let dates_text = {
         let (start, end) = meeting_time.datetime_range();
-        format!(
-            "{}/{}",
-            start.format("%Y%m%dT%H%M%S"),
-            end.format("%Y%m%dT%H%M%S")
-        )
+        format!("{}/{}", start.format("%Y%m%dT%H%M%S"), end.format("%Y%m%dT%H%M%S"))
     };
 
     // Get instructor name
@@ -98,9 +86,7 @@ fn generate_gcal_url(
         "CRN: {}\nInstructor: {}\nDays: {}",
         course.course_reference_number,
         instructor_name,
-        meeting_time
-            .days_string()
-            .unwrap_or_else(|| "TBA".to_string())
+        meeting_time.days_string().unwrap_or_else(|| "TBA".to_string())
     );
 
     // The event location

@@ -48,10 +48,7 @@ enum TrackedEndpoint {
 fn classify_route(path: &str) -> RouteGroup {
     if path.starts_with("/api/admin/") {
         RouteGroup::Admin
-    } else if path.starts_with("/api/health")
-        || path.starts_with("/api/ready")
-        || path.starts_with("/api/metrics")
-    {
+    } else if path.starts_with("/api/health") || path.starts_with("/api/ready") || path.starts_with("/api/metrics") {
         RouteGroup::Internal
     } else if path.starts_with("/api/") {
         RouteGroup::Api
@@ -143,7 +140,7 @@ impl AuthTier {
 /// buckets per auth tier.
 pub struct RateLimitState {
     // Layer 1: global per-IP
-    global_burst: DefaultKeyedRateLimiter<IpAddr>, // 5s window
+    global_burst: DefaultKeyedRateLimiter<IpAddr>,     // 5s window
     global_sustained: DefaultKeyedRateLimiter<IpAddr>, // 1min window
 
     // Layer 2: route-group per-IP
@@ -238,23 +235,20 @@ impl RateLimitState {
         // Layer 1: global
         let mut max_wait: Option<Duration> = None;
 
-        let check_limiter = |limiter: &DefaultKeyedRateLimiter<IpAddr>,
-                             ip: &IpAddr,
-                             max_wait: &mut Option<Duration>|
-         -> bool {
-            match limiter.check_key(ip) {
-                Ok(()) => true,
-                Err(not_until) => {
-                    let wait =
-                        not_until.wait_time_from(governor::clock::DefaultClock::default().now());
-                    let current_max = max_wait.unwrap_or(Duration::ZERO);
-                    if wait > current_max {
-                        *max_wait = Some(wait);
+        let check_limiter =
+            |limiter: &DefaultKeyedRateLimiter<IpAddr>, ip: &IpAddr, max_wait: &mut Option<Duration>| -> bool {
+                match limiter.check_key(ip) {
+                    Ok(()) => true,
+                    Err(not_until) => {
+                        let wait = not_until.wait_time_from(governor::clock::DefaultClock::default().now());
+                        let current_max = max_wait.unwrap_or(Duration::ZERO);
+                        if wait > current_max {
+                            *max_wait = Some(wait);
+                        }
+                        false
                     }
-                    false
                 }
-            }
-        };
+            };
 
         let mut rejected = false;
 
@@ -387,9 +381,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -445,11 +437,7 @@ fn extract_ip_from_headers(headers: &http::HeaderMap) -> Option<IpAddr> {
     }
     // Rightmost X-Forwarded-For (Railway)
     if let Some(xff) = header_str(headers, "x-forwarded-for")
-        && let Some(ip) = xff
-            .rsplit(',')
-            .next()
-            .map(str::trim)
-            .and_then(|s| s.parse().ok())
+        && let Some(ip) = xff.rsplit(',').next().map(str::trim).and_then(|s| s.parse().ok())
     {
         return Some(ip);
     }
@@ -461,9 +449,8 @@ fn rate_limit_response(retry_after: u64) -> Response<Body> {
     use axum::response::IntoResponse;
 
     let mut response = ApiError::rate_limited(retry_after).into_response();
-    response.headers_mut().insert(
-        "retry-after",
-        HeaderValue::from_str(&retry_after.to_string()).unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert("retry-after", HeaderValue::from_str(&retry_after.to_string()).unwrap());
     response
 }

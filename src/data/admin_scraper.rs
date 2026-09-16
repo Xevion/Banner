@@ -32,11 +32,7 @@ pub struct TimeseriesPoint {
 /// Fetch aggregate scraper stats for a period, with optional term filter.
 ///
 /// `interval_str` is a validated PostgreSQL interval literal (e.g. `"24 hours"`).
-pub async fn compute_stats(
-    pool: &PgPool,
-    interval_str: &str,
-    term: Option<&str>,
-) -> Result<ScraperStats> {
+pub async fn compute_stats(pool: &PgPool, interval_str: &str, term: Option<&str>) -> Result<ScraperStats> {
     let row = sqlx::query(
         "SELECT \
             COUNT(*) AS total_scrapes, \

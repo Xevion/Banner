@@ -67,9 +67,7 @@ fn default_period() -> String {
     "24h".to_string()
 }
 
-pub fn parse_scrape_jobs_filter(
-    filter: Option<StreamFilter>,
-) -> Result<ScrapeJobsFilter, StreamError> {
+pub fn parse_scrape_jobs_filter(filter: Option<StreamFilter>) -> Result<ScrapeJobsFilter, StreamError> {
     match filter {
         Some(StreamFilter::ScrapeJobs(filter)) => Ok(filter),
         Some(_) => Err(StreamError::invalid_filter("Invalid scrape jobs filter")),
@@ -98,9 +96,7 @@ pub fn parse_audit_log_filter(filter: Option<StreamFilter>) -> Result<AuditLogFi
     Ok(filter)
 }
 
-pub fn parse_scraper_stats_filter(
-    filter: Option<StreamFilter>,
-) -> Result<ScraperStatsFilter, StreamError> {
+pub fn parse_scraper_stats_filter(filter: Option<StreamFilter>) -> Result<ScraperStatsFilter, StreamError> {
     let f = match filter {
         Some(StreamFilter::ScraperStats(f)) => f,
         Some(_) => return Err(StreamError::invalid_filter("Invalid scraper stats filter")),
@@ -118,15 +114,11 @@ pub fn parse_scraper_stats_filter(
     Ok(f)
 }
 
-pub fn parse_scraper_timeseries_filter(
-    filter: Option<StreamFilter>,
-) -> Result<ScraperTimeseriesFilter, StreamError> {
+pub fn parse_scraper_timeseries_filter(filter: Option<StreamFilter>) -> Result<ScraperTimeseriesFilter, StreamError> {
     let f = match filter {
         Some(StreamFilter::ScraperTimeseries(f)) => f,
         Some(_) => {
-            return Err(StreamError::invalid_filter(
-                "Invalid scraper timeseries filter",
-            ));
+            return Err(StreamError::invalid_filter("Invalid scraper timeseries filter"));
         }
         None => ScraperTimeseriesFilter {
             period: "24h".to_string(),

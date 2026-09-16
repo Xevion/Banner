@@ -9,8 +9,7 @@ use tracing::debug;
 use super::context::DbContext;
 use super::events::DomainEvent;
 use crate::data::models::{
-    ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetPayload, TargetType,
-    UpsertCounts,
+    ScrapeJob, ScrapeJobStatus, ScrapePriority, SubjectResultStats, TargetPayload, TargetType, UpsertCounts,
 };
 use crate::data::unsigned::{Count, DurationMs};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
@@ -41,13 +40,11 @@ pub struct SubjectResultRow {
 
 /// List scrape jobs ordered by priority descending, then execute_at ascending.
 pub async fn list_ordered(pool: &PgPool, limit: i64) -> Result<Vec<ScrapeJob>> {
-    sqlx::query_as::<_, ScrapeJob>(
-        "SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT $1",
-    )
-    .bind(limit)
-    .fetch_all(pool)
-    .await
-    .context("failed to list ordered scrape jobs")
+    sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT $1")
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .context("failed to list ordered scrape jobs")
 }
 
 /// Count all scrape jobs in the queue.
@@ -93,11 +90,7 @@ pub async fn get_by_id(pool: &PgPool, id: i32) -> Result<Option<ScrapeJob>> {
 }
 
 /// Fetch recent scrape job results for a given subject.
-pub async fn list_results_for_subject(
-    pool: &PgPool,
-    subject: &str,
-    limit: i64,
-) -> Result<Vec<SubjectResultRow>> {
+pub async fn list_results_for_subject(pool: &PgPool, subject: &str, limit: i64) -> Result<Vec<SubjectResultRow>> {
     sqlx::query_as::<_, SubjectResultRow>(
         "SELECT id, completed_at, duration_ms, success, error_message, \
                 courses_fetched, courses_changed, courses_unchanged, \
@@ -159,9 +152,7 @@ impl<'a> ScrapeJobOps<'a> {
                 .context("failed to update locked_at for scrape job")?;
         }
 
-        tx.commit()
-            .await
-            .context("failed to commit lock_next transaction")?;
+        tx.commit().await.context("failed to commit lock_next transaction")?;
 
         // Emit event after successful commit
         if let Some(ref job) = job {
@@ -190,9 +181,7 @@ impl<'a> ScrapeJobOps<'a> {
 
         self.ctx
             .events()
-            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted {
-                id: job_id,
-            }));
+            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id: job_id }));
 
         Ok(())
     }
@@ -202,14 +191,13 @@ impl<'a> ScrapeJobOps<'a> {
     /// Emits a `ScrapeJobEvent::Completed` event with the subject extracted from
     /// the job's target payload.
     pub async fn complete(&self, job_id: i32) -> Result<()> {
-        let subject: Option<String> = sqlx::query_scalar(
-            "DELETE FROM scrape_jobs WHERE id = $1 RETURNING target_payload->>'subject'",
-        )
-        .bind(job_id)
-        .fetch_optional(self.ctx.pool())
-        .await
-        .context("failed to complete scrape job")?
-        .flatten();
+        let subject: Option<String> =
+            sqlx::query_scalar("DELETE FROM scrape_jobs WHERE id = $1 RETURNING target_payload->>'subject'")
+                .bind(job_id)
+                .fetch_optional(self.ctx.pool())
+                .await
+                .context("failed to complete scrape job")?
+                .flatten();
 
         self.ctx
             .events()
@@ -224,12 +212,7 @@ impl<'a> ScrapeJobOps<'a> {
     /// Unlock a job for retry.
     ///
     /// Emits a `ScrapeJobEvent::Retried` event.
-    pub async fn retry(
-        &self,
-        job_id: i32,
-        retry_count: Count,
-        execute_at: DateTime<Utc>,
-    ) -> Result<()> {
+    pub async fn retry(&self, job_id: i32, retry_count: Count, execute_at: DateTime<Utc>) -> Result<()> {
         sqlx::query(
             "UPDATE scrape_jobs SET locked_at = NULL, retry_count = $2, queued_at = NOW(), execute_at = $3 WHERE id = $1",
         )
@@ -265,14 +248,10 @@ impl<'a> ScrapeJobOps<'a> {
 
         self.ctx
             .events()
-            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Exhausted {
-                id: job_id,
-            }));
+            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Exhausted { id: job_id }));
         self.ctx
             .events()
-            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted {
-                id: job_id,
-            }));
+            .publish(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id: job_id }));
 
         Ok(())
     }
@@ -282,12 +261,11 @@ impl<'a> ScrapeJobOps<'a> {
     /// Intended to be called once at startup to recover jobs left locked by
     /// a previous unclean shutdown.
     pub async fn force_unlock_all(&self) -> Result<u64> {
-        let result = sqlx::query(
-            "UPDATE scrape_jobs SET locked_at = NULL, queued_at = NOW() WHERE locked_at IS NOT NULL",
-        )
-        .execute(self.ctx.pool())
-        .await
-        .context("failed to force unlock all scrape jobs")?;
+        let result =
+            sqlx::query("UPDATE scrape_jobs SET locked_at = NULL, queued_at = NOW() WHERE locked_at IS NOT NULL")
+                .execute(self.ctx.pool())
+                .await
+                .context("failed to force unlock all scrape jobs")?;
         Ok(result.rows_affected())
     }
 
@@ -430,10 +408,7 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// All jobs are inserted with `execute_at` set to the current time.
     /// Emits a `ScrapeJobEvent::Created` event for each inserted job.
-    pub async fn batch_insert(
-        &self,
-        jobs: &[(TargetPayload, TargetType, ScrapePriority)],
-    ) -> Result<Vec<ScrapeJob>> {
+    pub async fn batch_insert(&self, jobs: &[(TargetPayload, TargetType, ScrapePriority)]) -> Result<Vec<ScrapeJob>> {
         if jobs.is_empty() {
             return Ok(Vec::new());
         }
@@ -444,9 +419,7 @@ impl<'a> ScrapeJobOps<'a> {
 
         for (payload, target_type, priority) in jobs {
             target_types.push(format!("{target_type:?}"));
-            payloads.push(
-                serde_json::to_value(payload).context("failed to serialize scrape job payload")?,
-            );
+            payloads.push(serde_json::to_value(payload).context("failed to serialize scrape job payload")?);
             priorities.push(format!("{priority:?}"));
         }
 

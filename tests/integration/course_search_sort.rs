@@ -10,9 +10,7 @@ use crate::helpers::{MeetingTimeBuilder, make_course, with_meetings};
 use assert2::check;
 use banner::banner::Course;
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{
-    SearchFilter, SortDirection, SortKey, SortSpec, SortTerm, search_courses,
-};
+use banner::data::courses::{SearchFilter, SortDirection, SortKey, SortSpec, SortTerm, search_courses};
 use sqlx::PgPool;
 
 const TERM: &str = "202620";
@@ -49,14 +47,7 @@ async fn insert_fixture(pool: &PgPool) {
             ],
         ),
         with_meetings(
-            make_course(
-                "30002",
-                TERM,
-                "CS",
-                "2200",
-                "Data Structures",
-                (10, 30, 0, 10),
-            ),
+            make_course("30002", TERM, "CS", "2200", "Data Structures", (10, 30, 0, 10)),
             vec![
                 MeetingTimeBuilder::new()
                     .days([false, true, false, true, false, false, false])
@@ -138,24 +129,13 @@ async fn test_every_sort_key_executes_against_the_schema() {
 
     for key in SortKey::ALL {
         for direction in [SortDirection::Asc, SortDirection::Desc] {
-            let spec = SortSpec::new(vec![SortTerm {
-                key: *key,
-                direction,
-            }]);
+            let spec = SortSpec::new(vec![SortTerm { key: *key, direction }]);
 
             let (rows, total) = search_courses(&pool, &filter, 100, 0, &spec)
                 .await
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "sort by {key:?} {direction:?} ({}) failed: {e:#}",
-                        spec.to_sql()
-                    )
-                });
+                .unwrap_or_else(|e| panic!("sort by {key:?} {direction:?} ({}) failed: {e:#}", spec.to_sql()));
 
-            check!(
-                rows.len() == 6,
-                "{key:?} {direction:?} returned wrong count"
-            );
+            check!(rows.len() == 6, "{key:?} {direction:?} returned wrong count");
             check!(total == 6, "{key:?} {direction:?} miscounted");
         }
     }
@@ -249,13 +229,7 @@ async fn test_untimed_section_sinks_in_both_directions() {
     let pool = test_db!().await;
     insert_fixture(&pool).await;
 
-    for key in [
-        "start_time",
-        "end_time",
-        "duration",
-        "weekly_minutes",
-        "days",
-    ] {
+    for key in ["start_time", "end_time", "duration", "weekly_minutes", "days"] {
         let asc = crns_sorted_by(&pool, key).await;
         check!(asc.last() == Some(&"30005".to_owned()), "{key} ascending");
 
@@ -273,14 +247,8 @@ async fn test_ties_break_on_catalog_order() {
 
     for spec in ["start_time", "-start_time", "duration", "-duration"] {
         let crns = crns_sorted_by(&pool, spec).await;
-        let first = crns
-            .iter()
-            .position(|c| c == "30001")
-            .expect("30001 present");
-        let second = crns
-            .iter()
-            .position(|c| c == "30006")
-            .expect("30006 present");
+        let first = crns.iter().position(|c| c == "30001").expect("30001 present");
+        let second = crns.iter().position(|c| c == "30006").expect("30006 present");
 
         check!(second == first + 1, "{spec} split the tied sections");
         check!(first < second, "{spec} reversed the catalog tiebreaker");

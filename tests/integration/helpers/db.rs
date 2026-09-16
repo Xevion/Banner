@@ -169,10 +169,7 @@ async fn ensure_template(conn: &mut PgConnection, template: &str) {
             .await
             .expect("failed to migrate the template database");
         stamp_schema(&mut fresh).await;
-        fresh
-            .close()
-            .await
-            .expect("failed to close the template connection");
+        fresh.close().await.expect("failed to close the template connection");
 
         run_statement(
             &mut *conn,
@@ -195,13 +192,12 @@ async fn ensure_template(conn: &mut PgConnection, template: &str) {
 /// A test is free to drop or alter a table, and emptying rows would not put it
 /// back; such a clone has to be thrown away rather than reused.
 async fn schema_intact(pool: &PgPool) -> bool {
-    let stamped: Option<String> = sqlx::query_scalar(AssertSqlSafe(format!(
-        "SELECT digest FROM {STAMP_TABLE} LIMIT 1"
-    )))
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten();
+    let stamped: Option<String> =
+        sqlx::query_scalar(AssertSqlSafe(format!("SELECT digest FROM {STAMP_TABLE} LIMIT 1")))
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
     let Some(stamped) = stamped else {
         return false;
     };
@@ -277,9 +273,7 @@ pub async fn connect(key: &str) -> PgPool {
         }
     };
 
-    conn.close()
-        .await
-        .expect("failed to close the maintenance connection");
+    conn.close().await.expect("failed to close the maintenance connection");
     pool
 }
 

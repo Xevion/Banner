@@ -6,9 +6,7 @@ use crate::helpers::db::test_db;
 use crate::helpers::make_course;
 use banner::banner::models::meetings::FacultyItem;
 use banner::data::batch::batch_upsert_courses;
-use banner::data::courses::{
-    SearchFilter, SortSpec, search_courses, suggest_courses, suggest_instructors,
-};
+use banner::data::courses::{SearchFilter, SortSpec, search_courses, suggest_courses, suggest_instructors};
 use banner::data::instructors::{PublicInstructorListParams, list_public_instructors};
 use sqlx::PgPool;
 
@@ -27,10 +25,7 @@ fn make_faculty(banner_id: &str, display_name: &str, email: Option<&str>) -> Fac
 }
 
 /// Attach faculty to a course.
-fn with_faculty(
-    mut course: banner::banner::Course,
-    faculty: Vec<FacultyItem>,
-) -> banner::banner::Course {
+fn with_faculty(mut course: banner::banner::Course, faculty: Vec<FacultyItem>) -> banner::banner::Course {
     course.faculty = faculty;
     course
 }
@@ -56,14 +51,7 @@ async fn insert_accented_test_data(pool: &PgPool) {
             )],
         ),
         with_faculty(
-            make_course(
-                "30002",
-                term,
-                "MUS",
-                "2100",
-                "Études in Music Theory",
-                (15, 25, 0, 5),
-            ),
+            make_course("30002", term, "MUS", "2100", "Études in Music Theory", (15, 25, 0, 5)),
             vec![make_faculty(
                 "@F002",
                 "Müller, François",
@@ -71,29 +59,11 @@ async fn insert_accented_test_data(pool: &PgPool) {
             )],
         ),
         with_faculty(
-            make_course(
-                "30003",
-                term,
-                "CS",
-                "2200",
-                "Data Structures",
-                (25, 30, 0, 5),
-            ),
-            vec![make_faculty(
-                "@F003",
-                "O'Brien, Séan",
-                Some("sean.obrien@utsa.edu"),
-            )],
+            make_course("30003", term, "CS", "2200", "Data Structures", (25, 30, 0, 5)),
+            vec![make_faculty("@F003", "O'Brien, Séan", Some("sean.obrien@utsa.edu"))],
         ),
         with_faculty(
-            make_course(
-                "30004",
-                term,
-                "MATH",
-                "3400",
-                "Álgebra Lineal",
-                (18, 25, 0, 5),
-            ),
+            make_course("30004", term, "MATH", "3400", "Álgebra Lineal", (18, 25, 0, 5)),
             vec![make_faculty(
                 "@F004",
                 "Hernández, María",
@@ -138,10 +108,7 @@ async fn test_search_courses_title_unaccented_finds_accented() {
         .await
         .expect("search_courses failed");
 
-    assert!(
-        total >= 1,
-        "expected at least 1 result for 'Introduccion', got {total}"
-    );
+    assert!(total >= 1, "expected at least 1 result for 'Introduccion', got {total}");
     assert!(
         results.iter().any(|c| c.crn == "30001"),
         "should find CRN 30001 (Introducción a la Lingüística)"
@@ -163,10 +130,7 @@ async fn test_search_courses_title_unaccented_finds_umlaut() {
         .await
         .expect("search_courses failed");
 
-    assert!(
-        total >= 1,
-        "expected at least 1 result for 'Etudes', got {total}"
-    );
+    assert!(total >= 1, "expected at least 1 result for 'Etudes', got {total}");
     assert!(
         results.iter().any(|c| c.crn == "30002"),
         "should find CRN 30002 (Études in Music Theory)"
@@ -188,10 +152,7 @@ async fn test_search_courses_title_unaccented_finds_algebra() {
         .await
         .expect("search_courses failed");
 
-    assert!(
-        total >= 1,
-        "expected at least 1 result for 'Algebra', got {total}"
-    );
+    assert!(total >= 1, "expected at least 1 result for 'Algebra', got {total}");
     assert!(
         results.iter().any(|c| c.crn == "30004"),
         "should find CRN 30004 (Álgebra Lineal)"
@@ -279,10 +240,7 @@ async fn test_suggest_courses_unaccented_finds_etudes() {
         .await
         .expect("suggest_courses failed");
 
-    assert!(
-        !suggestions.is_empty(),
-        "expected suggestions for 'Etudes', got none"
-    );
+    assert!(!suggestions.is_empty(), "expected suggestions for 'Etudes', got none");
     assert!(
         suggestions.iter().any(|s| s.title.contains("Études")),
         "should suggest 'Études in Music Theory'"
@@ -299,14 +257,9 @@ async fn test_suggest_instructors_unaccented_finds_accented_name() {
         .await
         .expect("suggest_instructors failed");
 
+    assert!(!suggestions.is_empty(), "expected suggestions for 'Garcia', got none");
     assert!(
-        !suggestions.is_empty(),
-        "expected suggestions for 'Garcia', got none"
-    );
-    assert!(
-        suggestions
-            .iter()
-            .any(|s| s.display_name.contains("García")),
+        suggestions.iter().any(|s| s.display_name.contains("García")),
         "should suggest 'García López, José'"
     );
 }
@@ -320,14 +273,9 @@ async fn test_suggest_instructors_unaccented_finds_muller() {
         .await
         .expect("suggest_instructors failed");
 
+    assert!(!suggestions.is_empty(), "expected suggestions for 'Muller', got none");
     assert!(
-        !suggestions.is_empty(),
-        "expected suggestions for 'Muller', got none"
-    );
-    assert!(
-        suggestions
-            .iter()
-            .any(|s| s.display_name.contains("Müller")),
+        suggestions.iter().any(|s| s.display_name.contains("Müller")),
         "should suggest 'Müller, François'"
     );
 }
@@ -342,10 +290,7 @@ async fn test_suggest_instructors_unaccented_finds_sean() {
         .await
         .expect("suggest_instructors failed");
 
-    assert!(
-        !suggestions.is_empty(),
-        "expected suggestions for 'Sean', got none"
-    );
+    assert!(!suggestions.is_empty(), "expected suggestions for 'Sean', got none");
     assert!(
         suggestions.iter().any(|s| s.display_name.contains("Séan")),
         "should suggest 'O'Brien, Séan'"
@@ -377,10 +322,7 @@ async fn test_list_public_instructors_unaccented_search() {
         response.total
     );
     assert!(
-        response
-            .items
-            .iter()
-            .any(|i| i.display_name.contains("Hernández")),
+        response.items.iter().any(|i| i.display_name.contains("Hernández")),
         "should find 'Hernández, María'"
     );
 }
@@ -410,10 +352,7 @@ async fn test_list_public_instructors_unaccented_search_jose() {
         response.total
     );
     assert!(
-        response
-            .items
-            .iter()
-            .any(|i| i.display_name.contains("José")),
+        response.items.iter().any(|i| i.display_name.contains("José")),
         "should find 'García López, José'"
     );
 }
@@ -443,10 +382,7 @@ async fn test_list_public_instructors_unaccented_search_francois() {
         response.total
     );
     assert!(
-        response
-            .items
-            .iter()
-            .any(|i| i.display_name.contains("François")),
+        response.items.iter().any(|i| i.display_name.contains("François")),
         "should find 'Müller, François'"
     );
 }

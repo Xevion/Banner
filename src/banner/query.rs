@@ -174,9 +174,7 @@ impl SearchQuery {
 
         for field in self.fields() {
             match field {
-                QueryField::Single {
-                    param_key, value, ..
-                } => {
+                QueryField::Single { param_key, value, .. } => {
                     params.insert(param_key.to_string(), value);
                 }
                 QueryField::Time { prefix, time, .. } => {
@@ -199,46 +197,22 @@ impl SearchQuery {
         let mut fields = Vec::new();
 
         if let Some(ref subject) = self.subject {
-            fields.push(QueryField::single(
-                "txt_subject",
-                "subject",
-                subject.clone(),
-            ));
+            fields.push(QueryField::single("txt_subject", "subject", subject.clone()));
         }
         if let Some(ref title) = self.title {
-            fields.push(QueryField::single(
-                "txt_courseTitle",
-                "title",
-                title.trim().to_string(),
-            ));
+            fields.push(QueryField::single("txt_courseTitle", "title", title.trim().to_string()));
         }
         if let Some(ref crn) = self.course_reference_number {
-            fields.push(QueryField::single(
-                "txt_courseReferenceNumber",
-                "crn",
-                crn.clone(),
-            ));
+            fields.push(QueryField::single("txt_courseReferenceNumber", "crn", crn.clone()));
         }
         if let Some(ref keywords) = self.keywords {
-            fields.push(QueryField::single(
-                "txt_keywordlike",
-                "keywords",
-                keywords.join(" "),
-            ));
+            fields.push(QueryField::single("txt_keywordlike", "keywords", keywords.join(" ")));
         }
         if self.open_only == Some(true) {
-            fields.push(QueryField::single(
-                "chk_open_only",
-                "openOnly",
-                "true".to_string(),
-            ));
+            fields.push(QueryField::single("chk_open_only", "openOnly", "true".to_string()));
         }
         if let Some(ref term_part) = self.term_part {
-            fields.push(QueryField::single(
-                "txt_partOfTerm",
-                "termPart",
-                term_part.join(","),
-            ));
+            fields.push(QueryField::single("txt_partOfTerm", "termPart", term_part.join(",")));
         }
         if let Some(ref campus) = self.campus {
             fields.push(QueryField::single("txt_campus", "campus", campus.join(",")));
@@ -251,18 +225,10 @@ impl SearchQuery {
             ));
         }
         if let Some(ref attributes) = self.attributes {
-            fields.push(QueryField::single(
-                "txt_attribute",
-                "attributes",
-                attributes.join(","),
-            ));
+            fields.push(QueryField::single("txt_attribute", "attributes", attributes.join(",")));
         }
         if let Some(ref instructor) = self.instructor {
-            let value = instructor
-                .iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
+            let value = instructor.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
             fields.push(QueryField::single("txt_instructor", "instructor", value));
         }
         if let Some(start_time) = self.start_time {
@@ -307,11 +273,7 @@ impl SearchQuery {
                 high.to_string(),
             ));
         }
-        fields.push(QueryField::single(
-            "pageOffset",
-            "offset",
-            self.offset.to_string(),
-        ));
+        fields.push(QueryField::single("pageOffset", "offset", self.offset.to_string()));
         fields.push(QueryField::single(
             "pageMaxSize",
             "maxResults",
@@ -361,11 +323,7 @@ fn format_time_parameter(time: NaiveTime) -> (String, String, String) {
         h => h,
     };
 
-    (
-        hour_12.to_string(),
-        minutes.to_string(),
-        meridiem.to_string(),
-    )
+    (hour_12.to_string(), minutes.to_string(), meridiem.to_string())
 }
 
 impl std::fmt::Display for SearchQuery {
@@ -375,13 +333,9 @@ impl std::fmt::Display for SearchQuery {
             .into_iter()
             .map(|field| match field {
                 QueryField::Single {
-                    display_name,
-                    value,
-                    ..
+                    display_name, value, ..
                 } => format!("{display_name}={value}"),
-                QueryField::Time {
-                    display_name, time, ..
-                } => {
+                QueryField::Time { display_name, time, .. } => {
                     let (hour, minute, meridiem) = format_time_parameter(time);
                     format!("{display_name}={hour}:{minute}:{meridiem}")
                 }
@@ -421,18 +375,13 @@ mod tests {
 
     #[test]
     fn test_crn_param() {
-        let params = SearchQuery::new()
-            .course_reference_number("12345")
-            .to_params();
+        let params = SearchQuery::new().course_reference_number("12345").to_params();
         assert_eq!(params.get("txt_courseReferenceNumber").unwrap(), "12345");
     }
 
     #[test]
     fn test_keywords_joined_with_spaces() {
-        let params = SearchQuery::new()
-            .keyword("data")
-            .keyword("science")
-            .to_params();
+        let params = SearchQuery::new().keyword("data").keyword("science").to_params();
         assert_eq!(params.get("txt_keywordlike").unwrap(), "data science");
     }
 
@@ -562,10 +511,7 @@ mod tests {
         let params = SearchQuery::new()
             .instructional_method(vec!["ONLINE".into(), "HYBRID".into()])
             .to_params();
-        assert_eq!(
-            params.get("txt_instructionalMethod").unwrap(),
-            "ONLINE,HYBRID"
-        );
+        assert_eq!(params.get("txt_instructionalMethod").unwrap(), "ONLINE,HYBRID");
     }
 
     #[test]
@@ -578,9 +524,7 @@ mod tests {
 
     #[test]
     fn test_crn_display() {
-        let display = SearchQuery::new()
-            .course_reference_number("12345")
-            .to_string();
+        let display = SearchQuery::new().course_reference_number("12345").to_string();
         assert!(display.contains("crn=12345"));
     }
 

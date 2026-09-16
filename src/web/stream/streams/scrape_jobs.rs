@@ -6,10 +6,7 @@ use std::collections::HashSet;
 use crate::web::stream::filters::ScrapeJobsFilter;
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 
-pub async fn build_snapshot(
-    db_pool: &PgPool,
-    filter: &ScrapeJobsFilter,
-) -> Result<Vec<ScrapeJobDto>, sqlx::Error> {
+pub async fn build_snapshot(db_pool: &PgPool, filter: &ScrapeJobsFilter) -> Result<Vec<ScrapeJobDto>, sqlx::Error> {
     let rows = crate::data::scrape_jobs::list_ordered(db_pool, 200)
         .await
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
@@ -102,9 +99,7 @@ pub async fn event_matches(
                 }
             }
         }
-        ScrapeJobEvent::Completed { id, .. } | ScrapeJobEvent::Deleted { id } => {
-            known_ids.remove(id)
-        }
+        ScrapeJobEvent::Completed { id, .. } | ScrapeJobEvent::Deleted { id } => known_ids.remove(id),
     }
 }
 

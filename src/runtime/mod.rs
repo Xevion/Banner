@@ -47,10 +47,7 @@ pub trait Service: Send + Sync {
 }
 
 /// Generic service runner that handles the lifecycle
-pub async fn run_service(
-    mut service: Box<dyn Service>,
-    mut shutdown_rx: broadcast::Receiver<()>,
-) -> ServiceResult {
+pub async fn run_service(mut service: Box<dyn Service>, mut shutdown_rx: broadcast::Receiver<()>) -> ServiceResult {
     let name = service.name();
     info!(service = name, "service started");
 

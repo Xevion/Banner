@@ -36,9 +36,7 @@ pub use context::DbContext;
 
 /// Escape LIKE/ILIKE metacharacters so user input is treated as literal text.
 pub fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
+    s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
 #[cfg(test)]

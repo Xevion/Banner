@@ -71,10 +71,7 @@ fn to_db_meeting_times(course: &Course) -> serde_json::Value {
             };
 
             // Parse date range from MM/DD/YYYY strings
-            let date_range = match (
-                parse_mm_dd_yyyy(&mt.start_date),
-                parse_mm_dd_yyyy(&mt.end_date),
-            ) {
+            let date_range = match (parse_mm_dd_yyyy(&mt.start_date), parse_mm_dd_yyyy(&mt.end_date)) {
                 (Some(start), Some(end)) => DateRange::new(start, end).unwrap_or_else(|err| {
                     warn!(
                         crn = %mt.course_reference_number,
@@ -84,10 +81,7 @@ fn to_db_meeting_times(course: &Course) -> serde_json::Value {
                         "Invalid date range, swapping start/end"
                     );
                     // Swap so the invariant holds
-                    DateRange {
-                        start: end,
-                        end: start,
-                    }
+                    DateRange { start: end, end: start }
                 }),
                 _ => {
                     warn!(
@@ -138,11 +132,7 @@ fn to_db_meeting_times(course: &Course) -> serde_json::Value {
 
 /// Convert a Banner API course's section attributes to a JSONB array of code strings.
 fn to_db_attributes(course: &Course) -> serde_json::Value {
-    let codes: Vec<&str> = course
-        .section_attributes
-        .iter()
-        .map(|a| a.code.as_str())
-        .collect();
+    let codes: Vec<&str> = course.section_attributes.iter().map(|a| a.code.as_str()).collect();
     serde_json::to_value(codes).unwrap_or_default()
 }
 
@@ -319,29 +309,11 @@ fn compute_diffs(rows: &[UpsertDiffRow]) -> (Vec<AuditEntry>, Vec<MetricEntry>) 
 
         // Non-nullable fields
         diff_field!(audits, row, "enrollment", old_enrollment, new_enrollment);
-        diff_field!(
-            audits,
-            row,
-            "max_enrollment",
-            old_max_enrollment,
-            new_max_enrollment
-        );
+        diff_field!(audits, row, "max_enrollment", old_max_enrollment, new_max_enrollment);
         diff_field!(audits, row, "wait_count", old_wait_count, new_wait_count);
-        diff_field!(
-            audits,
-            row,
-            "wait_capacity",
-            old_wait_capacity,
-            new_wait_capacity
-        );
+        diff_field!(audits, row, "wait_capacity", old_wait_capacity, new_wait_capacity);
         diff_field!(audits, row, "subject", old_subject, new_subject);
-        diff_field!(
-            audits,
-            row,
-            "course_number",
-            old_course_number,
-            new_course_number
-        );
+        diff_field!(audits, row, "course_number", old_course_number, new_course_number);
         diff_field!(audits, row, "title", old_title, new_title);
 
         // Nullable text fields
@@ -395,8 +367,7 @@ async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result
 
     let course_ids: Vec<i32> = audits.iter().map(|a| a.course_id).collect();
     let fields: Vec<&str> = audits.iter().map(|a| a.field_changed).collect();
-    let old_values: Vec<Option<serde_json::Value>> =
-        audits.iter().map(|a| a.old_value.clone()).collect();
+    let old_values: Vec<Option<serde_json::Value>> = audits.iter().map(|a| a.old_value.clone()).collect();
     let new_values: Vec<serde_json::Value> = audits.iter().map(|a| a.new_value.clone()).collect();
 
     let rows: Vec<(i32,)> = sqlx::query_as(
@@ -457,10 +428,7 @@ async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Res
 /// # Performance
 /// - Reduces N database round-trips to 5 (old-data CTE + upsert, audits, metrics, instructors, junction)
 /// - Typical usage: 50-200 courses per batch
-pub async fn batch_upsert_courses(
-    courses: &[Course],
-    db_pool: &PgPool,
-) -> Result<(UpsertCounts, Vec<AuditLogEntry>)> {
+pub async fn batch_upsert_courses(courses: &[Course], db_pool: &PgPool) -> Result<(UpsertCounts, Vec<AuditLogEntry>)> {
     if courses.is_empty() {
         info!("No courses to upsert, skipping batch operation");
         return Ok((UpsertCounts::default(), Vec::new()));
@@ -493,8 +461,7 @@ pub async fn batch_upsert_courses(
     let instructor_lookup = upsert_instructors(courses, &mut tx).await?;
 
     // Step 5: Link courses to instructors via junction table, collecting instructor audits
-    let instructor_audits =
-        upsert_course_instructors(courses, &crn_term_to_id, &instructor_lookup, &mut tx).await?;
+    let instructor_audits = upsert_course_instructors(courses, &crn_term_to_id, &instructor_lookup, &mut tx).await?;
     audits.extend(instructor_audits);
 
     // Step 6: Sync denormalized course_meetings table backing schedule cache and sorting
@@ -507,9 +474,7 @@ pub async fn batch_upsert_courses(
     let counts = UpsertCounts {
         courses_fetched: Count::try_from(course_count)?,
         courses_changed,
-        courses_unchanged: Count::new(
-            u32::try_from(course_count)?.saturating_sub(courses_changed.get()),
-        ),
+        courses_unchanged: Count::new(u32::try_from(course_count)?.saturating_sub(courses_changed.get())),
         audits_generated: Count::try_from(audits.len())?,
         metrics_generated: Count::try_from(metrics.len())?,
     };
@@ -518,9 +483,7 @@ pub async fn batch_upsert_courses(
     let audit_ids = insert_audits(&audits, &mut tx).await?;
     insert_metrics(&metrics, &mut tx).await?;
 
-    tx.commit()
-        .await
-        .context("failed to commit batch upsert transaction")?;
+    tx.commit().await.context("failed to commit batch upsert transaction")?;
 
     // Refresh the precomputed aggregates for every term this batch touched, after
     // commit so they observe the new rows. A stale summary only means the search
@@ -587,10 +550,7 @@ pub async fn batch_upsert_courses(
     Ok((counts, audit_entries))
 }
 
-async fn fetch_audit_entries_by_ids(
-    db_pool: &PgPool,
-    audit_ids: &[i32],
-) -> Result<Vec<AuditLogEntry>> {
+async fn fetch_audit_entries_by_ids(db_pool: &PgPool, audit_ids: &[i32]) -> Result<Vec<AuditLogEntry>> {
     let rows: Vec<AuditRow> = sqlx::query_as(
         "SELECT a.id, a.course_id, a.timestamp, a.field_changed, a.old_value, a.new_value, \
                 c.subject, c.course_number, c.crn, c.title, c.term_code \
@@ -608,56 +568,32 @@ async fn fetch_audit_entries_by_ids(
 
 /// Upsert all courses and return diff rows with old and new values for auditing.
 async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<Vec<UpsertDiffRow>> {
-    let crns: Vec<&str> = courses
-        .iter()
-        .map(|c| c.course_reference_number.as_str())
-        .collect();
+    let crns: Vec<&str> = courses.iter().map(|c| c.course_reference_number.as_str()).collect();
     let subjects: Vec<&str> = courses.iter().map(|c| c.subject.as_str()).collect();
     let course_numbers: Vec<&str> = courses.iter().map(|c| c.course_number.as_str()).collect();
-    let titles: Vec<String> = courses
-        .iter()
-        .map(|c| decode_html_entities(&c.course_title))
-        .collect();
+    let titles: Vec<String> = courses.iter().map(|c| decode_html_entities(&c.course_title)).collect();
     let term_codes: Vec<&str> = courses.iter().map(|c| c.term.as_str()).collect();
     let enrollments: Vec<i32> = courses.iter().map(|c| c.enrollment).collect();
     let max_enrollments: Vec<i32> = courses.iter().map(|c| c.maximum_enrollment).collect();
     let wait_counts: Vec<i32> = courses.iter().map(|c| c.wait_count.unwrap_or(0)).collect();
-    let wait_capacities: Vec<i32> = courses
-        .iter()
-        .map(|c| c.wait_capacity.unwrap_or(0))
-        .collect();
+    let wait_capacities: Vec<i32> = courses.iter().map(|c| c.wait_capacity.unwrap_or(0)).collect();
 
     // New scalar fields
-    let sequence_numbers: Vec<Option<&str>> = courses
-        .iter()
-        .map(|c| Some(c.sequence_number.as_str()))
-        .collect();
-    let parts_of_term: Vec<Option<&str>> = courses
-        .iter()
-        .map(|c| Some(c.part_of_term.as_str()))
-        .collect();
-    let instructional_methods: Vec<Option<&str>> = courses
-        .iter()
-        .map(|c| c.instructional_method.as_deref())
-        .collect();
+    let sequence_numbers: Vec<Option<&str>> = courses.iter().map(|c| Some(c.sequence_number.as_str())).collect();
+    let parts_of_term: Vec<Option<&str>> = courses.iter().map(|c| Some(c.part_of_term.as_str())).collect();
+    let instructional_methods: Vec<Option<&str>> = courses.iter().map(|c| c.instructional_method.as_deref()).collect();
     let campuses: Vec<Option<String>> = courses.iter().map(extract_campus_code).collect();
     let credit_hours: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hours).collect();
     let credit_hour_lows: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_low).collect();
     let credit_hour_highs: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_high).collect();
     let cross_lists: Vec<Option<&str>> = courses.iter().map(|c| c.cross_list.as_deref()).collect();
-    let cross_list_capacities: Vec<Option<i32>> =
-        courses.iter().map(|c| c.cross_list_capacity).collect();
+    let cross_list_capacities: Vec<Option<i32>> = courses.iter().map(|c| c.cross_list_capacity).collect();
     let cross_list_counts: Vec<Option<i32>> = courses.iter().map(|c| c.cross_list_count).collect();
-    let link_identifiers: Vec<Option<&str>> = courses
-        .iter()
-        .map(|c| c.link_identifier.as_deref())
-        .collect();
-    let is_section_linkeds: Vec<Option<bool>> =
-        courses.iter().map(|c| Some(c.is_section_linked)).collect();
+    let link_identifiers: Vec<Option<&str>> = courses.iter().map(|c| c.link_identifier.as_deref()).collect();
+    let is_section_linkeds: Vec<Option<bool>> = courses.iter().map(|c| Some(c.is_section_linked)).collect();
 
     // JSONB fields
-    let meeting_times_json: Vec<serde_json::Value> =
-        courses.iter().map(to_db_meeting_times).collect();
+    let meeting_times_json: Vec<serde_json::Value> = courses.iter().map(to_db_meeting_times).collect();
     let attributes_json: Vec<serde_json::Value> = courses.iter().map(to_db_attributes).collect();
 
     let rows = sqlx::query_as::<_, UpsertDiffRow>(
@@ -807,9 +743,7 @@ impl InstructorLookup {
             self.by_email.get(&email.to_lowercase()).copied()
         } else {
             let name = faculty.display_name.as_deref()?;
-            self.by_display_name
-                .get(&decode_html_entities(name))
-                .copied()
+            self.by_display_name.get(&decode_html_entities(name)).copied()
         }
     }
 }
@@ -818,10 +752,7 @@ impl InstructorLookup {
 ///
 /// Looks up both the staff and student spelling of every address so an existing
 /// record is found whichever form the scrape reported.
-async fn existing_emails_by_canonical(
-    emails: &[String],
-    conn: &mut PgConnection,
-) -> Result<HashMap<String, String>> {
+async fn existing_emails_by_canonical(emails: &[String], conn: &mut PgConnection) -> Result<HashMap<String, String>> {
     let mut variants: HashSet<String> = HashSet::new();
     for email in emails {
         let canon = canonical_email(email);
@@ -833,20 +764,17 @@ async fn existing_emails_by_canonical(
     }
     let variants: Vec<String> = variants.into_iter().collect();
 
-    let rows: Vec<(String,)> =
-        sqlx::query_as("SELECT email FROM instructors WHERE email = ANY($1)")
-            .bind(&variants)
-            .fetch_all(conn)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT email FROM instructors WHERE email = ANY($1)")
+        .bind(&variants)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
 
     let mut stored: HashMap<String, String> = HashMap::new();
     for (email,) in rows {
         let canon = canonical_email(&email);
         // Prefer the staff address when both spellings are already on file.
-        let keep = stored
-            .get(&canon)
-            .is_none_or(|existing| existing.contains("@my."));
+        let keep = stored.get(&canon).is_none_or(|existing| existing.contains("@my."));
         if keep {
             stored.insert(canon, email);
         }
@@ -859,10 +787,7 @@ async fn existing_emails_by_canonical(
 /// Two-phase upsert:
 ///   1. Instructors with email -> dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
 ///   2. Instructors without email -> dedup by display_name (ON CONFLICT (display_name) WHERE email IS NULL)
-async fn upsert_instructors(
-    courses: &[Course],
-    conn: &mut PgConnection,
-) -> Result<InstructorLookup> {
+async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Result<InstructorLookup> {
     // Phase 1: Collect instructors WITH email, deduped by lowercased email
     let mut seen_emails = HashSet::new();
     let mut e_display_names = Vec::new();
@@ -905,8 +830,7 @@ async fn upsert_instructors(
 
     // A merged-away identity resolves to its survivor instead of being reinserted.
     let (absorbed_emails, absorbed_names) =
-        crate::data::instructor_merge::resolve_absorbed(&e_emails, &ne_display_names, &mut *conn)
-            .await?;
+        crate::data::instructor_merge::resolve_absorbed(&e_emails, &ne_display_names, &mut *conn).await?;
 
     // Phase 1: Upsert instructors with email
     if !e_display_names.is_empty() {
@@ -930,9 +854,7 @@ async fn upsert_instructors(
             if stored_by_canonical.contains_key(&canon) {
                 continue;
             }
-            let replace = batch_pick
-                .get(&canon)
-                .is_none_or(|current| current.contains("@my."));
+            let replace = batch_pick.get(&canon).is_none_or(|current| current.contains("@my."));
             if replace {
                 batch_pick.insert(canon, email.clone());
             }
@@ -974,8 +896,7 @@ async fn upsert_instructors(
         let e_last_names = u_last_names;
 
         let email_refs: Vec<&str> = u_emails.iter().map(|s| s.as_str()).collect();
-        let first_name_refs: Vec<Option<&str>> =
-            e_first_names.iter().map(|s| s.as_deref()).collect();
+        let first_name_refs: Vec<Option<&str>> = e_first_names.iter().map(|s| s.as_deref()).collect();
         let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
         let slugs: Vec<String> = e_display_names
             .iter()
@@ -1026,23 +947,15 @@ async fn upsert_instructors(
             .filter(|&i| !absorbed_names.contains_key(&ne_display_names[i]))
             .collect();
         (
-            keep.iter()
-                .map(|&i| ne_display_names[i].clone())
-                .collect::<Vec<_>>(),
-            keep.iter()
-                .map(|&i| ne_first_names[i].clone())
-                .collect::<Vec<_>>(),
-            keep.iter()
-                .map(|&i| ne_last_names[i].clone())
-                .collect::<Vec<_>>(),
+            keep.iter().map(|&i| ne_display_names[i].clone()).collect::<Vec<_>>(),
+            keep.iter().map(|&i| ne_first_names[i].clone()).collect::<Vec<_>>(),
+            keep.iter().map(|&i| ne_last_names[i].clone()).collect::<Vec<_>>(),
         )
     };
 
     if !ne_display_names.is_empty() {
-        let first_name_refs: Vec<Option<&str>> =
-            ne_first_names.iter().map(|s| s.as_deref()).collect();
-        let last_name_refs: Vec<Option<&str>> =
-            ne_last_names.iter().map(|s| s.as_deref()).collect();
+        let first_name_refs: Vec<Option<&str>> = ne_first_names.iter().map(|s| s.as_deref()).collect();
+        let last_name_refs: Vec<Option<&str>> = ne_last_names.iter().map(|s| s.as_deref()).collect();
         let slugs: Vec<String> = ne_display_names
             .iter()
             .map(|name| crate::data::instructors::generate_slug(name))
@@ -1101,10 +1014,7 @@ async fn upsert_course_instructors(
     let mut seen_pairs: HashSet<(i32, i32)> = HashSet::new();
 
     for course in courses {
-        let key = (
-            course.course_reference_number.as_str(),
-            course.term.as_str(),
-        );
+        let key = (course.course_reference_number.as_str(), course.term.as_str());
         let Some(&course_id) = crn_term_to_id.get(&key) else {
             warn!(
                 crn = %course.course_reference_number,
@@ -1136,12 +1046,7 @@ async fn upsert_course_instructors(
     }
 
     // Collect unique course IDs for the batch
-    let unique_cids: Vec<i32> = cids
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
+    let unique_cids: Vec<i32> = cids.iter().copied().collect::<HashSet<_>>().into_iter().collect();
 
     // Fetch existing instructor names before deletion
     let old_rows: Vec<(i32, String)> = sqlx::query_as(
@@ -1225,10 +1130,7 @@ async fn sync_course_meetings(
     let mut end_dates: Vec<NaiveDate> = Vec::new();
 
     for course in courses {
-        let key = (
-            course.course_reference_number.as_str(),
-            course.term.as_str(),
-        );
+        let key = (course.course_reference_number.as_str(), course.term.as_str());
         let Some(&course_id) = crn_term_to_id.get(&key) else {
             continue;
         };
@@ -1339,10 +1241,7 @@ async fn sync_course_meetings(
 /// Runs over every affected course, not just those that kept a meeting, so a
 /// section that loses its last one has its summary cleared rather than left
 /// stale. The LEFT JOIN is what produces those NULLs.
-async fn refresh_meeting_summary(
-    conn: &mut sqlx::PgConnection,
-    course_ids: &[i32],
-) -> anyhow::Result<()> {
+async fn refresh_meeting_summary(conn: &mut sqlx::PgConnection, course_ids: &[i32]) -> anyhow::Result<()> {
     if course_ids.is_empty() {
         return Ok(());
     }

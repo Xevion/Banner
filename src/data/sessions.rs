@@ -17,11 +17,7 @@ fn generate_token() -> String {
 }
 
 /// Create a new session for a user with the given duration.
-pub async fn create_session(
-    pool: &PgPool,
-    user_id: i64,
-    duration: std::time::Duration,
-) -> Result<UserSession> {
+pub async fn create_session(pool: &PgPool, user_id: i64, duration: std::time::Duration) -> Result<UserSession> {
     let token = generate_token();
     let duration_secs = duration.as_secs() as i64;
 
@@ -42,13 +38,11 @@ pub async fn create_session(
 
 /// Fetch a session by token, only if it has not expired.
 pub async fn get_session(pool: &PgPool, token: &str) -> Result<Option<UserSession>> {
-    sqlx::query_as::<_, UserSession>(
-        "SELECT * FROM user_sessions WHERE id = $1 AND expires_at > now()",
-    )
-    .bind(token)
-    .fetch_optional(pool)
-    .await
-    .context("failed to get session")
+    sqlx::query_as::<_, UserSession>("SELECT * FROM user_sessions WHERE id = $1 AND expires_at > now()")
+        .bind(token)
+        .fetch_optional(pool)
+        .await
+        .context("failed to get session")
 }
 
 /// Update the last-active timestamp and extend session expiry (sliding window).
@@ -92,10 +86,9 @@ pub async fn delete_user_sessions(pool: &PgPool, user_id: i64) -> Result<u64> {
 
 /// Count active (non-expired) sessions.
 pub async fn count_active(pool: &PgPool) -> Result<i64> {
-    let (count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM user_sessions WHERE expires_at > now()")
-            .fetch_one(pool)
-            .await?;
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_sessions WHERE expires_at > now()")
+        .fetch_one(pool)
+        .await?;
     Ok(count)
 }
 

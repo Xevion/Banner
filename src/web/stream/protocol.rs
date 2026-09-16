@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, TimeseriesPoint};
-use crate::web::stream::filters::{
-    AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter,
-};
+use crate::web::stream::filters::{AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter};
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 
 pub const STREAM_PROTOCOL_VERSION: u32 = 1;
@@ -257,13 +255,7 @@ mod tests {
 
     #[test]
     fn test_server_message_kind_label_matches_variant() {
-        assert_eq!(
-            StreamServerMessage::Ready {
-                protocol_version: 1
-            }
-            .kind_label(),
-            "ready"
-        );
+        assert_eq!(StreamServerMessage::Ready { protocol_version: 1 }.kind_label(), "ready");
         assert_eq!(
             StreamServerMessage::Pong {
                 request_id: None,

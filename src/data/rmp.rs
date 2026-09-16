@@ -16,23 +16,13 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
 
     // Deduplicate: keep last occurrence per legacy_id (latest page wins)
     let mut seen = HashSet::new();
-    let deduped: Vec<&RmpProfessor> = professors
-        .iter()
-        .rev()
-        .filter(|p| seen.insert(p.legacy_id))
-        .collect();
+    let deduped: Vec<&RmpProfessor> = professors.iter().rev().filter(|p| seen.insert(p.legacy_id)).collect();
 
     let legacy_ids: Vec<i32> = deduped.iter().map(|p| p.legacy_id).collect();
     let graphql_ids: Vec<&str> = deduped.iter().map(|p| p.graphql_id.as_str()).collect();
-    let first_names: Vec<String> = deduped
-        .iter()
-        .map(|p| p.first_name.trim().to_string())
-        .collect();
+    let first_names: Vec<String> = deduped.iter().map(|p| p.first_name.trim().to_string()).collect();
     let first_name_refs: Vec<&str> = first_names.iter().map(|s| s.as_str()).collect();
-    let last_names: Vec<String> = deduped
-        .iter()
-        .map(|p| p.last_name.trim().to_string())
-        .collect();
+    let last_names: Vec<String> = deduped.iter().map(|p| p.last_name.trim().to_string()).collect();
     let last_name_refs: Vec<&str> = last_names.iter().map(|s| s.as_str()).collect();
     let departments: Vec<Option<&str>> = deduped.iter().map(|p| p.department.as_deref()).collect();
     let avg_ratings: Vec<Option<f32>> = deduped.iter().map(|p| p.avg_rating).collect();
@@ -41,8 +31,7 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
         .iter()
         .map(|p| i32::try_from(p.num_ratings.get()).unwrap_or(i32::MAX))
         .collect();
-    let would_take_again_pcts: Vec<Option<f32>> =
-        deduped.iter().map(|p| p.would_take_again_pct).collect();
+    let would_take_again_pcts: Vec<Option<f32>> = deduped.iter().map(|p| p.would_take_again_pct).collect();
 
     sqlx::query(
         r#"
@@ -97,23 +86,17 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
 ///
 /// If `rmp_legacy_id` is `Some`, removes only that specific link.
 /// If `None`, removes all links for the instructor.
-pub async fn unmatch_instructor(
-    pool: &PgPool,
-    instructor_id: i32,
-    rmp_legacy_id: Option<i32>,
-) -> Result<()> {
+pub async fn unmatch_instructor(pool: &PgPool, instructor_id: i32, rmp_legacy_id: Option<i32>) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     // Delete specific link or all links
     if let Some(legacy_id) = rmp_legacy_id {
-        sqlx::query(
-            "DELETE FROM instructor_rmp_links WHERE instructor_id = $1 AND rmp_legacy_id = $2",
-        )
-        .bind(instructor_id)
-        .bind(legacy_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to delete specific rmp link for instructor")?;
+        sqlx::query("DELETE FROM instructor_rmp_links WHERE instructor_id = $1 AND rmp_legacy_id = $2")
+            .bind(instructor_id)
+            .bind(legacy_id)
+            .execute(&mut *tx)
+            .await
+            .context("failed to delete specific rmp link for instructor")?;
     } else {
         sqlx::query("DELETE FROM instructor_rmp_links WHERE instructor_id = $1")
             .bind(instructor_id)
@@ -158,10 +141,7 @@ pub async fn unmatch_instructor(
 ///
 /// Returns `(legacy_id, graphql_id)` pairs for professors whose
 /// `reviews_last_scraped_at` is NULL or past their individual interval.
-pub async fn get_professors_eligible_for_review_scrape(
-    pool: &PgPool,
-    limit: i64,
-) -> Result<Vec<(i32, String)>> {
+pub async fn get_professors_eligible_for_review_scrape(pool: &PgPool, limit: i64) -> Result<Vec<(i32, String)>> {
     let rows: Vec<(i32, String)> = sqlx::query_as(
         r#"
         SELECT legacy_id, graphql_id FROM rmp_professors
@@ -213,11 +193,7 @@ pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail)
 ///
 /// Uses a transaction to ensure atomicity. Delete-and-reinsert is simpler
 /// than composite-key upsert since RMP reviews lack stable IDs.
-pub async fn replace_professor_reviews(
-    pool: &PgPool,
-    legacy_id: i32,
-    reviews: &[RmpReview],
-) -> Result<()> {
+pub async fn replace_professor_reviews(pool: &PgPool, legacy_id: i32, reviews: &[RmpReview]) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1")
@@ -269,11 +245,7 @@ pub async fn replace_professor_reviews(
 ///
 /// Only called after `replace_professor_reviews` succeeds to prevent
 /// failed inserts from pushing the next scrape forward.
-pub async fn mark_professor_reviews_scraped(
-    pool: &PgPool,
-    legacy_id: i32,
-    num_ratings: i32,
-) -> Result<()> {
+pub async fn mark_professor_reviews_scraped(pool: &PgPool, legacy_id: i32, num_ratings: i32) -> Result<()> {
     let interval_days = match num_ratings {
         0 => 14,
         1..=5 => 7,

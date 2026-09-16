@@ -68,20 +68,16 @@ pub async fn scraper_stats(
 ) -> Result<Json<ScraperStatsResponse>, ApiError> {
     let start = Instant::now();
 
-    let stats = crate::data::scraper_stats::compute_stats(
-        &state.db_pool,
-        &params.period,
-        params.term.as_deref(),
-    )
-    .await
-    .map_err(|e| {
-        error!(error = %e, "failed to fetch scraper stats");
-        if e.to_string().contains("Invalid period") {
-            ApiError::bad_request(e.to_string())
-        } else {
-            ApiError::internal_error("Failed to fetch scraper stats")
-        }
-    })?;
+    let stats = crate::data::scraper_stats::compute_stats(&state.db_pool, &params.period, params.term.as_deref())
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to fetch scraper stats");
+            if e.to_string().contains("Invalid period") {
+                ApiError::bad_request(e.to_string())
+            } else {
+                ApiError::internal_error("Failed to fetch scraper stats")
+            }
+        })?;
 
     let success_rate = if stats.total_scrapes > 0 {
         Some(stats.successful_scrapes as f64 / stats.total_scrapes as f64)
@@ -186,11 +182,7 @@ pub async fn scraper_timeseries(
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_timeseries");
     trace!(point_count = points.len(), "fetched scraper timeseries");
 
-    Ok(Json(TimeseriesResponse {
-        period,
-        bucket,
-        points,
-    }))
+    Ok(Json(TimeseriesResponse { period, bucket, points }))
 }
 
 #[derive(Serialize, TS)]
@@ -255,13 +247,12 @@ pub async fn scraper_subjects(
     let start = Instant::now();
     let ref_cache = state.reference_cache.read().await;
 
-    let data =
-        crate::data::scraper_stats::compute_subjects(&state.db_pool, &state.events, &ref_cache)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "failed to fetch subject stats");
-                ApiError::internal_error("Failed to fetch subject stats")
-            })?;
+    let data = crate::data::scraper_stats::compute_subjects(&state.db_pool, &state.events, &ref_cache)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to fetch subject stats");
+            ApiError::internal_error("Failed to fetch subject stats")
+        })?;
 
     let subjects: Vec<SubjectSummary> = data
         .into_iter()
@@ -337,13 +328,12 @@ pub async fn scraper_subject_detail(
     let start = Instant::now();
     let limit = params.limit.clamp(1, 200);
 
-    let rows =
-        crate::data::scrape_jobs::list_results_for_subject(&state.db_pool, &subject, limit as i64)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "failed to fetch subject detail");
-                ApiError::internal_error("Failed to fetch subject detail")
-            })?;
+    let rows = crate::data::scrape_jobs::list_results_for_subject(&state.db_pool, &subject, limit as i64)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to fetch subject detail");
+            ApiError::internal_error("Failed to fetch subject detail")
+        })?;
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_subject_detail");
 

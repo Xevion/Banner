@@ -11,9 +11,7 @@ use ts_rs::TS;
 ///
 /// Deliberately not a column: several keys may share one column's header, and
 /// some belong to no column at all.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize, TS, VariantArray,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize, TS, VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum SortKey {
@@ -253,11 +251,7 @@ impl fmt::Display for SortParseError {
         match self {
             Self::UnknownKey(name) => {
                 let known: Vec<&str> = SortKey::ALL.iter().map(|k| k.name()).collect();
-                write!(
-                    f,
-                    "unknown sort key '{name}'; expected one of {}",
-                    known.join(", ")
-                )
+                write!(f, "unknown sort key '{name}'; expected one of {}", known.join(", "))
             }
         }
     }
@@ -351,14 +345,8 @@ mod sort_tests {
     fn the_leading_term_drives_the_ordering() {
         let asc = "start_time".parse::<SortSpec>().expect("parses").to_sql();
         let desc = "-start_time".parse::<SortSpec>().expect("parses").to_sql();
-        assert!(
-            asc.starts_with("first_begin_minutes ASC NULLS LAST"),
-            "{asc}"
-        );
-        assert!(
-            desc.starts_with("first_begin_minutes DESC NULLS LAST"),
-            "{desc}"
-        );
+        assert!(asc.starts_with("first_begin_minutes ASC NULLS LAST"), "{asc}");
+        assert!(desc.starts_with("first_begin_minutes DESC NULLS LAST"), "{desc}");
     }
 
     #[test]
@@ -376,14 +364,8 @@ mod sort_tests {
         assert!(SortSpec::default().to_sql().ends_with(DEFAULT_ORDER));
         for key in SortKey::ALL {
             for direction in [SortDirection::Asc, SortDirection::Desc] {
-                let spec = SortSpec::new(vec![SortTerm {
-                    key: *key,
-                    direction,
-                }]);
-                assert!(
-                    spec.to_sql().ends_with(DEFAULT_ORDER),
-                    "{key:?} {direction:?}"
-                );
+                let spec = SortSpec::new(vec![SortTerm { key: *key, direction }]);
+                assert!(spec.to_sql().ends_with(DEFAULT_ORDER), "{key:?} {direction:?}");
             }
         }
     }

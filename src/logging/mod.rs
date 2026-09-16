@@ -11,9 +11,7 @@ use tracing_subscriber::{EnvFilter, fmt::format::JsonFields};
 /// `access` carries one event per served request, on its own target so that silencing routine
 /// traffic (`access=off`) does not also silence application INFO.
 fn default_filter(base_level: &str) -> String {
-    format!(
-        "warn,banner={base_level},banner::banner::middleware=warn,banner::banner::session=warn,access=info"
-    )
+    format!("warn,banner={base_level},banner::banner::middleware=warn,banner::banner::session=warn,access=info")
 }
 
 /// Configure and initialize logging for the application.
@@ -21,8 +19,8 @@ pub fn setup_logging(config: &Config, tracing_format: TracingFormat) {
     // Configure logging based on config.
     // Module paths use `banner::banner::` because the crate (`banner`) contains
     // a `banner` submodule for the Banner API client.
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_filter(&config.log_level)));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter(&config.log_level)));
 
     let use_pretty = match tracing_format {
         TracingFormat::Pretty => true,
@@ -85,9 +83,7 @@ mod tests {
         let capture = Capture::default();
         let writer = capture.clone();
         let subscriber = tracing_subscriber::registry()
-            .with(tracing_subscriber::EnvFilter::new(default_filter(
-                base_level,
-            )))
+            .with(tracing_subscriber::EnvFilter::new(default_filter(base_level)))
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_target(true)

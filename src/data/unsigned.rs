@@ -18,19 +18,7 @@ use serde::{Deserialize, Serialize};
 /// - `TryFrom<i32>`, `TryFrom<i64>`, `TryFrom<usize>` for fallible signed conversions
 macro_rules! unsigned_newtype {
     ($name:ident, u32) => {
-        #[derive(
-            Default,
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Serialize,
-            Deserialize,
-        )]
+        #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
         #[serde(transparent)]
         pub struct $name(u32);
 
@@ -102,18 +90,11 @@ macro_rules! unsigned_newtype {
         }
 
         impl<'r> sqlx::Decode<'r, sqlx::Postgres> for $name {
-            fn decode(
-                value: sqlx::postgres::PgValueRef<'r>,
-            ) -> Result<Self, sqlx::error::BoxDynError> {
+            fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
                 let raw = <i32 as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-                u32::try_from(raw).map(Self).map_err(|_| {
-                    format!(
-                        "negative i32 {} cannot decode as {}",
-                        raw,
-                        stringify!($name)
-                    )
-                    .into()
-                })
+                u32::try_from(raw)
+                    .map(Self)
+                    .map_err(|_| format!("negative i32 {} cannot decode as {}", raw, stringify!($name)).into())
             }
         }
 
@@ -145,19 +126,7 @@ macro_rules! unsigned_newtype {
     };
 
     ($name:ident, u64) => {
-        #[derive(
-            Default,
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Serialize,
-            Deserialize,
-        )]
+        #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
         #[serde(transparent)]
         pub struct $name(u64);
 
@@ -229,18 +198,11 @@ macro_rules! unsigned_newtype {
         }
 
         impl<'r> sqlx::Decode<'r, sqlx::Postgres> for $name {
-            fn decode(
-                value: sqlx::postgres::PgValueRef<'r>,
-            ) -> Result<Self, sqlx::error::BoxDynError> {
+            fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
                 let raw = <i64 as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-                u64::try_from(raw).map(Self).map_err(|_| {
-                    format!(
-                        "negative i64 {} cannot decode as {}",
-                        raw,
-                        stringify!($name)
-                    )
-                    .into()
-                })
+                u64::try_from(raw)
+                    .map(Self)
+                    .map_err(|_| format!("negative i64 {} cannot decode as {}", raw, stringify!($name)).into())
             }
         }
 

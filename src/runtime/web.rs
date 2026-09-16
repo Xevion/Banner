@@ -50,10 +50,7 @@ impl WebService {
     }
 
     /// Periodically refreshes the reference cache from the database.
-    async fn reference_cache_refresh_loop(
-        state: AppState,
-        mut shutdown_rx: broadcast::Receiver<()>,
-    ) {
+    async fn reference_cache_refresh_loop(state: AppState, mut shutdown_rx: broadcast::Receiver<()>) {
         use std::time::Duration;
         let mut ticker = tokio::time::interval(Duration::from_secs(30 * 60));
         ticker.tick().await; // skip immediate first tick
@@ -119,9 +116,7 @@ impl Service for WebService {
         let addr = SocketAddr::from(([0, 0, 0, 0], self.port));
 
         let listener = TcpListener::bind(addr).await?;
-        self.app_state
-            .service_statuses
-            .set("web", ServiceStatus::Active);
+        self.app_state.service_statuses.set("web", ServiceStatus::Active);
         info!(
             service = "web",
             address = %addr,
@@ -157,18 +152,12 @@ impl Service for WebService {
         // Use axum's graceful shutdown with the internal shutdown signal.
         // `into_make_service_with_connect_info` makes `ConnectInfo<SocketAddr>`
         // available to handlers (used by the SSR proxy for x-forwarded-for).
-        axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.recv().await;
-            trace!(
-                service = "web",
-                "received shutdown signal, starting graceful shutdown"
-            );
-        })
-        .await?;
+        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+            .with_graceful_shutdown(async move {
+                let _ = shutdown_rx.recv().await;
+                trace!(service = "web", "received shutdown signal, starting graceful shutdown");
+            })
+            .await?;
 
         trace!(service = "web", "graceful shutdown completed");
         info!(service = "web", "web server stopped");

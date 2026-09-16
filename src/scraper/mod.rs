@@ -109,10 +109,7 @@ impl ScraperService {
             });
             self.worker_handles.push(worker_handle);
         }
-        info!(
-            worker_count = self.worker_handles.len(),
-            "Spawned worker tasks"
-        );
+        info!(worker_count = self.worker_handles.len(), "Spawned worker tasks");
         self.service_statuses.set("scraper", ServiceStatus::Active);
     }
 }
@@ -130,8 +127,7 @@ impl Service for ScraperService {
     }
 
     async fn shutdown(&mut self) -> Result<(), anyhow::Error> {
-        self.service_statuses
-            .set("scraper", ServiceStatus::Disabled);
+        self.service_statuses.set("scraper", ServiceStatus::Disabled);
         info!("Shutting down scraper service");
 
         // Send shutdown signal to all tasks
@@ -153,10 +149,7 @@ impl Service for ScraperService {
         let results = futures::future::join_all(all_handles).await;
         let failed = results.iter().filter(|r| r.is_err()).count();
         if failed > 0 {
-            warn!(
-                failed_count = failed,
-                "Some scraper tasks panicked during shutdown"
-            );
+            warn!(failed_count = failed, "Some scraper tasks panicked during shutdown");
             return Err(anyhow::anyhow!("{} task(s) panicked", failed));
         }
 

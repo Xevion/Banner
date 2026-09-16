@@ -42,9 +42,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -73,8 +71,7 @@ where
         // Client IP for tracing correlation (same priority as ClientIp extractor).
         let client_ip = header_str(req.headers(), "cf-connecting-ip")
             .or_else(|| {
-                header_str(req.headers(), "x-forwarded-for")
-                    .and_then(|xff| xff.rsplit(',').next().map(str::trim))
+                header_str(req.headers(), "x-forwarded-for").and_then(|xff| xff.rsplit(',').next().map(str::trim))
             })
             .unwrap_or("-")
             .to_string();

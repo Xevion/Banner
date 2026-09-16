@@ -63,8 +63,7 @@ impl ServiceManager {
             });
 
             // Store abort handle for shutdown control
-            self.service_handles
-                .insert(name.clone(), handle.abort_handle());
+            self.service_handles.insert(name.clone(), handle.abort_handle());
         }
 
         info!(
@@ -85,16 +84,10 @@ impl ServiceManager {
             );
         }
 
-        info!(
-            "service manager running {} services",
-            self.service_handles.len()
-        );
+        info!("service manager running {} services", self.service_handles.len());
 
         // Wait for any service to complete via the channel
-        let completion_rx = self
-            .completion_rx
-            .as_mut()
-            .expect("completion_rx should be available");
+        let completion_rx = self.completion_rx.as_mut().expect("completion_rx should be available");
 
         completion_rx
             .recv()
@@ -141,10 +134,7 @@ impl ServiceManager {
         let start_time = std::time::Instant::now();
 
         // Collect results from all services with timeout
-        let completion_rx = self
-            .completion_rx
-            .as_mut()
-            .expect("completion_rx should be available");
+        let completion_rx = self.completion_rx.as_mut().expect("completion_rx should be available");
 
         // Collect all completion results with a single timeout
         let collect_future = async {

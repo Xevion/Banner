@@ -24,9 +24,7 @@ impl DateRange {
     /// Creates a new `DateRange`, returning an error if `start` is after `end`.
     pub fn new(start: NaiveDate, end: NaiveDate) -> Result<Self, String> {
         if start > end {
-            return Err(format!(
-                "invalid date range: start ({start}) is after end ({end})"
-            ));
+            return Err(format!("invalid date range: start ({start}) is after end ({end})"));
         }
         Ok(Self { start, end })
     }
@@ -85,10 +83,7 @@ pub struct Enrollment {
 
 /// Treat 0 ratings / 0.0 average as "no data", returning `None` for both fields.
 /// Preserves meaningful values unchanged.
-pub fn sanitize_rmp_ratings(
-    avg_rating: Option<f32>,
-    num_ratings: Option<i32>,
-) -> (Option<f32>, Option<i32>) {
+pub fn sanitize_rmp_ratings(avg_rating: Option<f32>, num_ratings: Option<i32>) -> (Option<f32>, Option<i32>) {
     match (avg_rating, num_ratings) {
         (Some(r), Some(n)) if r != 0.0 && n > 0 => (Some(r), Some(n)),
         _ => (None, None),
@@ -146,18 +141,7 @@ pub struct RmpFull {
 /// `BlueBook` lowercases to `bluebook` under both attributes, which is the only
 /// spelling `instructor_scores.source` still holds.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TS,
-    AsRefStr,
-    EnumString,
-    IntoStaticStr,
-    VariantArray,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, EnumString, IntoStaticStr, VariantArray,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -187,10 +171,7 @@ pub struct InstructorRating {
     pub total_responses: i32,
 }
 
-pub fn build_bluebook_brief(
-    avg_rating: Option<f32>,
-    total_responses: Option<i64>,
-) -> Option<BlueBookBrief> {
+pub fn build_bluebook_brief(avg_rating: Option<f32>, total_responses: Option<i64>) -> Option<BlueBookBrief> {
     match (avg_rating, total_responses) {
         (Some(r), Some(n)) if r > 0.0 && n > 0 => Some(BlueBookBrief {
             avg_instructor_rating: r,

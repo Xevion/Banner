@@ -51,11 +51,7 @@ pub struct TriggeredWatch {
 ///
 /// Discord bot users may not have logged in via the web, so we create a thin
 /// record from the information available in the bot context.
-pub async fn ensure_user(
-    pool: &PgPool,
-    discord_user_id: i64,
-    discord_username: &str,
-) -> Result<()> {
+pub async fn ensure_user(pool: &PgPool, discord_user_id: i64, discord_username: &str) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO users (discord_id, discord_username)
@@ -74,12 +70,7 @@ pub async fn ensure_user(
 }
 
 /// Create or reactivate a watch. Returns true if newly created, false if it already existed.
-pub async fn upsert_watch(
-    pool: &PgPool,
-    discord_user_id: i64,
-    course_id: i32,
-    watch_type: WatchType,
-) -> Result<bool> {
+pub async fn upsert_watch(pool: &PgPool, discord_user_id: i64, course_id: i32, watch_type: WatchType) -> Result<bool> {
     // xmax = 0 means the row was just inserted; non-zero means it was updated.
     let row: (bool,) = sqlx::query_as(
         r#"
@@ -100,12 +91,7 @@ pub async fn upsert_watch(
 }
 
 /// Delete a specific watch. Returns true if a watch was found and deleted.
-pub async fn delete_watch(
-    pool: &PgPool,
-    discord_user_id: i64,
-    course_id: i32,
-    watch_type: WatchType,
-) -> Result<bool> {
+pub async fn delete_watch(pool: &PgPool, discord_user_id: i64, course_id: i32, watch_type: WatchType) -> Result<bool> {
     let result = sqlx::query(
         r#"
         DELETE FROM course_watches
@@ -122,11 +108,7 @@ pub async fn delete_watch(
 }
 
 /// Delete all watches for a user on a specific course. Returns count deleted.
-pub async fn delete_all_watches_for_course(
-    pool: &PgPool,
-    discord_user_id: i64,
-    course_id: i32,
-) -> Result<u64> {
+pub async fn delete_all_watches_for_course(pool: &PgPool, discord_user_id: i64, course_id: i32) -> Result<u64> {
     let result = sqlx::query(
         r#"
         DELETE FROM course_watches
@@ -142,10 +124,7 @@ pub async fn delete_all_watches_for_course(
 }
 
 /// List all active watches for a user with course info.
-pub async fn list_active_watches(
-    pool: &PgPool,
-    discord_user_id: i64,
-) -> Result<Vec<WatchListItem>> {
+pub async fn list_active_watches(pool: &PgPool, discord_user_id: i64) -> Result<Vec<WatchListItem>> {
     let items = sqlx::query_as::<_, WatchListItem>(
         r#"
         SELECT

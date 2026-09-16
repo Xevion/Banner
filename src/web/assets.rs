@@ -61,12 +61,7 @@ pub async fn try_serve_asset(method: &Method, uri: &Uri, headers: &HeaderMap) ->
     serve(ASSETS.clone(), method, uri, headers).await
 }
 
-async fn serve(
-    mut assets: ServeDir,
-    method: &Method,
-    uri: &Uri,
-    headers: &HeaderMap,
-) -> Option<Response> {
+async fn serve(mut assets: ServeDir, method: &Method, uri: &Uri, headers: &HeaderMap) -> Option<Response> {
     if method != Method::GET && method != Method::HEAD {
         return None;
     }
@@ -169,13 +164,9 @@ mod tests {
 
         // zstd outranks brotli at equal quality, matching what the old hand-rolled
         // negotiation preferred.
-        let zstd = get(
-            &dir,
-            "/_app/immutable/app.abc123.js",
-            accepting("gzip, br, zstd"),
-        )
-        .await
-        .expect("asset should be served");
+        let zstd = get(&dir, "/_app/immutable/app.abc123.js", accepting("gzip, br, zstd"))
+            .await
+            .expect("asset should be served");
 
         check!(zstd.headers()[header::CONTENT_ENCODING] == "zstd");
 
@@ -199,16 +190,8 @@ mod tests {
     async fn misses_fall_through() {
         let dir = fixture("miss");
 
-        check!(
-            get(&dir, "/courses/202620/12345", HeaderMap::new())
-                .await
-                .is_none()
-        );
-        check!(
-            get(&dir, "/_app/immutable/gone.js", HeaderMap::new())
-                .await
-                .is_none()
-        );
+        check!(get(&dir, "/courses/202620/12345", HeaderMap::new()).await.is_none());
+        check!(get(&dir, "/_app/immutable/gone.js", HeaderMap::new()).await.is_none());
     }
 
     #[tokio::test]
@@ -216,27 +199,15 @@ mod tests {
         let dir = fixture("dirs");
 
         check!(get(&dir, "/", HeaderMap::new()).await.is_none());
-        check!(
-            get(&dir, "/_app/immutable", HeaderMap::new())
-                .await
-                .is_none()
-        );
+        check!(get(&dir, "/_app/immutable", HeaderMap::new()).await.is_none());
     }
 
     #[tokio::test]
     async fn rejects_traversal_outside_the_build() {
         let dir = fixture("traversal");
 
-        check!(
-            get(&dir, "/../../etc/passwd", HeaderMap::new())
-                .await
-                .is_none()
-        );
-        check!(
-            get(&dir, "/_app/../../../etc/passwd", HeaderMap::new())
-                .await
-                .is_none()
-        );
+        check!(get(&dir, "/../../etc/passwd", HeaderMap::new()).await.is_none());
+        check!(get(&dir, "/_app/../../../etc/passwd", HeaderMap::new()).await.is_none());
     }
 
     #[tokio::test]

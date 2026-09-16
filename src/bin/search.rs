@@ -27,14 +27,11 @@ async fn main() -> Result<()> {
         .extract()
         .expect("Failed to load config");
 
-    info!(
-        banner_base_url = config.banner_base_url,
-        "Configuration loaded"
-    );
+    info!(banner_base_url = config.banner_base_url, "Configuration loaded");
 
     // Create Banner API client
-    let banner_api = BannerApi::new_with_config(config.banner_base_url, config.rate_limiting)
-        .expect("Failed to create BannerApi");
+    let banner_api =
+        BannerApi::new_with_config(config.banner_base_url, config.rate_limiting).expect("Failed to create BannerApi");
 
     // Get current term
     let term = Term::get_current().inner().to_string();
@@ -42,14 +39,8 @@ async fn main() -> Result<()> {
 
     // Define multiple search queries
     let queries = vec![
-        (
-            "CS Courses",
-            SearchQuery::new().subject("CS").max_results(10),
-        ),
-        (
-            "Math Courses",
-            SearchQuery::new().subject("MAT").max_results(10),
-        ),
+        ("CS Courses", SearchQuery::new().subject("CS").max_results(10)),
+        ("Math Courses", SearchQuery::new().subject("MAT").max_results(10)),
         (
             "3000-level CS",
             SearchQuery::new()
@@ -57,10 +48,7 @@ async fn main() -> Result<()> {
                 .course_numbers(3000, 3999)
                 .max_results(8),
         ),
-        (
-            "High Credit Courses",
-            SearchQuery::new().credits(4, 6).max_results(8),
-        ),
+        ("High Credit Courses", SearchQuery::new().credits(4, 6).max_results(8)),
         (
             "Programming Courses",
             SearchQuery::new().keyword("programming").max_results(6),
@@ -75,9 +63,7 @@ async fn main() -> Result<()> {
         let banner_api = &banner_api;
         let term = &term;
         async move {
-            let result = banner_api
-                .search(term, &query, "subjectDescription", false)
-                .await;
+            let result = banner_api.search(term, &query, "subjectDescription", false).await;
             (label, result)
         }
     });
@@ -114,10 +100,7 @@ async fn main() -> Result<()> {
                 for course in courses {
                     println!(
                         "    {} {} - {} (CRN: {})",
-                        course.subject,
-                        course.course_number,
-                        course.course_title,
-                        course.course_reference_number
+                        course.subject, course.course_number, course.course_title, course.course_reference_number
                     );
                 }
             }

@@ -234,10 +234,7 @@ pub struct ListInstructorsFilter {
 }
 
 /// List instructors with filtering, sorting, and pagination.
-pub async fn list_instructors(
-    pool: &PgPool,
-    filter: &ListInstructorsFilter,
-) -> Result<ListInstructorsResponse> {
+pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> Result<ListInstructorsResponse> {
     let page = filter.page.max(1);
     let per_page = filter.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
@@ -333,12 +330,11 @@ pub async fn list_instructors(
     .await
     .context("failed to get instructor stats")?;
 
-    let with_candidates = sqlx::query_scalar!(
-        r#"SELECT COUNT(DISTINCT instructor_id) AS "count!" FROM rmp_match_candidates"#
-    )
-    .fetch_one(pool)
-    .await
-    .context("failed to count instructors with candidates")?;
+    let with_candidates =
+        sqlx::query_scalar!(r#"SELECT COUNT(DISTINCT instructor_id) AS "count!" FROM rmp_match_candidates"#)
+            .fetch_one(pool)
+            .await
+            .context("failed to count instructors with candidates")?;
 
     let mut stats = InstructorStats {
         total: 0,
@@ -370,28 +366,18 @@ pub async fn list_instructors(
                 .map(|rmp_id| -> Result<TopCandidateResponse> {
                     Ok(TopCandidateResponse {
                         rmp_legacy_id: rmp_id,
-                        score: r
-                            .top_candidate_score
-                            .context("top candidate has no score")?,
+                        score: r.top_candidate_score.context("top candidate has no score")?,
                         score_breakdown: r
                             .top_candidate_breakdown
                             .as_ref()
                             .context("top candidate has no score breakdown")?
                             .0
                             .clone(),
-                        first_name: r
-                            .tc_first_name
-                            .clone()
-                            .context("top candidate has no rmp profile")?,
-                        last_name: r
-                            .tc_last_name
-                            .clone()
-                            .context("top candidate has no rmp profile")?,
+                        first_name: r.tc_first_name.clone().context("top candidate has no rmp profile")?,
+                        last_name: r.tc_last_name.clone().context("top candidate has no rmp profile")?,
                         department: r.tc_department.clone(),
                         avg_rating: r.tc_avg_rating,
-                        num_ratings: r
-                            .tc_num_ratings
-                            .context("top candidate has no rmp profile")?,
+                        num_ratings: r.tc_num_ratings.context("top candidate has no rmp profile")?,
                         claimed_by: r.tc_claimed_by.clone(),
                     })
                 })
@@ -576,12 +562,7 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
 ///
 /// Fails with [`AdminRmpError::AlreadyLinked`] if the RMP profile already belongs
 /// to a different instructor.
-pub async fn accept_candidate(
-    pool: &PgPool,
-    instructor_id: i32,
-    rmp_legacy_id: i32,
-    resolved_by: i64,
-) -> Result<()> {
+pub async fn accept_candidate(pool: &PgPool, instructor_id: i32, rmp_legacy_id: i32, resolved_by: i64) -> Result<()> {
     // Verify the candidate exists and is pending
     let candidate = sqlx::query_scalar!(
         "SELECT id FROM rmp_match_candidates WHERE instructor_id = $1 AND rmp_legacy_id = $2 AND status = 'pending'",
@@ -659,12 +640,7 @@ pub async fn accept_candidate(
 /// Reject a single candidate for an instructor.
 ///
 /// Returns `true` if a candidate was rejected, `false` if no pending candidate was found.
-pub async fn reject_candidate(
-    pool: &PgPool,
-    instructor_id: i32,
-    rmp_legacy_id: i32,
-    resolved_by: i64,
-) -> Result<bool> {
+pub async fn reject_candidate(pool: &PgPool, instructor_id: i32, rmp_legacy_id: i32, resolved_by: i64) -> Result<bool> {
     let mut tx = pool.begin().await.context("failed to begin rejection")?;
 
     let result = sqlx::query!(
@@ -685,11 +661,7 @@ pub async fn reject_candidate(
 /// Reject all pending candidates for an instructor and mark them as having no valid match.
 ///
 /// Returns an error if the instructor has confirmed matches (must unmatch first).
-pub async fn reject_all_candidates(
-    pool: &PgPool,
-    instructor_id: i32,
-    resolved_by: i64,
-) -> Result<()> {
+pub async fn reject_all_candidates(pool: &PgPool, instructor_id: i32, resolved_by: i64) -> Result<()> {
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
 
     // The view reads status through a CASE expression, so sqlx calls it nullable.

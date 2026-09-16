@@ -19,8 +19,8 @@ use crate::web::admin::scraper::{ScraperStatsResponse, SubjectSummary, Timeserie
 use crate::web::auth::extractors::AdminUser;
 use crate::web::stream::computed::{ComputedCacheKey, ComputedUpdate};
 use crate::web::stream::protocol::{
-    STREAM_PROTOCOL_VERSION, StreamClientMessage, StreamDelta, StreamError, StreamErrorCode,
-    StreamKind, StreamServerMessage, StreamSnapshot,
+    STREAM_PROTOCOL_VERSION, StreamClientMessage, StreamDelta, StreamError, StreamErrorCode, StreamKind,
+    StreamServerMessage, StreamSnapshot,
 };
 use crate::web::stream::streams::{audit_log, scrape_jobs};
 use crate::web::stream::subscriptions::{Subscription, SubscriptionRegistry, build_subscription};
@@ -39,11 +39,7 @@ enum ClientMessageResult {
 impl ClientMessageResult {
     /// Convert the result of a `send_error` call (true = sent, false = send failed).
     fn from_error_send(sent: bool) -> Self {
-        if sent {
-            Self::ErrorSent
-        } else {
-            Self::Disconnected
-        }
+        if sent { Self::ErrorSent } else { Self::Disconnected }
     }
 }
 
@@ -105,15 +101,13 @@ async fn send_message(
     // Serializing our own message cannot fail for any input the client controls, so this keeps the
     // connection rather than tearing it down; counting it is what stops it being silent.
     let Ok(json) = serde_json::to_string(message) else {
-        metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => "encode_failed")
-            .increment(1);
+        metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => "encode_failed").increment(1);
         return true;
     };
 
     let sent = sink.send(Message::Text(json.into())).await.is_ok();
     let outcome = if sent { "sent" } else { "failed" };
-    metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => outcome)
-        .increment(1);
+    metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => outcome).increment(1);
 
     sent
 }
@@ -224,13 +218,7 @@ async fn handle_client_message(
         Err(_) => {
             metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => "invalid", "outcome" => "received")
                 .increment(1);
-            let sent = send_error(
-                sink,
-                None,
-                StreamErrorCode::InvalidMessage,
-                "Invalid message",
-            )
-            .await;
+            let sent = send_error(sink, None, StreamErrorCode::InvalidMessage, "Invalid message").await;
             return ClientMessageResult::from_error_send(sent);
         }
     };
@@ -314,10 +302,7 @@ async fn handle_client_message(
 
             // Now get mutable reference and update
             let Some(subscription) = registry.get_mut(&subscription_id) else {
-                warn!(
-                    subscription_id,
-                    "subscription disappeared from registry during modify"
-                );
+                warn!(subscription_id, "subscription disappeared from registry during modify");
                 let sent = send_error(
                     sink,
                     Some(request_id),
@@ -359,14 +344,8 @@ async fn handle_client_message(
                 return ClientMessageResult::Disconnected;
             }
         }
-        StreamClientMessage::Ping {
-            request_id,
-            timestamp,
-        } => {
-            let pong = StreamServerMessage::Pong {
-                request_id,
-                timestamp,
-            };
+        StreamClientMessage::Ping { request_id, timestamp } => {
+            let pong = StreamServerMessage::Pong { request_id, timestamp };
             if !send_message(sink, &pong).await {
                 return ClientMessageResult::Disconnected;
             }
@@ -437,12 +416,8 @@ async fn send_snapshot(
             .await
         }
         Subscription::ScraperStats { filter } => {
-            match crate::data::scraper_stats::compute_stats(
-                &state.db_pool,
-                &filter.period,
-                filter.term.as_deref(),
-            )
-            .await
+            match crate::data::scraper_stats::compute_stats(&state.db_pool, &filter.period, filter.term.as_deref())
+                .await
             {
                 Ok(raw) => {
                     let success_rate = if raw.total_scrapes > 0 {
@@ -473,15 +448,7 @@ async fn send_snapshot(
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load stats",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load stats").await,
             }
         }
         Subscription::ScraperTimeseries { filter } => {
@@ -513,24 +480,12 @@ async fn send_snapshot(
                         sink,
                         &StreamServerMessage::Snapshot {
                             subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperTimeseries {
-                                points,
-                                period,
-                                bucket,
-                            },
+                            snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
                         },
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load timeseries",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load timeseries").await,
             }
         }
         Subscription::ScraperSubjects => {
@@ -564,15 +519,7 @@ async fn send_snapshot(
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load subjects",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load subjects").await,
             }
         }
     }
@@ -585,12 +532,8 @@ async fn dispatch_event(
     event: DomainEvent,
 ) -> bool {
     match event {
-        DomainEvent::ScrapeJob(scrape_event) => {
-            dispatch_scrape_job_event(sink, state, registry, scrape_event).await
-        }
-        DomainEvent::AuditLog(audit_event) => {
-            dispatch_audit_log_event(sink, registry, audit_event).await
-        }
+        DomainEvent::ScrapeJob(scrape_event) => dispatch_scrape_job_event(sink, state, registry, scrape_event).await,
+        DomainEvent::AuditLog(audit_event) => dispatch_audit_log_event(sink, registry, audit_event).await,
     }
 }
 
@@ -615,16 +558,12 @@ async fn dispatch_scrape_job_event(
             continue;
         };
 
-        let matches =
-            scrape_jobs::event_matches(&state.db_pool, filter, known_ids, &event, &mut job_details)
-                .await;
+        let matches = scrape_jobs::event_matches(&state.db_pool, filter, known_ids, &event, &mut job_details).await;
 
         if matches {
             let delta = StreamServerMessage::Delta {
                 subscription_id: subscription_id.clone(),
-                delta: StreamDelta::ScrapeJobs {
-                    event: event.clone(),
-                },
+                delta: StreamDelta::ScrapeJobs { event: event.clone() },
             };
             if !send_message(sink, &delta).await {
                 return false;
@@ -700,14 +639,7 @@ async fn dispatch_computed_update(
             (ComputedCacheKey::Stats { period, term }, Subscription::ScraperStats { filter }) => {
                 &filter.period == period && &filter.term == term
             }
-            (
-                ComputedCacheKey::Timeseries {
-                    period,
-                    bucket,
-                    term,
-                },
-                Subscription::ScraperTimeseries { filter },
-            ) => {
+            (ComputedCacheKey::Timeseries { period, bucket, term }, Subscription::ScraperTimeseries { filter }) => {
                 let filter_bucket = filter
                     .bucket
                     .clone()
@@ -740,12 +672,8 @@ async fn send_computed_snapshot(
 ) -> bool {
     match subscription {
         Subscription::ScraperStats { filter } => {
-            match crate::data::scraper_stats::compute_stats(
-                &state.db_pool,
-                &filter.period,
-                filter.term.as_deref(),
-            )
-            .await
+            match crate::data::scraper_stats::compute_stats(&state.db_pool, &filter.period, filter.term.as_deref())
+                .await
             {
                 Ok(raw) => {
                     let success_rate = if raw.total_scrapes > 0 {
@@ -776,15 +704,7 @@ async fn send_computed_snapshot(
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load stats",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load stats").await,
             }
         }
         Subscription::ScraperTimeseries { filter } => {
@@ -816,24 +736,12 @@ async fn send_computed_snapshot(
                         sink,
                         &StreamServerMessage::Snapshot {
                             subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperTimeseries {
-                                points,
-                                period,
-                                bucket,
-                            },
+                            snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
                         },
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load timeseries",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load timeseries").await,
             }
         }
         Subscription::ScraperSubjects => {
@@ -867,15 +775,7 @@ async fn send_computed_snapshot(
                     )
                     .await
                 }
-                Err(_) => {
-                    send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load subjects",
-                    )
-                    .await
-                }
+                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load subjects").await,
             }
         }
         _ => true, // Non-computed subscriptions don't need resync here
@@ -888,9 +788,7 @@ async fn resync_computed(
     registry: &SubscriptionRegistry,
 ) -> bool {
     for (subscription_id, subscription) in registry.iter() {
-        if subscription.is_computed()
-            && !send_computed_snapshot(sink, state, subscription, subscription_id).await
-        {
+        if subscription.is_computed() && !send_computed_snapshot(sink, state, subscription, subscription_id).await {
             return false;
         }
     }
@@ -915,8 +813,7 @@ mod tests {
                     term: None,
                 },
             };
-            let key = subscription_to_cache_key(&sub)
-                .expect("ScraperTimeseries should produce a cache key");
+            let key = subscription_to_cache_key(&sub).expect("ScraperTimeseries should produce a cache key");
             if let ComputedCacheKey::Timeseries { bucket, .. } = &key {
                 assert!(
                     validate_bucket(bucket).is_some(),
@@ -944,15 +841,12 @@ mod tests {
         assert_eq!(gauge_value(snapshotter.snapshot()), Some(0.0));
 
         fn gauge_value(snapshot: metrics_util::debugging::Snapshot) -> Option<f64> {
-            snapshot
-                .into_vec()
-                .into_iter()
-                .find_map(
-                    |(ck, _, _, value)| match (ck.key().name() == WS_CONNECTIONS, value) {
-                        (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
-                        _ => None,
-                    },
-                )
+            snapshot.into_vec().into_iter().find_map(|(ck, _, _, value)| {
+                match (ck.key().name() == WS_CONNECTIONS, value) {
+                    (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
+                    _ => None,
+                }
+            })
         }
     }
 }

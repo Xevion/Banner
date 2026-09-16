@@ -18,17 +18,14 @@ async fn load_calendar_course(
     term: &str,
     crn: &str,
 ) -> Result<(CalendarCourse, Vec<DbMeetingTime>), (StatusCode, String)> {
-    let term_code = Term::resolve_to_code(term)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Invalid term: {term}")))?;
+    let term_code =
+        Term::resolve_to_code(term).ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Invalid term: {term}")))?;
 
     let course = crate::data::courses::get_course_by_crn(&state.db_pool, crn, &term_code)
         .await
         .map_err(|e| {
             error!(%e, "Course lookup failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Lookup failed".to_string(),
-            )
+            (StatusCode::INTERNAL_SERVER_ERROR, "Lookup failed".to_string())
         })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Course not found".to_string()))?;
 

@@ -149,10 +149,7 @@ pub struct ListBluebookLinksFilter {
 }
 
 /// List BlueBook links with filtering and pagination.
-pub async fn list_links(
-    pool: &PgPool,
-    filter: &ListBluebookLinksFilter,
-) -> Result<ListBluebookLinksResponse> {
+pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Result<ListBluebookLinksResponse> {
     let page = filter.page.max(1);
     let per_page = filter.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
@@ -213,10 +210,7 @@ pub async fn list_links(
     }
     query = query.bind(per_page).bind(offset);
 
-    let rows = query
-        .fetch_all(pool)
-        .await
-        .context("failed to list bluebook links")?;
+    let rows = query.fetch_all(pool).await.context("failed to list bluebook links")?;
 
     // Count total with filters
     let count_query_str = format!(
@@ -376,19 +370,14 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
             .context("failed to fetch instructor teaching years")?;
 
             let course_count = sqlx::query_scalar!(
-                r#"SELECT COUNT(DISTINCT ci.course_id) AS "count!" FROM course_instructors ci WHERE ci.instructor_id = $1"#,
-                inst_id
-            )
-            .fetch_one(pool)
-            .await
-            .context("failed to count instructor courses")?;
+            r#"SELECT COUNT(DISTINCT ci.course_id) AS "count!" FROM course_instructors ci WHERE ci.instructor_id = $1"#,
+            inst_id
+        )
+        .fetch_one(pool)
+        .await
+        .context("failed to count instructor courses")?;
 
-            (
-                email,
-                subjects,
-                teaching_years,
-                Some(Count::try_from(course_count)?),
-            )
+            (email, subjects, teaching_years, Some(Count::try_from(course_count)?))
         } else {
             (None, vec![], vec![], None)
         };
@@ -501,11 +490,10 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     let mut tx = pool.begin().await.context("failed to start transaction")?;
 
     // Step 0: Delete all algorithm-generated links so we can regenerate them.
-    let deleted =
-        sqlx::query!("DELETE FROM instructor_bluebook_links WHERE status IN ('auto', 'pending')")
-            .execute(&mut *tx)
-            .await
-            .context("failed to delete stale auto/pending links")?;
+    let deleted = sqlx::query!("DELETE FROM instructor_bluebook_links WHERE status IN ('auto', 'pending')")
+        .execute(&mut *tx)
+        .await
+        .context("failed to delete stale auto/pending links")?;
     let deleted_stale = deleted.rows_affected() as usize;
 
     // Count names with manual decisions that we'll skip.
@@ -599,8 +587,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                 }
                 None => {
                     // CRN candidates exist but no name match -- pending review
-                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1))
-                        .await?;
+                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1)).await?;
                     pending_review += 1;
                 }
             }
@@ -639,18 +626,11 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
         }
     }
 
-    tx.commit()
-        .await
-        .context("failed to commit matching results")?;
+    tx.commit().await.context("failed to commit matching results")?;
 
     info!(
         total_names,
-        auto_matched,
-        pending_review,
-        no_match,
-        deleted_stale,
-        skipped_manual,
-        "BlueBook auto-matching complete"
+        auto_matched, pending_review, no_match, deleted_stale, skipped_manual, "BlueBook auto-matching complete"
     );
 
     Ok(BluebookMatchResponse {

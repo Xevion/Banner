@@ -54,8 +54,7 @@ pub(super) async fn suggest(
 ) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
 
-    let term_code =
-        Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
+    let term_code = Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
     let limit = params.limit.clamp(1, 25);
     let q = params.q.trim();
 
@@ -76,10 +75,7 @@ pub(super) async fn suggest(
     .map_err(|e| db_error("Suggest query", e))?;
 
     Ok(with_cache_control(
-        SuggestResponse {
-            courses,
-            instructors,
-        },
+        SuggestResponse { courses, instructors },
         cache::REFERENCE,
     ))
 }
@@ -95,10 +91,7 @@ pub(super) async fn suggest_instructors(
     let q = params.q.trim();
 
     if q.chars().count() < 2 {
-        return Ok(with_cache_control(
-            Vec::<InstructorSuggestion>::new(),
-            cache::REFERENCE,
-        ));
+        return Ok(with_cache_control(Vec::<InstructorSuggestion>::new(), cache::REFERENCE));
     }
 
     let term_code = params
@@ -107,10 +100,9 @@ pub(super) async fn suggest_instructors(
         .map(|t| Term::resolve_to_code(t).ok_or_else(|| ApiError::invalid_term(t)))
         .transpose()?;
 
-    let instructors =
-        data::courses::suggest_instructors_global(&state.db_pool, term_code.as_deref(), q, limit)
-            .await
-            .map_err(|e| db_error("Suggest instructors", e))?;
+    let instructors = data::courses::suggest_instructors_global(&state.db_pool, term_code.as_deref(), q, limit)
+        .await
+        .map_err(|e| db_error("Suggest instructors", e))?;
 
     Ok(with_cache_control(instructors, cache::REFERENCE))
 }
@@ -121,10 +113,7 @@ pub(super) async fn resolve_instructors(
     axum_extra::extract::Query(params): axum_extra::extract::Query<ResolveInstructorsParams>,
 ) -> Result<Response, ApiError> {
     if params.slug.is_empty() {
-        return Ok(with_cache_control(
-            HashMap::<String, String>::new(),
-            cache::REFERENCE,
-        ));
+        return Ok(with_cache_control(HashMap::<String, String>::new(), cache::REFERENCE));
     }
 
     if params.slug.len() > 50 {

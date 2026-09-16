@@ -123,8 +123,7 @@ impl SessionCache {
 
     /// Remove all cached sessions belonging to a user.
     pub fn evict_user(&self, discord_id: i64) {
-        self.cache
-            .retain(|_, entry| entry.user.discord_id != discord_id);
+        self.cache.retain(|_, entry| entry.user.discord_id != discord_id);
     }
 
     /// Delete expired sessions from the database and sweep the in-memory cache.

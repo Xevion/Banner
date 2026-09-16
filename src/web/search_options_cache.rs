@@ -38,8 +38,7 @@ impl SearchOptionsCache {
 
     /// Store a fresh response for the given term.
     pub(crate) fn insert(&self, term_code: String, value: SearchOptionsResponse) {
-        self.entries
-            .insert(term_code, (Instant::now(), Arc::new(value)));
+        self.entries.insert(term_code, (Instant::now(), Arc::new(value)));
     }
 
     /// Try to claim the singleflight slot for a term.

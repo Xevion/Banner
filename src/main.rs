@@ -70,13 +70,11 @@ async fn main() -> ExitCode {
     let mut app = App::new().await.expect("Failed to initialize application");
 
     // Setup services (web, scraper)
-    app.setup_services(&enabled_services)
-        .expect("Failed to setup services");
+    app.setup_services(&enabled_services).expect("Failed to setup services");
 
     // Setup bot service if enabled
     if enabled_services.contains(&ServiceName::Bot) {
-        app.setup_bot_service()
-            .expect("Failed to setup bot service");
+        app.setup_bot_service().expect("Failed to setup bot service");
     }
 
     // Start all services and run the application

@@ -10,13 +10,11 @@ use axum::response::Response;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-static SERVER: HeaderValue =
-    HeaderValue::from_static(concat!("banner/", env!("CARGO_PKG_VERSION")));
+static SERVER: HeaderValue = HeaderValue::from_static(concat!("banner/", env!("CARGO_PKG_VERSION")));
 static XFO: HeaderValue = HeaderValue::from_static("DENY");
 static XCTO: HeaderValue = HeaderValue::from_static("nosniff");
 static REFERRER: HeaderValue = HeaderValue::from_static("strict-origin-when-cross-origin");
-static PERMISSIONS: HeaderValue =
-    HeaderValue::from_static("camera=(), microphone=(), geolocation=()");
+static PERMISSIONS: HeaderValue = HeaderValue::from_static("camera=(), microphone=(), geolocation=()");
 static COOP: HeaderValue = HeaderValue::from_static("same-origin");
 static HSTS: HeaderValue = HeaderValue::from_static("max-age=31536000; includeSubDomains");
 
@@ -45,9 +43,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)

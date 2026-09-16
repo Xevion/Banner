@@ -492,8 +492,7 @@ pub fn compare_instructor_names(name_a: &str, name_b: &str) -> NameCompareResult
         confidence: 0.0,
     };
 
-    let (Some(parts_a), Some(parts_b)) = (parse_banner_name(name_a), parse_banner_name(name_b))
-    else {
+    let (Some(parts_a), Some(parts_b)) = (parse_banner_name(name_a), parse_banner_name(name_b)) else {
         return no_match;
     };
 
@@ -562,10 +561,7 @@ pub struct BestMatch {
 ///
 /// When multiple candidates match at the same quality level, returns `None`
 /// (ambiguous -- needs manual review).
-pub fn find_best_candidate(
-    bluebook_name: &str,
-    candidates: &[MatchCandidate],
-) -> Option<BestMatch> {
+pub fn find_best_candidate(bluebook_name: &str, candidates: &[MatchCandidate]) -> Option<BestMatch> {
     let mut best: Option<BestMatch> = None;
     let mut ambiguous = false;
 
@@ -610,12 +606,11 @@ pub fn find_best_candidate(
 /// Parses each `display_name` using [`parse_banner_name`] and updates the row.
 /// Logs warnings for any names that fail to parse.
 pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
-    let rows: Vec<(i32, String)> = sqlx::query_as(
-        "SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL",
-    )
-    .fetch_all(db_pool)
-    .await
-    .context("failed to fetch instructors for name backfill")?;
+    let rows: Vec<(i32, String)> =
+        sqlx::query_as("SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL")
+            .fetch_all(db_pool)
+            .await
+            .context("failed to fetch instructors for name backfill")?;
 
     if rows.is_empty() {
         return Ok(());
@@ -1032,11 +1027,11 @@ mod tests {
         let rmp_keys = matching_keys(&rmp);
 
         // Both should normalize to ("aguirremesa", "andres") as primary
-        assert!(banner_keys.iter().any(|bk| {
-            rmp_keys
+        assert!(
+            banner_keys
                 .iter()
-                .any(|rk| bk.last == rk.last && bk.first == rk.first)
-        }));
+                .any(|bk| { rmp_keys.iter().any(|rk| bk.last == rk.last && bk.first == rk.first) })
+        );
     }
 
     #[test]
@@ -1047,11 +1042,11 @@ mod tests {
         let rmp = parse_rmp_name("José", "García").unwrap();
         let rmp_keys = matching_keys(&rmp);
 
-        assert!(banner_keys.iter().any(|bk| {
-            rmp_keys
+        assert!(
+            banner_keys
                 .iter()
-                .any(|rk| bk.last == rk.last && bk.first == rk.first)
-        }));
+                .any(|bk| { rmp_keys.iter().any(|rk| bk.last == rk.last && bk.first == rk.first) })
+        );
     }
 
     #[test]
@@ -1173,10 +1168,7 @@ mod tests {
     #[test]
     fn compare_complex_multi_word_last() {
         // BB: "Gutierrez Gonzalez, Braulio Ivan" vs Banner: "Gutierrez Gonzalez, Braulio"
-        let r = compare_instructor_names(
-            "Gutierrez Gonzalez, Braulio Ivan",
-            "Gutierrez Gonzalez, Braulio",
-        );
+        let r = compare_instructor_names("Gutierrez Gonzalez, Braulio Ivan", "Gutierrez Gonzalez, Braulio");
         assert_eq!(r.quality, NameMatchQuality::Partial);
         assert!(r.confidence > 0.0);
     }

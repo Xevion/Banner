@@ -104,8 +104,7 @@ pub(super) async fn get_search_options(
         first_term.slug()
     };
 
-    let term_code =
-        Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
+    let term_code = Term::resolve_to_code(&term_slug).ok_or_else(|| ApiError::invalid_term(&term_slug))?;
 
     if let Some(cached) = state.search_options_cache.get(&term_code) {
         return Ok(with_cache_control((*cached).clone(), cache::REFERENCE));
@@ -178,9 +177,7 @@ pub(super) async fn get_search_options(
         sorts: data::courses::SortKey::catalog(),
     };
 
-    state
-        .search_options_cache
-        .insert(term_code.clone(), response.clone());
+    state.search_options_cache.insert(term_code.clone(), response.clone());
     state.search_options_cache.release(&term_code);
 
     Ok(with_cache_control(response, cache::REFERENCE))

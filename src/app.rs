@@ -104,11 +104,8 @@ impl App {
         info!("Database migrations up to date");
 
         // Create BannerApi early so we can use it for term sync
-        let banner_api = BannerApi::new_with_config(
-            config.banner_base_url.clone(),
-            config.rate_limiting.clone(),
-        )
-        .context("Failed to create BannerApi")?;
+        let banner_api = BannerApi::new_with_config(config.banner_base_url.clone(), config.rate_limiting.clone())
+            .context("Failed to create BannerApi")?;
         let banner_api_arc = Arc::new(banner_api);
 
         // Run startup DB operations in parallel
@@ -126,9 +123,7 @@ impl App {
                     updated = result.updated,
                     "Term sync completed"
                 );
-                if let Err(e) =
-                    crate::data::kv::set_timestamp(&db_pool, KV_TERM_SYNC, Utc::now()).await
-                {
+                if let Err(e) = crate::data::kv::set_timestamp(&db_pool, KV_TERM_SYNC, Utc::now()).await {
                     warn!(error = ?e, "Failed to persist term sync timestamp");
                 }
             }
@@ -198,9 +193,7 @@ impl App {
 
             #[cfg(debug_assertions)]
             {
-                app_state
-                    .session_cache
-                    .inject_dev_session("dev-admin", user);
+                app_state.session_cache.inject_dev_session("dev-admin", user);
                 info!("Dev auth bypass active -- use: Cookie: session=dev-admin");
             }
         }
@@ -223,11 +216,7 @@ impl App {
                 client_secret: self.config.discord_client_secret.clone(),
                 redirect_base: self.config.discord_redirect_uri.clone(),
             };
-            let web_service = Box::new(WebService::new(
-                self.config.port,
-                self.app_state.clone(),
-                auth_config,
-            ));
+            let web_service = Box::new(WebService::new(self.config.port, self.app_state.clone(), auth_config));
             self.service_manager
                 .register_service(ServiceName::Web.as_str(), web_service);
         }
@@ -264,12 +253,8 @@ impl App {
         // Any service set, not just web: a scraper-only or bot-only process still has pool and
         // process metrics worth scraping. Bot is registered after this runs, so check the request.
         if self.service_manager.has_services() || services.contains(&ServiceName::Bot) {
-            let metrics_service = Box::new(MetricsService::new(
-                self.config.metrics_port,
-                self.db_pool.clone(),
-            ));
-            self.service_manager
-                .register_service("metrics", metrics_service);
+            let metrics_service = Box::new(MetricsService::new(self.config.metrics_port, self.db_pool.clone()));
+            self.service_manager.register_service("metrics", metrics_service);
         }
 
         // Check if any services are enabled

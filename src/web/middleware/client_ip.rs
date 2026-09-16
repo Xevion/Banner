@@ -23,9 +23,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // 1. CF-Connecting-IP -- set by Cloudflare, most trustworthy.
-        if let Some(ip) =
-            header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok())
-        {
+        if let Some(ip) = header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok()) {
             return Ok(ClientIp(ip));
         }
 
@@ -45,10 +43,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
             return Ok(ClientIp(addr.ip()));
         }
 
-        Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unable to determine client IP",
-        ))
+        Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to determine client IP"))
     }
 }
 

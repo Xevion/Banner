@@ -135,10 +135,7 @@ pub(super) async fn status(State(state): State<AppState>) -> Json<StatusResponse
         );
     }
 
-    let overall_status = if services
-        .values()
-        .any(|s| matches!(s.status, ServiceStatus::Error))
-    {
+    let overall_status = if services.values().any(|s| matches!(s.status, ServiceStatus::Error)) {
         ServiceStatus::Error
     } else if !services.is_empty()
         && services

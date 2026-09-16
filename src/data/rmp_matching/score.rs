@@ -149,9 +149,7 @@ fn is_known_abbreviation(subject: &str) -> bool {
 fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
     for &(abbr, expansions) in ABBREVIATIONS {
         if subject == abbr {
-            return expansions
-                .iter()
-                .any(|expansion| department.contains(expansion));
+            return expansions.iter().any(|expansion| department.contains(expansion));
         }
     }
     false
@@ -209,8 +207,7 @@ pub fn compute_match_score(
             let Some(load) = taught.get(&subject.to_lowercase()) else {
                 return false;
             };
-            !is_generic_subject(subject)
-                || (*load as f32 / taught_total as f32) >= GENERIC_SUBJECT_MIN_SHARE
+            !is_generic_subject(subject) || (*load as f32 / taught_total as f32) >= GENERIC_SUBJECT_MIN_SHARE
         };
 
         let matching: u32 = rmp_review_subjects
@@ -271,9 +268,7 @@ pub fn compute_match_score(
 ///
 /// Course codes are formatted as `"SPN1014"`, `"WRC1013"`, etc.
 /// Extracts the alphabetic prefix (e.g., `"SPN"`, `"WRC"`).
-pub(super) fn extract_review_subjects(
-    course_codes: Option<&[RmpCourseCode]>,
-) -> Vec<(String, u32)> {
+pub(super) fn extract_review_subjects(course_codes: Option<&[RmpCourseCode]>) -> Vec<(String, u32)> {
     let Some(codes) = course_codes else {
         return Vec::new();
     };
@@ -281,11 +276,7 @@ pub(super) fn extract_review_subjects(
     let mut subjects: HashMap<String, u32> = HashMap::new();
     for entry in codes {
         // Extract alphabetic prefix: "WRC1013" -> "WRC"
-        let prefix: String = entry
-            .course_name
-            .chars()
-            .take_while(|c| c.is_alphabetic())
-            .collect();
+        let prefix: String = entry.course_name.chars().take_while(|c| c.is_alphabetic()).collect();
         if !prefix.is_empty() {
             *subjects.entry(prefix.to_uppercase()).or_default() += entry.course_count.get();
         }
@@ -381,48 +372,20 @@ mod tests {
 
     #[test]
     fn test_department_match() {
-        let ms = compute_match_score(
-            &[("CS".to_string(), 20)],
-            Some("Computer Science"),
-            1,
-            10,
-            false,
-            &[],
-        );
+        let ms = compute_match_score(&[("CS".to_string(), 20)], Some("Computer Science"), 1, 10, false, &[]);
         assert_eq!(ms.breakdown.department, 1.0);
     }
 
     #[test]
     fn test_department_mismatch() {
-        let ms = compute_match_score(
-            &[("CS".to_string(), 20)],
-            Some("History"),
-            1,
-            10,
-            false,
-            &[],
-        );
+        let ms = compute_match_score(&[("CS".to_string(), 20)], Some("History"), 1, 10, false, &[]);
         assert_eq!(ms.breakdown.department, 0.2);
     }
 
     #[test]
     fn test_department_match_outscores_mismatch() {
-        let matched = compute_match_score(
-            &[("CS".to_string(), 20)],
-            Some("Computer Science"),
-            1,
-            10,
-            false,
-            &[],
-        );
-        let mismatched = compute_match_score(
-            &[("CS".to_string(), 20)],
-            Some("History"),
-            1,
-            10,
-            false,
-            &[],
-        );
+        let matched = compute_match_score(&[("CS".to_string(), 20)], Some("Computer Science"), 1, 10, false, &[]);
+        let mismatched = compute_match_score(&[("CS".to_string(), 20)], Some("History"), 1, 10, false, &[]);
         assert!(
             matched.score > mismatched.score,
             "Department match ({}) should outscore mismatch ({})",
@@ -442,10 +405,7 @@ mod tests {
             zero.breakdown.volume
         );
         assert_eq!(zero.breakdown.volume, 0.0);
-        assert!(
-            many.breakdown.volume > 0.9,
-            "100 ratings should be near max"
-        );
+        assert!(many.breakdown.volume > 0.9, "100 ratings should be near max");
     }
 
     #[test]
@@ -556,19 +516,9 @@ mod tests {
     #[test]
     fn test_nickname_single_signal_stays_pending() {
         // Department agrees but no review data corroborates it.
-        let ms = compute_match_score(
-            &[("EDU".to_string(), 20)],
-            Some("Education"),
-            1,
-            13,
-            true,
-            &[],
-        );
+        let ms = compute_match_score(&[("EDU".to_string(), 20)], Some("Education"), 1, 13, true, &[]);
         assert_eq!(ms.breakdown.name, NAME_NICKNAME);
-        assert!(
-            !ms.auto_eligible(1),
-            "Single-signal nickname should not auto"
-        );
+        assert!(!ms.auto_eligible(1), "Single-signal nickname should not auto");
     }
 
     #[test]
@@ -620,14 +570,7 @@ mod tests {
         );
         assert!(confirmed.auto_eligible(3));
 
-        let unconfirmed = compute_match_score(
-            &[("CS".to_string(), 20)],
-            Some("Political Science"),
-            3,
-            3,
-            false,
-            &[],
-        );
+        let unconfirmed = compute_match_score(&[("CS".to_string(), 20)], Some("Political Science"), 3, 3, false, &[]);
         assert!(
             !unconfirmed.auto_eligible(3),
             "A namesake in another department must not auto-link"
@@ -673,8 +616,7 @@ mod tests {
             {"courseName": "HIS1053", "courseCount": 10}
         ]))
         .unwrap();
-        let subjects: HashMap<String, u32> =
-            extract_review_subjects(Some(&codes)).into_iter().collect();
+        let subjects: HashMap<String, u32> = extract_review_subjects(Some(&codes)).into_iter().collect();
         assert_eq!(subjects.get("WRC"), Some(&280));
         assert_eq!(subjects.get("HIS"), Some(&10));
         assert_eq!(subjects.len(), 2);

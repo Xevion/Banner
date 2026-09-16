@@ -4,9 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::telemetry::WS_SUBSCRIPTIONS;
 use crate::web::stream::filters::{
-    AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter,
-    parse_audit_log_filter, parse_scrape_jobs_filter, parse_scraper_stats_filter,
-    parse_scraper_timeseries_filter,
+    AuditLogFilter, ScrapeJobsFilter, ScraperStatsFilter, ScraperTimeseriesFilter, parse_audit_log_filter,
+    parse_scrape_jobs_filter, parse_scraper_stats_filter, parse_scraper_timeseries_filter,
 };
 use crate::web::stream::protocol::{StreamError, StreamFilter, StreamKind};
 
@@ -105,13 +104,7 @@ impl SubscriptionRegistry {
     pub fn ids_for_kind(&self, kind: StreamKind) -> Vec<String> {
         self.subscriptions
             .iter()
-            .filter_map(|(id, sub)| {
-                if sub.kind() == kind {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(id, sub)| if sub.kind() == kind { Some(id.clone()) } else { None })
             .collect()
     }
 }
@@ -125,10 +118,7 @@ impl Drop for SubscriptionRegistry {
     }
 }
 
-pub fn build_subscription(
-    kind: StreamKind,
-    filter: Option<StreamFilter>,
-) -> Result<Subscription, StreamError> {
+pub fn build_subscription(kind: StreamKind, filter: Option<StreamFilter>) -> Result<Subscription, StreamError> {
     match kind {
         StreamKind::ScrapeJobs => {
             let filter = parse_scrape_jobs_filter(filter)?;
@@ -160,20 +150,14 @@ mod tests {
     use super::*;
 
     fn gauge_value(snapshot: metrics_util::debugging::Snapshot, stream: &str) -> Option<f64> {
-        snapshot
-            .into_vec()
-            .into_iter()
-            .find_map(|(ck, _, _, value)| {
-                let matches = ck.key().name() == WS_SUBSCRIPTIONS
-                    && ck
-                        .key()
-                        .labels()
-                        .any(|l| l.key() == "stream" && l.value() == stream);
-                match (matches, value) {
-                    (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
-                    _ => None,
-                }
-            })
+        snapshot.into_vec().into_iter().find_map(|(ck, _, _, value)| {
+            let matches = ck.key().name() == WS_SUBSCRIPTIONS
+                && ck.key().labels().any(|l| l.key() == "stream" && l.value() == stream);
+            match (matches, value) {
+                (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
+                _ => None,
+            }
+        })
     }
 
     #[test]

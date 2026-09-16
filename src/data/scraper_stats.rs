@@ -72,8 +72,7 @@ pub async fn compute_stats(
     period: &str,
     term: Option<&str>,
 ) -> anyhow::Result<admin_scraper::ScraperStats> {
-    let interval_str =
-        validate_period(period).ok_or_else(|| anyhow::anyhow!("Invalid period: {period}"))?;
+    let interval_str = validate_period(period).ok_or_else(|| anyhow::anyhow!("Invalid period: {period}"))?;
     admin_scraper::compute_stats(pool, interval_str, term).await
 }
 
@@ -86,13 +85,11 @@ pub async fn compute_timeseries(
     bucket: Option<&str>,
     term: Option<&str>,
 ) -> anyhow::Result<(Vec<admin_scraper::TimeseriesPoint>, String, String)> {
-    let period_interval =
-        validate_period(period).ok_or_else(|| anyhow::anyhow!("Invalid period: {period}"))?;
+    let period_interval = validate_period(period).ok_or_else(|| anyhow::anyhow!("Invalid period: {period}"))?;
     let bucket_code = bucket.unwrap_or_else(|| default_bucket_for_period(period));
-    let bucket_interval = validate_bucket(bucket_code)
-        .ok_or_else(|| anyhow::anyhow!("Invalid bucket: {bucket_code}"))?;
-    let raw =
-        admin_scraper::compute_timeseries(pool, bucket_interval, period_interval, term).await?;
+    let bucket_interval =
+        validate_bucket(bucket_code).ok_or_else(|| anyhow::anyhow!("Invalid bucket: {bucket_code}"))?;
+    let raw = admin_scraper::compute_timeseries(pool, bucket_interval, period_interval, term).await?;
     Ok((raw, period.to_string(), bucket_code.to_string()))
 }
 
@@ -141,9 +138,7 @@ pub async fn compute_subjects(
                 SubjectSchedule::Paused => (None, None),
             };
 
-            let subject_description = ref_cache
-                .lookup("subject", &stats.subject)
-                .map(|s| s.to_string());
+            let subject_description = ref_cache.lookup("subject", &stats.subject).map(|s| s.to_string());
 
             let tracked_course_count = course_counts.get(&stats.subject).copied().unwrap_or(0);
 

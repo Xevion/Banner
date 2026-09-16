@@ -5,9 +5,7 @@ use crate::data::models::{ReferenceData, ScrapePriority, TargetPayload, TargetTy
 use crate::data::unsigned::Count;
 use crate::data::{kv, term_subjects, terms};
 use crate::rmp::RmpClient;
-use crate::scraper::adaptive::{
-    ARCHIVED_INTERVAL, SubjectSchedule, SubjectStats, TermCategory, evaluate_subject,
-};
+use crate::scraper::adaptive::{ARCHIVED_INTERVAL, SubjectSchedule, SubjectStats, TermCategory, evaluate_subject};
 use crate::scraper::jobs::subject::SubjectJob;
 use crate::state::ReferenceCache;
 use crate::telemetry;
@@ -83,8 +81,7 @@ fn sample_queue_depth(pool: PgPool) {
         match crate::data::scrape_jobs::queue_depth(&pool).await {
             Ok(depth) => {
                 metrics::gauge!(SCRAPE_QUEUE_DEPTH).set(depth.count as f64);
-                metrics::gauge!(SCRAPE_QUEUE_OLDEST_SECONDS)
-                    .set(depth.oldest_seconds.unwrap_or(0.0));
+                metrics::gauge!(SCRAPE_QUEUE_OLDEST_SECONDS).set(depth.oldest_seconds.unwrap_or(0.0));
             }
             Err(e) => {
                 telemetry::record_db_failure(&e);
@@ -190,10 +187,8 @@ impl Scheduler {
         let mut last_rmp_sync = persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL);
         let mut last_term_sync = persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL);
         let mut last_bluebook_sync = persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL);
-        let mut last_rmp_review_scrape =
-            persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL);
-        let mut last_cluster_courses =
-            persisted_to_instant(persisted_cluster, CLUSTER_COURSES_INTERVAL);
+        let mut last_rmp_review_scrape = persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL);
+        let mut last_cluster_courses = persisted_to_instant(persisted_cluster, CLUSTER_COURSES_INTERVAL);
         let mut bluebook_notified = false;
 
         loop {
@@ -489,10 +484,7 @@ impl Scheduler {
         let stats_rows = db.scrape_jobs().fetch_subject_stats().await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
-            warn!(
-                duration = fmt_duration(elapsed),
-                "Slow query: fetch_subject_stats"
-            );
+            warn!(duration = fmt_duration(elapsed), "Slow query: fetch_subject_stats");
         }
         let stats_map: HashMap<(String, String), SubjectStats> = stats_rows
             .into_iter()
@@ -520,9 +512,7 @@ impl Scheduler {
         }
 
         for (term, category) in active_terms {
-            if let Err(e) =
-                Self::schedule_term_jobs(db, banner_api, &term.code, category, &stats_map).await
-            {
+            if let Err(e) = Self::schedule_term_jobs(db, banner_api, &term.code, category, &stats_map).await {
                 error!(term = %term.code, error = ?e, "Failed to schedule jobs for term");
                 continue;
             }
@@ -562,10 +552,7 @@ impl Scheduler {
                     cached
                 } else {
                     let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
-                    trace!(
-                        count = fetched.len(),
-                        "Fetched subjects from API (cold cache)"
-                    );
+                    trace!(count = fetched.len(), "Fetched subjects from API (cold cache)");
                     term_subjects::cache(term_code, &fetched, db.pool()).await?;
                     fetched
                 }
@@ -586,20 +573,17 @@ impl Scheduler {
 
         for subject in &subjects {
             let key = (subject.code.clone(), term_code.to_string());
-            let stats = stats_map
-                .get(&key)
-                .cloned()
-                .unwrap_or_else(|| SubjectStats {
-                    subject: subject.code.clone(),
-                    term: term_code.to_string(),
-                    recent_runs: 0,
-                    avg_change_ratio: 0.0,
-                    consecutive_zero_changes: 0,
-                    consecutive_empty_fetches: 0,
-                    recent_failure_count: 0,
-                    recent_success_count: 0,
-                    last_completed: DateTime::<Utc>::MIN_UTC,
-                });
+            let stats = stats_map.get(&key).cloned().unwrap_or_else(|| SubjectStats {
+                subject: subject.code.clone(),
+                term: term_code.to_string(),
+                recent_runs: 0,
+                avg_change_ratio: 0.0,
+                consecutive_zero_changes: 0,
+                consecutive_empty_fetches: 0,
+                recent_failure_count: 0,
+                recent_success_count: 0,
+                last_completed: DateTime::<Utc>::MIN_UTC,
+            });
 
             match evaluate_subject(&stats, now, category) {
                 SubjectSchedule::Eligible(_) => {
@@ -633,9 +617,7 @@ impl Scheduler {
         // Create payloads with term field for eligible subjects
         let subject_payloads: Vec<TargetPayload> = eligible_subjects
             .iter()
-            .map(|code| {
-                TargetPayload::Subject(SubjectJob::new(code.clone(), term_code.to_string()))
-            })
+            .map(|code| TargetPayload::Subject(SubjectJob::new(code.clone(), term_code.to_string())))
             .collect();
 
         // Query existing jobs for eligible subjects only
@@ -646,10 +628,7 @@ impl Scheduler {
             .await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
-            warn!(
-                duration = fmt_duration(elapsed),
-                "Slow query: find_existing_payloads"
-            );
+            warn!(duration = fmt_duration(elapsed), "Slow query: find_existing_payloads");
         }
 
         // Filter out subjects that already have pending jobs
@@ -720,10 +699,7 @@ impl Scheduler {
             .await
             .context("failed to analyze courses after clustering")?;
 
-        info!(
-            duration = fmt_duration(start.elapsed()),
-            "Re-clustered courses"
-        );
+        info!(duration = fmt_duration(start.elapsed()), "Re-clustered courses");
         Ok(())
     }
 
@@ -737,10 +713,7 @@ impl Scheduler {
         let result = terms::sync_terms_from_banner(db_pool, banner_terms).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
-            warn!(
-                duration = fmt_duration(elapsed),
-                "Slow query: sync_terms_from_banner"
-            );
+            warn!(duration = fmt_duration(elapsed), "Slow query: sync_terms_from_banner");
         }
 
         info!(
@@ -778,10 +751,7 @@ impl Scheduler {
         let stats = crate::data::rmp_matching::generate_candidates(db_pool).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
-            warn!(
-                duration = fmt_duration(elapsed),
-                "Slow query: generate_candidates"
-            );
+            warn!(duration = fmt_duration(elapsed), "Slow query: generate_candidates");
         }
         info!(
             total,
@@ -805,21 +775,15 @@ impl Scheduler {
     /// stores them, and updates the scrape schedule based on review count.
     #[tracing::instrument(skip_all)]
     async fn sync_rmp_reviews(db_pool: &PgPool) -> Result<()> {
-        let eligible = crate::data::rmp::get_professors_eligible_for_review_scrape(
-            db_pool,
-            RMP_REVIEW_SCRAPE_BATCH_SIZE,
-        )
-        .await?;
+        let eligible =
+            crate::data::rmp::get_professors_eligible_for_review_scrape(db_pool, RMP_REVIEW_SCRAPE_BATCH_SIZE).await?;
 
         if eligible.is_empty() {
             trace!("No professors eligible for RMP review scraping");
             return Ok(());
         }
 
-        info!(
-            count = eligible.len(),
-            "Scraping RMP reviews for professors"
-        );
+        info!(count = eligible.len(), "Scraping RMP reviews for professors");
 
         let client = RmpClient::new();
         let mut success_count = 0;
@@ -827,21 +791,15 @@ impl Scheduler {
         for (legacy_id, graphql_id) in &eligible {
             match client.fetch_professor_with_reviews(graphql_id).await {
                 Ok((detail, reviews)) => {
-                    let num_reviews =
-                        Count::try_from(reviews.len()).unwrap_or(Count::new(u32::MAX));
+                    let num_reviews = Count::try_from(reviews.len()).unwrap_or(Count::new(u32::MAX));
 
-                    if let Err(e) =
-                        crate::data::rmp::upsert_professor_detail(db_pool, &detail).await
-                    {
+                    if let Err(e) = crate::data::rmp::upsert_professor_detail(db_pool, &detail).await {
                         telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to upsert professor detail");
                         continue;
                     }
 
-                    if let Err(e) =
-                        crate::data::rmp::replace_professor_reviews(db_pool, *legacy_id, &reviews)
-                            .await
-                    {
+                    if let Err(e) = crate::data::rmp::replace_professor_reviews(db_pool, *legacy_id, &reviews).await {
                         telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to replace professor reviews");
                         continue;
@@ -864,9 +822,7 @@ impl Scheduler {
                 }
                 Err(e) => {
                     warn!(legacy_id, error = ?e, "Failed to fetch professor reviews from RMP");
-                    if let Err(e) =
-                        crate::data::rmp::defer_professor_review_scrape(db_pool, *legacy_id).await
-                    {
+                    if let Err(e) = crate::data::rmp::defer_professor_review_scrape(db_pool, *legacy_id).await {
                         telemetry::record_db_failure(&e);
                         warn!(legacy_id, error = ?e, "Failed to defer professor review scrape");
                     }
@@ -1014,10 +970,7 @@ impl Scheduler {
         let all = crate::data::reference::get_all(db_pool).await?;
         let elapsed = start.elapsed();
         if elapsed > SLOW_QUERY_THRESHOLD {
-            warn!(
-                duration = fmt_duration(elapsed),
-                "Slow query: reference::get_all"
-            );
+            warn!(duration = fmt_duration(elapsed), "Slow query: reference::get_all");
         }
         let count = all.len();
         *reference_cache.write().await = ReferenceCache::from_entries(all);

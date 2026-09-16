@@ -15,8 +15,7 @@ use tracing_subscriber::registry::LookupSpan;
 use yansi::Paint;
 
 /// Cached format description for timestamps
-const TIMESTAMP_FORMAT: &[FormatItem<'static>] =
-    format_description!("[hour]:[minute]:[second].[subsecond digits:5]");
+const TIMESTAMP_FORMAT: &[FormatItem<'static>] = format_description!("[hour]:[minute]:[second].[subsecond digits:5]");
 
 /// Maximum length for string values before truncation
 const MAX_VALUE_LENGTH: usize = 60;
@@ -63,10 +62,7 @@ fn format_string_value(s: &str, truncate: bool) -> String {
         (false, false) => s.to_string(),
         (false, true) => format!("{}...", truncate_str(s, MAX_VALUE_LENGTH)),
         (true, false) => format!("\"{}\"", escape_string(s)),
-        (true, true) => format!(
-            "\"{}...\"",
-            escape_string(truncate_str(s, MAX_VALUE_LENGTH))
-        ),
+        (true, true) => format!("\"{}...\"", escape_string(truncate_str(s, MAX_VALUE_LENGTH))),
     }
 }
 
@@ -182,9 +178,7 @@ impl WriteColored for FieldValue {
     fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
         let ansi = writer.has_ansi_escapes();
         match self {
-            FieldValue::Debug(s) | FieldValue::Display(s) => {
-                write_str_value_colored(writer, s, truncate)
-            }
+            FieldValue::Debug(s) | FieldValue::Display(s) => write_str_value_colored(writer, s, truncate),
             FieldValue::Signed(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
@@ -359,8 +353,7 @@ impl Visit for FieldCollector {
 
     fn record_i64(&mut self, field: &Field, value: i64) {
         if field.name() != "message" {
-            self.fields
-                .insert(field.name().to_string(), FieldValue::Signed(value));
+            self.fields.insert(field.name().to_string(), FieldValue::Signed(value));
         }
     }
 
@@ -373,8 +366,7 @@ impl Visit for FieldCollector {
 
     fn record_bool(&mut self, field: &Field, value: bool) {
         if field.name() != "message" {
-            self.fields
-                .insert(field.name().to_string(), FieldValue::Bool(value));
+            self.fields.insert(field.name().to_string(), FieldValue::Bool(value));
         }
     }
 }
@@ -528,10 +520,7 @@ fn write_span_fields_colored(writer: &mut Writer<'_>, fields_str: &str) -> fmt::
                 }
                 end += 1;
             }
-            let byte_end = chars[..=end.min(chars.len() - 1)]
-                .iter()
-                .collect::<String>()
-                .len();
+            let byte_end = chars[..=end.min(chars.len() - 1)].iter().collect::<String>().len();
             let val = &remaining[..byte_end];
             remaining = &remaining[byte_end..];
             val
@@ -561,12 +550,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
 {
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &Event<'_>,
-    ) -> fmt::Result {
+    fn format_event(&self, ctx: &FmtContext<'_, S, N>, mut writer: Writer<'_>, event: &Event<'_>) -> fmt::Result {
         let meta = event.metadata();
         let ansi = writer.has_ansi_escapes();
 
@@ -644,12 +628,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
 {
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &Event<'_>,
-    ) -> fmt::Result {
+    fn format_event(&self, ctx: &FmtContext<'_, S, N>, mut writer: Writer<'_>, event: &Event<'_>) -> fmt::Result {
         let meta = event.metadata();
 
         #[derive(Serialize)]
@@ -690,28 +669,23 @@ where
                     if key == "message" {
                         *self.message = Some(value.to_string());
                     } else {
-                        self.fields
-                            .insert(key.to_string(), Value::String(value.to_string()));
+                        self.fields.insert(key.to_string(), Value::String(value.to_string()));
                     }
                 }
 
                 fn record_i64(&mut self, field: &Field, value: i64) {
                     let key = field.name();
                     if key != "message" {
-                        self.fields.insert(
-                            key.to_string(),
-                            Value::Number(serde_json::Number::from(value)),
-                        );
+                        self.fields
+                            .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
                     }
                 }
 
                 fn record_u64(&mut self, field: &Field, value: u64) {
                     let key = field.name();
                     if key != "message" {
-                        self.fields.insert(
-                            key.to_string(),
-                            Value::Number(serde_json::Number::from(value)),
-                        );
+                        self.fields
+                            .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
                     }
                 }
 
@@ -739,9 +713,9 @@ where
                     let ext = span.extensions();
                     if let Some(formatted_fields) = ext.get::<FormattedFields<N>>() {
                         // Try to parse as JSON first
-                        if let Ok(json_fields) = serde_json::from_str::<Map<String, Value>>(
-                            formatted_fields.fields.as_str(),
-                        ) {
+                        if let Ok(json_fields) =
+                            serde_json::from_str::<Map<String, Value>>(formatted_fields.fields.as_str())
+                        {
                             span_fields.extend(json_fields);
                         } else {
                             // If not valid JSON, treat the entire field string as a single field
@@ -838,11 +812,7 @@ impl CompactFields {
         Self { rules: vec![] }
     }
 
-    fn transform(
-        mut self,
-        field: &'static str,
-        f: impl Fn(&str) -> Cow<'_, str> + Send + Sync + 'static,
-    ) -> Self {
+    fn transform(mut self, field: &'static str, f: impl Fn(&str) -> Cow<'_, str> + Send + Sync + 'static) -> Self {
         self.rules.push((field, FieldRule::Transform(Box::new(f))));
         self
     }

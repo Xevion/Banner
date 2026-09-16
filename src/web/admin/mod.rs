@@ -148,11 +148,7 @@ pub async fn set_user_admin(
 
     state.session_cache.evict_user(discord_id);
 
-    info!(
-        discord_id,
-        is_admin = body.is_admin,
-        "Updated user admin status"
-    );
+    info!(discord_id, is_admin = body.is_admin, "Updated user admin status");
 
     Ok(Json(user))
 }
@@ -182,9 +178,7 @@ fn to_http_date(dt: &DateTime<Utc>) -> String {
 /// Parse an `If-Modified-Since` header value into a `DateTime<Utc>`.
 fn parse_if_modified_since(headers: &HeaderMap) -> Option<DateTime<Utc>> {
     let val = headers.get(header::IF_MODIFIED_SINCE)?.to_str().ok()?;
-    DateTime::parse_from_rfc2822(val)
-        .ok()
-        .map(|dt| dt.with_timezone(&Utc))
+    DateTime::parse_from_rfc2822(val).ok().map(|dt| dt.with_timezone(&Utc))
 }
 
 /// `GET /api/admin/audit-log` -- List recent audit entries.

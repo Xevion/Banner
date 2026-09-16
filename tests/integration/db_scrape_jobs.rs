@@ -343,26 +343,15 @@ async fn find_existing_payloads_empty_candidates() {
         .await
         .unwrap();
 
-    assert!(
-        existing.is_empty(),
-        "empty candidates should return empty result"
-    );
+    assert!(existing.is_empty(), "empty candidates should return empty result");
 }
 
 #[tokio::test]
 async fn batch_insert_inserts_multiple() {
     let pool = test_db!().await;
     let jobs = vec![
-        (
-            subject_payload("CS"),
-            TargetType::Subject,
-            ScrapePriority::High,
-        ),
-        (
-            subject_payload("MAT"),
-            TargetType::Subject,
-            ScrapePriority::Medium,
-        ),
+        (subject_payload("CS"), TargetType::Subject, ScrapePriority::High),
+        (subject_payload("MAT"), TargetType::Subject, ScrapePriority::Medium),
         (
             TargetPayload::SingleCrn(banner::data::models::SingleCrnTarget {
                 crn: "12345".to_string(),
@@ -418,10 +407,7 @@ async fn test_queue_depth_counts_ready_job_and_ages_it() {
     let depth = banner::data::scrape_jobs::queue_depth(&pool).await.unwrap();
     assert_eq!(depth.count, 1);
     let oldest_seconds = depth.oldest_seconds.expect("expected an oldest queued job");
-    assert!(
-        oldest_seconds >= 89.0,
-        "expected age near 90s, got {oldest_seconds}"
-    );
+    assert!(oldest_seconds >= 89.0, "expected age near 90s, got {oldest_seconds}");
 }
 
 #[tokio::test]

@@ -36,10 +36,7 @@ async fn db_context_emits_event_on_job_lock() {
     // Verify event was emitted
     let event = events.read(cursor);
     assert!(
-        matches!(
-            event,
-            Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Locked { .. }))
-        ),
+        matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Locked { .. }))),
         "Expected Locked event, got {:?}",
         event
     );

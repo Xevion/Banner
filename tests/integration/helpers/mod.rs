@@ -231,14 +231,12 @@ pub async fn insert_scrape_job(
 ///
 /// `email` must be unique when present; rows without one are unique by name.
 pub async fn insert_instructor(pool: &PgPool, display_name: &str, email: Option<&str>) -> i32 {
-    let (id,): (i32,) = sqlx::query_as(
-        "INSERT INTO instructors (display_name, email) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(display_name)
-    .bind(email)
-    .fetch_one(pool)
-    .await
-    .expect("insert_instructor failed");
+    let (id,): (i32,) = sqlx::query_as("INSERT INTO instructors (display_name, email) VALUES ($1, $2) RETURNING id")
+        .bind(display_name)
+        .bind(email)
+        .fetch_one(pool)
+        .await
+        .expect("insert_instructor failed");
 
     id
 }

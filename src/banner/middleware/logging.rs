@@ -52,23 +52,12 @@ impl Middleware for LoggingMiddleware {
                     }
                     Ok(response)
                 } else {
-                    warn!(
-                        method,
-                        url,
-                        status,
-                        duration = fmt_duration(duration),
-                        "Request failed"
-                    );
+                    warn!(method, url, status, duration = fmt_duration(duration), "Request failed");
                     Ok(response)
                 }
             }
             Err(error) => {
-                warn!(
-                    method,
-                    url,
-                    duration = fmt_duration(duration),
-                    "Request failed"
-                );
+                warn!(method, url, duration = fmt_duration(duration), "Request failed");
                 Err(error)
             }
         }

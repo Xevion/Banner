@@ -62,10 +62,7 @@ pub struct Course {
 impl Course {
     /// Returns the course title in the format "SUBJ #### - Course Title"
     pub fn display_title(&self) -> String {
-        format!(
-            "{} {} - {}",
-            self.subject, self.course_number, self.course_title
-        )
+        format!("{} {} - {}", self.subject, self.course_number, self.course_title)
     }
 
     /// Returns the name of the primary instructor, or "Unknown" if not available

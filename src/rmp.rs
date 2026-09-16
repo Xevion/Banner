@@ -191,8 +191,7 @@ impl RmpClient {
                 all.push(RmpProfessor {
                     legacy_id: node["legacyId"]
                         .as_i64()
-                        .ok_or_else(|| anyhow::anyhow!("Missing legacyId"))?
-                        as i32,
+                        .ok_or_else(|| anyhow::anyhow!("Missing legacyId"))? as i32,
                     graphql_id: node["id"]
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("Missing id"))?
@@ -224,11 +223,7 @@ impl RmpClient {
     }
 
     /// Send a GraphQL request with variables and return the parsed JSON.
-    async fn graphql_request(
-        &self,
-        query: &str,
-        variables: serde_json::Value,
-    ) -> Result<serde_json::Value> {
+    async fn graphql_request(&self, query: &str, variables: serde_json::Value) -> Result<serde_json::Value> {
         let body = serde_json::json!({
             "query": query,
             "variables": variables,
@@ -286,8 +281,7 @@ impl RmpClient {
         Ok(RmpProfessorDetail {
             legacy_id: node["legacyId"]
                 .as_i64()
-                .ok_or_else(|| anyhow::anyhow!("Missing legacyId in professor detail"))?
-                as i32,
+                .ok_or_else(|| anyhow::anyhow!("Missing legacyId in professor detail"))? as i32,
             ratings_r1: dist["r1"].as_i64().and_then(|v| Count::try_from(v).ok()),
             ratings_r2: dist["r2"].as_i64().and_then(|v| Count::try_from(v).ok()),
             ratings_r3: dist["r3"].as_i64().and_then(|v| Count::try_from(v).ok()),
@@ -341,12 +335,7 @@ impl RmpClient {
                 let node = &edge["node"];
                 let tags: Vec<String> = node["ratingTags"]
                     .as_str()
-                    .map(|s| {
-                        s.split("--")
-                            .filter(|t| !t.is_empty())
-                            .map(|t| t.to_string())
-                            .collect()
-                    })
+                    .map(|s| s.split("--").filter(|t| !t.is_empty()).map(|t| t.to_string()).collect())
                     .unwrap_or_default();
 
                 let posted_at = node["date"].as_str().and_then(parse_review_date);
@@ -364,13 +353,9 @@ impl RmpClient {
                     would_take_again: wta,
                     is_for_credit: node["isForCredit"].as_bool(),
                     is_for_online_class: node["isForOnlineClass"].as_bool(),
-                    attendance_mandatory: node["attendanceMandatory"]
-                        .as_str()
-                        .map(|s| s.to_string()),
+                    attendance_mandatory: node["attendanceMandatory"].as_str().map(|s| s.to_string()),
                     flag_status: node["flagStatus"].as_str().unwrap_or("visible").to_string(),
-                    textbook_use: node["textbookUse"]
-                        .as_i64()
-                        .and_then(|v| Count::try_from(v).ok()),
+                    textbook_use: node["textbookUse"].as_i64().and_then(|v| Count::try_from(v).ok()),
                     thumbs_up_total: clamped_count(&node["thumbsUpTotal"]),
                     thumbs_down_total: clamped_count(&node["thumbsDownTotal"]),
                     posted_at,
@@ -385,20 +370,14 @@ impl RmpClient {
             }
 
             cursor = page_info["endCursor"].as_str().map(|s| s.to_string());
-            trace!(
-                fetched = all.len(),
-                "RMP reviews pagination: fetching next page"
-            );
+            trace!(fetched = all.len(), "RMP reviews pagination: fetching next page");
         }
 
         Ok(all)
     }
 
     /// Fetch both extended profile and all reviews for a professor.
-    pub async fn fetch_professor_with_reviews(
-        &self,
-        graphql_id: &str,
-    ) -> Result<(RmpProfessorDetail, Vec<RmpReview>)> {
+    pub async fn fetch_professor_with_reviews(&self, graphql_id: &str) -> Result<(RmpProfessorDetail, Vec<RmpReview>)> {
         let detail = self.fetch_professor_detail(graphql_id).await?;
         let reviews = self.fetch_professor_reviews(graphql_id).await?;
         Ok((detail, reviews))

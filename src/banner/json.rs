@@ -24,10 +24,7 @@ pub fn parse_json_with_context<T: serde::de::DeserializeOwned>(body: &str) -> Re
             if !path.is_empty() && path != "." {
                 final_err.push_str(&format!("at path '{}': ", path));
             }
-            final_err.push_str(&format!(
-                "{} (line {} col {})\n{}",
-                type_info, line, column, snippet
-            ));
+            final_err.push_str(&format!("{} (line {} col {})\n{}", type_info, line, column, snippet));
 
             Err(anyhow::anyhow!(final_err))
         }
@@ -51,11 +48,7 @@ fn parse_type_mismatch(error_msg: &str) -> String {
             let expected_part = &after_prefix[comma_pos + ", expected ".len()..];
 
             // Clean up expected part (remove " at line X column Y" if present)
-            let expected_type = expected_part
-                .split(" at line ")
-                .next()
-                .unwrap_or(expected_part)
-                .trim();
+            let expected_type = expected_part.split(" at line ").next().unwrap_or(expected_part).trim();
 
             return format!("expected {}, got {}", expected_type, actual_type);
         }

@@ -23,9 +23,7 @@ fn xml_response(body: Arc<String>) -> Response {
     );
     response.headers_mut().insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static(
-            "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
-        ),
+        HeaderValue::from_static("public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600"),
     );
     response
 }
@@ -94,10 +92,7 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
         "  <sitemap><loc>{origin}/sitemap-subjects.xml</loc></sitemap>\n"
     ));
     for code in &terms {
-        let slug = code
-            .parse::<Term>()
-            .map(|t| t.slug())
-            .unwrap_or(code.clone());
+        let slug = code.parse::<Term>().map(|t| t.slug()).unwrap_or(code.clone());
         xml.push_str(&format!(
             "  <sitemap><loc>{origin}/sitemap-courses-{slug}.xml</loc></sitemap>\n"
         ));
@@ -146,8 +141,7 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let entries = match data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await
-    {
+    let entries = match data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await {
         Ok(e) => e,
         Err(_) => {
             state.sitemap_cache.release(key);
@@ -162,15 +156,9 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
 
     for entry in &entries {
         xml.push_str("  <url>\n");
-        xml.push_str(&format!(
-            "    <loc>{origin}/instructors/{}</loc>\n",
-            entry.slug
-        ));
+        xml.push_str(&format!("    <loc>{origin}/instructors/{}</loc>\n", entry.slug));
         if let Some(dt) = entry.last_modified {
-            xml.push_str(&format!(
-                "    <lastmod>{}</lastmod>\n",
-                dt.format("%Y-%m-%d")
-            ));
+            xml.push_str(&format!("    <lastmod>{}</lastmod>\n", dt.format("%Y-%m-%d")));
         }
         xml.push_str("  </url>\n");
     }
@@ -196,10 +184,7 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
     let Some(term_code) = Term::resolve_to_code(term_input) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let term_slug = term_code
-        .parse::<Term>()
-        .map(|t| t.slug())
-        .unwrap_or(term_code.clone());
+    let term_slug = term_code.parse::<Term>().map(|t| t.slug()).unwrap_or(term_code.clone());
 
     let key_owned = format!("courses-{term_code}");
     let key = key_owned.as_str();
@@ -232,9 +217,7 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
 
     for crn in &crns {
         xml.push_str("  <url>\n");
-        xml.push_str(&format!(
-            "    <loc>{origin}/courses/{term_slug}/{crn}</loc>\n"
-        ));
+        xml.push_str(&format!("    <loc>{origin}/courses/{term_slug}/{crn}</loc>\n"));
         if let Some(ref lm) = lastmod {
             xml.push_str(&format!("    <lastmod>{lm}</lastmod>\n"));
         }
@@ -271,9 +254,7 @@ pub async fn sitemap_subjects(State(state): State<AppState>) -> Response {
     );
 
     for code in &subjects {
-        xml.push_str(&format!(
-            "  <url><loc>{origin}/subjects/{code}</loc></url>\n"
-        ));
+        xml.push_str(&format!("  <url><loc>{origin}/subjects/{code}</loc></url>\n"));
     }
 
     xml.push_str("</urlset>\n");

@@ -37,9 +37,7 @@ pub enum TermPoint {
 }
 
 /// Represents a season within a term
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, AsRefStr, VariantArray,
-)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, AsRefStr, VariantArray)]
 #[ts(export)]
 pub enum Season {
     Fall,
@@ -125,24 +123,12 @@ impl Term {
     /// Returns the start and end day of each term for the given year.
     /// The ranges are inclusive of the start day and exclusive of the end day.
     fn get_season_ranges(year: u32) -> SeasonRanges {
-        let spring_start = NaiveDate::from_ymd_opt(year as i32, 1, 14)
-            .unwrap()
-            .ordinal();
-        let spring_end = NaiveDate::from_ymd_opt(year as i32, 5, 1)
-            .unwrap()
-            .ordinal();
-        let summer_start = NaiveDate::from_ymd_opt(year as i32, 5, 25)
-            .unwrap()
-            .ordinal();
-        let summer_end = NaiveDate::from_ymd_opt(year as i32, 8, 15)
-            .unwrap()
-            .ordinal();
-        let fall_start = NaiveDate::from_ymd_opt(year as i32, 8, 18)
-            .unwrap()
-            .ordinal();
-        let fall_end = NaiveDate::from_ymd_opt(year as i32, 12, 10)
-            .unwrap()
-            .ordinal();
+        let spring_start = NaiveDate::from_ymd_opt(year as i32, 1, 14).unwrap().ordinal();
+        let spring_end = NaiveDate::from_ymd_opt(year as i32, 5, 1).unwrap().ordinal();
+        let summer_start = NaiveDate::from_ymd_opt(year as i32, 5, 25).unwrap().ordinal();
+        let summer_end = NaiveDate::from_ymd_opt(year as i32, 8, 15).unwrap().ordinal();
+        let fall_start = NaiveDate::from_ymd_opt(year as i32, 8, 18).unwrap().ordinal();
+        let fall_end = NaiveDate::from_ymd_opt(year as i32, 12, 10).unwrap().ordinal();
 
         SeasonRanges {
             spring: YearDayRange {
@@ -320,8 +306,7 @@ impl FromStr for Term {
         }
 
         let code_year = s[0..4].parse::<u32>().context("Failed to parse year")?;
-        let season =
-            Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {}", e))?;
+        let season = Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {}", e))?;
 
         // Banner encodes Fall as (display_year + 1)10, so we subtract 1 to get the year
         // that matches the human-readable description (e.g., "200210" -> Fall 2001).
@@ -360,10 +345,7 @@ mod tests {
     #[test]
     fn test_season_from_str_invalid() {
         for input in ["00", "40", "1", ""] {
-            assert!(
-                Season::from_str(input).is_err(),
-                "expected Err for {input:?}"
-            );
+            assert!(Season::from_str(input).is_err(), "expected Err for {input:?}");
         }
     }
 
@@ -467,18 +449,14 @@ mod tests {
     fn test_status_mid_spring() {
         let date = NaiveDate::from_ymd_opt(2025, 2, 15).unwrap();
         let status = Term::get_status_for_date(date);
-        assert!(
-            matches!(status, TermPoint::InTerm { current } if current.season == Season::Spring)
-        );
+        assert!(matches!(status, TermPoint::InTerm { current } if current.season == Season::Spring));
     }
 
     #[test]
     fn test_status_mid_summer() {
         let date = NaiveDate::from_ymd_opt(2025, 7, 1).unwrap();
         let status = Term::get_status_for_date(date);
-        assert!(
-            matches!(status, TermPoint::InTerm { current } if current.season == Season::Summer)
-        );
+        assert!(matches!(status, TermPoint::InTerm { current } if current.season == Season::Summer));
     }
 
     #[test]
@@ -492,18 +470,14 @@ mod tests {
     fn test_status_between_fall_and_spring() {
         let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         let status = Term::get_status_for_date(date);
-        assert!(
-            matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Spring)
-        );
+        assert!(matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Spring));
     }
 
     #[test]
     fn test_status_between_spring_and_summer() {
         let date = NaiveDate::from_ymd_opt(2025, 5, 15).unwrap();
         let status = Term::get_status_for_date(date);
-        assert!(
-            matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Summer)
-        );
+        assert!(matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Summer));
     }
 
     #[test]
@@ -517,9 +491,7 @@ mod tests {
     fn test_status_after_fall_end() {
         let date = NaiveDate::from_ymd_opt(2025, 12, 15).unwrap();
         let status = Term::get_status_for_date(date);
-        assert!(
-            matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Spring)
-        );
+        assert!(matches!(status, TermPoint::BetweenTerms { next } if next.season == Season::Spring));
         // Year should roll over: fall 2025 ends -> next spring is 2026
         let next_term = status.inner();
         assert_eq!(next_term.year, 2026);
@@ -585,10 +557,7 @@ mod tests {
 
     #[test]
     fn test_resolve_to_code_case_insensitive() {
-        assert_eq!(
-            Term::resolve_to_code("Spring-2026"),
-            Some("202620".to_string())
-        );
+        assert_eq!(Term::resolve_to_code("Spring-2026"), Some("202620".to_string()));
     }
 
     #[test]
@@ -633,10 +602,7 @@ mod tests {
 
     #[test]
     fn test_resolve_to_code_from_slug() {
-        assert_eq!(
-            Term::resolve_to_code("spring-2026"),
-            Some("202620".to_string())
-        );
+        assert_eq!(Term::resolve_to_code("spring-2026"), Some("202620".to_string()));
     }
 
     #[test]

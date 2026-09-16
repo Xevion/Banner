@@ -63,11 +63,7 @@ pub fn rating_sort_sql(ascending: bool, policy: UnratedPolicy) -> (String, Optio
             None,
         ),
         UnratedPolicy::Last => {
-            let sentinel = if ascending {
-                "'Infinity'"
-            } else {
-                "'-Infinity'"
-            };
+            let sentinel = if ascending { "'Infinity'" } else { "'-Infinity'" };
             (
                 format!("COALESCE(sc.sort_score, {sentinel}) {dir}, i.display_name ASC"),
                 None,
@@ -258,10 +254,7 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     let ci_lowers: Vec<f32> = scores.iter().map(|s| s.ci_lower).collect();
     let ci_uppers: Vec<f32> = scores.iter().map(|s| s.ci_upper).collect();
     let confidences: Vec<f32> = scores.iter().map(|s| s.confidence).collect();
-    let sources: Vec<String> = scores
-        .iter()
-        .map(|s| s.source.as_ref().to_owned())
-        .collect();
+    let sources: Vec<String> = scores.iter().map(|s| s.source.as_ref().to_owned()).collect();
     let rmp_ratings: Vec<Option<f32>> = scores.iter().map(|s| s.rmp_rating).collect();
     let rmp_counts: Vec<i32> = scores.iter().map(|s| s.rmp_count).collect();
     let bb_ratings: Vec<Option<f32>> = scores.iter().map(|s| s.bb_rating).collect();
@@ -451,10 +444,7 @@ mod tests {
         assert_eq!(RatingSource::BlueBook.as_ref(), "bluebook");
         assert_eq!("both".parse::<RatingSource>().unwrap(), RatingSource::Both);
         assert_eq!("rmp".parse::<RatingSource>().unwrap(), RatingSource::Rmp);
-        assert_eq!(
-            "bluebook".parse::<RatingSource>().unwrap(),
-            RatingSource::BlueBook
-        );
+        assert_eq!("bluebook".parse::<RatingSource>().unwrap(), RatingSource::BlueBook);
         assert!("invalid".parse::<RatingSource>().is_err());
     }
 }

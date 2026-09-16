@@ -10,9 +10,7 @@ use sqlx::PgPool;
 use tracing::{error, instrument};
 use ts_rs::TS;
 
-use crate::data::admin_audits::{
-    self, AdminAction, AdminAuditFilter, AdminAuditPage, AdminEntity, Target,
-};
+use crate::data::admin_audits::{self, AdminAction, AdminAuditFilter, AdminAuditPage, AdminEntity, Target};
 use crate::data::models::User;
 use crate::state::AppState;
 use crate::web::auth::extractors::AdminUser;
@@ -22,13 +20,7 @@ use crate::web::error::{ApiError, db_error};
 ///
 /// The action being described has already committed, so failing the request now
 /// would report a false failure; the error carries the whole entry instead.
-pub async fn record(
-    pool: &PgPool,
-    actor: &User,
-    action: AdminAction,
-    target: Target,
-    detail: serde_json::Value,
-) {
+pub async fn record(pool: &PgPool, actor: &User, action: AdminAction, target: Target, detail: serde_json::Value) {
     let described = format!("{target:?}");
 
     if let Err(e) = admin_audits::insert(pool, actor, action, target, detail.clone()).await {
@@ -127,9 +119,7 @@ mod tests {
 
     #[test]
     fn test_blank_filters_are_treated_as_absent() {
-        let filter = params(json!({ "entityId": "  ", "actor": "" }))
-            .into_filter()
-            .unwrap();
+        let filter = params(json!({ "entityId": "  ", "actor": "" })).into_filter().unwrap();
 
         check!(filter.entity_id == None);
         check!(filter.actor_discord_id == None);

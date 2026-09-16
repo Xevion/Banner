@@ -4,9 +4,7 @@
 //! classifying requests by URL pattern and throttling each type independently.
 
 use crate::config::RateLimitingConfig;
-use crate::telemetry::{
-    BANNER_DECODE_FAILURES, BANNER_DURATION, BANNER_RATE_LIMIT_WAIT, BANNER_REQUESTS,
-};
+use crate::telemetry::{BANNER_DECODE_FAILURES, BANNER_DURATION, BANNER_RATE_LIMIT_WAIT, BANNER_REQUESTS};
 use crate::utils::fmt_duration;
 use governor::{
     Quota, RateLimiter,
@@ -119,9 +117,7 @@ const ENDPOINT_RULES: &[EndpointRule] = &[
 ];
 
 fn lookup_endpoint(path: &str) -> Option<&'static EndpointRule> {
-    ENDPOINT_RULES
-        .iter()
-        .find(|rule| path.contains(rule.pattern))
+    ENDPOINT_RULES.iter().find(|rule| path.contains(rule.pattern))
 }
 
 /// Classifies a URL path into a request type using `ENDPOINT_RULES`.
@@ -247,8 +243,7 @@ impl Middleware for RateLimitMiddleware {
         self.rate_limiter.wait_for_permission(request_type).await;
         let wait_duration = wait_start.elapsed();
 
-        metrics::histogram!(BANNER_RATE_LIMIT_WAIT, "endpoint" => endpoint)
-            .record(wait_duration.as_secs_f64());
+        metrics::histogram!(BANNER_RATE_LIMIT_WAIT, "endpoint" => endpoint).record(wait_duration.as_secs_f64());
 
         if wait_duration >= Duration::from_secs(5) {
             debug!(
@@ -269,8 +264,7 @@ impl Middleware for RateLimitMiddleware {
             Err(_) => "transport_error",
         };
 
-        metrics::counter!(BANNER_REQUESTS, "endpoint" => endpoint, "outcome" => outcome)
-            .increment(1);
+        metrics::counter!(BANNER_REQUESTS, "endpoint" => endpoint, "outcome" => outcome).increment(1);
         metrics::histogram!(BANNER_DURATION, "endpoint" => endpoint).record(duration.as_secs_f64());
 
         result
@@ -389,14 +383,8 @@ mod tests {
             RequestType::Metadata,
             RequestType::Reset,
         ] {
-            let result =
-                tokio::time::timeout(timeout_duration, limiter.wait_for_permission(request_type))
-                    .await;
-            assert!(
-                result.is_ok(),
-                "wait_for_permission timed out for {:?}",
-                request_type
-            );
+            let result = tokio::time::timeout(timeout_duration, limiter.wait_for_permission(request_type)).await;
+            assert!(result.is_ok(), "wait_for_permission timed out for {:?}", request_type);
         }
     }
 
@@ -422,18 +410,9 @@ mod tests {
         assert_eq!(classify("/classSearch/getTerms"), RequestType::Metadata);
         assert_eq!(classify("/classSearch/get_subject"), RequestType::Metadata);
         assert_eq!(classify("/classSearch/get_campus"), RequestType::Metadata);
-        assert_eq!(
-            classify("/classSearch/get_instructionalMethod"),
-            RequestType::Metadata
-        );
-        assert_eq!(
-            classify("/classSearch/get_partOfTerm"),
-            RequestType::Metadata
-        );
-        assert_eq!(
-            classify("/classSearch/get_attribute"),
-            RequestType::Metadata
-        );
+        assert_eq!(classify("/classSearch/get_instructionalMethod"), RequestType::Metadata);
+        assert_eq!(classify("/classSearch/get_partOfTerm"), RequestType::Metadata);
+        assert_eq!(classify("/classSearch/get_attribute"), RequestType::Metadata);
     }
 
     #[test]
@@ -451,14 +430,8 @@ mod tests {
 
     #[test]
     fn test_classify_search_endpoints() {
-        assert_eq!(
-            classify("/searchResults/searchResults"),
-            RequestType::Search
-        );
-        assert_eq!(
-            classify("/searchResults/getFacultyMeetingTimes"),
-            RequestType::Search
-        );
+        assert_eq!(classify("/searchResults/searchResults"), RequestType::Search);
+        assert_eq!(classify("/searchResults/getFacultyMeetingTimes"), RequestType::Search);
     }
 
     #[test]
@@ -495,11 +468,7 @@ mod tests {
     #[test]
     fn test_endpoint_label_all_rules_are_bounded_lowercase_snake_case() {
         for rule in ENDPOINT_RULES {
-            check!(
-                rule.label
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c == '_')
-            );
+            check!(rule.label.chars().all(|c| c.is_ascii_lowercase() || c == '_'));
         }
     }
 

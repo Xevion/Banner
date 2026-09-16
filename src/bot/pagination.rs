@@ -6,8 +6,8 @@
 
 use crate::bot::{Context, Error};
 use serenity::all::{
-    ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed,
-    CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage,
+    ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed, CreateEmbedFooter,
+    CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 use std::time::Duration;
 
@@ -116,11 +116,7 @@ pub struct PageInfo {
 impl PageInfo {
     /// Footer line shown under every page.
     pub fn footer_text(self) -> String {
-        let noun = if self.total_results == 1 {
-            "result"
-        } else {
-            "results"
-        };
+        let noun = if self.total_results == 1 { "result" } else { "results" };
         format!(
             "Page {} of {} ({} total {noun})",
             self.index + 1,
@@ -194,8 +190,7 @@ where
             page_count,
             total_results,
         };
-        render(page_slice(items, page, per_page), info)
-            .footer(CreateEmbedFooter::new(info.footer_text()))
+        render(page_slice(items, page, per_page), info).footer(CreateEmbedFooter::new(info.footer_text()))
     };
 
     let mut page = 0;
@@ -240,12 +235,7 @@ where
     }
 
     handle
-        .edit(
-            ctx,
-            poise::CreateReply::default()
-                .embed(build(page))
-                .components(vec![]),
-        )
+        .edit(ctx, poise::CreateReply::default().embed(build(page)).components(vec![]))
         .await?;
 
     Ok(())
@@ -346,12 +336,7 @@ mod tests {
 
     #[test]
     fn custom_id_round_trips() {
-        for action in [
-            PageAction::First,
-            PageAction::Prev,
-            PageAction::Next,
-            PageAction::Last,
-        ] {
+        for action in [PageAction::First, PageAction::Prev, PageAction::Next, PageAction::Last] {
             let encoded = action.encode(1234);
             check!(PageAction::decode(&encoded, 1234) == Some(action));
         }

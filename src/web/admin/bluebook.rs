@@ -18,9 +18,7 @@ use crate::web::admin::action_log;
 use crate::web::auth::extractors::AdminUser;
 use crate::web::error::{ApiError, db_error};
 
-pub use crate::data::admin_bluebook::{
-    BluebookLinkDetail, BluebookMatchResponse, ListBluebookLinksResponse,
-};
+pub use crate::data::admin_bluebook::{BluebookLinkDetail, BluebookMatchResponse, ListBluebookLinksResponse};
 
 /// Check if an `anyhow::Error` chain contains a [`BluebookError`] variant that
 /// indicates a "not found" condition, and return the appropriate 404 response.

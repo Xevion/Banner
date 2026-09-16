@@ -32,10 +32,7 @@ pub struct Config {
     ///
     /// Accepts both numeric values (seconds) and duration strings
     /// Defaults to 8 seconds if not specified
-    #[serde(
-        default = "default_shutdown_timeout",
-        deserialize_with = "deserialize_duration"
-    )]
+    #[serde(default = "default_shutdown_timeout", deserialize_with = "deserialize_duration")]
     pub shutdown_timeout: Duration,
     /// Discord bot token for authentication
     pub bot_token: String,
@@ -224,10 +221,11 @@ where
         where
             E: serde::de::Error,
         {
-            DURATION_PARSER.parse(value)
+            DURATION_PARSER
+                .parse(value)
                 .map_err(|e| {
                     serde::de::Error::custom(format!(
-                        "Invalid duration format '{}': {}. Examples: '5' (5 seconds), '3500ms', '30s', '2m', '1.5h'", 
+                        "Invalid duration format '{}': {}. Examples: '5' (5 seconds), '3500ms', '30s', '2m', '1.5h'",
                         value, e
                     ))
                 })?
@@ -367,10 +365,7 @@ mod tests {
     #[test]
     fn test_duration_invalid_string_rejected() {
         let err = parse(r#"{"value": "notaduration"}"#).unwrap_err();
-        assert!(
-            err.contains("Invalid duration"),
-            "expected invalid format error: {err}"
-        );
+        assert!(err.contains("Invalid duration"), "expected invalid format error: {err}");
     }
 
     #[test]

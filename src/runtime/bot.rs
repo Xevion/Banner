@@ -66,11 +66,7 @@ impl BotService {
                             poise::Context::Application(_) => ctx.invocation_string(),
                             poise::Context::Prefix(prefix) => prefix.msg.content.to_string(),
                         };
-                        let channel_name = ctx
-                            .channel_id()
-                            .name(ctx.http())
-                            .await
-                            .unwrap_or("unknown".to_string());
+                        let channel_name = ctx.channel_id().name(ctx.http()).await.unwrap_or("unknown".to_string());
 
                         let span = tracing::Span::current();
                         span.record("command_name", &*ctx.command().qualified_name);
@@ -120,12 +116,10 @@ impl BotService {
                     );
 
                     // Skip command registration if definitions haven't changed since last startup.
-                    let fingerprint =
-                        crate::bot::commands_fingerprint(&framework.options().commands);
-                    let stored =
-                        crate::data::kv::get(&app_state.db_pool, "bot.commands_fingerprint")
-                            .await
-                            .unwrap_or(None);
+                    let fingerprint = crate::bot::commands_fingerprint(&framework.options().commands);
+                    let stored = crate::data::kv::get(&app_state.db_pool, "bot.commands_fingerprint")
+                        .await
+                        .unwrap_or(None);
 
                     if stored.as_deref() == Some(fingerprint.as_str()) {
                         info!(
@@ -133,21 +127,12 @@ impl BotService {
                             "Discord commands unchanged, skipping registration"
                         );
                     } else {
-                        poise::builtins::register_in_guild(
-                            ctx,
-                            &framework.options().commands,
-                            bot_target_guild.into(),
-                        )
-                        .await?;
-                        poise::builtins::register_globally(ctx, &framework.options().commands)
+                        poise::builtins::register_in_guild(ctx, &framework.options().commands, bot_target_guild.into())
                             .await?;
+                        poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
-                        if let Err(e) = crate::data::kv::set(
-                            &app_state.db_pool,
-                            "bot.commands_fingerprint",
-                            &fingerprint,
-                        )
-                        .await
+                        if let Err(e) =
+                            crate::data::kv::set(&app_state.db_pool, "bot.commands_fingerprint", &fingerprint).await
                         {
                             warn!(error = ?e, "Failed to persist command fingerprint");
                         }
@@ -161,11 +146,7 @@ impl BotService {
                     }
 
                     // Start status update task with shutdown support
-                    let handle = Self::start_status_update_task(
-                        ctx.clone(),
-                        app_state.clone(),
-                        status_shutdown_rx,
-                    );
+                    let handle = Self::start_status_update_task(ctx.clone(), app_state.clone(), status_shutdown_rx);
                     *status_task_handle.lock().await = Some(handle);
 
                     app_state.service_statuses.set("bot", ServiceStatus::Active);
@@ -175,9 +156,7 @@ impl BotService {
             })
             .build();
 
-        Ok(ClientBuilder::new(bot_token, intents)
-            .framework(framework)
-            .await?)
+        Ok(ClientBuilder::new(bot_token, intents).framework(framework).await?)
     }
 
     /// Start the status update task for the Discord bot with graceful shutdown support

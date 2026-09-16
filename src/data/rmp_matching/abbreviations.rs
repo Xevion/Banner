@@ -5,14 +5,8 @@ pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
     // Computer Science & Engineering
     ("cs", &["computer science"]),
     ("ece", &["early childhood education", "early childhood"]),
-    (
-        "ee",
-        &["electrical engineering", "electrical", "engineering"],
-    ),
-    (
-        "me",
-        &["mechanical engineering", "mechanical", "engineering"],
-    ),
+    ("ee", &["electrical engineering", "electrical", "engineering"]),
+    ("me", &["mechanical engineering", "mechanical", "engineering"]),
     ("ce", &["civil engineering", "civil", "engineering"]),
     ("egr", &["engineering"]),
     ("bme", &["biomedical engineering", "engineering"]),
@@ -51,22 +45,10 @@ pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
     ("grg", &["geography"]),
     ("ges", &["geography"]),
     // Business (include generic "business" and "managerial" for RMP catch-alls)
-    (
-        "acc",
-        &["accounting", "business", "managerial science", "managerial"],
-    ),
-    (
-        "fin",
-        &["finance", "business", "managerial science", "managerial"],
-    ),
-    (
-        "mgt",
-        &["management", "business", "managerial science", "managerial"],
-    ),
-    (
-        "mkt",
-        &["marketing", "business", "managerial science", "managerial"],
-    ),
+    ("acc", &["accounting", "business", "managerial science", "managerial"]),
+    ("fin", &["finance", "business", "managerial science", "managerial"]),
+    ("mgt", &["management", "business", "managerial science", "managerial"]),
+    ("mkt", &["marketing", "business", "managerial science", "managerial"]),
     (
         "ms",
         &[
@@ -78,27 +60,14 @@ pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
             "statistics",
         ],
     ),
-    (
-        "is",
-        &["information systems", "information science", "business"],
-    ),
+    ("is", &["information systems", "information science", "business"]),
     (
         "gba",
-        &[
-            "general business",
-            "business",
-            "managerial science",
-            "managerial",
-        ],
+        &["general business", "business", "managerial science", "managerial"],
     ),
     (
         "ent",
-        &[
-            "entrepreneurship",
-            "business",
-            "managerial science",
-            "managerial",
-        ],
+        &["entrepreneurship", "business", "managerial science", "managerial"],
     ),
     ("blw", &["business law", "law", "business"]),
     ("rfd", &["real estate"]),
@@ -137,27 +106,15 @@ pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
     ("rus", &["russian", "languages", "modern languages"]),
     ("lat", &["latin", "languages"]),
     ("grk", &["greek", "languages"]),
-    (
-        "asl",
-        &["american sign language", "sign language", "languages"],
-    ),
-    (
-        "fl",
-        &["foreign languages", "languages", "modern languages"],
-    ),
+    ("asl", &["american sign language", "sign language", "languages"]),
+    ("fl", &["foreign languages", "languages", "modern languages"]),
     // Education
     ("edu", &["education"]),
     ("ci", &["curriculum", "education"]),
     ("edl", &["educational leadership", "education"]),
     ("csm", &["construction", "architecture", "engineering"]),
-    (
-        "edp",
-        &["educational psychology", "education", "psychology"],
-    ),
-    (
-        "bbl",
-        &["bilingual education", "bilingual", "education", "languages"],
-    ),
+    ("edp", &["educational psychology", "education", "psychology"]),
+    ("bbl", &["bilingual education", "bilingual", "education", "languages"]),
     ("spe", &["special education", "education"]),
     // Health & Kinesiology
     ("hth", &["health"]),
@@ -173,29 +130,13 @@ pub(super) const ABBREVIATIONS: &[(&str, &[&str])] = &[
     ("cou", &["counseling", "psychology", "education"]),
     (
         "esl",
-        &[
-            "english as a second language",
-            "bilingual",
-            "education",
-            "languages",
-        ],
+        &["english as a second language", "bilingual", "education", "languages"],
     ),
     (
         "ais",
-        &[
-            "applied interdisciplinary studies",
-            "interdisciplinary",
-            "education",
-        ],
+        &["applied interdisciplinary studies", "interdisciplinary", "education"],
     ),
-    (
-        "ids",
-        &[
-            "interdisciplinary studies",
-            "interdisciplinary",
-            "education",
-        ],
-    ),
+    ("ids", &["interdisciplinary studies", "interdisciplinary", "education"]),
     ("hon", &["honors"]),
     ("lted", &["literacy", "education"]),
     ("rdg", &["reading", "education"]),

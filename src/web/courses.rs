@@ -13,9 +13,7 @@ use ts_rs::TS;
 
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, SectionLink};
 use crate::data::courses::SortSpec;
-use crate::data::reference_types::{
-    Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm,
-};
+use crate::data::reference_types::{Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm};
 use crate::data::unsigned::Count;
 use crate::data::{self, models};
 use crate::state::AppState;
@@ -36,15 +34,9 @@ pub fn code_to_filter_value(category: &str, code: &str, description: Option<&str
         "instructional_method" => InstructionalMethod::from_code(code)
             .map(|m| m.to_filter_str().to_owned())
             .unwrap_or_else(|_| format!("raw:{code}")),
-        "campus" => Campus::from_code(code, description)
-            .to_filter_str()
-            .into_owned(),
-        "attribute" => Attribute::from_code(code, description)
-            .to_filter_str()
-            .into_owned(),
-        "part_of_term" => PartOfTerm::from_code(code, description)
-            .to_filter_str()
-            .into_owned(),
+        "campus" => Campus::from_code(code, description).to_filter_str().into_owned(),
+        "attribute" => Attribute::from_code(code, description).to_filter_str().into_owned(),
+        "part_of_term" => PartOfTerm::from_code(code, description).to_filter_str().into_owned(),
         _ => format!("raw:{code}"),
     }
 }
@@ -150,14 +142,9 @@ pub(super) async fn course_trends(
     use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&body.term).unwrap_or_else(|| body.term.clone());
 
-    let rows = data::metrics::list_trends_for_courses(
-        &state.db_pool,
-        &term_code,
-        &body.crns,
-        TREND_BUCKETS,
-    )
-    .await
-    .map_err(|e| db_error("Course trends query", e))?;
+    let rows = data::metrics::list_trends_for_courses(&state.db_pool, &term_code, &body.crns, TREND_BUCKETS)
+        .await
+        .map_err(|e| db_error("Course trends query", e))?;
 
     for row in rows {
         trends.entry(row.crn).or_default().push(TrendSample {
@@ -252,20 +239,16 @@ pub fn build_course_response(
         .into_iter()
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
-                let (avg_rating, num_ratings) = crate::data::course_types::sanitize_rmp_ratings(
-                    i.avg_rating.map(|v| v as f32),
-                    i.num_ratings,
-                );
+                let (avg_rating, num_ratings) =
+                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating.map(|v| v as f32), i.num_ratings);
                 RmpBrief {
                     avg_rating,
                     num_ratings,
                     legacy_id,
                 }
             });
-            let bluebook = crate::data::course_types::build_bluebook_brief(
-                i.bb_avg_instructor_rating,
-                i.bb_total_responses,
-            );
+            let bluebook =
+                crate::data::course_types::build_bluebook_brief(i.bb_avg_instructor_rating, i.bb_total_responses);
             let rating = match (
                 i.sc_display_score,
                 i.sc_sort_score,
@@ -274,20 +257,18 @@ pub fn build_course_response(
                 i.sc_confidence,
                 i.sc_source,
             ) {
-                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => {
-                    Some(crate::data::scoring::build_rating_from_score_row(
-                        &crate::data::scoring::ScoreRow {
-                            display_score: ds,
-                            sort_score: ss,
-                            ci_lower: cl,
-                            ci_upper: cu,
-                            confidence: conf,
-                            source: src,
-                            rmp_count: i.sc_rmp_count.unwrap_or(0),
-                            bb_count: i.sc_bb_count.unwrap_or(0),
-                        },
-                    ))
-                }
+                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => Some(
+                    crate::data::scoring::build_rating_from_score_row(&crate::data::scoring::ScoreRow {
+                        display_score: ds,
+                        sort_score: ss,
+                        ci_lower: cl,
+                        ci_upper: cu,
+                        confidence: conf,
+                        source: src,
+                        rmp_count: i.sc_rmp_count.unwrap_or(0),
+                        bb_count: i.sc_bb_count.unwrap_or(0),
+                    }),
+                ),
                 _ => None,
             };
             InstructorResponse {
@@ -336,18 +317,14 @@ pub fn build_course_response(
         None => (None, None),
     };
 
-    let campus = course
-        .campus
-        .as_ref()
-        .map(|code| Campus::from_code(code, None));
+    let campus = course.campus.as_ref().map(|code| Campus::from_code(code, None));
     let part_of_term = course
         .part_of_term
         .as_ref()
         .map(|code| PartOfTerm::from_code(code, None));
 
     let is_async_online = meeting_times.first().is_some_and(|mt| {
-        mt.location.as_ref().and_then(|loc| loc.building.as_deref()) == Some("INT")
-            && mt.is_time_tba()
+        mt.location.as_ref().and_then(|loc| loc.building.as_deref()) == Some("INT") && mt.is_time_tba()
     });
 
     let physical_location = meeting_times
@@ -389,11 +366,7 @@ pub fn build_course_response(
         wait_capacity: Count::new(course.wait_capacity.max(0) as u32),
     };
 
-    let credit_hours = match (
-        course.credit_hours,
-        course.credit_hour_low,
-        course.credit_hour_high,
-    ) {
+    let credit_hours = match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {
         (Some(fixed), _, _) => Some(CreditHours::Fixed { hours: fixed }),
         (None, Some(low), Some(high)) if low != high => Some(CreditHours::Range { low, high }),
         (None, Some(hours), None) | (None, None, Some(hours)) => Some(CreditHours::Fixed { hours }),
@@ -454,8 +427,7 @@ pub(super) async fn search_courses(
 ) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
 
-    let term_code =
-        Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
+    let term_code = Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
     let page = params.page.max(1);
     let per_page = params.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
@@ -466,21 +438,9 @@ pub(super) async fn search_courses(
         .iter()
         .map(|fv| fv.to_code().into_owned())
         .collect();
-    let campus_codes: Vec<String> = params
-        .campus
-        .iter()
-        .map(|fv| fv.to_code().into_owned())
-        .collect();
-    let pot_codes: Vec<String> = params
-        .part_of_term
-        .iter()
-        .map(|fv| fv.to_code().into_owned())
-        .collect();
-    let attr_codes: Vec<String> = params
-        .attributes
-        .iter()
-        .map(|fv| fv.to_code().into_owned())
-        .collect();
+    let campus_codes: Vec<String> = params.campus.iter().map(|fv| fv.to_code().into_owned()).collect();
+    let pot_codes: Vec<String> = params.part_of_term.iter().map(|fv| fv.to_code().into_owned()).collect();
+    let attr_codes: Vec<String> = params.attributes.iter().map(|fv| fv.to_code().into_owned()).collect();
 
     let filter = data::courses::SearchFilter {
         term_code: &term_code,
@@ -511,16 +471,8 @@ pub(super) async fn search_courses(
         },
         time_start: params.time_start.as_deref(),
         time_end: params.time_end.as_deref(),
-        part_of_term: if pot_codes.is_empty() {
-            None
-        } else {
-            Some(&pot_codes)
-        },
-        attributes: if attr_codes.is_empty() {
-            None
-        } else {
-            Some(&attr_codes)
-        },
+        part_of_term: if pot_codes.is_empty() { None } else { Some(&pot_codes) },
+        attributes: if attr_codes.is_empty() { None } else { Some(&attr_codes) },
         credit_hour_min: params.credit_hour_min,
         credit_hour_max: params.credit_hour_max,
         instructors: if params.instructor.is_empty() {
@@ -537,19 +489,17 @@ pub(super) async fn search_courses(
         None => SortSpec::default(),
     };
 
-    let (courses, total_count) =
-        data::courses::search_courses(&state.db_pool, &filter, per_page, offset, &sort)
-            .await
-            .map_err(|e| db_error("Course search", e))?;
+    let (courses, total_count) = data::courses::search_courses(&state.db_pool, &filter, per_page, offset, &sort)
+        .await
+        .map_err(|e| db_error("Course search", e))?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
-    let mut instructor_map =
-        data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
-            .await
-            .unwrap_or_else(|e| {
-                error!(error = %e, "Failed to fetch instructors for course search");
-                Default::default()
-            });
+    let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
+        .await
+        .unwrap_or_else(|e| {
+            error!(error = %e, "Failed to fetch instructors for course search");
+            Default::default()
+        });
 
     let course_responses: Vec<CourseResponse> = courses
         .iter()
@@ -559,8 +509,7 @@ pub(super) async fn search_courses(
         })
         .collect();
 
-    let total = Count::try_from(total_count)
-        .map_err(|_| ApiError::internal_error("total count overflow"))?;
+    let total = Count::try_from(total_count).map_err(|_| ApiError::internal_error("total count overflow"))?;
 
     Ok(with_cache_control(
         models::Page {
@@ -587,22 +536,15 @@ pub(super) async fn get_course(
         .or_not_found("Course", &crn)?;
 
     // ETag based on term, CRN, and last scrape timestamp
-    let etag = format!(
-        "\"c:{}:{}:{}\"",
-        term_code,
-        crn,
-        course.last_scraped_at.timestamp()
-    );
+    let etag = format!("\"c:{}:{}:{}\"", term_code, crn, course.last_scraped_at.timestamp());
 
     // 304 Not Modified if client ETag matches
     if let Some(if_none_match) = headers.get(axum::http::header::IF_NONE_MATCH)
         && if_none_match.as_bytes() == etag.as_bytes()
     {
         let mut resp = StatusCode::NOT_MODIFIED.into_response();
-        resp.headers_mut().insert(
-            axum::http::header::ETAG,
-            HeaderValue::from_str(&etag).unwrap(),
-        );
+        resp.headers_mut()
+            .insert(axum::http::header::ETAG, HeaderValue::from_str(&etag).unwrap());
         resp.headers_mut().insert(
             axum::http::header::CACHE_CONTROL,
             HeaderValue::from_static(cache::DETAIL),
@@ -618,10 +560,8 @@ pub(super) async fn get_course(
         });
 
     let mut resp = Json(build_course_response(&course, instructors)).into_response();
-    resp.headers_mut().insert(
-        axum::http::header::ETAG,
-        HeaderValue::from_str(&etag).unwrap(),
-    );
+    resp.headers_mut()
+        .insert(axum::http::header::ETAG, HeaderValue::from_str(&etag).unwrap());
     resp.headers_mut().insert(
         axum::http::header::CACHE_CONTROL,
         HeaderValue::from_static(cache::DETAIL),
@@ -638,19 +578,17 @@ pub(super) async fn get_related_sections(
 ) -> Result<Response, ApiError> {
     use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
-    let courses =
-        data::courses::get_related_sections(&state.db_pool, &term_code, &subject, &course_number)
-            .await
-            .map_err(|e| db_error("Related sections lookup", e))?;
+    let courses = data::courses::get_related_sections(&state.db_pool, &term_code, &subject, &course_number)
+        .await
+        .map_err(|e| db_error("Related sections lookup", e))?;
 
     let course_ids: Vec<i32> = courses.iter().map(|c| c.id).collect();
-    let mut instructor_map =
-        data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
-            .await
-            .unwrap_or_else(|e| {
-                error!(error = %e, "Failed to fetch instructors for related sections");
-                Default::default()
-            });
+    let mut instructor_map = data::courses::get_instructors_for_courses(&state.db_pool, &course_ids)
+        .await
+        .unwrap_or_else(|e| {
+            error!(error = %e, "Failed to fetch instructors for related sections");
+            Default::default()
+        });
 
     let responses: Vec<CourseResponse> = courses
         .iter()

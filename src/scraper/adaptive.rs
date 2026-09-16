@@ -126,14 +126,8 @@ pub fn time_of_day_multiplier(now: DateTime<Utc>) -> u32 {
 ///
 /// Combines base interval, time-of-day multiplier, pause detection (empty
 /// fetches / consecutive failures), and term category scheduling tiers.
-pub fn evaluate_subject(
-    stats: &SubjectStats,
-    now: DateTime<Utc>,
-    category: TermCategory,
-) -> SubjectSchedule {
-    let elapsed = (now - stats.last_completed)
-        .to_std()
-        .unwrap_or(Duration::ZERO);
+pub fn evaluate_subject(stats: &SubjectStats, now: DateTime<Utc>, category: TermCategory) -> SubjectSchedule {
+    let elapsed = (now - stats.last_completed).to_std().unwrap_or(Duration::ZERO);
 
     // Past and Archived terms use a fixed long interval, bypassing adaptive logic entirely.
     if category == TermCategory::Past || category == TermCategory::Archived {

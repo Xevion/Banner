@@ -1,7 +1,5 @@
 use crate::helpers::db::test_db;
-use banner::data::admin_audits::{
-    AdminAction, AdminAuditFilter, AdminEntity, Target, insert, list,
-};
+use banner::data::admin_audits::{AdminAction, AdminAuditFilter, AdminEntity, Target, insert, list};
 use banner::data::models::User;
 use chrono::Utc;
 use serde_json::json;
@@ -72,15 +70,9 @@ async fn test_untargeted_action_records_a_null_entity_id() {
 async fn test_every_action_records_and_lists_under_its_own_name() {
     let pool = test_db!().await;
     for action in AdminAction::VARIANTS {
-        insert(
-            &pool,
-            &actor(1, "xevion"),
-            *action,
-            Target::id(7),
-            json!({}),
-        )
-        .await
-        .expect("failed to record entry");
+        insert(&pool, &actor(1, "xevion"), *action, Target::id(7), json!({}))
+            .await
+            .expect("failed to record entry");
     }
 
     for action in AdminAction::VARIANTS {

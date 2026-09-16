@@ -7,12 +7,7 @@ use super::models::User;
 use anyhow::Result;
 
 /// Insert a new user or update username/avatar on conflict.
-pub async fn upsert_user(
-    pool: &PgPool,
-    discord_id: i64,
-    username: &str,
-    avatar_hash: Option<&str>,
-) -> Result<User> {
+pub async fn upsert_user(pool: &PgPool, discord_id: i64, username: &str, avatar_hash: Option<&str>) -> Result<User> {
     sqlx::query_as::<_, User>(
         r#"
         INSERT INTO users (discord_id, discord_username, discord_avatar_hash)
@@ -51,9 +46,7 @@ pub async fn list_users(pool: &PgPool) -> Result<Vec<User>> {
 
 /// Count all registered users.
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-        .fetch_one(pool)
-        .await?;
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(pool).await?;
     Ok(count)
 }
 

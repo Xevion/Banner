@@ -40,9 +40,7 @@ pub async fn watch(
     ctx: Context<'_>,
     #[description = "Course Reference Number (CRN)"] crn: String,
     #[description = "Term code (e.g. 202620 -- defaults to current)"] term: Option<String>,
-    #[description = "What to watch for (default: Seats Available)"] watch_type: Option<
-        WatchTypeChoice,
-    >,
+    #[description = "What to watch for (default: Seats Available)"] watch_type: Option<WatchTypeChoice>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 

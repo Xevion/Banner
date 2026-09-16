@@ -140,16 +140,10 @@ pub async fn auth_callback(
     Query(params): Query<CallbackParams>,
 ) -> Result<Response, (StatusCode, Json<Value>)> {
     // 1. Validate CSRF state and recover the origin used during login
-    let origin = state
-        .oauth_state_store
-        .validate(&params.state)
-        .ok_or_else(|| {
-            warn!("OAuth callback with invalid CSRF state");
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "Invalid OAuth state" })),
-            )
-        })?;
+    let origin = state.oauth_state_store.validate(&params.state).ok_or_else(|| {
+        warn!("OAuth callback with invalid CSRF state");
+        (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid OAuth state" })))
+    })?;
 
     // 2. Exchange authorization code for access token
     let redirect_uri = format!("{origin}{CALLBACK_PATH}");
@@ -257,19 +251,11 @@ pub async fn auth_callback(
 
     // 6. Build response with session cookie
     let secure = redirect_uri.starts_with("https://");
-    let cookie = session_cookie(
-        &session.id,
-        crate::data::sessions::SESSION_DURATION_SECS as i64,
-        secure,
-    );
+    let cookie = session_cookie(&session.id, crate::data::sessions::SESSION_DURATION_SECS as i64, secure);
 
     let redirect_to = if user.is_admin { "/admin" } else { "/" };
 
-    Ok((
-        [(header::SET_COOKIE, cookie)],
-        Redirect::temporary(redirect_to),
-    )
-        .into_response())
+    Ok(([(header::SET_COOKIE, cookie)], Redirect::temporary(redirect_to)).into_response())
 }
 
 /// `POST /api/auth/logout` -- Destroy the current session.
@@ -294,10 +280,7 @@ pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> R
 
 /// `GET /api/auth/me` -- Return the current authenticated user's info.
 #[instrument(skip_all)]
-pub async fn auth_me(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<Json<Value>, StatusCode> {
+pub async fn auth_me(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, StatusCode> {
     let token = extract_session_token(&headers).ok_or(StatusCode::UNAUTHORIZED)?;
 
     let user = state

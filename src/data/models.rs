@@ -18,9 +18,7 @@ fn serialize_i64_as_string<S: Serializer>(value: &i64, serializer: S) -> Result<
 }
 
 /// Deserialize an `i64` from either a number or a string.
-fn deserialize_i64_from_string<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<i64, D::Error> {
+fn deserialize_i64_from_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
     use serde::de;
 
     struct I64OrStringVisitor;
@@ -154,19 +152,18 @@ impl<'de> Deserialize<'de> for DbMeetingTime {
         let raw = Raw::deserialize(deserializer)?;
 
         // Resolve time_range: prefer new field, fall back to old begin_time/end_time
-        let time_range =
-            raw.time_range.or_else(
-                || match (raw.begin_time.as_deref(), raw.end_time.as_deref()) {
-                    (Some(begin), Some(end)) => {
-                        let result = TimeRange::from_hhmm(begin, end);
-                        if result.is_none() {
-                            tracing::warn!(begin, end, "failed to parse old-format time range");
-                        }
-                        result
+        let time_range = raw
+            .time_range
+            .or_else(|| match (raw.begin_time.as_deref(), raw.end_time.as_deref()) {
+                (Some(begin), Some(end)) => {
+                    let result = TimeRange::from_hhmm(begin, end);
+                    if result.is_none() {
+                        tracing::warn!(begin, end, "failed to parse old-format time range");
                     }
-                    _ => None,
-                },
-            );
+                    result
+                }
+                _ => None,
+            });
 
         // Resolve date_range: prefer new field, fall back to old start_date/end_date
         let date_range = if let Some(dr) = raw.date_range {
@@ -332,9 +329,7 @@ macro_rules! text_column_enum {
         }
 
         impl<'r> sqlx::Decode<'r, sqlx::Postgres> for $name {
-            fn decode(
-                value: sqlx::postgres::PgValueRef<'r>,
-            ) -> Result<Self, sqlx::error::BoxDynError> {
+            fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
                 let text = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
                 text.parse()
                     .map_err(|_| UnknownVariant::new(stringify!($name), text).into())
@@ -373,18 +368,7 @@ pub struct Page<T> {
 /// Stored as VARCHAR, so `serde` and `strum` must spell every variant the same way:
 /// one drives the API and TypeScript union, the other the column round-trip.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TS,
-    AsRefStr,
-    EnumString,
-    IntoStaticStr,
-    VariantArray,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, EnumString, IntoStaticStr, VariantArray,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -401,18 +385,7 @@ text_column_enum!(RmpMatchStatus);
 
 /// Review state of a single `rmp_match_candidates` row.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TS,
-    AsRefStr,
-    EnumString,
-    IntoStaticStr,
-    VariantArray,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, EnumString, IntoStaticStr, VariantArray,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -429,18 +402,7 @@ text_column_enum!(RmpCandidateStatus);
 ///
 /// `Auto` and `Pending` are algorithm-generated; the other two are human decisions.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TS,
-    AsRefStr,
-    EnumString,
-    IntoStaticStr,
-    VariantArray,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, EnumString, IntoStaticStr, VariantArray,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -675,13 +637,9 @@ impl ScrapeJob {
     pub fn status(&self) -> ScrapeJobStatus {
         let now = Utc::now();
         match self.locked_at {
-            Some(locked) if (now - locked).num_seconds() < LOCK_EXPIRY_SECS => {
-                ScrapeJobStatus::Processing
-            }
+            Some(locked) if (now - locked).num_seconds() < LOCK_EXPIRY_SECS => ScrapeJobStatus::Processing,
             Some(_) => ScrapeJobStatus::StaleLock,
-            None if self.retry_count >= self.max_retries && self.max_retries.get() > 0 => {
-                ScrapeJobStatus::Exhausted
-            }
+            None if self.retry_count >= self.max_retries && self.max_retries.get() > 0 => ScrapeJobStatus::Exhausted,
             None if self.execute_at > now => ScrapeJobStatus::Scheduled,
             None => ScrapeJobStatus::Pending,
         }
@@ -771,10 +729,7 @@ mod tests {
     /// These are the exact strings the columns hold, so a casing change is a data bug.
     #[test]
     fn test_strum_spellings_match_the_stored_column_values() {
-        check!(
-            spellings::<RmpMatchStatus>()
-                == ["unmatched", "pending", "auto", "confirmed", "rejected"]
-        );
+        check!(spellings::<RmpMatchStatus>() == ["unmatched", "pending", "auto", "confirmed", "rejected"]);
         check!(spellings::<RmpCandidateStatus>() == ["pending", "accepted", "rejected"]);
         check!(spellings::<BluebookLinkStatus>() == ["auto", "pending", "approved", "rejected"]);
         check!(spellings::<RatingSource>() == ["both", "rmp", "bluebook"]);

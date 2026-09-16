@@ -75,10 +75,7 @@ impl ApiError {
     pub fn rate_limited(retry_after_secs: u64) -> Self {
         Self {
             code: ApiErrorCode::RateLimited,
-            message: format!(
-                "Too many requests. Retry after {} seconds.",
-                retry_after_secs
-            ),
+            message: format!("Too many requests. Retry after {} seconds.", retry_after_secs),
             details: Some(serde_json::json!({ "retryAfter": retry_after_secs })),
         }
     }

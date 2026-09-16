@@ -40,19 +40,7 @@ pub enum MergeError {
 ///
 /// The two casings differ on purpose: `instructor_merges.tier` stores snake_case,
 /// while the API and TypeScript union use camelCase.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TS,
-    AsRefStr,
-    IntoStaticStr,
-    VariantArray,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, IntoStaticStr, VariantArray)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
 #[ts(export)]
@@ -156,15 +144,8 @@ impl From<&InstructorRow> for DuplicateSide {
 ///
 /// Prefers the one that actually teaches, then the staff address over the
 /// student one, then the older row.
-fn pick_survivor<'a>(
-    a: &'a InstructorRow,
-    b: &'a InstructorRow,
-) -> (&'a InstructorRow, &'a InstructorRow) {
-    let is_staff = |row: &InstructorRow| {
-        row.email
-            .as_deref()
-            .is_some_and(|e| !e.to_lowercase().contains("@my."))
-    };
+fn pick_survivor<'a>(a: &'a InstructorRow, b: &'a InstructorRow) -> (&'a InstructorRow, &'a InstructorRow) {
+    let is_staff = |row: &InstructorRow| row.email.as_deref().is_some_and(|e| !e.to_lowercase().contains("@my."));
     let key = |row: &InstructorRow| (row.course_count, is_staff(row), -row.id);
     if key(a) >= key(b) { (a, b) } else { (b, a) }
 }
@@ -172,9 +153,7 @@ fn pick_survivor<'a>(
 /// Classify a pair by how strongly the two records are tied together.
 fn classify(a: Option<&str>, b: Option<&str>) -> DuplicateTier {
     match (a, b) {
-        (Some(x), Some(y)) if canonical_email(x) == canonical_email(y) => {
-            DuplicateTier::SameAccount
-        }
+        (Some(x), Some(y)) if canonical_email(x) == canonical_email(y) => DuplicateTier::SameAccount,
         (None, _) | (_, None) => DuplicateTier::MissingEmail,
         _ => DuplicateTier::DifferentAccount,
     }
@@ -223,17 +202,13 @@ fn build_pair(a: &InstructorRow, b: &InstructorRow) -> DuplicatePair {
 }
 
 async fn dismissed_pairs(pool: &PgPool) -> Result<Vec<(i32, i32)>> {
-    let rows = sqlx::query!(
-        "SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC"
-    )
-    .fetch_all(pool)
-    .await
-    .context("failed to fetch dismissed instructor pairs")?;
+    let rows =
+        sqlx::query!("SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC")
+            .fetch_all(pool)
+            .await
+            .context("failed to fetch dismissed instructor pairs")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| (r.lesser_id, r.greater_id))
-        .collect())
+    Ok(rows.into_iter().map(|r| (r.lesser_id, r.greater_id)).collect())
 }
 
 /// Find instructor records that share a display name, paired and classified.
@@ -289,13 +264,12 @@ pub async fn find_dismissed_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
     }
 
     let ids: Vec<i32> = dismissed.iter().flat_map(|&(a, b)| [a, b]).collect();
-    let rows: Vec<InstructorRow> = sqlx::query_as(AssertSqlSafe(format!(
-        "{INSTRUCTOR_PAIR_SELECT} WHERE i.id = ANY($1)"
-    )))
-    .bind(&ids)
-    .fetch_all(pool)
-    .await
-    .context("failed to fetch dismissed instructor records")?;
+    let rows: Vec<InstructorRow> =
+        sqlx::query_as(AssertSqlSafe(format!("{INSTRUCTOR_PAIR_SELECT} WHERE i.id = ANY($1)")))
+            .bind(&ids)
+            .fetch_all(pool)
+            .await
+            .context("failed to fetch dismissed instructor records")?;
 
     let by_id: HashMap<i32, &InstructorRow> = rows.iter().map(|row| (row.id, row)).collect();
     Ok(dismissed
@@ -322,10 +296,7 @@ pub async fn dismiss_pair(pool: &PgPool, a: i32, b: i32, decided_by: Option<i64>
 
     match result {
         Ok(_) => {
-            info!(
-                lesser,
-                greater, "Dismissed instructor pair as different people"
-            );
+            info!(lesser, greater, "Dismissed instructor pair as different people");
             Ok(())
         }
         Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("23503") => {
@@ -412,13 +383,10 @@ pub async fn merge_instructors(
     .await
     .context("failed to move course links")?;
 
-    sqlx::query!(
-        "DELETE FROM course_instructors WHERE instructor_id = $1",
-        loser_id
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to drop leftover course links")?;
+    sqlx::query!("DELETE FROM course_instructors WHERE instructor_id = $1", loser_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to drop leftover course links")?;
 
     // A single RMP profile is globally unique to one instructor, so these can
     // move wholesale; the summary view aggregates several profiles per person.
@@ -452,21 +420,15 @@ pub async fn merge_instructors(
     .await
     .context("failed to move match candidates")?;
 
-    sqlx::query!(
-        "DELETE FROM rmp_match_candidates WHERE instructor_id = $1",
-        loser_id
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to clear leftover match candidates")?;
+    sqlx::query!("DELETE FROM rmp_match_candidates WHERE instructor_id = $1", loser_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear leftover match candidates")?;
 
-    sqlx::query!(
-        "DELETE FROM instructor_scores WHERE instructor_id = $1",
-        loser_id
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to clear the loser score")?;
+    sqlx::query!("DELETE FROM instructor_scores WHERE instructor_id = $1", loser_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear the loser score")?;
 
     let survivor = sides
         .iter()
@@ -480,14 +442,10 @@ pub async fn merge_instructors(
     // Keep an address if the survivor lacked one.
     let email = survivor.email.clone().or_else(|| loser.email.clone());
 
-    sqlx::query!(
-        "UPDATE instructors SET email = $1 WHERE id = $2",
-        email,
-        survivor_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to update survivor")?;
+    sqlx::query!("UPDATE instructors SET email = $1 WHERE id = $2", email, survivor_id,)
+        .execute(&mut *tx)
+        .await
+        .context("failed to update survivor")?;
 
     // Anything the loser had already absorbed must follow it across, or deleting
     // the loser would cascade those records away and let the scrape rebuild them.
@@ -669,14 +627,8 @@ mod tests {
 
     #[test]
     fn test_canonical_email_strips_student_domain() {
-        assert_eq!(
-            canonical_email("First.Last@my.utsa.edu"),
-            "first.last@utsa.edu"
-        );
-        assert_eq!(
-            canonical_email("first.last@utsa.edu"),
-            "first.last@utsa.edu"
-        );
+        assert_eq!(canonical_email("First.Last@my.utsa.edu"), "first.last@utsa.edu");
+        assert_eq!(canonical_email("first.last@utsa.edu"), "first.last@utsa.edu");
     }
 
     #[test]

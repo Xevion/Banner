@@ -29,15 +29,12 @@ pub const BUILD_INFO: &str = "build_info";
 /// Spans sub-millisecond cache hits through the 60s request timeout, so neither end is a cliff.
 /// Applied globally: an unmatched histogram would otherwise silently render as a summary.
 const LATENCY_BUCKETS: &[f64] = &[
-    0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
-    60.0,
+    0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0,
 ];
 
 /// A scrape job runs for seconds to minutes. The global set wastes half its buckets below a
 /// millisecond and stops at the 60s HTTP timeout, which a large term scrape passes routinely.
-const SCRAPE_JOB_BUCKETS: &[f64] = &[
-    0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0, 300.0, 600.0,
-];
+const SCRAPE_JOB_BUCKETS: &[f64] = &[0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0, 300.0, 600.0];
 
 /// Bounds series growth from label values we do not fully control.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -50,18 +47,12 @@ pub fn recorder() -> &'static PrometheusHandle {
         let handle = PrometheusBuilder::new()
             .set_buckets(LATENCY_BUCKETS)
             .expect("latency buckets are non-empty and ascending")
-            .set_buckets_for_metric(
-                Matcher::Full(SCRAPE_JOB_DURATION.to_owned()),
-                SCRAPE_JOB_BUCKETS,
-            )
+            .set_buckets_for_metric(Matcher::Full(SCRAPE_JOB_DURATION.to_owned()), SCRAPE_JOB_BUCKETS)
             .expect("scrape job buckets are non-empty and ascending")
             // Counters and histograms only. A gauge tracks current state owned by a live RAII
             // guard, so reaping an idle series orphans that handle and the eventual decrement
             // lands on a fresh zero, under-counting for the life of the process.
-            .idle_timeout(
-                MetricKindMask::COUNTER | MetricKindMask::HISTOGRAM,
-                Some(IDLE_TIMEOUT),
-            )
+            .idle_timeout(MetricKindMask::COUNTER | MetricKindMask::HISTOGRAM, Some(IDLE_TIMEOUT))
             .install_recorder()
             .expect("no global metrics recorder was installed before this call");
 
@@ -132,11 +123,7 @@ fn describe() {
         Unit::Count,
         "Banner responses that arrived intact but could not be deserialized."
     );
-    describe_gauge!(
-        WS_CONNECTIONS,
-        Unit::Count,
-        "WebSocket connections currently open."
-    );
+    describe_gauge!(WS_CONNECTIONS, Unit::Count, "WebSocket connections currently open.");
     describe_gauge!(
         WS_SUBSCRIPTIONS,
         Unit::Count,

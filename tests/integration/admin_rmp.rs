@@ -76,12 +76,11 @@ async fn unmatch_resets_accepted_candidates_to_pending() {
     );
 
     // ASSERT: Link should be deleted
-    let (link_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM instructor_rmp_links WHERE instructor_id = $1")
-            .bind(instructor_id)
-            .fetch_one(&pool)
-            .await
-            .expect("failed to count links");
+    let (link_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructor_rmp_links WHERE instructor_id = $1")
+        .bind(instructor_id)
+        .fetch_one(&pool)
+        .await
+        .expect("failed to count links");
     assert_eq!(link_count, 0, "link should be deleted");
 
     // ASSERT: the candidate this reopened puts the instructor back in the queue

@@ -10,8 +10,8 @@ use crate::data::models::Page;
 use crate::data::unsigned::Count;
 
 const NANOID_ALPHABET: &[char] = &[
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-    'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 const NANOID_LEN: usize = 3;
 
@@ -50,11 +50,10 @@ pub fn generate_slug(display_name: &str) -> String {
 
 /// Backfill slugs for all instructors that don't have one yet.
 pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
-    let rows: Vec<(i32, String)> =
-        sqlx::query_as("SELECT id, display_name FROM instructors WHERE slug IS NULL")
-            .fetch_all(pool)
-            .await
-            .context("failed to fetch instructors without slugs")?;
+    let rows: Vec<(i32, String)> = sqlx::query_as("SELECT id, display_name FROM instructors WHERE slug IS NULL")
+        .fetch_all(pool)
+        .await
+        .context("failed to fetch instructors without slugs")?;
 
     if rows.is_empty() {
         return Ok(0);
@@ -206,8 +205,7 @@ pub async fn list_public_instructors(
         if let Some(ref search) = params.search {
             builder.push(" AND (immutable_unaccent(i.display_name) % immutable_unaccent(");
             builder.push_bind(search);
-            builder
-                .push(") OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(");
+            builder.push(") OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(");
             builder.push_bind(search);
             builder.push(") || '%')");
         }
@@ -291,8 +289,7 @@ pub async fn list_public_instructors(
         .context("failed to list public instructors")?;
 
     // Count query
-    let mut count_builder: QueryBuilder<Postgres> =
-        QueryBuilder::new("SELECT COUNT(*) FROM instructors i");
+    let mut count_builder: QueryBuilder<Postgres> = QueryBuilder::new("SELECT COUNT(*) FROM instructors i");
     push_instructor_conditions(&mut count_builder, params, &extra_condition);
 
     let (total,): (i64,) = count_builder
@@ -305,10 +302,8 @@ pub async fn list_public_instructors(
         .into_iter()
         .map(|r| {
             let rmp = r.rmp_legacy_id.map(|legacy_id| {
-                let (avg_rating, num_ratings) = super::course_types::sanitize_rmp_ratings(
-                    r.avg_rating.map(|v| v as f32),
-                    r.num_ratings,
-                );
+                let (avg_rating, num_ratings) =
+                    super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
                 super::course_types::RmpBrief {
                     avg_rating,
                     num_ratings,
@@ -317,12 +312,12 @@ pub async fn list_public_instructors(
             });
             let bluebook = match (r.bb_avg_instructor_rating, r.bb_total_responses) {
                 (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
-                    Count::try_from(n).ok().map(|total_responses| {
-                        super::course_types::BlueBookBrief {
+                    Count::try_from(n)
+                        .ok()
+                        .map(|total_responses| super::course_types::BlueBookBrief {
                             avg_instructor_rating: avg,
                             total_responses,
-                        }
-                    })
+                        })
                 }
                 _ => None,
             };
@@ -334,8 +329,8 @@ pub async fn list_public_instructors(
                 r.confidence,
                 r.score_source,
             ) {
-                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => Some(
-                    super::scoring::build_rating_from_score_row(&super::scoring::ScoreRow {
+                (Some(ds), Some(ss), Some(cl), Some(cu), Some(conf), Some(src)) => {
+                    Some(super::scoring::build_rating_from_score_row(&super::scoring::ScoreRow {
                         display_score: ds,
                         sort_score: ss,
                         ci_lower: cl,
@@ -344,8 +339,8 @@ pub async fn list_public_instructors(
                         source: src,
                         rmp_count: r.sc_rmp_count.unwrap_or(0),
                         bb_count: r.sc_bb_count.unwrap_or(0),
-                    }),
-                ),
+                    }))
+                }
                 _ => None,
             };
             PublicInstructorListItem {
@@ -431,10 +426,8 @@ pub async fn get_public_instructor_by_slug(
 
     let rmp_summary = rmp.and_then(|r| {
         let legacy_id = r.legacy_id?;
-        let (avg_rating, num_ratings) = super::course_types::sanitize_rmp_ratings(
-            r.avg_rating.map(|v| v as f32),
-            r.num_ratings,
-        );
+        let (avg_rating, num_ratings) =
+            super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
         Some(super::course_types::RmpFull {
             avg_rating,
             avg_difficulty: r.avg_difficulty.map(|v| v as f32),
@@ -557,10 +550,7 @@ pub async fn get_public_instructor_by_slug(
 }
 
 /// Get teaching history grouped by term for an instructor.
-async fn get_teaching_history(
-    pool: &PgPool,
-    instructor_id: i32,
-) -> Result<Vec<TeachingHistoryTerm>> {
+async fn get_teaching_history(pool: &PgPool, instructor_id: i32) -> Result<Vec<TeachingHistoryTerm>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         term_code: String,
@@ -653,16 +643,12 @@ pub async fn get_instructor_sections(
 }
 
 /// Resolve a batch of instructor slugs to their display names.
-pub async fn resolve_instructor_slugs(
-    pool: &PgPool,
-    slugs: &[String],
-) -> Result<Vec<(String, String)>> {
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT slug, display_name FROM instructors WHERE slug = ANY($1)")
-            .bind(slugs)
-            .fetch_all(pool)
-            .await
-            .context("failed to resolve instructor slugs")?;
+pub async fn resolve_instructor_slugs(pool: &PgPool, slugs: &[String]) -> Result<Vec<(String, String)>> {
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT slug, display_name FROM instructors WHERE slug = ANY($1)")
+        .bind(slugs)
+        .fetch_all(pool)
+        .await
+        .context("failed to resolve instructor slugs")?;
     Ok(rows)
 }
 
@@ -676,9 +662,7 @@ pub struct InstructorSitemapEntry {
 ///
 /// The lastmod is the most recent of: score computation, BlueBook link update,
 /// RMP profile sync, and course scrape time.
-pub async fn list_all_instructor_sitemap_entries(
-    pool: &PgPool,
-) -> Result<Vec<InstructorSitemapEntry>> {
+pub async fn list_all_instructor_sitemap_entries(pool: &PgPool) -> Result<Vec<InstructorSitemapEntry>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         slug: String,
@@ -749,10 +733,7 @@ pub fn classify_identifier(s: &str) -> IdentifierKind {
 
 /// Resolve any identifier form to (instructor_id, canonical_slug).
 /// Returns None if not found or if the instructor has no slug yet.
-pub async fn resolve_instructor_identifier(
-    pool: &PgPool,
-    raw: &str,
-) -> Result<Option<(i32, String)>> {
+pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<Option<(i32, String)>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         id: i32,
@@ -805,10 +786,7 @@ pub async fn resolve_instructor_identifier(
 ///
 /// The score is the most frequently changing part of a profile, so it stands in
 /// for profile freshness when building an ETag.
-pub async fn get_score_computed_at(
-    pool: &PgPool,
-    instructor_id: i32,
-) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+pub async fn get_score_computed_at(pool: &PgPool, instructor_id: i32) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     sqlx::query_scalar("SELECT computed_at FROM instructor_scores WHERE instructor_id = $1")
         .bind(instructor_id)
         .fetch_optional(pool)

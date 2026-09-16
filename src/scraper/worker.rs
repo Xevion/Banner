@@ -122,9 +122,8 @@ impl Worker {
 
     async fn process_job(&self, job: ScrapeJob) -> Result<UpsertCounts, JobError> {
         // Convert the database job to our job type
-        let job_type =
-            JobType::from_target_type_and_payload(job.target_type, job.target_payload.0.clone())
-                .map_err(|e| JobError::Unrecoverable(anyhow::anyhow!(e)))?; // Parse errors are unrecoverable
+        let job_type = JobType::from_target_type_and_payload(job.target_type, job.target_payload.0.clone())
+            .map_err(|e| JobError::Unrecoverable(anyhow::anyhow!(e)))?; // Parse errors are unrecoverable
 
         // Get the job implementation
         let job_impl = job_type.boxed();
@@ -151,10 +150,7 @@ impl Worker {
 
     /// Handle shutdown signal received during job processing
     async fn handle_shutdown_during_processing(&self, job_id: i32) {
-        info!(
-            worker_id = self.id,
-            job_id, "Shutdown received during job processing"
-        );
+        info!(worker_id = self.id, job_id, "Shutdown received during job processing");
 
         if let Err(e) = self.unlock_job(job_id).await {
             telemetry::record_db_failure(&e);
@@ -369,11 +365,7 @@ impl Worker {
                     "Invalid session detected, will retry"
                 );
             }
-            Some(BannerApiError::ParseFailed {
-                status,
-                url,
-                source,
-            }) => {
+            Some(BannerApiError::ParseFailed { status, url, source }) => {
                 error!(
                     worker_id = self.id,
                     job_id,
@@ -408,12 +400,7 @@ impl Worker {
             // Jittered exponential backoff so a mass failure (e.g. a whole term
             // timing out at once) doesn't re-hammer the upstream in lockstep.
             let execute_at = Utc::now() + retry_backoff(next_attempt.get());
-            match self
-                .db
-                .scrape_jobs()
-                .retry(job_id, next_attempt, execute_at)
-                .await
-            {
+            match self.db.scrape_jobs().retry(job_id, next_attempt, execute_at).await {
                 Ok(()) => {
                     debug!(
                         worker_id = self.id,
@@ -431,8 +418,7 @@ impl Worker {
             }
         } else {
             // Max retries exceeded -- log final failure result
-            let duration_ms =
-                DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
+            let duration_ms = DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
             let err_msg = format!("{e:#}");
             if let Err(log_err) = self
                 .db
@@ -497,15 +483,7 @@ mod tests {
     #[test]
     fn test_retry_backoff_grows_then_caps_within_jitter_bounds() {
         // (attempt, expected capped ceiling in seconds)
-        let cases = [
-            (1, 10),
-            (2, 20),
-            (3, 40),
-            (4, 80),
-            (5, 160),
-            (6, 300),
-            (20, 300),
-        ];
+        let cases = [(1, 10), (2, 20), (3, 40), (4, 80), (5, 160), (6, 300), (20, 300)];
         for (attempt, ceiling) in cases {
             let floor = ceiling / 2;
             for _ in 0..1000 {

@@ -8,30 +8,16 @@ use crate::web::stream::filters::AuditLogFilter;
 const DEFAULT_AUDIT_LIMIT: i32 = 200;
 const MAX_AUDIT_LIMIT: i32 = 500;
 
-pub async fn build_snapshot(
-    db_pool: &PgPool,
-    filter: &AuditLogFilter,
-) -> Result<Vec<AuditLogEntry>, sqlx::Error> {
-    let limit = filter
-        .limit
-        .unwrap_or(DEFAULT_AUDIT_LIMIT)
-        .clamp(1, MAX_AUDIT_LIMIT);
+pub async fn build_snapshot(db_pool: &PgPool, filter: &AuditLogFilter) -> Result<Vec<AuditLogEntry>, sqlx::Error> {
+    let limit = filter.limit.unwrap_or(DEFAULT_AUDIT_LIMIT).clamp(1, MAX_AUDIT_LIMIT);
 
-    let field_changed: Option<&[String]> =
-        filter.field_changed.as_deref().filter(|v| !v.is_empty());
+    let field_changed: Option<&[String]> = filter.field_changed.as_deref().filter(|v| !v.is_empty());
     let subject: Option<&[String]> = filter.subject.as_deref().filter(|v| !v.is_empty());
     let term: Option<&str> = filter.term.as_deref();
 
-    let rows = crate::data::audit::list_filtered(
-        db_pool,
-        filter.since_dt,
-        field_changed,
-        subject,
-        term,
-        limit,
-    )
-    .await
-    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+    let rows = crate::data::audit::list_filtered(db_pool, filter.since_dt, field_changed, subject, term, limit)
+        .await
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
     Ok(rows.into_iter().map(AuditLogEntry::from).collect())
 }

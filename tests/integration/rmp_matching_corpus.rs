@@ -11,8 +11,8 @@ use sqlx::postgres::PgPoolOptions;
 #[tokio::test]
 #[ignore = "mutates match state; requires RMP_CORPUS_DATABASE_URL"]
 async fn rmp_corpus_regenerate_reports_outcome_mix() {
-    let url = std::env::var("RMP_CORPUS_DATABASE_URL")
-        .expect("set RMP_CORPUS_DATABASE_URL to a scratch database restore");
+    let url =
+        std::env::var("RMP_CORPUS_DATABASE_URL").expect("set RMP_CORPUS_DATABASE_URL to a scratch database restore");
 
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -20,16 +20,13 @@ async fn rmp_corpus_regenerate_reports_outcome_mix() {
         .await
         .expect("connect to corpus database");
 
-    let stats = generate_candidates(&pool)
-        .await
-        .expect("generate candidates");
+    let stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    let statuses: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT status, COUNT(*) FROM instructor_rmp_match_status GROUP BY 1 ORDER BY 2 DESC",
-    )
-    .fetch_all(&pool)
-    .await
-    .expect("fetch status mix");
+    let statuses: Vec<(String, i64)> =
+        sqlx::query_as("SELECT status, COUNT(*) FROM instructor_rmp_match_status GROUP BY 1 ORDER BY 2 DESC")
+            .fetch_all(&pool)
+            .await
+            .expect("fetch status mix");
 
     // Several auto-links on one instructor are correct when RMP holds duplicate
     // profiles for that person, so only the per-profile invariant is asserted.
@@ -76,12 +73,10 @@ async fn rmp_corpus_regenerate_reports_outcome_mix() {
 #[tokio::test]
 #[ignore = "mutates instructor rows; requires RMP_CORPUS_DATABASE_URL"]
 async fn rmp_corpus_merge_duplicate_instructors() {
-    use banner::data::instructor_merge::{
-        DuplicateTier, auto_merge_duplicates, find_duplicate_pairs,
-    };
+    use banner::data::instructor_merge::{DuplicateTier, auto_merge_duplicates, find_duplicate_pairs};
 
-    let url = std::env::var("RMP_CORPUS_DATABASE_URL")
-        .expect("set RMP_CORPUS_DATABASE_URL to a scratch database restore");
+    let url =
+        std::env::var("RMP_CORPUS_DATABASE_URL").expect("set RMP_CORPUS_DATABASE_URL to a scratch database restore");
     let pool = PgPoolOptions::new()
         .max_connections(4)
         .connect(&url)
@@ -89,24 +84,14 @@ async fn rmp_corpus_merge_duplicate_instructors() {
         .expect("connect to corpus database");
 
     let before = find_duplicate_pairs(&pool).await.expect("find duplicates");
-    let same_account = before
-        .iter()
-        .filter(|p| p.tier == DuplicateTier::SameAccount)
-        .count();
+    let same_account = before.iter().filter(|p| p.tier == DuplicateTier::SameAccount).count();
     println!("pairs: {}, same-account: {same_account}", before.len());
 
-    let stats = auto_merge_duplicates(&pool, None)
-        .await
-        .expect("merge duplicates");
+    let stats = auto_merge_duplicates(&pool, None).await.expect("merge duplicates");
     println!("{stats:?}");
 
-    let after = find_duplicate_pairs(&pool)
-        .await
-        .expect("re-find duplicates");
-    let remaining = after
-        .iter()
-        .filter(|p| p.tier == DuplicateTier::SameAccount)
-        .count();
+    let after = find_duplicate_pairs(&pool).await.expect("re-find duplicates");
+    let remaining = after.iter().filter(|p| p.tier == DuplicateTier::SameAccount).count();
 
     let orphans: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM course_instructors ci \

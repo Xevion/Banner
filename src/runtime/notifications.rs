@@ -63,30 +63,21 @@ impl NotificationService {
         any_change_ids.sort_unstable();
         any_change_ids.dedup();
 
-        let triggered = match watches::find_triggered_watches(
-            &self.pool,
-            &enrollment_ids,
-            &waitlist_ids,
-            &any_change_ids,
-        )
-        .await
-        {
-            Ok(w) => w,
-            Err(e) => {
-                telemetry::record_db_failure(&e);
-                warn!(error = ?e, "failed to query triggered watches");
-                return;
-            }
-        };
+        let triggered =
+            match watches::find_triggered_watches(&self.pool, &enrollment_ids, &waitlist_ids, &any_change_ids).await {
+                Ok(w) => w,
+                Err(e) => {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "failed to query triggered watches");
+                    return;
+                }
+            };
 
         if triggered.is_empty() {
             return;
         }
 
-        debug!(
-            count = triggered.len(),
-            "dispatching course watch notifications"
-        );
+        debug!(count = triggered.len(), "dispatching course watch notifications");
 
         for watch in &triggered {
             match self.send_notification(watch).await {
@@ -118,8 +109,7 @@ impl NotificationService {
             .map(|base| format!("{}/courses/{}/{}", base, watch.term_code, watch.crn));
 
         let embed = build_embed(watch, course_link.as_deref());
-        dm.send_message(&self.http, CreateMessage::new().embed(embed))
-            .await?;
+        dm.send_message(&self.http, CreateMessage::new().embed(embed)).await?;
         Ok(())
     }
 }

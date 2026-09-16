@@ -86,10 +86,7 @@ impl BannerSession {
 
     /// Returns a string used to for the "Cookie" header
     pub fn cookie(&self) -> String {
-        format!(
-            "JSESSIONID={}; SSB_COOKIE={}",
-            self.jsessionid, self.ssb_cookie
-        )
+        format!("JSESSIONID={}; SSB_COOKIE={}", self.jsessionid, self.ssb_cookie)
     }
 
     pub fn been_used(&self) -> bool {
@@ -223,10 +220,7 @@ impl SessionPool {
                 let mut queue = term_pool.sessions.lock().await;
                 if let Some(session) = queue.pop_front() {
                     if !session.is_expired() {
-                        let age = session
-                            .last_activity
-                            .unwrap_or(session.created_at)
-                            .elapsed();
+                        let age = session.last_activity.unwrap_or(session.created_at).elapsed();
                         trace!(
                             id = session.unique_session_id,
                             age_secs = age.as_secs(),
@@ -301,10 +295,7 @@ impl SessionPool {
             .context("Failed to reach registration page")?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Registration page returned {}",
-                response.status()
-            ));
+            return Err(anyhow::anyhow!("Registration page returned {}", response.status()));
         }
 
         let cookies: HashMap<String, String> = response
@@ -361,23 +352,13 @@ impl SessionPool {
 
         let term_code = term.to_string();
         let unique_session_id = generate_session_id();
-        self.select_term(&term_code, &unique_session_id, &cookie_header)
-            .await?;
+        self.select_term(&term_code, &unique_session_id, &cookie_header).await?;
 
-        Ok(BannerSession::new(
-            &unique_session_id,
-            &jsessionid,
-            &ssb_cookie,
-        ))
+        Ok(BannerSession::new(&unique_session_id, &jsessionid, &ssb_cookie))
     }
 
     /// Retrieves a list of terms from the Banner API.
-    pub async fn get_terms(
-        &self,
-        search: &str,
-        page: i32,
-        max_results: i32,
-    ) -> Result<Vec<BannerTerm>> {
+    pub async fn get_terms(&self, search: &str, page: i32, max_results: i32) -> Result<Vec<BannerTerm>> {
         if page <= 0 {
             return Err(anyhow::anyhow!("Page must be greater than 0"));
         }
@@ -408,12 +389,7 @@ impl SessionPool {
     }
 
     /// Selects a term for the current session.
-    async fn select_term(
-        &self,
-        term: &str,
-        unique_session_id: &str,
-        cookie_header: &str,
-    ) -> Result<()> {
+    async fn select_term(&self, term: &str, unique_session_id: &str, cookie_header: &str) -> Result<()> {
         let form_data = [
             ("term", term),
             ("studyPath", ""),
@@ -434,11 +410,7 @@ impl SessionPool {
             .await?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Failed to select term {}: {}",
-                term,
-                response.status()
-            ));
+            return Err(anyhow::anyhow!("Failed to select term {}: {}", term, response.status()));
         }
 
         #[derive(serde::Deserialize)]
@@ -458,17 +430,13 @@ impl SessionPool {
             .context("Failed to parse base URL")?
             .path()
             .to_string();
-        let non_overlap_redirect =
-            redirect
-                .fwd_url
-                .strip_prefix(&base_url_path)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Redirect URL '{}' does not start with expected prefix '{}'",
-                        redirect.fwd_url,
-                        base_url_path
-                    )
-                })?;
+        let non_overlap_redirect = redirect.fwd_url.strip_prefix(&base_url_path).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Redirect URL '{}' does not start with expected prefix '{}'",
+                redirect.fwd_url,
+                base_url_path
+            )
+        })?;
 
         // Follow the redirect
         let redirect_url = format!("{}{}", self.base_url, non_overlap_redirect);
