@@ -272,7 +272,6 @@ pub async fn merge_instructors(
     for stmt in [
         "UPDATE instructor_rmp_links SET instructor_id = $1 WHERE instructor_id = $2",
         "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
-        "UPDATE bluebook_evaluations SET instructor_id = $1 WHERE instructor_id = $2",
     ] {
         sqlx::query(stmt)
             .bind(survivor_id)

@@ -107,6 +107,11 @@ struct ComputedScore {
     bb_count: i32,
 }
 
+/// Calibrate a raw BlueBook rating onto the RMP scale, clamped to [1.0, 5.0].
+pub fn calibrate_bluebook(bb: f32) -> f32 {
+    (REG_ALPHA + REG_BETA * bb as f64).clamp(1.0, 5.0) as f32
+}
+
 /// Compute the Bayesian posterior score for a single instructor.
 ///
 /// Each instructor has a "true quality" μ. We observe noisy measurements from
@@ -116,11 +121,7 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     let has_rmp = data.rmp_rating.is_some() && data.rmp_num_ratings > 0;
     let has_bb = data.bb_avg_instructor_rating.is_some() && data.bb_total_responses > 0;
 
-    // Calibrate BB to RMP scale, clamped to [1.0, 5.0]
-    let calibrated_bb = data.bb_avg_instructor_rating.map(|bb| {
-        let raw = REG_ALPHA + REG_BETA * bb as f64;
-        raw.clamp(1.0, 5.0) as f32
-    });
+    let calibrated_bb = data.bb_avg_instructor_rating.map(calibrate_bluebook);
 
     // Effective sample sizes with diminishing returns
     let rmp_n_eff = if data.rmp_num_ratings > 0 {

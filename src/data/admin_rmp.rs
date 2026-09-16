@@ -9,6 +9,7 @@ use sqlx::{AssertSqlSafe, PgPool};
 use tracing::warn;
 use ts_rs::TS;
 
+use crate::data::escape_like;
 use crate::data::models::RmpMatchStatus;
 use crate::data::rmp_matching::ScoreBreakdown;
 
@@ -298,7 +299,7 @@ pub async fn list_instructors(
         query = query.bind(status);
     }
     if let Some(ref search) = filter.search {
-        query = query.bind(format!("%{search}%"));
+        query = query.bind(format!("%{}%", escape_like(search)));
     }
     query = query.bind(per_page).bind(offset);
 
@@ -314,7 +315,7 @@ pub async fn list_instructors(
         count_query = count_query.bind(status);
     }
     if let Some(ref search) = filter.search {
-        count_query = count_query.bind(format!("%{search}%"));
+        count_query = count_query.bind(format!("%{}%", escape_like(search)));
     }
 
     let (total,) = count_query

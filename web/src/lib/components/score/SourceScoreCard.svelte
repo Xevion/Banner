@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { BlueBookFull, InstructorRating, RmpFull } from "$lib/bindings";
+import type { BlueBookFull, RmpFull } from "$lib/bindings";
 import StatItem from "$lib/components/score/StatItem.svelte";
 import { ratingColor, rmpUrl, scoreBadgeStyle } from "$lib/course";
 import { themeStore } from "$lib/stores/theme.svelte";
@@ -8,13 +8,11 @@ import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { BookOpen, ExternalLink, Star } from "@lucide/svelte";
 
 let {
-  rating,
   source,
   bluebook = undefined,
   rmp = undefined,
   inline = false,
 }: {
-  rating: InstructorRating;
   source: "bluebook" | "rmp";
   bluebook?: BlueBookFull;
   rmp?: RmpFull;
@@ -35,14 +33,14 @@ let {
       <div class="text-center w-14">
         <div
           class="text-lg font-semibold"
-          style={scoreBadgeStyle(rating.score, themeStore.isDark)}
+          style={scoreBadgeStyle(bb.calibratedRating, themeStore.isDark)}
         >
-          {rating.score.toFixed(1)}
+          {bb.calibratedRating.toFixed(1)}
         </div>
         <div class="w-full h-1 rounded-full bg-muted mt-1">
           <div
             class="h-full rounded-full"
-            style="width: {(rating.score / 5) * 100}%; background-color: {ratingColor(rating.score, themeStore.isDark)}"
+            style="width: {(bb.calibratedRating / 5) * 100}%; background-color: {ratingColor(bb.calibratedRating, themeStore.isDark)}"
           ></div>
         </div>
         <SimpleTooltip text="Calibrated to the RateMyProfessors scale&#10;using regression calibration" side="bottom" contentClass="max-w-48">
@@ -76,17 +74,18 @@ let {
     {/if}
     <div class="flex items-center gap-6 flex-wrap">
       {#if r.avgRating != null}
+        {@const avgRating = r.avgRating}
         <div class="text-center w-14">
           <div
             class="text-lg font-semibold"
-            style={scoreBadgeStyle(rating.score, themeStore.isDark)}
+            style={scoreBadgeStyle(avgRating, themeStore.isDark)}
           >
-            {rating.score.toFixed(1)}
+            {avgRating.toFixed(1)}
           </div>
           <div class="w-full h-1 rounded-full bg-muted mt-1">
             <div
               class="h-full rounded-full"
-              style="width: {(rating.score / 5) * 100}%; background-color: {ratingColor(rating.score, themeStore.isDark)}"
+              style="width: {(avgRating / 5) * 100}%; background-color: {ratingColor(avgRating, themeStore.isDark)}"
             ></div>
           </div>
           <div class="text-xs text-muted-foreground mt-1">Overall</div>

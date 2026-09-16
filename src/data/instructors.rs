@@ -528,7 +528,7 @@ pub async fn get_public_instructor_by_slug(
                         let calibrated_rating = score_row
                             .as_ref()
                             .and_then(|s| s.calibrated_bb)
-                            .unwrap_or_else(|| (-2.58 + 1.45 * avg as f64).clamp(1.0, 5.0) as f32);
+                            .unwrap_or_else(|| super::scoring::calibrate_bluebook(avg));
                         Some(super::course_types::BlueBookFull {
                             calibrated_rating,
                             avg_instructor_rating: avg,

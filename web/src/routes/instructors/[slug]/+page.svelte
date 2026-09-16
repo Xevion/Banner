@@ -213,12 +213,12 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                   </Tabs.List>
                   <Tabs.Content value="rmp" class="p-4">
                     {#if rmp}
-                      <SourceScoreCard rating={rating!} source="rmp" {rmp} inline />
+                      <SourceScoreCard source="rmp" {rmp} inline />
                     {/if}
                   </Tabs.Content>
                   <Tabs.Content value="bluebook" class="p-4">
                     {#if bluebook}
-                      <SourceScoreCard rating={rating!} source="bluebook" {bluebook} inline />
+                      <SourceScoreCard source="bluebook" {bluebook} inline />
                     {/if}
                   </Tabs.Content>
                 </Tabs.Root>
@@ -231,9 +231,9 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
                 </div>
                 <div class="p-4">
                   {#if hasRmp && rmp}
-                    <SourceScoreCard rating={rating!} source="rmp" {rmp} inline />
+                    <SourceScoreCard source="rmp" {rmp} inline />
                   {:else if hasBb && bluebook}
-                    <SourceScoreCard rating={rating!} source="bluebook" {bluebook} inline />
+                    <SourceScoreCard source="bluebook" {bluebook} inline />
                   {/if}
                 </div>
               {/if}

@@ -32,3 +32,45 @@ pub mod users;
 pub mod watches;
 
 pub use context::DbContext;
+
+/// Escape LIKE/ILIKE metacharacters so user input is treated as literal text.
+pub fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_like;
+
+    #[test]
+    fn test_escape_like_no_metacharacters() {
+        assert_eq!(escape_like("John Smith"), "John Smith");
+    }
+
+    #[test]
+    fn test_escape_like_percent() {
+        assert_eq!(escape_like("100%"), "100\\%");
+    }
+
+    #[test]
+    fn test_escape_like_underscore() {
+        assert_eq!(escape_like("foo_bar"), "foo\\_bar");
+    }
+
+    #[test]
+    fn test_escape_like_backslash() {
+        assert_eq!(escape_like("path\\to"), "path\\\\to");
+    }
+
+    #[test]
+    fn test_escape_like_all_metacharacters() {
+        assert_eq!(escape_like("%_\\"), "\\%\\_\\\\");
+    }
+
+    #[test]
+    fn test_escape_like_empty_string() {
+        assert_eq!(escape_like(""), "");
+    }
+}

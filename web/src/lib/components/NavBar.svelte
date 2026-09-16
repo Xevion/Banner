@@ -2,11 +2,13 @@
 import { page } from "$app/state";
 import { authStore } from "$lib/auth.svelte";
 import { navbar } from "$lib/stores/navigation.svelte";
-import { Clock, Search, User } from "@lucide/svelte";
+import { BookOpen, Clock, Search, User, Users } from "@lucide/svelte";
 import ThemeToggle from "./ThemeToggle.svelte";
 
 const staticTabs = [
   { href: "/", label: "Search", icon: Search },
+  { href: "/instructors", label: "Instructors", icon: Users },
+  { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/timeline", label: "Timeline", icon: Clock },
 ] as const;
 
@@ -205,7 +207,7 @@ $effect(() => {
         <a
           href={tab.href}
           bind:this={tabRefs[i]}
-          class="relative z-10 flex items-center gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-sm font-medium transition-colors no-underline select-none
+          class="relative z-10 flex items-center gap-1.5 rounded-md px-2 md:px-3 py-1.5 text-sm font-medium transition-colors no-underline select-none
             {isActive(tab.href) ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}"
         >
           <tab.icon size={15} strokeWidth={2} />
@@ -213,7 +215,7 @@ $effect(() => {
             class="grid overflow-hidden transition-[grid-template-columns,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
               {isLabelExpanded(tab.href)
                 ? 'grid-cols-[1fr] opacity-100'
-                : 'grid-cols-[0fr] opacity-0 sm:grid-cols-[1fr] sm:opacity-100'}"
+                : 'grid-cols-[0fr] opacity-0 md:grid-cols-[1fr] md:opacity-100'}"
           >
             <span class="overflow-hidden whitespace-nowrap">{tab.label}</span>
           </span>
@@ -222,7 +224,7 @@ $effect(() => {
       <a
         href={profileTab.href}
         bind:this={tabRefs[staticTabs.length]}
-        class="relative z-10 flex items-center gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-sm font-medium transition-colors no-underline select-none
+        class="relative z-10 flex items-center gap-1.5 rounded-md px-2 md:px-3 py-1.5 text-sm font-medium transition-colors no-underline select-none
           {isActive(profileTab.href)
             ? 'text-foreground'
             : 'text-muted-foreground hover:text-foreground'}"
@@ -233,7 +235,7 @@ $effect(() => {
             class="grid overflow-hidden transition-[grid-template-columns,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
               {isLabelExpanded(profileTab.href)
                 ? 'grid-cols-[1fr] opacity-100'
-                : 'grid-cols-[0fr] opacity-0 sm:grid-cols-[1fr] sm:opacity-100'}"
+                : 'grid-cols-[0fr] opacity-0 md:grid-cols-[1fr] md:opacity-100'}"
           >
             <span class="overflow-hidden whitespace-nowrap">{profileTab.label}</span>
           </span>

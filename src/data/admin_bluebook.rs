@@ -11,6 +11,7 @@ use ts_rs::TS;
 
 use crate::data::unsigned::Count;
 
+use crate::data::escape_like;
 use crate::data::names::{MatchCandidate, NameMatchQuality, find_best_candidate};
 
 /// Domain errors for BlueBook link operations.
@@ -140,13 +141,6 @@ struct LinkListRow {
 struct StatusCount {
     status: String,
     count: i64,
-}
-
-/// Escape LIKE/ILIKE metacharacters so user input is treated as literal text.
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
 }
 
 /// Filter/sort/pagination params for listing links.
@@ -723,36 +717,6 @@ async fn insert_link(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_escape_like_no_metacharacters() {
-        assert_eq!(escape_like("John Smith"), "John Smith");
-    }
-
-    #[test]
-    fn test_escape_like_percent() {
-        assert_eq!(escape_like("100%"), "100\\%");
-    }
-
-    #[test]
-    fn test_escape_like_underscore() {
-        assert_eq!(escape_like("foo_bar"), "foo\\_bar");
-    }
-
-    #[test]
-    fn test_escape_like_backslash() {
-        assert_eq!(escape_like("path\\to"), "path\\\\to");
-    }
-
-    #[test]
-    fn test_escape_like_all_metacharacters() {
-        assert_eq!(escape_like("%_\\"), "\\%\\_\\\\");
-    }
-
-    #[test]
-    fn test_escape_like_empty_string() {
-        assert_eq!(escape_like(""), "");
-    }
 
     #[test]
     fn test_bluebook_error_downcast() {
