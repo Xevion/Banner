@@ -14,7 +14,7 @@ let {
 {#if result}
   <div
     class="mb-4 rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2
-           {result.isError ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}"
+           {result.isError ? 'bg-status-red/10 text-status-red' : 'bg-muted text-muted-foreground'}"
     transition:fade={{ duration: 150 }}
   >
     <span>{result.message}</span>

@@ -259,29 +259,10 @@ pub async fn list_instructors(
         _ => "tc.score DESC NULLS LAST, i.display_name ASC",
     };
 
-    // Build WHERE clause
-    let mut conditions = Vec::new();
-    let mut bind_idx = 0u32;
-
-    if filter.status.is_some() {
-        bind_idx += 1;
-        conditions.push(format!("ms.status = ${bind_idx}"));
-    }
-    if filter.search.is_some() {
-        bind_idx += 1;
-        conditions.push(format!(
-            "(i.display_name ILIKE ${bind_idx} OR i.email ILIKE ${bind_idx})"
-        ));
-    }
-
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
-
-    let limit_idx = bind_idx + 1;
-    let offset_idx = bind_idx + 2;
+    let search_pattern = filter
+        .search
+        .as_ref()
+        .map(|search| format!("%{}%", escape_like(search)));
 
     let query_str = format!(
         r#"
@@ -313,40 +294,40 @@ pub async fn list_instructors(
             LIMIT 1
         ) tc ON true
         LEFT JOIN rmp_professors rp ON rp.legacy_id = tc.rmp_legacy_id
-        {where_clause}
+        WHERE ($1::text IS NULL OR ms.status = $1)
+          AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)
         ORDER BY {sort_clause}
-        LIMIT ${limit_idx} OFFSET ${offset_idx}
+        LIMIT $3 OFFSET $4
         "#
     );
 
-    let mut query = sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str));
-    if let Some(ref status) = filter.status {
-        query = query.bind(status);
-    }
-    if let Some(ref search) = filter.search {
-        query = query.bind(format!("%{}%", escape_like(search)));
-    }
-    query = query.bind(per_page).bind(offset);
-
-    let rows = query
+    // Only the sort is interpolated, and ORDER BY cannot be a bind parameter, so this
+    // one stays runtime-checked. A NULL bind disables its own filter clause.
+    let rows = sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str))
+        .bind(filter.status.as_deref())
+        .bind(search_pattern.as_deref())
+        .bind(per_page)
+        .bind(offset)
         .fetch_all(pool)
         .await
         .context("failed to list instructors")?;
 
-    // Count total with filters
-    let count_query_str = format!("SELECT COUNT(*) FROM instructors i {where_clause}");
-    let mut count_query = sqlx::query_as::<_, (i64,)>(AssertSqlSafe(count_query_str));
-    if let Some(ref status) = filter.status {
-        count_query = count_query.bind(status);
-    }
-    if let Some(ref search) = filter.search {
-        count_query = count_query.bind(format!("%{}%", escape_like(search)));
-    }
-
-    let (total,) = count_query
-        .fetch_one(pool)
-        .await
-        .context("failed to count instructors")?;
+    // The count repeats the page query's FROM and WHERE, and is macro-checked so that
+    // an alias the count cannot resolve fails the build instead of the request.
+    let total = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "total!"
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        WHERE ($1::text IS NULL OR ms.status = $1)
+          AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)
+        "#,
+        filter.status.as_deref(),
+        search_pattern.as_deref(),
+    )
+    .fetch_one(pool)
+    .await
+    .context("failed to count instructors")?;
 
     // Aggregate stats (unfiltered)
     let stats_rows = sqlx::query_as::<_, StatusCount>(

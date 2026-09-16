@@ -8,6 +8,7 @@ import type {
   InstructorListItem,
 } from "$lib/bindings";
 import ActionResultBanner from "$lib/components/ActionResultBanner.svelte";
+import ErrorPanel from "$lib/components/ErrorPanel.svelte";
 import FilterCards from "$lib/components/FilterCards.svelte";
 import MatchListSkeleton from "$lib/components/MatchListSkeleton.svelte";
 import MatchPageHeader from "$lib/components/MatchPageHeader.svelte";
@@ -131,7 +132,8 @@ let totalPages = $derived(Math.max(1, Math.ceil(totalCount / perPage)));
 
 async function fetchLinks() {
   loading = true;
-  error = null;
+  // The error stays up until this attempt resolves, so a retry spins in place
+  // rather than flashing the panel away and back.
   highlight.clear();
   const result = await client.getAdminBluebookLinks({
     status: activeFilter ?? null,
@@ -141,7 +143,12 @@ async function fetchLinks() {
   });
   if (result.isErr) {
     error = result.error.message;
+    // The rows and counts on screen answer the previous filter, so leaving them up
+    // would read as a successful result for the one that just failed.
+    links = [];
+    totalCount = 0;
   } else {
+    error = null;
     links = result.value.links;
     totalCount = result.value.total;
     stats = result.value.stats;
@@ -312,17 +319,16 @@ function formatConfidence(confidence: number | null): string {
 
 <ActionResultBanner result={matchResult} onDismiss={() => (matchResult = null)} />
 
-<!-- Error -->
 {#if error}
-  <div
-    class="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
-    transition:fade={{ duration: 150 }}
-  >
-    {error}
+  <div transition:fade={{ duration: 150 }}>
+    <ErrorPanel
+      title="Couldn't load BlueBook links"
+      message={error}
+      onRetry={fetchLinks}
+      retrying={loading}
+    />
   </div>
-{/if}
-
-{#if loading && links.length === 0}
+{:else if loading && links.length === 0}
   <MatchListSkeleton
     statCardsClass="grid-cols-2 sm:grid-cols-5"
     cellClasses={[

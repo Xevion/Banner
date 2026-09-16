@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"total!\"\n        FROM instructors i\n        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id\n        WHERE ($1::text IS NULL OR ms.status = $1)\n          AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "09261f4434b6bbdbef0471cb8a7505d9a638651709cee1e4bc26e6ce7c99a428"
+}

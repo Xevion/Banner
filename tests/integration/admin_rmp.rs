@@ -1,5 +1,7 @@
 use crate::helpers::db::test_db;
-use banner::data::admin_rmp::{AdminRmpError, accept_candidate, reject_all_candidates};
+use banner::data::admin_rmp::{
+    AdminRmpError, ListInstructorsFilter, accept_candidate, list_instructors, reject_all_candidates,
+};
 use banner::data::rmp::unmatch_instructor;
 
 /// Test that unmatching an instructor resets accepted candidates back to pending.
@@ -200,4 +202,60 @@ async fn reject_all_refuses_an_instructor_with_confirmed_matches() {
         ),
         "expected ConfirmedMatches, got {err:?}"
     );
+}
+
+/// The status filter is applied to the page query and the count query alike, and
+/// the two have different FROM clauses. A filter that only one of them can resolve
+/// fails the whole listing.
+#[tokio::test]
+async fn listing_by_status_filters_both_the_page_and_the_total() {
+    let pool = test_db!().await;
+    let (unmatched_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email) \
+         VALUES ('Unmatched, Ida', 'ida@utsa.edu') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to create the unmatched instructor");
+
+    let (confirmed_id,): (i32,) = sqlx::query_as(
+        "INSERT INTO instructors (display_name, email) \
+         VALUES ('Confirmed, Cal', 'cal@utsa.edu') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to create the confirmed instructor");
+
+    sqlx::query(
+        "INSERT INTO rmp_professors (legacy_id, graphql_id, first_name, last_name, num_ratings) \
+         VALUES (9999997, 'status-filter-graphql-id', 'Cal', 'Confirmed', 3)",
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to create rmp professor");
+
+    sqlx::query(
+        "INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source) \
+         VALUES ($1, 9999997, 'manual')",
+    )
+    .bind(confirmed_id)
+    .execute(&pool)
+    .await
+    .expect("failed to create link");
+
+    let filter = ListInstructorsFilter {
+        status: Some("unmatched".to_string()),
+        search: None,
+        page: 1,
+        per_page: 50,
+        sort: None,
+    };
+    let response = list_instructors(&pool, &filter)
+        .await
+        .expect("listing by status should succeed");
+
+    let ids: Vec<i32> = response.instructors.iter().map(|i| i.id).collect();
+    assert_eq!(ids, vec![unmatched_id]);
+    assert_eq!(response.total, 1);
+    assert!(!ids.contains(&confirmed_id));
 }

@@ -11,6 +11,7 @@ import {
   toLocalInput,
 } from "$lib/action-log";
 import type { ActionLogParams, AdminAuditEntry } from "$lib/bindings";
+import ErrorPanel from "$lib/components/ErrorPanel.svelte";
 import Pagination from "$lib/components/Pagination.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import StyledSelect, { type SelectItem } from "$lib/components/StyledSelect.svelte";
@@ -164,7 +165,9 @@ const inputClass =
 </div>
 
 {#if data.error}
-  <p class="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{data.error}</p>
+  <div class="mb-4">
+    <ErrorPanel title="Couldn't load the action log" message={data.error} />
+  </div>
 {/if}
 
 <div class="bg-card border-border overflow-hidden rounded-lg border">

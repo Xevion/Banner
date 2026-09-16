@@ -2,6 +2,7 @@
 import { client } from "$lib/api";
 import type { DuplicatePair, DuplicateSide, DuplicateTier } from "$lib/bindings";
 import ActionResultBanner from "$lib/components/ActionResultBanner.svelte";
+import ErrorPanel from "$lib/components/ErrorPanel.svelte";
 import { formatInstructorName } from "$lib/course";
 import { ArrowRight, LoaderCircle, Merge, Undo2, UserX } from "@lucide/svelte";
 import { untrack } from "svelte";
@@ -147,7 +148,7 @@ async function handleMergeAll() {
   <ActionResultBanner {result} onDismiss={() => (result = null)} />
 
   {#if error}
-    <div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
+    <ErrorPanel title="Couldn't load duplicate records" message={error} onRetry={refresh} />
   {:else if pairs.length === 0}
     <div class="rounded-md border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
       No duplicate instructor records found.

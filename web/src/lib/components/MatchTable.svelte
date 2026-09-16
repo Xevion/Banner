@@ -1,4 +1,5 @@
 <script lang="ts" generics="T, D extends object">
+import ErrorPanel from "$lib/components/ErrorPanel.svelte";
 import type { MatchColumn } from "$lib/ui";
 import { ChevronRight } from "@lucide/svelte";
 import type { Snippet } from "svelte";
@@ -105,9 +106,7 @@ let {
                     </div>
                   </div>
                 {:else if detailError}
-                  <div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {detailError}
-                  </div>
+                  <ErrorPanel title="Couldn't load details" message={detailError} />
                 {:else if detail}
                   {@render detailPanel(detail)}
                 {/if}
