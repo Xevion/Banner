@@ -568,7 +568,7 @@ async fn test_absorbed_account_is_not_recreated_by_a_later_scrape(pool: PgPool) 
 
     let survivor = ids[0].0;
     let absorbed = ids[1].0;
-    banner::data::instructor_merge::merge_instructors(&pool, survivor, absorbed, None)
+    banner::data::instructor_merge::merge_instructors(&pool, survivor, absorbed, None, false)
         .await
         .unwrap();
 
@@ -636,7 +636,7 @@ async fn test_absorbed_nameless_record_is_not_recreated(pool: PgPool) {
             .await
             .unwrap();
 
-    banner::data::instructor_merge::merge_instructors(&pool, survivor.0, nameless, None)
+    banner::data::instructor_merge::merge_instructors(&pool, survivor.0, nameless, None, true)
         .await
         .unwrap();
 
@@ -693,10 +693,10 @@ async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
     assert_eq!(ids.len(), 3);
     let (first, second, third) = (ids[0].0, ids[1].0, ids[2].0);
 
-    banner::data::instructor_merge::merge_instructors(&pool, second, first, None)
+    banner::data::instructor_merge::merge_instructors(&pool, second, first, None, false)
         .await
         .unwrap();
-    banner::data::instructor_merge::merge_instructors(&pool, third, second, None)
+    banner::data::instructor_merge::merge_instructors(&pool, third, second, None, false)
         .await
         .unwrap();
 
@@ -724,4 +724,174 @@ async fn test_chained_merge_keeps_the_earlier_decision(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(landed.0, third, "the section lands on the final survivor");
+}
+
+/// Two records sharing a display name across distinct accounts -- the shape
+/// review keeps offering until someone records that they are two people.
+async fn seed_distinct_namesakes(pool: &PgPool) -> (i32, i32) {
+    let mut a = helpers::make_course("20020", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Devan",
+        Some("devan.fictional@utsa.edu"),
+        20020,
+        "202510",
+    )];
+
+    let mut b = helpers::make_course("20021", "202510", "AST", "2013", "Planets", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Fictional, Devan",
+        Some("devan.fictional2@utsa.edu"),
+        20021,
+        "202510",
+    )];
+
+    batch_upsert_courses(&[a, b], pool).await.unwrap();
+
+    let ids: Vec<(i32,)> = sqlx::query_as("SELECT id FROM instructors ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    assert_eq!(ids.len(), 2, "distinct accounts start as separate records");
+    (ids[0].0, ids[1].0)
+}
+
+#[sqlx::test]
+async fn test_dismissed_pair_leaves_the_duplicate_list(pool: PgPool) {
+    use banner::data::instructor_merge::{
+        dismiss_pair, find_dismissed_pairs, find_duplicate_pairs,
+    };
+
+    let (a, b) = seed_distinct_namesakes(&pool).await;
+    let before = find_duplicate_pairs(&pool).await.unwrap();
+    assert_eq!(before.len(), 1, "the namesakes start out awaiting review");
+
+    dismiss_pair(&pool, a, b, None).await.unwrap();
+
+    let after = find_duplicate_pairs(&pool).await.unwrap();
+    assert!(
+        after.is_empty(),
+        "a dismissed pair must not be offered again"
+    );
+
+    let dismissed = find_dismissed_pairs(&pool).await.unwrap();
+    assert_eq!(dismissed.len(), 1, "review still needs it to offer an undo");
+}
+
+/// The decision is about identity, so a later scrape must not resurrect it.
+#[sqlx::test]
+async fn test_dismissal_survives_a_later_scrape(pool: PgPool) {
+    use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs};
+
+    let (a, b) = seed_distinct_namesakes(&pool).await;
+    dismiss_pair(&pool, a, b, None).await.unwrap();
+
+    let mut again = helpers::make_course("20022", "202520", "AST", "1013", "Stars", (5, 30, 0, 0));
+    again.faculty = vec![helpers::make_faculty(
+        "Fictional, Devan",
+        Some("devan.fictional@utsa.edu"),
+        20022,
+        "202520",
+    )];
+    batch_upsert_courses(&[again], &pool).await.unwrap();
+
+    let pairs = find_duplicate_pairs(&pool).await.unwrap();
+    assert!(pairs.is_empty(), "the dismissal must survive a rescrape");
+}
+
+#[sqlx::test]
+async fn test_undismissing_returns_the_pair_to_review(pool: PgPool) {
+    use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs, undismiss_pair};
+
+    let (a, b) = seed_distinct_namesakes(&pool).await;
+    dismiss_pair(&pool, a, b, None).await.unwrap();
+
+    // Submitted the other way round, so the stored ordering has to be normalised.
+    let removed = undismiss_pair(&pool, b, a).await.unwrap();
+    assert!(removed, "the dismissal must be found either way round");
+
+    let pairs = find_duplicate_pairs(&pool).await.unwrap();
+    assert_eq!(pairs.len(), 1, "a mistaken dismissal must be reversible");
+}
+
+#[sqlx::test]
+async fn test_dismissing_a_pair_twice_keeps_one_decision(pool: PgPool) {
+    use banner::data::instructor_merge::dismiss_pair;
+
+    let (a, b) = seed_distinct_namesakes(&pool).await;
+    dismiss_pair(&pool, a, b, None).await.unwrap();
+    dismiss_pair(&pool, b, a, None).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructor_dismissals")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 1, "argument order must not double the decision");
+}
+
+/// A dismissal speaks about two live records, so merging one away must take it.
+#[sqlx::test]
+async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision(pool: PgPool) {
+    use banner::data::instructor_merge::{dismiss_pair, merge_instructors};
+
+    let (a, b) = seed_distinct_namesakes(&pool).await;
+    dismiss_pair(&pool, a, b, None).await.unwrap();
+
+    merge_instructors(&pool, b, a, None, false).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructor_dismissals")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 0, "no decision may outlive the record it names");
+}
+
+/// Merging is irreversible, so two records that do not share a name must not
+/// fold together on an id alone.
+#[sqlx::test]
+async fn test_merging_unrelated_records_needs_confirmation(pool: PgPool) {
+    use banner::data::instructor_merge::merge_instructors;
+
+    let mut a = helpers::make_course("20020", "202510", "MMI", "1013", "Media", (5, 30, 0, 0));
+    a.faculty = vec![helpers::make_faculty(
+        "Fictional, Esme",
+        Some("esme.fictional@utsa.edu"),
+        20020,
+        "202510",
+    )];
+    let mut b = helpers::make_course("20021", "202510", "ENG", "1013", "Writing", (5, 30, 0, 0));
+    b.faculty = vec![helpers::make_faculty(
+        "Fictional, Rafferty",
+        Some("rafferty.fictional@utsa.edu"),
+        20021,
+        "202510",
+    )];
+    batch_upsert_courses(&[a, b], &pool).await.unwrap();
+
+    let ids: Vec<(i32,)> = sqlx::query_as("SELECT id FROM instructors ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let (first, second) = (ids[0].0, ids[1].0);
+
+    let refused = merge_instructors(&pool, first, second, None, false).await;
+    assert!(refused.is_err(), "unrelated records must not merge unasked");
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        count.0, 2,
+        "the refused merge must not have deleted anything"
+    );
+
+    merge_instructors(&pool, first, second, None, true)
+        .await
+        .expect("an explicit confirmation still merges");
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instructors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 1);
 }

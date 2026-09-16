@@ -511,6 +511,26 @@ export class BannerApiClient {
     });
   }
 
+  async dismissDuplicate(
+    firstId: number,
+    secondId: number
+  ): Promise<Result<MergeResponse, ApiErrorClass>> {
+    return this.request<MergeResponse>("/admin/instructors/dismiss", {
+      method: "POST",
+      body: { firstId, secondId },
+    });
+  }
+
+  async undismissDuplicate(
+    firstId: number,
+    secondId: number
+  ): Promise<Result<MergeResponse, ApiErrorClass>> {
+    return this.request<MergeResponse>("/admin/instructors/undismiss", {
+      method: "POST",
+      body: { firstId, secondId },
+    });
+  }
+
   async mergeWithClaimant(
     instructorId: number,
     rmpLegacyId: number

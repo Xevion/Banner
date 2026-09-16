@@ -7,6 +7,7 @@ export const load: PageLoad = async ({ fetch }) => {
 
   return {
     pairs: result.isOk ? result.value.pairs : [],
+    dismissed: result.isOk ? result.value.dismissed : [],
     error: result.isErr ? result.error.message : null,
   };
 };

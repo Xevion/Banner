@@ -122,6 +122,14 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         )
         .route("/admin/instructors/merge", post(admin::duplicates::merge))
         .route(
+            "/admin/instructors/dismiss",
+            post(admin::duplicates::dismiss),
+        )
+        .route(
+            "/admin/instructors/undismiss",
+            post(admin::duplicates::undismiss),
+        )
+        .route(
             "/admin/instructors/{id}/merge-claimant",
             post(admin::duplicates::merge_claimant),
         )

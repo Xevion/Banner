@@ -25,12 +25,25 @@ fn merge_error(context: &str, e: anyhow::Error) -> ApiError {
 #[ts(export)]
 pub struct DuplicatesResponse {
     pub pairs: Vec<DuplicatePair>,
+    /// Pairs already judged to be different people, kept so review can undo one.
+    pub dismissed: Vec<DuplicatePair>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeBody {
     survivor_id: i32,
     loser_id: i32,
+    /// Set when the reviewer has confirmed two differing names are one person.
+    #[serde(default)]
+    names_confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DismissBody {
+    first_id: i32,
+    second_id: i32,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -50,9 +63,17 @@ pub async fn list_duplicates(
         .await
         .map_err(|e| db_error("list duplicate instructors", e))?;
 
-    trace!(count = pairs.len(), "Listed duplicate instructor pairs");
+    let dismissed = instructor_merge::find_dismissed_pairs(&state.db_pool)
+        .await
+        .map_err(|e| db_error("list dismissed instructor pairs", e))?;
 
-    Ok(Json(DuplicatesResponse { pairs }))
+    trace!(
+        count = pairs.len(),
+        dismissed = dismissed.len(),
+        "Listed duplicate instructor pairs"
+    );
+
+    Ok(Json(DuplicatesResponse { pairs, dismissed }))
 }
 
 /// `POST /api/admin/instructors/merge` -- Fold one instructor record into another.
@@ -67,6 +88,7 @@ pub async fn merge(
         body.survivor_id,
         body.loser_id,
         Some(user.discord_id),
+        body.names_confirmed,
     )
     .await
     .map_err(|e| merge_error("merge instructors", e))?;
@@ -78,6 +100,7 @@ pub async fn merge(
     info!(
         survivor_id = body.survivor_id,
         loser_id = body.loser_id,
+        actor = user.discord_id,
         "Merged duplicate instructors"
     );
 
@@ -85,6 +108,7 @@ pub async fn merge(
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeClaimantBody {
     rmp_legacy_id: i32,
 }
@@ -113,7 +137,9 @@ pub async fn merge_claimant(
 
     info!(
         survivor,
-        loser, "Resolved blocked candidate by merging records"
+        loser,
+        actor = user.discord_id,
+        "Resolved blocked candidate by merging records"
     );
 
     Ok(Json(MergeResponse { ok: true }))
@@ -122,10 +148,10 @@ pub async fn merge_claimant(
 /// `POST /api/admin/instructors/merge-duplicates` -- Merge every unambiguous pair.
 #[instrument(skip_all)]
 pub async fn merge_all(
-    AdminUser(_user): AdminUser,
+    AdminUser(user): AdminUser,
     State(state): State<AppState>,
 ) -> Result<Json<MergeStats>, ApiError> {
-    let stats = instructor_merge::auto_merge_duplicates(&state.db_pool)
+    let stats = instructor_merge::auto_merge_duplicates(&state.db_pool, Some(user.discord_id))
         .await
         .map_err(|e| db_error("merge duplicate instructors", e))?;
 
@@ -136,10 +162,59 @@ pub async fn merge_all(
     info!(
         merged = stats.merged,
         skipped = stats.skipped,
+        actor = user.discord_id,
         "Merged duplicate instructor records"
     );
 
     Ok(Json(stats))
+}
+
+/// `POST /api/admin/instructors/dismiss` -- Record that a pair is two people.
+#[instrument(skip_all, fields(first_id, second_id))]
+pub async fn dismiss(
+    AdminUser(user): AdminUser,
+    State(state): State<AppState>,
+    Json(body): Json<DismissBody>,
+) -> Result<Json<MergeResponse>, ApiError> {
+    instructor_merge::dismiss_pair(
+        &state.db_pool,
+        body.first_id,
+        body.second_id,
+        Some(user.discord_id),
+    )
+    .await
+    .map_err(|e| merge_error("dismiss instructor pair", e))?;
+
+    info!(
+        first_id = body.first_id,
+        second_id = body.second_id,
+        actor = user.discord_id,
+        "Dismissed a duplicate instructor pair"
+    );
+
+    Ok(Json(MergeResponse { ok: true }))
+}
+
+/// `POST /api/admin/instructors/undismiss` -- Return a dismissed pair to review.
+#[instrument(skip_all, fields(first_id, second_id))]
+pub async fn undismiss(
+    AdminUser(user): AdminUser,
+    State(state): State<AppState>,
+    Json(body): Json<DismissBody>,
+) -> Result<Json<MergeResponse>, ApiError> {
+    let removed = instructor_merge::undismiss_pair(&state.db_pool, body.first_id, body.second_id)
+        .await
+        .map_err(|e| merge_error("undismiss instructor pair", e))?;
+
+    info!(
+        first_id = body.first_id,
+        second_id = body.second_id,
+        removed,
+        actor = user.discord_id,
+        "Restored a dismissed instructor pair"
+    );
+
+    Ok(Json(MergeResponse { ok: true }))
 }
 
 #[cfg(test)]

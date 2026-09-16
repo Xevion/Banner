@@ -95,7 +95,7 @@ async fn rmp_corpus_merge_duplicate_instructors() {
         .count();
     println!("pairs: {}, same-account: {same_account}", before.len());
 
-    let stats = auto_merge_duplicates(&pool)
+    let stats = auto_merge_duplicates(&pool, None)
         .await
         .expect("merge duplicates");
     println!("{stats:?}");

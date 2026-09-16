@@ -5,7 +5,8 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info};
 use ts_rs::TS;
@@ -24,6 +25,12 @@ pub enum MergeError {
     NoClaimant,
     #[error("records name different people; merge them manually if they are the same")]
     DifferentPeople,
+    #[error("cannot dismiss a record against itself")]
+    SelfDismiss,
+    #[error("both instructors must exist to dismiss the pair")]
+    MissingDismissSide,
+    #[error("{survivor} and {loser} are different names; confirm the merge to override")]
+    DifferentNames { survivor: String, loser: String },
 }
 
 /// How much evidence there is that two records are the same person.
@@ -174,36 +181,72 @@ fn classify(a: Option<&str>, b: Option<&str>) -> DuplicateTier {
     }
 }
 
-/// Find instructor records that share a display name, paired and classified.
-pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
-    let rows: Vec<InstructorRow> = sqlx::query_as(
-        r#"
-        SELECT i.id, i.display_name, i.email, i.rmp_match_status,
-               COALESCE(ci.course_count, 0) AS course_count,
-               COALESCE(ci.subjects, '{}') AS subjects,
-               COALESCE(rl.legacy_ids, '{}') AS rmp_legacy_ids
-        FROM instructors i
-        LEFT JOIN LATERAL (
-            SELECT COUNT(*) AS course_count,
-                   ARRAY_AGG(DISTINCT c.subject) AS subjects
-            FROM course_instructors x
-            JOIN courses c ON c.id = x.course_id
-            WHERE x.instructor_id = i.id
-        ) ci ON TRUE
-        LEFT JOIN LATERAL (
-            SELECT ARRAY_AGG(l.rmp_legacy_id ORDER BY l.rmp_legacy_id) AS legacy_ids
-            FROM instructor_rmp_links l
-            WHERE l.instructor_id = i.id
-        ) rl ON TRUE
-        WHERE i.display_name IN (
-            SELECT display_name FROM instructors GROUP BY display_name HAVING COUNT(*) > 1
-        )
-        ORDER BY i.display_name, i.id
-        "#,
+const INSTRUCTOR_PAIR_SELECT: &str = r#"
+    SELECT i.id, i.display_name, i.email, i.rmp_match_status,
+           COALESCE(ci.course_count, 0) AS course_count,
+           COALESCE(ci.subjects, '{}') AS subjects,
+           COALESCE(rl.legacy_ids, '{}') AS rmp_legacy_ids
+    FROM instructors i
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS course_count,
+               ARRAY_AGG(DISTINCT c.subject) AS subjects
+        FROM course_instructors x
+        JOIN courses c ON c.id = x.course_id
+        WHERE x.instructor_id = i.id
+    ) ci ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT ARRAY_AGG(l.rmp_legacy_id ORDER BY l.rmp_legacy_id) AS legacy_ids
+        FROM instructor_rmp_links l
+        WHERE l.instructor_id = i.id
+    ) rl ON TRUE
+"#;
+
+/// The two ids of a pair in the order the dismissal table stores them.
+///
+/// `None` when both sides are the same record, which is never a pair.
+fn ordered_pair(a: i32, b: i32) -> Option<(i32, i32)> {
+    match a.cmp(&b) {
+        Ordering::Less => Some((a, b)),
+        Ordering::Greater => Some((b, a)),
+        Ordering::Equal => None,
+    }
+}
+
+fn build_pair(a: &InstructorRow, b: &InstructorRow) -> DuplicatePair {
+    let (survivor, loser) = pick_survivor(a, b);
+    DuplicatePair {
+        tier: classify(a.email.as_deref(), b.email.as_deref()),
+        subjects_overlap: survivor.subjects.iter().any(|s| loser.subjects.contains(s)),
+        survivor: survivor.into(),
+        loser: loser.into(),
+    }
+}
+
+async fn dismissed_pairs(pool: &PgPool) -> Result<Vec<(i32, i32)>> {
+    sqlx::query_as(
+        "SELECT lesser_id, greater_id FROM instructor_dismissals ORDER BY decided_at DESC, id DESC",
     )
     .fetch_all(pool)
     .await
+    .context("failed to fetch dismissed instructor pairs")
+}
+
+/// Find instructor records that share a display name, paired and classified.
+///
+/// Pairs an admin has judged to be different people are left out.
+pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
+    let rows: Vec<InstructorRow> = sqlx::query_as(AssertSqlSafe(format!(
+        "{INSTRUCTOR_PAIR_SELECT} \
+         WHERE i.display_name IN ( \
+             SELECT display_name FROM instructors GROUP BY display_name HAVING COUNT(*) > 1 \
+         ) \
+         ORDER BY i.display_name, i.id"
+    )))
+    .fetch_all(pool)
+    .await
     .context("failed to fetch duplicate instructor groups")?;
+
+    let dismissed: HashSet<(i32, i32)> = dismissed_pairs(pool).await?.into_iter().collect();
 
     let mut by_name: HashMap<&str, Vec<&InstructorRow>> = HashMap::new();
     for row in &rows {
@@ -214,14 +257,10 @@ pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
     for group in by_name.values() {
         for (i, a) in group.iter().enumerate() {
             for b in &group[i + 1..] {
-                let (survivor, loser) = pick_survivor(a, b);
-                let subjects_overlap = survivor.subjects.iter().any(|s| loser.subjects.contains(s));
-                pairs.push(DuplicatePair {
-                    tier: classify(a.email.as_deref(), b.email.as_deref()),
-                    survivor: survivor.into(),
-                    loser: loser.into(),
-                    subjects_overlap,
-                });
+                if ordered_pair(a.id, b.id).is_some_and(|key| dismissed.contains(&key)) {
+                    continue;
+                }
+                pairs.push(build_pair(a, b));
             }
         }
     }
@@ -235,6 +274,79 @@ pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
     Ok(pairs)
 }
 
+/// The pairs an admin has judged to be different people, newest decision first.
+///
+/// Review needs these to offer an undo; they never appear in the live list.
+pub async fn find_dismissed_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
+    let dismissed = dismissed_pairs(pool).await?;
+    if dismissed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let ids: Vec<i32> = dismissed.iter().flat_map(|&(a, b)| [a, b]).collect();
+    let rows: Vec<InstructorRow> = sqlx::query_as(AssertSqlSafe(format!(
+        "{INSTRUCTOR_PAIR_SELECT} WHERE i.id = ANY($1)"
+    )))
+    .bind(&ids)
+    .fetch_all(pool)
+    .await
+    .context("failed to fetch dismissed instructor records")?;
+
+    let by_id: HashMap<i32, &InstructorRow> = rows.iter().map(|row| (row.id, row)).collect();
+    Ok(dismissed
+        .into_iter()
+        .filter_map(|(a, b)| Some(build_pair(by_id.get(&a)?, by_id.get(&b)?)))
+        .collect())
+}
+
+/// Record that two records naming the same person are in fact different people.
+///
+/// Idempotent, so a repeated click keeps the original decision and its author.
+pub async fn dismiss_pair(pool: &PgPool, a: i32, b: i32, decided_by: Option<i64>) -> Result<()> {
+    let (lesser, greater) = ordered_pair(a, b).ok_or(MergeError::SelfDismiss)?;
+
+    let result = sqlx::query(
+        "INSERT INTO instructor_dismissals (lesser_id, greater_id, decided_by) \
+         VALUES ($1, $2, $3) ON CONFLICT (lesser_id, greater_id) DO NOTHING",
+    )
+    .bind(lesser)
+    .bind(greater)
+    .bind(decided_by)
+    .execute(pool)
+    .await;
+
+    match result {
+        Ok(_) => {
+            info!(
+                lesser,
+                greater, "Dismissed instructor pair as different people"
+            );
+            Ok(())
+        }
+        Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("23503") => {
+            Err(MergeError::MissingDismissSide.into())
+        }
+        Err(e) => Err(anyhow::Error::from(e).context("failed to record the dismissal")),
+    }
+}
+
+/// Undo a dismissal, returning the pair to review. Reports whether one existed.
+pub async fn undismiss_pair(pool: &PgPool, a: i32, b: i32) -> Result<bool> {
+    let (lesser, greater) = ordered_pair(a, b).ok_or(MergeError::SelfDismiss)?;
+
+    let result =
+        sqlx::query("DELETE FROM instructor_dismissals WHERE lesser_id = $1 AND greater_id = $2")
+            .bind(lesser)
+            .bind(greater)
+            .execute(pool)
+            .await
+            .context("failed to undo the dismissal")?;
+
+    let removed = result.rows_affected() > 0;
+    info!(lesser, greater, removed, "Undid an instructor dismissal");
+    Ok(removed)
+}
+
 /// Fold `loser_id` into `survivor_id` and delete the loser.
 ///
 /// Every dependent row moves across; rows that would collide with one the
@@ -244,6 +356,7 @@ pub async fn merge_instructors(
     survivor_id: i32,
     loser_id: i32,
     decided_by: Option<i64>,
+    names_confirmed: bool,
 ) -> Result<()> {
     if survivor_id == loser_id {
         return Err(MergeError::SelfMerge.into());
@@ -262,6 +375,22 @@ pub async fn merge_instructors(
 
     if sides.len() != 2 {
         return Err(MergeError::MissingInstructor.into());
+    }
+
+    // Merging is irreversible, so two records that do not even share a name
+    // need the caller to say outright that they are one person.
+    if !names_confirmed {
+        let survivor = sides.iter().find(|s| s.id == survivor_id);
+        let loser = sides.iter().find(|s| s.id == loser_id);
+        if let (Some(survivor), Some(loser)) = (survivor, loser)
+            && survivor.display_name != loser.display_name
+        {
+            return Err(MergeError::DifferentNames {
+                survivor: survivor.display_name.clone(),
+                loser: loser.display_name.clone(),
+            }
+            .into());
+        }
     }
 
     // Course links are keyed on (course_id, instructor_id); both records can
@@ -435,7 +564,8 @@ pub async fn merge_with_claimant(
         (names[1].0, names[0].0)
     };
 
-    merge_instructors(pool, survivor, loser, decided_by).await?;
+    // The name check above is stricter than the one inside the merge.
+    merge_instructors(pool, survivor, loser, decided_by, true).await?;
     Ok((survivor, loser))
 }
 
@@ -486,7 +616,7 @@ pub async fn resolve_absorbed(
 }
 
 /// Merge every pair whose tier needs no human confirmation.
-pub async fn auto_merge_duplicates(pool: &PgPool) -> Result<MergeStats> {
+pub async fn auto_merge_duplicates(pool: &PgPool, decided_by: Option<i64>) -> Result<MergeStats> {
     let pairs = find_duplicate_pairs(pool).await?;
     let mut stats = MergeStats::default();
 
@@ -495,7 +625,7 @@ pub async fn auto_merge_duplicates(pool: &PgPool) -> Result<MergeStats> {
             stats.skipped += 1;
             continue;
         }
-        match merge_instructors(pool, pair.survivor.id, pair.loser.id, None).await {
+        match merge_instructors(pool, pair.survivor.id, pair.loser.id, decided_by, false).await {
             Ok(()) => stats.merged += 1,
             Err(e) => {
                 stats.skipped += 1;
@@ -556,6 +686,13 @@ mod tests {
         assert!(DuplicateTier::SameAccount.is_auto_mergeable());
         assert!(!DuplicateTier::MissingEmail.is_auto_mergeable());
         assert!(!DuplicateTier::DifferentAccount.is_auto_mergeable());
+    }
+
+    #[test]
+    fn test_ordered_pair_is_the_same_key_either_way_round() {
+        assert_eq!(ordered_pair(7, 3), Some((3, 7)));
+        assert_eq!(ordered_pair(3, 7), Some((3, 7)));
+        assert_eq!(ordered_pair(3, 3), None);
     }
 
     #[test]
