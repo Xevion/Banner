@@ -80,3 +80,8 @@ assert2 = "0.4.1"
 [profile.dev-release]
 inherits = "dev"
 debug-assertions = false
+
+# Dependencies are never stepped through, and their debuginfo is most of what
+# the linker merges into every one of the test binaries.
+[profile.dev.package."*"]
+debug = false

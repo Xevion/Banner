@@ -18,6 +18,29 @@ import { defineConfig, presets, task } from "@xevion/tempo";
 const BINDINGS_DIR = "web/src/lib/bindings";
 const RUST_SOURCES = ["src/**/*.rs", "Cargo.toml", "Cargo.lock"];
 
+/**
+ * Cargo takes one build lock per target directory, so tasks sharing a directory
+ * run one at a time however much of the machine is idle.
+ *
+ * These three each recompile the crate for their own reason and share nothing
+ * reusable: clippy's lints, sqlx's macro expansion and the dev binary. Splitting
+ * them lets all three run at once. `bindings` and `test` deliberately stay in
+ * the default directory, where they do share the built test binary.
+ */
+const TARGET_DIRS: Record<string, string> = {
+  "backend:lint": "target/clippy",
+  "backend:sqlx": "target/sqlx",
+  "backend:dev-build": "target/dev",
+};
+
+/** Give each task in `TARGET_DIRS` its own cargo build lock. */
+function withTargetDirs(tasks: Task[]): Task[] {
+  return tasks.map((t) => {
+    const dir = TARGET_DIRS[t.name];
+    return dir ? { ...t, env: { ...t.env, CARGO_TARGET_DIR: dir } } : t;
+  });
+}
+
 /** Rewrite the bindings barrel from the generated per-type files. */
 function generateBarrel(root: string): number {
   const dir = join(root, BINDINGS_DIR);
@@ -270,7 +293,7 @@ function withSubsystemAliases(tasks: Task[]): Task[] {
 
 export default defineConfig({
   runtime: "bun",
-  tasks: withSubsystemAliases([
+  tasks: withTargetDirs(withSubsystemAliases([
     task({
       name: "web:deps",
       cwd: "web",
@@ -358,14 +381,6 @@ export default defineConfig({
         test: "cargo nextest run -E 'not test(export_bindings)'",
       },
     }),
-    task({
-      name: "backend:type-check",
-      body: "cargo check --all-features",
-      tags: ["check"],
-      // Ordering only: .sqlx is checked in, so a missing sqlx-cli must not
-      // block the compile that reads it.
-      after: ["backend:sqlx"],
-    }),
 
     task({
       name: "security:advisories",
@@ -393,18 +408,19 @@ export default defineConfig({
     // Rust proxies non-API requests to the Vite dev server.
     task({
       name: "backend:dev",
-      body: ["./target/debug/banner", "--tracing", "pretty"],
+      body: ["./target/dev/debug/banner", "--tracing", "pretty"],
       tags: ["dev"],
       persistent: true,
       passthrough: true,
       env: { SSR_DOWNSTREAM: "http://localhost:3001" },
       needs: ["backend:dev-build"],
-      // interrupt: cargo rewrites target/debug/banner while it is executing.
+      // Rebuild behind the running server and swap on success: cargo relinks
+      // the binary, leaving the inode the old process executes untouched.
       watch: {
-        paths: ["src", "migrations", ".sqlx", ".cargo", "Cargo.toml", "Cargo.lock"],
-        exts: [".rs", ".sql", ".json", ".toml"],
+        paths: ["src", "migrations", ".cargo", "Cargo.toml", "Cargo.lock"],
+        exts: [".rs", ".sql", ".toml"],
         debounce: 200,
-        interrupt: true,
+        interrupt: false,
       },
       // Bound to spawning, readiness would race the listener; /api/health is
       // static, so it answers as soon as axum is actually serving.
@@ -564,7 +580,7 @@ export default defineConfig({
         return reportPublicOrigin(ctx);
       },
     }),
-  ]),
+  ])),
 
   commands: {
     check: { description: "Run every check", tags: ["check"] },
