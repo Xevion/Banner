@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ColumnVisibilityState } from "@tanstack/table-core";
+import { MediaQuery } from "svelte/reactivity";
 import type { CourseResponse } from "$lib/bindings";
 import type { SortController } from "$lib/composables/useSort.svelte";
 import { courseTrends } from "$lib/stores/course-trends.svelte";
@@ -37,6 +38,11 @@ export function navigateToSection(crn: string) {
   state.toggleRow(crn);
 }
 
+// Both layouts stay mounted, so only the one on screen may open a row: a detail
+// panel behind `display: none` fetches and observes just as eagerly. Matches the
+// `sm:` breakpoint the two layouts switch at.
+const wide = new MediaQuery("min-width: 640px");
+
 // One batched request per page of results, after the rows themselves are on screen.
 $effect(() => {
   const term = courses[0]?.termSlug;
@@ -51,7 +57,7 @@ $effect(() => {
   {loading}
   stale={state.stale}
   skeletonRowCount={state.skeletonRowCount}
-  expandedCrn={state.expandedCrn}
+  expandedCrn={wide.current ? null : state.expandedCrn}
   onToggle={state.toggleRow}
 />
 
@@ -63,7 +69,7 @@ $effect(() => {
   {subjectMap}
   bind:columnVisibility
   {defaultVisibility}
-  expandedCrn={state.expandedCrn}
+  expandedCrn={wide.current ? state.expandedCrn : null}
   onToggle={state.toggleRow}
   skeletonRowCount={state.skeletonRowCount}
   hadResults={state.hadResults}

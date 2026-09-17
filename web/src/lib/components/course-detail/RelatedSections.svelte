@@ -26,18 +26,25 @@ type LoadState =
 let state = $state<LoadState>({ mode: "loading" });
 
 $effect(() => {
-  const { termSlug, subject, courseNumber } = course;
+  const { termSlug, subject, courseNumber, crn } = course;
+  let cancelled = false;
+
   state = { mode: "loading" };
 
   void client.getRelatedSections(termSlug, subject, courseNumber).then((result) => {
+    if (cancelled) return;
     if (result.isErr) {
       state = { mode: "error", message: result.error.message };
     } else {
       const sections = result.value;
       state = { mode: "loaded", sections };
-      sectionCount = sections.filter((s) => s.crn !== course.crn).length;
+      sectionCount = sections.filter((s) => s.crn !== crn).length;
     }
   });
+
+  return () => {
+    cancelled = true;
+  };
 });
 
 // How far the scroll container pulls up behind the header (header height + gap)

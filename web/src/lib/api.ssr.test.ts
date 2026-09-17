@@ -38,3 +38,17 @@ describe("search options on the server", () => {
     expect(second).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("concurrent GETs on the server", () => {
+  it("gives each request its own fetch, even when they overlap", async () => {
+    const fetchFn = respondWith([]);
+    const client = new BannerApiClient(undefined, fetchFn);
+
+    await Promise.all([
+      client.getRelatedSections("fall-2026", "CS", "3443"),
+      client.getRelatedSections("fall-2026", "CS", "3443"),
+    ]);
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+});

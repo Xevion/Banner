@@ -180,6 +180,13 @@ function describeNetworkError(e: unknown): string {
 const _searchOptionsCache = new Map<string, { data: SearchOptionsResponse; fetchedAt: number }>();
 const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
 
+/**
+ * Plain GETs this tab is already waiting on, keyed by URL and dropped the moment
+ * they settle, so two callers asking in the same tick share one request without
+ * this ever holding an answer. The server keeps none, for the reason above.
+ */
+const _inFlightGets = new Map<string, Promise<Result<unknown, ApiErrorClass>>>();
+
 /** What a caller may vary about a request; everything else is fixed. */
 interface RequestOptions {
   method?: string;
@@ -299,7 +306,28 @@ export class BannerApiClient {
     return ok(response);
   }
 
-  private async request<T>(
+  /**
+   * Shares a GET already in flight instead of opening a second one.
+   *
+   * Only a bare GET qualifies: anything carrying a method or a body builds an
+   * init, and the URL on its own would no longer name the request.
+   */
+  private request<T>(
+    endpoint: string,
+    options?: RequestOptions
+  ): Promise<Result<T, ApiErrorClass>> {
+    if (!browser || options !== undefined) return this.fetchJson<T>(endpoint, options);
+
+    const url = `${this.baseUrl}${endpoint}`;
+    const inFlight = _inFlightGets.get(url);
+    if (inFlight) return inFlight as Promise<Result<T, ApiErrorClass>>;
+
+    const pending = this.fetchJson<T>(endpoint).finally(() => _inFlightGets.delete(url));
+    _inFlightGets.set(url, pending);
+    return pending;
+  }
+
+  private async fetchJson<T>(
     endpoint: string,
     options?: RequestOptions
   ): Promise<Result<T, ApiErrorClass>> {

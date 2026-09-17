@@ -125,3 +125,84 @@ describe("BannerApiClient", () => {
     }
   });
 });
+
+describe("concurrent GETs", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("shares one request between callers asking at the same time", async () => {
+    const sections = [{ crn: "12345" }];
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(sections),
+    } as Response);
+
+    const client = new BannerApiClient();
+    const [first, second] = await Promise.all([
+      client.getRelatedSections("fall-2026", "CS", "3443"),
+      client.getRelatedSections("fall-2026", "CS", "3443"),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(first.isOk).toBe(true);
+    expect(second.isOk).toBe(true);
+  });
+
+  it("shares across client instances, since they all reach the same tab", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response);
+
+    await Promise.all([
+      new BannerApiClient().getRelatedSections("fall-2026", "CS", "3443"),
+      new BannerApiClient().getRelatedSections("fall-2026", "CS", "3443"),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps different URLs apart", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response);
+
+    const client = new BannerApiClient();
+    await Promise.all([
+      client.getRelatedSections("fall-2026", "CS", "3443"),
+      client.getRelatedSections("fall-2026", "CS", "3743"),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds nothing once a request settles", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response);
+
+    const client = new BannerApiClient();
+    await client.getRelatedSections("fall-2026", "CS", "3443");
+    await client.getRelatedSections("fall-2026", "CS", "3443");
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not share a request that carries a body", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ trends: {} }),
+    } as Response);
+
+    const client = new BannerApiClient();
+    await Promise.all([
+      client.getCourseTrends("fall-2026", ["12345"]),
+      client.getCourseTrends("fall-2026", ["12345"]),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
