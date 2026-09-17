@@ -57,7 +57,7 @@ tower-http = { version = "0.7.0", features = ["cors", "trace", "timeout", "compr
 clap = { version = "4.5", features = ["derive"] }
 yansi = "1.0.1"
 extension-traits = "2"
-ts-rs = { version = "11.1.0", features = ["chrono-impl", "serde-compat", "serde-json-impl", "no-serde-warnings"] }
+ts-rs = { version = "12.0.1", features = ["chrono-impl", "serde-compat", "serde-json-impl", "no-serde-warnings"] }
 axum-extra = { version = "0.12.5", features = ["query"] }
 chrono-tz = "0.10.4"
 htmlize = { version = "1.0.6", features = ["unescape"] }

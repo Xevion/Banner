@@ -103,23 +103,23 @@ macro_rules! unsigned_newtype {
             type WithoutGenerics = Self;
             type OptionInnerType = Self;
 
-            fn name() -> String {
+            fn name(_: &ts_rs::Config) -> String {
                 "number".to_owned()
             }
 
-            fn inline() -> String {
+            fn inline(_: &ts_rs::Config) -> String {
                 "number".to_owned()
             }
 
-            fn decl() -> String {
+            fn decl(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be declared", stringify!($name))
             }
 
-            fn decl_concrete() -> String {
+            fn decl_concrete(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be declared", stringify!($name))
             }
 
-            fn inline_flattened() -> String {
+            fn inline_flattened(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be flattened", stringify!($name))
             }
         }
@@ -211,23 +211,23 @@ macro_rules! unsigned_newtype {
             type WithoutGenerics = Self;
             type OptionInnerType = Self;
 
-            fn name() -> String {
+            fn name(_: &ts_rs::Config) -> String {
                 "number".to_owned()
             }
 
-            fn inline() -> String {
+            fn inline(_: &ts_rs::Config) -> String {
                 "number".to_owned()
             }
 
-            fn decl() -> String {
+            fn decl(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be declared", stringify!($name))
             }
 
-            fn decl_concrete() -> String {
+            fn decl_concrete(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be declared", stringify!($name))
             }
 
-            fn inline_flattened() -> String {
+            fn inline_flattened(_: &ts_rs::Config) -> String {
                 panic!("{} cannot be flattened", stringify!($name))
             }
         }
@@ -285,8 +285,9 @@ mod tests {
 
     #[test]
     fn count_ts_inlines_as_number() {
-        assert_eq!(<Count as ts_rs::TS>::name(), "number");
-        assert_eq!(<Count as ts_rs::TS>::inline(), "number");
+        let cfg = ts_rs::Config::default();
+        assert_eq!(<Count as ts_rs::TS>::name(&cfg), "number");
+        assert_eq!(<Count as ts_rs::TS>::inline(&cfg), "number");
     }
 
     #[test]
@@ -297,8 +298,9 @@ mod tests {
 
     #[test]
     fn duration_ms_ts_inlines_as_number() {
-        assert_eq!(<DurationMs as ts_rs::TS>::name(), "number");
-        assert_eq!(<DurationMs as ts_rs::TS>::inline(), "number");
+        let cfg = ts_rs::Config::default();
+        assert_eq!(<DurationMs as ts_rs::TS>::name(&cfg), "number");
+        assert_eq!(<DurationMs as ts_rs::TS>::inline(&cfg), "number");
     }
 
     #[test]

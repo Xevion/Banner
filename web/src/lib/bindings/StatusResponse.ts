@@ -2,4 +2,4 @@
 import type { ServiceInfo } from "./ServiceInfo";
 import type { ServiceStatus } from "./ServiceStatus";
 
-export type StatusResponse = { status: ServiceStatus, version: string, commit: string, services: { [key in string]?: ServiceInfo }, };
+export type StatusResponse = { status: ServiceStatus, version: string, commit: string, services: { [key in string]: ServiceInfo }, };

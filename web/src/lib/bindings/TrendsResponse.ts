@@ -5,4 +5,4 @@ export type TrendsResponse = {
 /**
  * CRN to its oldest-first samples. Sections with no recorded history are absent.
  */
-trends: { [key in string]?: Array<TrendSample> }, };
+trends: { [key in string]: Array<TrendSample> }, };
