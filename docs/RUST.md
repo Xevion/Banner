@@ -171,6 +171,12 @@ Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashM
   non-`Option` field then fails to compile, on an empty database only. Once a query carries
   a `?` on one side it needs a `!` on the other, so its column types stop depending on how
   much data happens to be around.
+- **`.sqlx` is prepared against `banner_sqlx`, an empty database holding only the
+  migrations.** Never against the dev database. The metadata records the plan-derived
+  nullability verbatim, so preparing against real data writes that machine's row counts
+  into the repository and CI's `cargo sqlx prepare --check`, which migrates an empty
+  database, rejects it byte for byte. `just check` handles this; a hand-run
+  `cargo sqlx prepare` against the dev database does not.
 - **Batch operations**: Use `UNNEST` for bulk inserts/upserts instead of looping single inserts
 - **JSONB**: Used for nested structures (meeting times, enrollment). Query with `jsonb_array_elements` and lateral joins.
 

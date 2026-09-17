@@ -332,6 +332,27 @@ async function reportPublicOrigin(ctx: RunContext): Promise<number> {
   return 0;
 }
 
+/**
+ * The database `.sqlx` is prepared against: a second, empty one beside the dev
+ * database, holding nothing but the migrations.
+ *
+ * sqlx records the nullability it infers from the query plan, and the planner
+ * reads table statistics, so an outer join against a populated table and the
+ * same join against an empty one disagree about which side can be NULL.
+ * Preparing against the dev database would bake that machine's row counts into
+ * the checked-in metadata, and CI, which migrates an empty database, would
+ * reject it. Migrating a fresh one keeps `.sqlx` a function of the migrations.
+ */
+function prepareDatabaseUrl(ctx: RunContext): string {
+  const dev = process.env.DATABASE_URL;
+  if (!dev) ctx.fail("DATABASE_URL is unset -- copy .env.example to .env");
+
+  const url = new URL(dev);
+  url.pathname = `${url.pathname}_sqlx`;
+  if (url.href === dev) ctx.fail(`refusing to prepare against the dev database at ${dev}`);
+  return url.href;
+}
+
 /** Extra target words each subsystem answers to, beyond its task-name prefix. */
 const SUBSYSTEM_ALIASES: Record<string, string[]> = {
   web: ["frontend", "f"],
@@ -379,8 +400,19 @@ export default defineConfig({
     task({
       name: "backend:sqlx",
       body: async (ctx) => {
-        if ((await ctx.run(["cargo", "sqlx", "prepare"])) !== 0) {
-          ctx.log("sqlx prepare failed -- is the database running?");
+        const env = { DATABASE_URL: prepareDatabaseUrl(ctx), SQLX_OFFLINE: "false" };
+
+        if ((await ctx.run(["cargo", "sqlx", "database", "create"], { env })) !== 0) {
+          ctx.fail("cannot reach Postgres -- run `just db`");
+        }
+        // Migrations only ever add, so this is idempotent and never drops. An
+        // edited migration fails the checksum here instead of silently leaving
+        // the prepare database on a schema no migration produces.
+        if ((await ctx.run(["cargo", "sqlx", "migrate", "run"], { env })) !== 0) {
+          ctx.fail("migrations failed against the prepare database");
+        }
+        if ((await ctx.run(["cargo", "sqlx", "prepare"], { env })) !== 0) {
+          ctx.fail("sqlx prepare failed");
         }
       },
       tags: ["check"],
