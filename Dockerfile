@@ -1,5 +1,7 @@
 # Build arguments
-ARG RUST_VERSION=1.96.1
+# Keep in step with rust-toolchain.toml: a mismatch makes rustup download the pinned
+# toolchain inside the build, on top of the one the base image already carries.
+ARG RUST_VERSION=1.98.1
 ARG GIT_COMMIT_SHA
 
 # Frontend Build Stage

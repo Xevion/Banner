@@ -323,6 +323,11 @@ Per-module log levels are configured via `RUST_LOG` env var or the default filte
 
 - Zero clippy warnings allowed (`--deny warnings`)
 - Run `just check` to validate (includes clippy)
+- **The toolchain is pinned in `rust-toolchain.toml`, and CI reads its `channel`.** Rustup
+  honours the file automatically, so `cargo` inside this repository is that version whatever
+  `rustup default` says. Bumping it is a deliberate commit: a new release adds lints, and with
+  `--deny warnings` an added lint is a build failure, not a warning. The `Dockerfile`'s
+  `RUST_VERSION` tracks the same value.
 
 ## Optionality
 
