@@ -63,11 +63,48 @@ impl App {
             .extract()
             .context("Failed to load config")?;
 
+        let db_pool = Self::create_db_pool(&config).await?;
+
+        // Create BannerApi early so we can use it for term sync
+        let banner_api = BannerApi::new_with_config(config.banner_base_url.clone(), config.rate_limiting.clone())
+            .context("Failed to create BannerApi")?;
+        let banner_api_arc = Arc::new(banner_api);
+
+        Self::run_startup_backfills(&db_pool, &banner_api_arc).await;
+
+        // Create shared BlueBook sync notify and force flag for manual trigger from admin endpoints
+        let bluebook_sync_notify = Arc::new(tokio::sync::Notify::new());
+        let bluebook_force_flag = Arc::new(AtomicBool::new(false));
+
+        // Create AppState (BannerApi already created above for term sync)
+        let app_state = AppState::new(
+            banner_api_arc.clone(),
+            db_pool.clone(),
+            config.ssr_downstream.clone(),
+            bluebook_sync_notify,
+            bluebook_force_flag.clone(),
+            config.public_origin.clone(),
+        );
+
+        Self::load_startup_caches(&db_pool, &app_state).await;
+
+        Self::seed_admin_user(&db_pool, config.admin_discord_id, &app_state).await?;
+
+        Ok(Self {
+            config,
+            db_pool,
+            banner_api: banner_api_arc,
+            state: app_state,
+            service_manager: ServiceManager::new(),
+        })
+    }
+
+    /// Connects the database pool and runs pending migrations.
+    async fn create_db_pool(config: &Config) -> Result<sqlx::PgPool, anyhow::Error> {
         // Check if the database URL is via private networking
         let is_private = config.database_url.contains("railway.internal");
         let slow_threshold = Duration::from_millis(if is_private { 200 } else { 500 });
 
-        // Create database connection pool
         let connect_options = sqlx::postgres::PgConnectOptions::from_str(&config.database_url)
             .context("Failed to parse database URL")?
             .log_statements(tracing::log::LevelFilter::Debug)
@@ -95,7 +132,6 @@ impl App {
             "database pool established"
         );
 
-        // Run database migrations
         info!("Checking database migrations...");
         sqlx::migrate!("./migrations")
             .run(&db_pool)
@@ -103,16 +139,16 @@ impl App {
             .context("Failed to run database migrations")?;
         info!("Database migrations up to date");
 
-        // Create BannerApi early so we can use it for term sync
-        let banner_api = BannerApi::new_with_config(config.banner_base_url.clone(), config.rate_limiting.clone())
-            .context("Failed to create BannerApi")?;
-        let banner_api_arc = Arc::new(banner_api);
+        Ok(db_pool)
+    }
 
+    /// Runs startup backfills and instructor score recomputation, logging failures as non-fatal.
+    async fn run_startup_backfills(db_pool: &sqlx::PgPool, banner_api: &Arc<BannerApi>) {
         // Run startup DB operations in parallel
         let (term_result, name_result, slug_result) = tokio::join!(
-            Self::sync_terms_on_startup(&db_pool, &banner_api_arc),
-            crate::data::names::backfill_instructor_names(&db_pool),
-            crate::data::instructors::backfill_instructor_slugs(&db_pool),
+            Self::sync_terms_on_startup(db_pool, banner_api),
+            crate::data::names::backfill_instructor_names(db_pool),
+            crate::data::instructors::backfill_instructor_slugs(db_pool),
         );
 
         // Persist term sync timestamp so the scheduler doesn't repeat this on its first cycle.
@@ -123,7 +159,7 @@ impl App {
                     updated = result.updated,
                     "Term sync completed"
                 );
-                if let Err(e) = crate::data::kv::set_timestamp(&db_pool, KV_TERM_SYNC, Utc::now()).await {
+                if let Err(e) = crate::data::kv::set_timestamp(db_pool, KV_TERM_SYNC, Utc::now()).await {
                     warn!(error = ?e, "Failed to persist term sync timestamp");
                 }
             }
@@ -144,31 +180,20 @@ impl App {
         }
 
         // Compute instructor scores from RMP + BlueBook data
-        match crate::data::scoring::recompute_all_scores(&db_pool).await {
+        match crate::data::scoring::recompute_all_scores(db_pool).await {
             Ok(0) => info!("Computed instructor scores (none found - no RMP or BlueBook data)"),
             Ok(n) => info!(count = n, "Computed instructor scores"),
             Err(e) => warn!(error = ?e, "Failed to compute instructor scores (non-fatal)"),
         }
+    }
 
-        // Create shared BlueBook sync notify and force flag for manual trigger from admin endpoints
-        let bluebook_sync_notify = Arc::new(tokio::sync::Notify::new());
-        let bluebook_force_flag = Arc::new(AtomicBool::new(false));
-
-        // Create AppState (BannerApi already created above for term sync)
-        let app_state = AppState::new(
-            banner_api_arc.clone(),
-            db_pool.clone(),
-            config.ssr_downstream.clone(),
-            bluebook_sync_notify,
-            bluebook_force_flag.clone(),
-            config.public_origin.clone(),
-        );
-
-        // Load reference cache and schedule cache in parallel
+    /// Loads the reference and schedule caches used to serve early requests, logging
+    /// failures as non-fatal.
+    async fn load_startup_caches(db_pool: &sqlx::PgPool, app_state: &AppState) {
         let schedule_cache = app_state.schedule_cache.clone();
         let (ref_result, sched_result) = tokio::join!(
             async {
-                let entries = crate::data::reference::get_all(&db_pool).await?;
+                let entries = crate::data::reference::get_all(db_pool).await?;
                 let count = entries.len();
                 let cache = crate::state::ReferenceCache::from_entries(entries);
                 *app_state.reference_cache.write().await = cache;
@@ -183,29 +208,39 @@ impl App {
         if let Err(e) = sched_result {
             info!(error = ?e, "Could not load schedule cache on startup (may be empty)");
         }
+    }
 
-        // Seed the initial admin user if configured
-        if let Some(admin_id) = config.admin_discord_id {
-            let admin_id_i64 = i64::try_from(admin_id).context("admin discord id exceeds i64 range")?;
-            let user = crate::data::users::ensure_seed_admin(&db_pool, admin_id_i64)
-                .await
-                .context("Failed to seed admin user")?;
-            info!(discord_id = %admin_id, username = %user.discord_username, "Seed admin ensured");
+    /// Seeds the initial admin user if configured, injecting the dev auth bypass
+    /// session in debug builds.
+    #[cfg_attr(
+        not(debug_assertions),
+        expect(
+            unused_variables,
+            reason = "app_state is only read by the debug-build dev session injection"
+        )
+    )]
+    async fn seed_admin_user(
+        db_pool: &sqlx::PgPool,
+        admin_discord_id: Option<u64>,
+        app_state: &AppState,
+    ) -> Result<(), anyhow::Error> {
+        let Some(admin_id) = admin_discord_id else {
+            return Ok(());
+        };
 
-            #[cfg(debug_assertions)]
-            {
-                app_state.session_cache.inject_dev_session("dev-admin", user);
-                info!("Dev auth bypass active -- use: Cookie: session=dev-admin");
-            }
+        let admin_id_i64 = i64::try_from(admin_id).context("admin discord id exceeds i64 range")?;
+        let user = crate::data::users::ensure_seed_admin(db_pool, admin_id_i64)
+            .await
+            .context("Failed to seed admin user")?;
+        info!(discord_id = %admin_id, username = %user.discord_username, "Seed admin ensured");
+
+        #[cfg(debug_assertions)]
+        {
+            app_state.session_cache.inject_dev_session("dev-admin", user);
+            info!("Dev auth bypass active -- use: Cookie: session=dev-admin");
         }
 
-        Ok(Self {
-            config,
-            db_pool,
-            banner_api: banner_api_arc,
-            state: app_state,
-            service_manager: ServiceManager::new(),
-        })
+        Ok(())
     }
 
     /// Setup and register services based on enabled service list

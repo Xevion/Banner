@@ -233,12 +233,10 @@ pub struct ListInstructorsFilter {
     pub sort: Option<String>,
 }
 
-/// List instructors with filtering, sorting, and pagination.
-pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> Result<ListInstructorsResponse> {
-    let page = filter.page.max(1);
-    let per_page = filter.per_page.clamp(1, 100);
-    let offset = (page - 1) * per_page;
-
+/// Build the sort clause, status filter, and search pattern for the instructor list query.
+fn build_instructor_list_params(
+    filter: &ListInstructorsFilter,
+) -> (&'static str, Option<&'static str>, Option<String>) {
     let sort_clause = match filter.sort.as_deref() {
         Some("name_asc") => "i.display_name ASC",
         Some("name_desc") => "i.display_name DESC",
@@ -252,6 +250,20 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
         .as_ref()
         .map(|search| format!("%{}%", escape_like(search)));
 
+    (sort_clause, status, search_pattern)
+}
+
+/// Fetch a page of instructor rows matching the filter.
+/// Only the sort is interpolated, and ORDER BY cannot be a bind parameter, so this
+/// query stays runtime-checked. A NULL bind disables its own filter clause.
+async fn fetch_instructor_rows(
+    pool: &PgPool,
+    sort_clause: &str,
+    status: Option<&str>,
+    search_pattern: Option<&str>,
+    per_page: i32,
+    offset: i32,
+) -> Result<Vec<InstructorRow>> {
     let query_str = format!(
         r"
         SELECT
@@ -289,20 +301,21 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
         "
     );
 
-    // Only the sort is interpolated, and ORDER BY cannot be a bind parameter, so this
-    // one stays runtime-checked. A NULL bind disables its own filter clause.
-    let rows = sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str))
+    sqlx::query_as::<_, InstructorRow>(AssertSqlSafe(query_str))
         .bind(status)
-        .bind(search_pattern.as_deref())
+        .bind(search_pattern)
         .bind(per_page)
         .bind(offset)
         .fetch_all(pool)
         .await
-        .context("failed to list instructors")?;
+        .context("failed to list instructors")
+}
 
-    // The count repeats the page query's FROM and WHERE, and is macro-checked so that
-    // an alias the count cannot resolve fails the build instead of the request.
-    let total = sqlx::query_scalar!(
+/// Count instructors matching the filter, ignoring pagination.
+/// The count repeats the page query's FROM and WHERE, and is macro-checked so that
+/// an alias the count cannot resolve fails the build instead of the request.
+async fn count_instructors(pool: &PgPool, status: Option<&str>, search_pattern: Option<&str>) -> Result<i64> {
+    sqlx::query_scalar!(
         r#"
         SELECT COUNT(*) AS "total!"
         FROM instructors i
@@ -311,14 +324,17 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
           AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)
         "#,
         status,
-        search_pattern.as_deref(),
+        search_pattern,
     )
     .fetch_one(pool)
     .await
-    .context("failed to count instructors")?;
+    .context("failed to count instructors")
+}
 
-    // Aggregate stats (unfiltered). Both overrides are the view's doing: sqlx reads
-    // status through a CASE expression, and an aggregate, as nullable.
+/// Aggregate unfiltered status counts across all instructors.
+/// Both overrides are the view's doing: sqlx reads status through a CASE
+/// expression, and an aggregate, as nullable.
+async fn fetch_instructor_stats(pool: &PgPool) -> Result<InstructorStats> {
     let stats_rows = sqlx::query!(
         r#"
         SELECT status AS "status!: RmpMatchStatus", COUNT(*) AS "count!"
@@ -356,46 +372,65 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
         }
     }
 
-    let instructors: Vec<InstructorListItem> = rows
-        .iter()
-        .map(|r| {
-            // The lateral join either produces a whole candidate row or none of it,
-            // and its rmp_legacy_id is a foreign key, so the professor columns follow.
-            let top_candidate = r
-                .top_candidate_rmp_id
-                .map(|rmp_id| -> Result<TopCandidateResponse> {
-                    Ok(TopCandidateResponse {
-                        rmp_legacy_id: rmp_id,
-                        score: r.top_candidate_score.context("top candidate has no score")?,
-                        score_breakdown: r
-                            .top_candidate_breakdown
-                            .as_ref()
-                            .context("top candidate has no score breakdown")?
-                            .0
-                            .clone(),
-                        first_name: r.tc_first_name.clone().context("top candidate has no rmp profile")?,
-                        last_name: r.tc_last_name.clone().context("top candidate has no rmp profile")?,
-                        department: r.tc_department.clone(),
-                        avg_rating: r.tc_avg_rating,
-                        num_ratings: r.tc_num_ratings.context("top candidate has no rmp profile")?,
-                        claimed_by: r.tc_claimed_by.clone(),
-                    })
-                })
-                .transpose()?;
+    Ok(instructor_stats)
+}
 
-            Ok(InstructorListItem {
-                id: r.id,
-                display_name: r.display_name.clone(),
-                email: r.email.clone(),
-                rmp_match_status: r.rmp_match_status,
-                rmp_link_count: r.rmp_link_count,
-                candidate_count: r.candidate_count,
-                course_subject_count: r.course_subject_count,
-                top_candidate,
-                teaching_years: r.teaching_years.clone().unwrap_or_default(),
-                subjects_taught: r.subjects_taught.clone().unwrap_or_default(),
+/// Map an instructor row to a list item, including its optional top-candidate summary.
+///
+/// The lateral join either produces a whole candidate row or none of it, and its
+/// `rmp_legacy_id` is a foreign key, so the professor columns follow.
+fn instructor_row_to_list_item(r: &InstructorRow) -> Result<InstructorListItem> {
+    let top_candidate = r
+        .top_candidate_rmp_id
+        .map(|rmp_id| -> Result<TopCandidateResponse> {
+            Ok(TopCandidateResponse {
+                rmp_legacy_id: rmp_id,
+                score: r.top_candidate_score.context("top candidate has no score")?,
+                score_breakdown: r
+                    .top_candidate_breakdown
+                    .as_ref()
+                    .context("top candidate has no score breakdown")?
+                    .0
+                    .clone(),
+                first_name: r.tc_first_name.clone().context("top candidate has no rmp profile")?,
+                last_name: r.tc_last_name.clone().context("top candidate has no rmp profile")?,
+                department: r.tc_department.clone(),
+                avg_rating: r.tc_avg_rating,
+                num_ratings: r.tc_num_ratings.context("top candidate has no rmp profile")?,
+                claimed_by: r.tc_claimed_by.clone(),
             })
         })
+        .transpose()?;
+
+    Ok(InstructorListItem {
+        id: r.id,
+        display_name: r.display_name.clone(),
+        email: r.email.clone(),
+        rmp_match_status: r.rmp_match_status,
+        rmp_link_count: r.rmp_link_count,
+        candidate_count: r.candidate_count,
+        course_subject_count: r.course_subject_count,
+        top_candidate,
+        teaching_years: r.teaching_years.clone().unwrap_or_default(),
+        subjects_taught: r.subjects_taught.clone().unwrap_or_default(),
+    })
+}
+
+/// List instructors with filtering, sorting, and pagination.
+pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> Result<ListInstructorsResponse> {
+    let page = filter.page.max(1);
+    let per_page = filter.per_page.clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let (sort_clause, status, search_pattern) = build_instructor_list_params(filter);
+
+    let rows = fetch_instructor_rows(pool, sort_clause, status, search_pattern.as_deref(), per_page, offset).await?;
+    let total = count_instructors(pool, status, search_pattern.as_deref()).await?;
+    let instructor_stats = fetch_instructor_stats(pool).await?;
+
+    let instructors: Vec<InstructorListItem> = rows
+        .iter()
+        .map(instructor_row_to_list_item)
         .collect::<Result<Vec<_>>>()?;
 
     Ok(ListInstructorsResponse {
@@ -409,27 +444,8 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
     })
 }
 
-/// Fetch full instructor detail with candidates and linked profiles.
-///
-/// `blocked_reason` is left empty; the web layer fills in reviewer-facing copy.
-pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
-    // The view reads status through a CASE expression, so sqlx calls it nullable.
-    let instructor = sqlx::query!(
-        r#"
-        SELECT i.id, i.display_name, i.email, ms.status AS "status!: RmpMatchStatus"
-        FROM instructors i
-        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
-        WHERE i.id = $1
-        "#,
-        id
-    )
-    .fetch_optional(pool)
-    .await
-    .context("failed to fetch instructor")?
-    .ok_or(AdminRmpError::NoSuchInstructor)?;
-
-    let inst_id = instructor.id;
-
+/// Fetch the subjects taught, total course count, and teaching years for an instructor.
+async fn fetch_instructor_teaching_summary(pool: &PgPool, inst_id: i32) -> Result<(Vec<String>, i64, Vec<i16>)> {
     let subjects = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT c.subject
@@ -467,7 +483,12 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     .await
     .context("failed to fetch teaching years")?;
 
-    // Hand-mapped because blocked_reason is not a column: the web layer fills it in.
+    Ok((subjects, course_count, teaching_years))
+}
+
+/// Fetch match candidates for an instructor.
+/// Hand-mapped because `blocked_reason` is not a column: the web layer fills it in.
+async fn fetch_instructor_candidates(pool: &PgPool, inst_id: i32) -> Result<Vec<CandidateResponse>> {
     let candidates = sqlx::query!(
         r#"
         SELECT mc.id, mc.rmp_legacy_id, mc.score,
@@ -512,7 +533,12 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     })
     .collect::<Vec<_>>();
 
-    let current_matches = sqlx::query_as!(
+    Ok(candidates)
+}
+
+/// Fetch RMP profiles currently linked to an instructor.
+async fn fetch_linked_profiles(pool: &PgPool, inst_id: i32) -> Result<Vec<LinkedRmpProfile>> {
+    sqlx::query_as!(
         LinkedRmpProfile,
         r#"
         SELECT irl.id as link_id,
@@ -541,7 +567,33 @@ pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorD
     )
     .fetch_all(pool)
     .await
-    .context("failed to fetch linked rmp profiles")?;
+    .context("failed to fetch linked rmp profiles")
+}
+
+/// Fetch full instructor detail with candidates and linked profiles.
+///
+/// `blocked_reason` is left empty; the web layer fills in reviewer-facing copy.
+pub async fn get_instructor_detail(pool: &PgPool, id: i32) -> Result<InstructorDetailResponse> {
+    // The view reads status through a CASE expression, so sqlx calls it nullable.
+    let instructor = sqlx::query!(
+        r#"
+        SELECT i.id, i.display_name, i.email, ms.status AS "status!: RmpMatchStatus"
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        WHERE i.id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
+    .await
+    .context("failed to fetch instructor")?
+    .ok_or(AdminRmpError::NoSuchInstructor)?;
+
+    let inst_id = instructor.id;
+
+    let (subjects, course_count, teaching_years) = fetch_instructor_teaching_summary(pool, inst_id).await?;
+    let candidates = fetch_instructor_candidates(pool, inst_id).await?;
+    let current_matches = fetch_linked_profiles(pool, inst_id).await?;
 
     Ok(InstructorDetailResponse {
         instructor: InstructorDetail {

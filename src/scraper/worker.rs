@@ -211,76 +211,19 @@ impl Worker {
 
         match result {
             Ok(counts) => {
-                telemetry::record_scrape_job("success");
-                telemetry::record_upsert_counts(
-                    u64::from(counts.courses_fetched.get()),
-                    u64::from(counts.courses_changed.get()),
-                    u64::from(counts.courses_unchanged.get()),
-                );
-
-                // Log at INFO if data changed, DEBUG if no changes
-                let has_changes = counts.courses_changed > Count::default();
-                if has_changes {
-                    info!(
-                        worker_id = self.id,
-                        job_id,
-                        duration = fmt_duration(duration),
-                        courses_fetched = %counts.courses_fetched,
-                        courses_changed = %counts.courses_changed,
-                        courses_unchanged = %counts.courses_unchanged,
-                        "Job completed with changes"
-                    );
-                } else {
-                    debug!(
-                        worker_id = self.id,
-                        job_id,
-                        duration = fmt_duration(duration),
-                        courses_fetched = %counts.courses_fetched,
-                        courses_changed = %counts.courses_changed,
-                        courses_unchanged = %counts.courses_unchanged,
-                        "Job completed (no changes)"
-                    );
-                }
-
-                // Extract term code before payload is moved into insert_result
-                let term_code = payload.term().map(String::from);
-
-                // Log the result
-                if let Err(e) = self
-                    .db
-                    .scrape_jobs()
-                    .insert_result(
-                        target_type,
-                        payload,
-                        priority,
-                        queued_at,
-                        started_at,
-                        duration_ms,
-                        true,
-                        None,
-                        retry_count,
-                        Some(&counts),
-                    )
-                    .await
-                {
-                    telemetry::record_db_failure(&e);
-                    error!(worker_id = self.id, job_id, error = ?e, "Failed to insert job result");
-                }
-
-                // Mark job as completed (deletes it and emits Completed event)
-                if let Err(e) = self.db.scrape_jobs().complete(job_id).await {
-                    telemetry::record_db_failure(&e);
-                    error!(worker_id = self.id, job_id, error = ?e, "Failed to complete job");
-                }
-
-                // Update last_scraped_at for the term if this job has a term code
-                if let Some(code) = term_code {
-                    let _ = terms::update_last_scraped_at(self.db.pool(), &code).await
-                        .map_err(|e| {
-                            telemetry::record_db_failure(&e);
-                            warn!(worker_id = self.id, job_id, term_code = code.as_str(), error = ?e, "Failed to update last_scraped_at");
-                        });
-                }
+                self.handle_job_success(
+                    job_id,
+                    retry_count,
+                    counts,
+                    duration,
+                    duration_ms,
+                    target_type,
+                    payload,
+                    priority,
+                    queued_at,
+                    started_at,
+                )
+                .await;
             }
             Err(JobError::Recoverable(e)) => {
                 telemetry::record_scrape_job("recoverable_error");
@@ -299,44 +242,168 @@ impl Worker {
                 .await;
             }
             Err(JobError::Unrecoverable(e)) => {
-                telemetry::record_scrape_job("unrecoverable_error");
-
-                // Log the failed result
-                let err_msg = format!("{e:#}");
-                if let Err(log_err) = self
-                    .db
-                    .scrape_jobs()
-                    .insert_result(
-                        target_type,
-                        payload,
-                        priority,
-                        queued_at,
-                        started_at,
-                        duration_ms,
-                        false,
-                        Some(&err_msg),
-                        retry_count,
-                        None,
-                    )
-                    .await
-                {
-                    telemetry::record_db_failure(&log_err);
-                    error!(worker_id = self.id, job_id, error = ?log_err, "Failed to insert job result");
-                }
-
-                error!(
-                    worker_id = self.id,
+                self.handle_job_unrecoverable(
                     job_id,
-                    duration = fmt_duration(duration),
-                    error = ?e,
-                    "Job corrupted, deleting"
-                );
-                // Delete job (emits Deleted event automatically)
-                if let Err(e) = self.db.scrape_jobs().delete(job_id).await {
-                    telemetry::record_db_failure(&e);
-                    error!(worker_id = self.id, job_id, error = ?e, "Failed to delete corrupted job");
-                }
+                    retry_count,
+                    e,
+                    duration,
+                    duration_ms,
+                    target_type,
+                    payload,
+                    priority,
+                    queued_at,
+                    started_at,
+                )
+                .await;
             }
+        }
+    }
+
+    /// Handle a successfully completed job: record metrics, log the outcome, persist the
+    /// result, mark the job completed, and update the term's last-scraped timestamp.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the scrape_job_results row that insert_result writes"
+    )]
+    async fn handle_job_success(
+        &self,
+        job_id: i32,
+        retry_count: Count,
+        counts: UpsertCounts,
+        duration: std::time::Duration,
+        duration_ms: DurationMs,
+        target_type: crate::data::models::TargetType,
+        payload: crate::data::models::TargetPayload,
+        priority: crate::data::models::ScrapePriority,
+        queued_at: DateTime<Utc>,
+        started_at: DateTime<Utc>,
+    ) {
+        telemetry::record_scrape_job("success");
+        telemetry::record_upsert_counts(
+            u64::from(counts.courses_fetched.get()),
+            u64::from(counts.courses_changed.get()),
+            u64::from(counts.courses_unchanged.get()),
+        );
+
+        // Log at INFO if data changed, DEBUG if no changes
+        let has_changes = counts.courses_changed > Count::default();
+        if has_changes {
+            info!(
+                worker_id = self.id,
+                job_id,
+                duration = fmt_duration(duration),
+                courses_fetched = %counts.courses_fetched,
+                courses_changed = %counts.courses_changed,
+                courses_unchanged = %counts.courses_unchanged,
+                "Job completed with changes"
+            );
+        } else {
+            debug!(
+                worker_id = self.id,
+                job_id,
+                duration = fmt_duration(duration),
+                courses_fetched = %counts.courses_fetched,
+                courses_changed = %counts.courses_changed,
+                courses_unchanged = %counts.courses_unchanged,
+                "Job completed (no changes)"
+            );
+        }
+
+        // Extract term code before payload is moved into insert_result
+        let term_code = payload.term().map(String::from);
+
+        // Log the result
+        if let Err(e) = self
+            .db
+            .scrape_jobs()
+            .insert_result(
+                target_type,
+                payload,
+                priority,
+                queued_at,
+                started_at,
+                duration_ms,
+                true,
+                None,
+                retry_count,
+                Some(&counts),
+            )
+            .await
+        {
+            telemetry::record_db_failure(&e);
+            error!(worker_id = self.id, job_id, error = ?e, "Failed to insert job result");
+        }
+
+        // Mark job as completed (deletes it and emits Completed event)
+        if let Err(e) = self.db.scrape_jobs().complete(job_id).await {
+            telemetry::record_db_failure(&e);
+            error!(worker_id = self.id, job_id, error = ?e, "Failed to complete job");
+        }
+
+        // Update last_scraped_at for the term if this job has a term code
+        if let Some(code) = term_code {
+            let _ = terms::update_last_scraped_at(self.db.pool(), &code).await
+                .map_err(|e| {
+                    telemetry::record_db_failure(&e);
+                    warn!(worker_id = self.id, job_id, term_code = code.as_str(), error = ?e, "Failed to update last_scraped_at");
+                });
+        }
+    }
+
+    /// Handle an unrecoverable job: persist the failed result, log it, and delete the job.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the scrape_job_results row that insert_result writes"
+    )]
+    async fn handle_job_unrecoverable(
+        &self,
+        job_id: i32,
+        retry_count: Count,
+        e: anyhow::Error,
+        duration: std::time::Duration,
+        duration_ms: DurationMs,
+        target_type: crate::data::models::TargetType,
+        payload: crate::data::models::TargetPayload,
+        priority: crate::data::models::ScrapePriority,
+        queued_at: DateTime<Utc>,
+        started_at: DateTime<Utc>,
+    ) {
+        telemetry::record_scrape_job("unrecoverable_error");
+
+        // Log the failed result
+        let err_msg = format!("{e:#}");
+        if let Err(log_err) = self
+            .db
+            .scrape_jobs()
+            .insert_result(
+                target_type,
+                payload,
+                priority,
+                queued_at,
+                started_at,
+                duration_ms,
+                false,
+                Some(&err_msg),
+                retry_count,
+                None,
+            )
+            .await
+        {
+            telemetry::record_db_failure(&log_err);
+            error!(worker_id = self.id, job_id, error = ?log_err, "Failed to insert job result");
+        }
+
+        error!(
+            worker_id = self.id,
+            job_id,
+            duration = fmt_duration(duration),
+            error = ?e,
+            "Job corrupted, deleting"
+        );
+        // Delete job (emits Deleted event automatically)
+        if let Err(e) = self.db.scrape_jobs().delete(job_id).await {
+            telemetry::record_db_failure(&e);
+            error!(worker_id = self.id, job_id, error = ?e, "Failed to delete corrupted job");
         }
     }
 

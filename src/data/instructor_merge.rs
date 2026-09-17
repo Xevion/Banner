@@ -348,6 +348,159 @@ pub async fn undismiss_pair(pool: &PgPool, a: i32, b: i32) -> Result<bool> {
     Ok(removed)
 }
 
+async fn load_merge_sides(conn: &mut sqlx::PgConnection, survivor_id: i32, loser_id: i32) -> Result<Vec<MergeSide>> {
+    let sides = sqlx::query_as!(
+        MergeSide,
+        "SELECT id, email, display_name, slug FROM instructors WHERE id = ANY($1::int4[])",
+        &[survivor_id, loser_id][..],
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .context("failed to load merge participants")?;
+
+    if sides.len() != 2 {
+        return Err(MergeError::MissingInstructor.into());
+    }
+    Ok(sides)
+}
+
+/// Merging is irreversible, so two records that do not even share a name need
+/// the caller to say outright that they are one person.
+fn ensure_names_confirmed(sides: &[MergeSide], survivor_id: i32, loser_id: i32, names_confirmed: bool) -> Result<()> {
+    if names_confirmed {
+        return Ok(());
+    }
+    let survivor = sides.iter().find(|s| s.id == survivor_id);
+    let loser = sides.iter().find(|s| s.id == loser_id);
+    if let (Some(survivor), Some(loser)) = (survivor, loser)
+        && survivor.display_name != loser.display_name
+    {
+        return Err(MergeError::DifferentNames {
+            survivor: survivor.display_name.clone(),
+            loser: loser.display_name.clone(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+/// Move every dependent row from the loser to the survivor, dropping rows that
+/// would collide with one the survivor already has.
+async fn move_merge_dependents(conn: &mut sqlx::PgConnection, survivor_id: i32, loser_id: i32) -> Result<()> {
+    // Course links are keyed on (course_id, instructor_id); both records can
+    // hold the same section, so move what is new and discard the rest.
+    sqlx::query!(
+        "UPDATE course_instructors SET instructor_id = $1 \
+         WHERE instructor_id = $2 \
+           AND course_id NOT IN (SELECT course_id FROM course_instructors WHERE instructor_id = $1)",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to move course links")?;
+
+    sqlx::query!("DELETE FROM course_instructors WHERE instructor_id = $1", loser_id)
+        .execute(&mut *conn)
+        .await
+        .context("failed to drop leftover course links")?;
+
+    // A single RMP profile is globally unique to one instructor, so these can
+    // move wholesale; the summary view aggregates several profiles per person.
+    sqlx::query!(
+        "UPDATE instructor_rmp_links SET instructor_id = $1 WHERE instructor_id = $2",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to move rmp links")?;
+
+    sqlx::query!(
+        "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to move bluebook links")?;
+
+    sqlx::query!(
+        "UPDATE rmp_match_candidates SET instructor_id = $1 \
+         WHERE instructor_id = $2 \
+           AND rmp_legacy_id NOT IN \
+               (SELECT rmp_legacy_id FROM rmp_match_candidates WHERE instructor_id = $1)",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to move match candidates")?;
+
+    sqlx::query!("DELETE FROM rmp_match_candidates WHERE instructor_id = $1", loser_id)
+        .execute(&mut *conn)
+        .await
+        .context("failed to clear leftover match candidates")?;
+
+    sqlx::query!("DELETE FROM instructor_scores WHERE instructor_id = $1", loser_id)
+        .execute(&mut *conn)
+        .await
+        .context("failed to clear the loser score")?;
+
+    Ok(())
+}
+
+/// Point the survivor at the loser's address if it had none, then record and
+/// apply the merge itself.
+async fn finalize_merge(
+    conn: &mut sqlx::PgConnection,
+    survivor: &MergeSide,
+    loser: &MergeSide,
+    survivor_id: i32,
+    loser_id: i32,
+    decided_by: Option<i64>,
+) -> Result<()> {
+    let email = survivor.email.clone().or_else(|| loser.email.clone());
+
+    sqlx::query!("UPDATE instructors SET email = $1 WHERE id = $2", email, survivor_id,)
+        .execute(&mut *conn)
+        .await
+        .context("failed to update survivor")?;
+
+    // Anything the loser had already absorbed must follow it across, or deleting
+    // the loser would cascade those records away and let the scrape rebuild them.
+    sqlx::query!(
+        "UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2",
+        survivor_id,
+        loser_id,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to move earlier merges")?;
+
+    sqlx::query!(
+        "INSERT INTO instructor_merges \
+             (survivor_id, absorbed_email, absorbed_display_name, absorbed_slug, tier, decided_by) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        survivor_id,
+        loser.email.as_deref(),
+        loser.display_name,
+        loser.slug.as_deref(),
+        <&'static str>::from(classify(survivor.email.as_deref(), loser.email.as_deref())),
+        decided_by,
+    )
+    .execute(&mut *conn)
+    .await
+    .context("failed to record the merge")?;
+
+    sqlx::query!("DELETE FROM instructors WHERE id = $1", loser_id)
+        .execute(&mut *conn)
+        .await
+        .context("failed to delete merged instructor")?;
+
+    Ok(())
+}
+
 /// Fold `loser_id` into `survivor_id` and delete the loser.
 ///
 /// Every dependent row moves across; rows that would collide with one the
@@ -365,94 +518,10 @@ pub async fn merge_instructors(
 
     let mut tx = pool.begin().await.context("failed to begin merge")?;
 
-    let sides = sqlx::query_as!(
-        MergeSide,
-        "SELECT id, email, display_name, slug FROM instructors WHERE id = ANY($1::int4[])",
-        &[survivor_id, loser_id][..],
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .context("failed to load merge participants")?;
+    let sides = load_merge_sides(&mut tx, survivor_id, loser_id).await?;
+    ensure_names_confirmed(&sides, survivor_id, loser_id, names_confirmed)?;
 
-    if sides.len() != 2 {
-        return Err(MergeError::MissingInstructor.into());
-    }
-
-    // Merging is irreversible, so two records that do not even share a name
-    // need the caller to say outright that they are one person.
-    if !names_confirmed {
-        let survivor = sides.iter().find(|s| s.id == survivor_id);
-        let loser = sides.iter().find(|s| s.id == loser_id);
-        if let (Some(survivor), Some(loser)) = (survivor, loser)
-            && survivor.display_name != loser.display_name
-        {
-            return Err(MergeError::DifferentNames {
-                survivor: survivor.display_name.clone(),
-                loser: loser.display_name.clone(),
-            }
-            .into());
-        }
-    }
-
-    // Course links are keyed on (course_id, instructor_id); both records can
-    // hold the same section, so move what is new and discard the rest.
-    sqlx::query!(
-        "UPDATE course_instructors SET instructor_id = $1 \
-         WHERE instructor_id = $2 \
-           AND course_id NOT IN (SELECT course_id FROM course_instructors WHERE instructor_id = $1)",
-        survivor_id,
-        loser_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to move course links")?;
-
-    sqlx::query!("DELETE FROM course_instructors WHERE instructor_id = $1", loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to drop leftover course links")?;
-
-    // A single RMP profile is globally unique to one instructor, so these can
-    // move wholesale; the summary view aggregates several profiles per person.
-    sqlx::query!(
-        "UPDATE instructor_rmp_links SET instructor_id = $1 WHERE instructor_id = $2",
-        survivor_id,
-        loser_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to move rmp links")?;
-
-    sqlx::query!(
-        "UPDATE instructor_bluebook_links SET instructor_id = $1 WHERE instructor_id = $2",
-        survivor_id,
-        loser_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to move bluebook links")?;
-
-    sqlx::query!(
-        "UPDATE rmp_match_candidates SET instructor_id = $1 \
-         WHERE instructor_id = $2 \
-           AND rmp_legacy_id NOT IN \
-               (SELECT rmp_legacy_id FROM rmp_match_candidates WHERE instructor_id = $1)",
-        survivor_id,
-        loser_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to move match candidates")?;
-
-    sqlx::query!("DELETE FROM rmp_match_candidates WHERE instructor_id = $1", loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to clear leftover match candidates")?;
-
-    sqlx::query!("DELETE FROM instructor_scores WHERE instructor_id = $1", loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to clear the loser score")?;
+    move_merge_dependents(&mut tx, survivor_id, loser_id).await?;
 
     let survivor = sides
         .iter()
@@ -463,44 +532,7 @@ pub async fn merge_instructors(
         .find(|s| s.id == loser_id)
         .ok_or_else(|| anyhow!("loser missing from merge participants"))?;
 
-    // Keep an address if the survivor lacked one.
-    let email = survivor.email.clone().or_else(|| loser.email.clone());
-
-    sqlx::query!("UPDATE instructors SET email = $1 WHERE id = $2", email, survivor_id,)
-        .execute(&mut *tx)
-        .await
-        .context("failed to update survivor")?;
-
-    // Anything the loser had already absorbed must follow it across, or deleting
-    // the loser would cascade those records away and let the scrape rebuild them.
-    sqlx::query!(
-        "UPDATE instructor_merges SET survivor_id = $1 WHERE survivor_id = $2",
-        survivor_id,
-        loser_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to move earlier merges")?;
-
-    sqlx::query!(
-        "INSERT INTO instructor_merges \
-             (survivor_id, absorbed_email, absorbed_display_name, absorbed_slug, tier, decided_by) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-        survivor_id,
-        loser.email.as_deref(),
-        loser.display_name,
-        loser.slug.as_deref(),
-        <&'static str>::from(classify(survivor.email.as_deref(), loser.email.as_deref())),
-        decided_by,
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to record the merge")?;
-
-    sqlx::query!("DELETE FROM instructors WHERE id = $1", loser_id)
-        .execute(&mut *tx)
-        .await
-        .context("failed to delete merged instructor")?;
+    finalize_merge(&mut tx, survivor, loser, survivor_id, loser_id, decided_by).await?;
 
     tx.commit().await.context("failed to commit merge")?;
 

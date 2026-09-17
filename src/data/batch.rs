@@ -790,20 +790,27 @@ async fn existing_emails_by_canonical(emails: &[String], conn: &mut PgConnection
     Ok(stored)
 }
 
-/// Deduplicate and upsert all instructors from the batch.
-///
-/// Two-phase upsert:
-///   1. Instructors with email -> dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
-///   2. Instructors without email -> dedup by `display_name` (ON CONFLICT (`display_name`) WHERE email IS NULL)
-async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Result<InstructorLookup> {
-    // Phase 1: Collect instructors WITH email, deduped by lowercased email
+/// Faculty collected from a batch of courses, deduped by lowercased email
+/// (phase 1) and by display name for faculty without an email (phase 2).
+struct FacultyCollection {
+    e_display_names: Vec<String>,
+    e_first_names: Vec<Option<String>>,
+    e_last_names: Vec<Option<String>>,
+    e_emails: Vec<String>,
+    ne_display_names: Vec<String>,
+    ne_first_names: Vec<Option<String>>,
+    ne_last_names: Vec<Option<String>>,
+}
+
+/// Walk every course's faculty list, deduping by email where present and by
+/// display name otherwise.
+fn collect_faculty(courses: &[Course]) -> FacultyCollection {
     let mut seen_emails = HashSet::new();
     let mut e_display_names = Vec::new();
     let mut e_first_names: Vec<Option<String>> = Vec::new();
     let mut e_last_names: Vec<Option<String>> = Vec::new();
     let mut e_emails = Vec::new();
 
-    // Phase 2: Collect instructors WITHOUT email, deduped by display_name
     let mut seen_names = HashSet::new();
     let mut ne_display_names = Vec::new();
     let mut ne_first_names: Vec<Option<String>> = Vec::new();
@@ -833,86 +840,102 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
         }
     }
 
-    let mut by_email = HashMap::new();
-    let mut by_display_name = HashMap::new();
+    FacultyCollection {
+        e_display_names,
+        e_first_names,
+        e_last_names,
+        e_emails,
+        ne_display_names,
+        ne_first_names,
+        ne_last_names,
+    }
+}
 
-    // A merged-away identity resolves to its survivor instead of being reinserted.
-    let (absorbed_emails, absorbed_names) =
-        crate::data::instructor_merge::resolve_absorbed(&e_emails, &ne_display_names, &mut *conn).await?;
+/// Upsert (phase 1 of [`upsert_instructors`]) the instructors that have an email,
+/// deduped by email (ON CONFLICT (email) WHERE email IS NOT NULL).
+async fn upsert_emailed_instructors(
+    e_display_names: Vec<String>,
+    e_first_names: Vec<Option<String>>,
+    e_last_names: Vec<Option<String>>,
+    e_emails: Vec<String>,
+    absorbed_emails: HashMap<String, i32>,
+    conn: &mut PgConnection,
+) -> Result<HashMap<String, i32>> {
+    if e_display_names.is_empty() {
+        return Ok(HashMap::new());
+    }
 
-    // Phase 1: Upsert instructors with email
-    if !e_display_names.is_empty() {
-        // UTSA hands one person both a student and a staff address. Resolve each
-        // incoming address to the row that already holds the account, so the
-        // same person does not get a second record.
-        let stored_by_canonical = existing_emails_by_canonical(&e_emails, &mut *conn).await?;
+    // UTSA hands one person both a student and a staff address. Resolve each
+    // incoming address to the row that already holds the account, so the
+    // same person does not get a second record.
+    let stored_by_canonical = existing_emails_by_canonical(&e_emails, &mut *conn).await?;
 
-        // Both spellings of one account share a canonical form, so a survivor
-        // matches the tombstone of the twin it absorbed. A live row always wins.
-        let absorbed_emails: HashMap<String, i32> = absorbed_emails
-            .into_iter()
-            .filter(|(canon, _)| !stored_by_canonical.contains_key(canon))
-            .collect();
+    // Both spellings of one account share a canonical form, so a survivor
+    // matches the tombstone of the twin it absorbed. A live row always wins.
+    let absorbed_emails: HashMap<String, i32> = absorbed_emails
+        .into_iter()
+        .filter(|(canon, _)| !stored_by_canonical.contains_key(canon))
+        .collect();
 
-        // Both spellings can also arrive together in one batch, with no row yet
-        // for either. Pick one representative, favouring the staff address.
-        let mut batch_pick: HashMap<String, String> = HashMap::new();
-        for email in &e_emails {
+    // Both spellings can also arrive together in one batch, with no row yet
+    // for either. Pick one representative, favouring the staff address.
+    let mut batch_pick: HashMap<String, String> = HashMap::new();
+    for email in &e_emails {
+        let canon = canonical_email(email);
+        if stored_by_canonical.contains_key(&canon) {
+            continue;
+        }
+        let replace = batch_pick.get(&canon).is_none_or(|current| current.contains("@my."));
+        if replace {
+            batch_pick.insert(canon, email.clone());
+        }
+    }
+
+    let resolved: Vec<String> = e_emails
+        .iter()
+        .map(|email| {
             let canon = canonical_email(email);
-            if stored_by_canonical.contains_key(&canon) {
-                continue;
-            }
-            let replace = batch_pick.get(&canon).is_none_or(|current| current.contains("@my."));
-            if replace {
-                batch_pick.insert(canon, email.clone());
-            }
+            stored_by_canonical
+                .get(&canon)
+                .or_else(|| batch_pick.get(&canon))
+                .cloned()
+                .unwrap_or_else(|| email.clone())
+        })
+        .collect();
+
+    // Two incoming addresses can resolve to one row, and a conflicting
+    // upsert may not touch the same row twice in one statement.
+    let mut seen_resolved = HashSet::new();
+    let mut u_emails = Vec::new();
+    let mut u_display_names = Vec::new();
+    let mut u_first_names: Vec<Option<String>> = Vec::new();
+    let mut u_last_names: Vec<Option<String>> = Vec::new();
+    for (idx, email) in resolved.iter().enumerate() {
+        if absorbed_emails.contains_key(&canonical_email(&e_emails[idx])) {
+            continue;
         }
-
-        let resolved: Vec<String> = e_emails
-            .iter()
-            .map(|email| {
-                let canon = canonical_email(email);
-                stored_by_canonical
-                    .get(&canon)
-                    .or_else(|| batch_pick.get(&canon))
-                    .cloned()
-                    .unwrap_or_else(|| email.clone())
-            })
-            .collect();
-
-        // Two incoming addresses can resolve to one row, and a conflicting
-        // upsert may not touch the same row twice in one statement.
-        let mut seen_resolved = HashSet::new();
-        let mut u_emails = Vec::new();
-        let mut u_display_names = Vec::new();
-        let mut u_first_names: Vec<Option<String>> = Vec::new();
-        let mut u_last_names: Vec<Option<String>> = Vec::new();
-        for (idx, email) in resolved.iter().enumerate() {
-            if absorbed_emails.contains_key(&canonical_email(&e_emails[idx])) {
-                continue;
-            }
-            if seen_resolved.insert(email.clone()) {
-                u_emails.push(email.clone());
-                u_display_names.push(e_display_names[idx].clone());
-                u_first_names.push(e_first_names[idx].clone());
-                u_last_names.push(e_last_names[idx].clone());
-            }
+        if seen_resolved.insert(email.clone()) {
+            u_emails.push(email.clone());
+            u_display_names.push(e_display_names[idx].clone());
+            u_first_names.push(e_first_names[idx].clone());
+            u_last_names.push(e_last_names[idx].clone());
         }
+    }
 
-        let e_display_names = u_display_names;
-        let e_first_names = u_first_names;
-        let e_last_names = u_last_names;
+    let e_display_names = u_display_names;
+    let e_first_names = u_first_names;
+    let e_last_names = u_last_names;
 
-        let email_refs: Vec<&str> = u_emails.iter().map(String::as_str).collect();
-        let first_name_refs: Vec<Option<&str>> = e_first_names.iter().map(|s| s.as_deref()).collect();
-        let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
-        let slugs: Vec<String> = e_display_names
-            .iter()
-            .map(|name| crate::data::instructors::generate_slug(name))
-            .collect();
+    let email_refs: Vec<&str> = u_emails.iter().map(String::as_str).collect();
+    let first_name_refs: Vec<Option<&str>> = e_first_names.iter().map(|s| s.as_deref()).collect();
+    let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
+    let slugs: Vec<String> = e_display_names
+        .iter()
+        .map(|name| crate::data::instructors::generate_slug(name))
+        .collect();
 
-        let rows = sqlx::query!(
-            r#"
+    let rows = sqlx::query!(
+        r#"
             INSERT INTO instructors (display_name, email, first_name, last_name, slug)
             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
             ON CONFLICT (email) WHERE email IS NOT NULL
@@ -923,33 +946,45 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
                 slug = COALESCE(instructors.slug, EXCLUDED.slug)
             RETURNING id, email AS "email!"
             "#,
-            &e_display_names,
-            &email_refs as &[&str],
-            &first_name_refs as &[Option<&str>],
-            &last_name_refs as &[Option<&str>],
-            &slugs,
-        )
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {e}"))?;
+        &e_display_names,
+        &email_refs as &[&str],
+        &first_name_refs as &[Option<&str>],
+        &last_name_refs as &[Option<&str>],
+        &slugs,
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {e}"))?;
 
-        let by_stored: HashMap<String, i32> = rows.into_iter().map(|r| (r.email, r.id)).collect();
-        // Callers look instructors up by the address the scrape reported, so
-        // every original address maps to the row that absorbed it.
-        by_email = e_emails
-            .iter()
-            .zip(resolved.iter())
-            .filter_map(|(original, stored)| {
-                if let Some(survivor) = absorbed_emails.get(&canonical_email(original)) {
-                    return Some((original.clone(), *survivor));
-                }
-                by_stored.get(stored).map(|id| (original.clone(), *id))
-            })
-            .collect();
-    }
+    let by_stored: HashMap<String, i32> = rows.into_iter().map(|r| (r.email, r.id)).collect();
+    // Callers look instructors up by the address the scrape reported, so
+    // every original address maps to the row that absorbed it.
+    let by_email = e_emails
+        .iter()
+        .zip(resolved.iter())
+        .filter_map(|(original, stored)| {
+            if let Some(survivor) = absorbed_emails.get(&canonical_email(original)) {
+                return Some((original.clone(), *survivor));
+            }
+            by_stored.get(stored).map(|id| (original.clone(), *id))
+        })
+        .collect();
 
-    // Phase 2: Upsert instructors without email
+    Ok(by_email)
+}
+
+/// Upsert (phase 2 of [`upsert_instructors`]) the instructors that have no email,
+/// deduped by `display_name` (ON CONFLICT (`display_name`) WHERE email IS NULL).
+async fn upsert_unemailed_instructors(
+    ne_display_names: Vec<String>,
+    ne_first_names: Vec<Option<String>>,
+    ne_last_names: Vec<Option<String>>,
+    absorbed_names: &HashMap<String, i32>,
+    conn: &mut PgConnection,
+) -> Result<HashMap<String, i32>> {
+    let mut by_display_name = HashMap::new();
     by_display_name.extend(absorbed_names.iter().map(|(n, id)| (n.clone(), *id)));
+
     let (ne_display_names, ne_first_names, ne_last_names) = {
         let keep: Vec<usize> = (0..ne_display_names.len())
             .filter(|&i| !absorbed_names.contains_key(&ne_display_names[i]))
@@ -961,16 +996,19 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
         )
     };
 
-    if !ne_display_names.is_empty() {
-        let first_name_refs: Vec<Option<&str>> = ne_first_names.iter().map(|s| s.as_deref()).collect();
-        let last_name_refs: Vec<Option<&str>> = ne_last_names.iter().map(|s| s.as_deref()).collect();
-        let slugs: Vec<String> = ne_display_names
-            .iter()
-            .map(|name| crate::data::instructors::generate_slug(name))
-            .collect();
+    if ne_display_names.is_empty() {
+        return Ok(by_display_name);
+    }
 
-        let rows = sqlx::query!(
-            r#"
+    let first_name_refs: Vec<Option<&str>> = ne_first_names.iter().map(|s| s.as_deref()).collect();
+    let last_name_refs: Vec<Option<&str>> = ne_last_names.iter().map(|s| s.as_deref()).collect();
+    let slugs: Vec<String> = ne_display_names
+        .iter()
+        .map(|name| crate::data::instructors::generate_slug(name))
+        .collect();
+
+    let rows = sqlx::query!(
+        r#"
             INSERT INTO instructors (display_name, first_name, last_name, slug)
             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
             ON CONFLICT (display_name) WHERE email IS NULL
@@ -980,17 +1018,51 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
                 slug = COALESCE(instructors.slug, EXCLUDED.slug)
             RETURNING id, display_name
             "#,
-            &ne_display_names,
-            &first_name_refs as &[Option<&str>],
-            &last_name_refs as &[Option<&str>],
-            &slugs,
-        )
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {e}"))?;
+        &ne_display_names,
+        &first_name_refs as &[Option<&str>],
+        &last_name_refs as &[Option<&str>],
+        &slugs,
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {e}"))?;
 
-        by_display_name.extend(rows.into_iter().map(|r| (r.display_name, r.id)));
-    }
+    by_display_name.extend(rows.into_iter().map(|r| (r.display_name, r.id)));
+
+    Ok(by_display_name)
+}
+
+/// Deduplicate and upsert all instructors from the batch.
+///
+/// Two-phase upsert:
+///   1. Instructors with email -> dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
+///   2. Instructors without email -> dedup by `display_name` (ON CONFLICT (`display_name`) WHERE email IS NULL)
+async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Result<InstructorLookup> {
+    let collected = collect_faculty(courses);
+
+    // A merged-away identity resolves to its survivor instead of being reinserted.
+    let (absorbed_emails, absorbed_names) =
+        crate::data::instructor_merge::resolve_absorbed(&collected.e_emails, &collected.ne_display_names, &mut *conn)
+            .await?;
+
+    let by_email = upsert_emailed_instructors(
+        collected.e_display_names,
+        collected.e_first_names,
+        collected.e_last_names,
+        collected.e_emails,
+        absorbed_emails,
+        &mut *conn,
+    )
+    .await?;
+
+    let by_display_name = upsert_unemailed_instructors(
+        collected.ne_display_names,
+        collected.ne_first_names,
+        collected.ne_last_names,
+        &absorbed_names,
+        &mut *conn,
+    )
+    .await?;
 
     Ok(InstructorLookup {
         by_email,

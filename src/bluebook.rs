@@ -609,16 +609,15 @@ impl BlueBookClient {
         Some((caps[1].parse().ok()?, caps[2].parse().ok()?))
     }
 
-    /// Scrape all subjects and upsert evaluations to the database per-subject.
+    /// Fetch scrape timestamps and filter subjects down to those due for a rescrape.
     ///
-    /// Searches each subject with the PAST term filter, paginates through all
-    /// pages, and upserts immediately after each subject completes. Returns the
-    /// total number of evaluations upserted.
-    ///
-    /// When `force` is true all subjects are scraped regardless of timestamps.
-    pub(crate) async fn scrape_all(&self, db_pool: &PgPool, force: bool) -> Result<u32> {
-        let (subjects, initial_fields) = self.fetch_subjects().await?;
-
+    /// Returns the eligible subset (borrowing from `subjects`), the total subject
+    /// count, and how many were skipped due to the rescrape interval.
+    async fn select_eligible_subjects<'a>(
+        db_pool: &PgPool,
+        subjects: &'a [SubjectEntry],
+        force: bool,
+    ) -> (Vec<&'a SubjectEntry>, usize, usize) {
         let scrape_times = get_all_subject_scrape_times(db_pool).await.unwrap_or_default();
         let max_terms = get_subject_max_terms(db_pool).await.unwrap_or_default();
         let current_term_code = Term::get_current().inner().to_string();
@@ -635,6 +634,171 @@ impl BlueBookClient {
         let eligible = eligible_subjects.len();
         let skipped_interval = total - eligible;
 
+        (eligible_subjects, total, skipped_interval)
+    }
+
+    /// Search for a subject, returning the response form fields.
+    /// Returns `None` on failure (already logged as a warning).
+    async fn search_subject_fields(
+        &self,
+        subject: &SubjectEntry,
+        initial_fields: &FormFields,
+        progress: usize,
+        subject_count: usize,
+    ) -> Option<FormFields> {
+        // Drop Html before next await, since Html is !Send
+        match self.search_subject(subject, initial_fields).await {
+            Ok((_html, fields)) => Some(fields),
+            Err(e) => {
+                warn!(
+                    code = subject.code.as_str(),
+                    progress, subject_count,
+                    error = %e,
+                    "Failed to search subject, skipping"
+                );
+                None
+            }
+        }
+    }
+
+    /// Log and mark a subject with no results as scraped.
+    /// `BlueBook` omits the term filter radio for these, so switching to PAST would
+    /// fail; marking it scraped keeps it from being retried every cycle.
+    async fn handle_no_radio_subject(db_pool: &PgPool, subject: &SubjectEntry, progress: usize, subject_count: usize) {
+        info!(
+            code = subject.code.as_str(),
+            progress, subject_count, "Skipped (no results)"
+        );
+        if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
+            warn!(
+                code = subject.code.as_str(),
+                error = %e,
+                "Failed to record scrape timestamp for empty subject"
+            );
+        }
+    }
+
+    /// Switch to the PAST term filter and paginate through all result pages.
+    /// Returns the collected evaluations and total page count, or `Err(())` if the
+    /// term filter switch itself failed (already logged as a warning).
+    async fn fetch_subject_evaluations(
+        &self,
+        subject: &SubjectEntry,
+        fields: &FormFields,
+        progress: usize,
+        subject_count: usize,
+    ) -> Result<(Vec<BlueBookEvaluation>, u32), ()> {
+        let mut subject_evals = Vec::new();
+        let (total_pages, mut fields) = match self.switch_term_filter("PAST", fields).await {
+            Ok((html, fields)) => {
+                let page_evals = Self::parse_evaluations(&html, &subject.code);
+                subject_evals.extend(page_evals);
+                let total_pages = Self::parse_page_info(&html).map_or(1, |(_, total)| total);
+                (total_pages, fields)
+            }
+            Err(e) => {
+                warn!(
+                    code = subject.code.as_str(),
+                    progress, subject_count,
+                    error = %e,
+                    "Failed to switch to PAST filter, skipping"
+                );
+                return Err(());
+            }
+        };
+
+        for page in 2..=total_pages {
+            debug!(code = subject.code.as_str(), page, total_pages, "Fetching page");
+
+            match self.next_page(&fields, true).await {
+                Ok((page_html, new_fields)) => {
+                    fields = new_fields;
+                    let page_evals = Self::parse_evaluations(&page_html, &subject.code);
+                    subject_evals.extend(page_evals);
+                }
+                Err(e) => {
+                    warn!(
+                        code = subject.code.as_str(),
+                        page,
+                        error = %e,
+                        "Failed to fetch page, stopping pagination"
+                    );
+                    break;
+                }
+            }
+        }
+
+        Ok((subject_evals, total_pages))
+    }
+
+    /// Upsert a subject's evaluations, mark it scraped, and log the outcome.
+    /// Returns `false` if the upsert failed (already logged); `total_evals` is
+    /// only incremented on success.
+    async fn upsert_and_mark_subject(
+        db_pool: &PgPool,
+        subject: &SubjectEntry,
+        subject_evals: &[BlueBookEvaluation],
+        total_pages: u32,
+        progress: usize,
+        subject_count: usize,
+        total_evals: &mut u32,
+    ) -> bool {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "subject_evals is one subject's scraped rows, far under u32::MAX"
+        )]
+        let subject_eval_count = subject_evals.len() as u32;
+
+        // Upsert immediately so data is available without waiting for the full scrape
+        if !subject_evals.is_empty()
+            && let Err(e) = batch_upsert_bluebook_evaluations(db_pool, subject_evals).await
+        {
+            warn!(
+                code = subject.code.as_str(),
+                evals = subject_eval_count,
+                error = %e,
+                "Failed to upsert evaluations for subject"
+            );
+            return false;
+        }
+
+        *total_evals += subject_eval_count;
+
+        if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
+            warn!(
+                code = subject.code.as_str(),
+                error = %e,
+                "Failed to record subject scrape timestamp"
+            );
+        }
+
+        info!(
+            code = subject.code.as_str(),
+            progress,
+            subject_count,
+            pages = total_pages,
+            evals = subject_eval_count,
+            total_evals = *total_evals,
+            "Scraped subject"
+        );
+
+        true
+    }
+
+    /// Scrape all subjects and upsert evaluations to the database per-subject.
+    ///
+    /// Searches each subject with the PAST term filter, paginates through all
+    /// pages, and upserts immediately after each subject completes. Returns the
+    /// total number of evaluations upserted.
+    ///
+    /// When `force` is true all subjects are scraped regardless of timestamps.
+    pub(crate) async fn scrape_all(&self, db_pool: &PgPool, force: bool) -> Result<u32> {
+        let (subjects, initial_fields) = self.fetch_subjects().await?;
+
+        let (eligible_subjects, total, skipped_interval) =
+            Self::select_eligible_subjects(db_pool, &subjects, force).await;
+        let eligible = eligible_subjects.len();
+
         info!(
             total,
             eligible,
@@ -650,124 +814,41 @@ impl BlueBookClient {
         for (i, subject) in eligible_subjects.iter().enumerate() {
             let progress = i + 1;
 
-            // Search for the subject (drop Html before next await, since Html is !Send)
-            let fields = match self.search_subject(subject, &initial_fields).await {
-                Ok((_html, fields)) => fields,
-                Err(e) => {
-                    warn!(
-                        code = subject.code.as_str(),
-                        progress, subject_count,
-                        error = %e,
-                        "Failed to search subject, skipping"
-                    );
-                    skipped_errors += 1;
-                    continue;
-                }
-            };
-
-            // Subjects with no results don't render the term filter radio buttons.
-            // The response contains TotalRows=0 and a "Revise your search criteria"
-            // message. Attempting to POST a PAST switch would fail with ASP.NET
-            // EventValidation rejection, so detect this early and skip.
-            // Mark as scraped so these subjects are not retried every cycle.
-            if !fields.has(TERM_FILTER_RADIO) {
-                info!(
-                    code = subject.code.as_str(),
-                    progress, subject_count, "Skipped (no results)"
-                );
-                skipped_no_radio += 1;
-                if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
-                    warn!(
-                        code = subject.code.as_str(),
-                        error = %e,
-                        "Failed to record scrape timestamp for empty subject"
-                    );
-                }
-                continue;
-            }
-
-            // Switch to PAST courses to get completed evaluations
-            let mut subject_evals = Vec::new();
-            let (total_pages, mut fields) = match self.switch_term_filter("PAST", &fields).await {
-                Ok((html, fields)) => {
-                    let page_evals = Self::parse_evaluations(&html, &subject.code);
-                    subject_evals.extend(page_evals);
-                    let total_pages = Self::parse_page_info(&html).map_or(1, |(_, total)| total);
-                    (total_pages, fields)
-                }
-                Err(e) => {
-                    warn!(
-                        code = subject.code.as_str(),
-                        progress, subject_count,
-                        error = %e,
-                        "Failed to switch to PAST filter, skipping"
-                    );
-                    skipped_errors += 1;
-                    continue;
-                }
-            };
-
-            // Paginate through remaining pages
-            for page in 2..=total_pages {
-                debug!(code = subject.code.as_str(), page, total_pages, "Fetching page");
-
-                match self.next_page(&fields, true).await {
-                    Ok((page_html, new_fields)) => {
-                        fields = new_fields;
-                        let page_evals = Self::parse_evaluations(&page_html, &subject.code);
-                        subject_evals.extend(page_evals);
-                    }
-                    Err(e) => {
-                        warn!(
-                            code = subject.code.as_str(),
-                            page,
-                            error = %e,
-                            "Failed to fetch page, stopping pagination"
-                        );
-                        break;
-                    }
-                }
-            }
-
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "subject_evals is one subject's scraped rows, far under u32::MAX"
-            )]
-            let subject_eval_count = subject_evals.len() as u32;
-
-            // Upsert immediately so data is available without waiting for the full scrape
-            if !subject_evals.is_empty()
-                && let Err(e) = batch_upsert_bluebook_evaluations(db_pool, &subject_evals).await
-            {
-                warn!(
-                    code = subject.code.as_str(),
-                    evals = subject_eval_count,
-                    error = %e,
-                    "Failed to upsert evaluations for subject"
-                );
+            let Some(fields) = self
+                .search_subject_fields(subject, &initial_fields, progress, subject_count)
+                .await
+            else {
                 skipped_errors += 1;
                 continue;
+            };
+
+            if !fields.has(TERM_FILTER_RADIO) {
+                Self::handle_no_radio_subject(db_pool, subject, progress, subject_count).await;
+                skipped_no_radio += 1;
+                continue;
             }
 
-            total_evals += subject_eval_count;
+            let Ok((subject_evals, total_pages)) = self
+                .fetch_subject_evaluations(subject, &fields, progress, subject_count)
+                .await
+            else {
+                skipped_errors += 1;
+                continue;
+            };
 
-            if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
-                warn!(
-                    code = subject.code.as_str(),
-                    error = %e,
-                    "Failed to record subject scrape timestamp"
-                );
-            }
-
-            info!(
-                code = subject.code.as_str(),
+            if !Self::upsert_and_mark_subject(
+                db_pool,
+                subject,
+                &subject_evals,
+                total_pages,
                 progress,
                 subject_count,
-                pages = total_pages,
-                evals = subject_eval_count,
-                total_evals,
-                "Scraped subject"
-            );
+                &mut total_evals,
+            )
+            .await
+            {
+                skipped_errors += 1;
+            }
         }
 
         info!(

@@ -1,3 +1,4 @@
+use crate::banner::models::common::Pair;
 use crate::banner::{BannerApi, Term};
 use crate::bluebook::BlueBookClient;
 use crate::data::DbContext;
@@ -132,6 +133,28 @@ pub struct Scheduler {
     bluebook_force_flag: Arc<AtomicBool>,
 }
 
+/// In-memory cooldown clocks derived from persisted scheduler timestamps.
+struct SchedulerTimestamps {
+    ref_scrape: Instant,
+    rmp_sync: Instant,
+    term_sync: Instant,
+    bluebook_sync: Instant,
+    rmp_review_scrape: Instant,
+    cluster_courses: Instant,
+}
+
+/// Which work items one scheduling cycle should run, decided once per tick.
+#[derive(Clone, Copy)]
+struct CycleFlags {
+    scrape_ref: bool,
+    sync_rmp: bool,
+    sync_terms: bool,
+    sync_bluebook: bool,
+    scrape_rmp_reviews: bool,
+    cluster_courses: bool,
+    bluebook_force: bool,
+}
+
 impl Scheduler {
     pub fn new(
         db: DbContext,
@@ -167,36 +190,13 @@ impl Scheduler {
         let mut current_work: Option<(tokio::task::JoinHandle<()>, CancellationToken)> = None;
 
         // Load persisted timestamps so we don't redo work that completed recently.
-        let pool = self.db.pool();
-        let persisted_ref = persisted_timestamp(pool, KV_REF_SCRAPE).await;
-        let persisted_rmp = persisted_timestamp(pool, KV_RMP_SYNC).await;
-        let persisted_term = persisted_timestamp(pool, KV_TERM_SYNC).await;
-        let persisted_bb = persisted_timestamp(pool, KV_BLUEBOOK_SYNC).await;
-        let persisted_rmp_reviews = persisted_timestamp(pool, KV_RMP_REVIEW_SCRAPE).await;
-        let persisted_cluster = persisted_timestamp(pool, KV_CLUSTER_COURSES).await;
-
-        if persisted_ref.is_some()
-            || persisted_rmp.is_some()
-            || persisted_term.is_some()
-            || persisted_bb.is_some()
-            || persisted_rmp_reviews.is_some()
-        {
-            info!(
-                last_ref_scrape = persisted_ref.map(|v| v.to_rfc3339()).as_deref(),
-                last_rmp_sync = persisted_rmp.map(|v| v.to_rfc3339()).as_deref(),
-                last_term_sync = persisted_term.map(|v| v.to_rfc3339()).as_deref(),
-                last_bluebook_sync = persisted_bb.map(|v| v.to_rfc3339()).as_deref(),
-                last_rmp_review_scrape = persisted_rmp_reviews.map(|v| v.to_rfc3339()).as_deref(),
-                "Loaded persisted scheduler timestamps"
-            );
-        }
-
-        let mut last_ref_scrape = persisted_to_instant(persisted_ref, REFERENCE_DATA_INTERVAL);
-        let mut last_rmp_sync = persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL);
-        let mut last_term_sync = persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL);
-        let mut last_bluebook_sync = persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL);
-        let mut last_rmp_review_scrape = persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL);
-        let mut last_cluster_courses = persisted_to_instant(persisted_cluster, CLUSTER_COURSES_INTERVAL);
+        let timestamps = Self::load_scheduler_timestamps(self.db.pool()).await;
+        let mut last_ref_scrape = timestamps.ref_scrape;
+        let mut last_rmp_sync = timestamps.rmp_sync;
+        let mut last_term_sync = timestamps.term_sync;
+        let mut last_bluebook_sync = timestamps.bluebook_sync;
+        let mut last_rmp_review_scrape = timestamps.rmp_review_scrape;
+        let mut last_cluster_courses = timestamps.cluster_courses;
         let mut bluebook_notified = false;
 
         loop {
@@ -221,175 +221,43 @@ impl Scheduler {
 
                     let cancel_token = CancellationToken::new();
 
-                    let should_scrape_ref = last_ref_scrape.elapsed() >= REFERENCE_DATA_INTERVAL;
-                    let should_sync_rmp = last_rmp_sync.elapsed() >= RMP_SYNC_INTERVAL;
-                    let should_sync_terms = last_term_sync.elapsed() >= TERM_SYNC_INTERVAL;
-                    let should_sync_bluebook = bluebook_notified
-                        || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL;
-                    let should_scrape_rmp_reviews =
-                        last_rmp_review_scrape.elapsed() >= RMP_REVIEW_SCRAPE_INTERVAL;
-                    let should_cluster_courses =
-                        last_cluster_courses.elapsed() >= CLUSTER_COURSES_INTERVAL;
+                    let flags = CycleFlags {
+                        scrape_ref: last_ref_scrape.elapsed() >= REFERENCE_DATA_INTERVAL,
+                        sync_rmp: last_rmp_sync.elapsed() >= RMP_SYNC_INTERVAL,
+                        sync_terms: last_term_sync.elapsed() >= TERM_SYNC_INTERVAL,
+                        sync_bluebook: bluebook_notified
+                            || last_bluebook_sync.elapsed() >= BLUEBOOK_SYNC_INTERVAL,
+                        scrape_rmp_reviews: last_rmp_review_scrape.elapsed()
+                            >= RMP_REVIEW_SCRAPE_INTERVAL,
+                        cluster_courses: last_cluster_courses.elapsed() >= CLUSTER_COURSES_INTERVAL,
+                        // Cleared here so the spawned task sees this cycle's value.
+                        bluebook_force: self.bluebook_force_flag.swap(false, Ordering::Relaxed),
+                    };
                     bluebook_notified = false;
-
-                    // Read and clear the force flag before spawning so the flag
-                    // state at decision time is used by the spawned task.
-                    let bluebook_force = self
-                        .bluebook_force_flag
-                        .swap(false, Ordering::Relaxed);
 
                     // Spawn work in separate task to allow graceful cancellation during shutdown.
                     // Timestamps are persisted to DB on success so restarts don't redo recent work.
-                    let work_handle = tokio::spawn({
-                        let db = self.db.clone();
-                        let banner_api = self.banner_api.clone();
-                        let cancel_token = cancel_token.clone();
-                        let reference_cache = self.reference_cache.clone();
-                        let archived_eval_times = self.archived_eval_times.clone();
-
-                                async move {
-                                    tokio::select! {
-                                        () = async {
-                                            // Term sync, RMP sync, and reference data are independent,
-                                            // so run them concurrently instead of waiting behind each other.
-                                            let term_fut = async {
-                                                if should_sync_terms {
-                                                    match Self::sync_terms(db.pool(), &banner_api).await {
-                                                        Ok(()) => {
-                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_TERM_SYNC, Utc::now()).await {
-                                                                telemetry::record_db_failure(&e);
-                                                                warn!(error = ?e, "Failed to persist term sync timestamp");
-                                                            }
-                                                        }
-                                                        Err(e) => error!(error = ?e, "Failed to sync terms"),
-                                                    }
-                                                }
-                                            };
-
-                                            let rmp_fut = async {
-                                                if should_sync_rmp {
-                                                    match Self::sync_rmp_data(db.pool()).await {
-                                                        Ok(()) => {
-                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_SYNC, Utc::now()).await {
-                                                                telemetry::record_db_failure(&e);
-                                                                warn!(error = ?e, "Failed to persist RMP sync timestamp");
-                                                            }
-                                                        }
-                                                        Err(e) => error!(error = ?e, "Failed to sync RMP data"),
-                                                    }
-                                                }
-                                            };
-
-                                            let ref_fut = async {
-                                                if should_scrape_ref {
-                                                    match Self::scrape_reference_data(db.pool(), &banner_api, &reference_cache).await {
-                                                        Ok(()) => {
-                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_REF_SCRAPE, Utc::now()).await {
-                                                                telemetry::record_db_failure(&e);
-                                                                warn!(error = ?e, "Failed to persist ref scrape timestamp");
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            telemetry::record_db_failure(&e);
-                                                            error!(error = ?e, "Failed to scrape reference data");
-                                                        }
-                                                    }
-                                                }
-                                            };
-
-                                            let bb_fut = async {
-                                                if should_sync_bluebook {
-                                                    match Self::sync_bluebook(db.pool(), bluebook_force).await {
-                                                        Ok(()) => {
-                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_BLUEBOOK_SYNC, Utc::now()).await {
-                                                                telemetry::record_db_failure(&e);
-                                                                warn!(error = ?e, "Failed to persist BlueBook sync timestamp");
-                                                            }
-                                                        }
-                                                        Err(e) => error!(error = ?e, "Failed to sync BlueBook data"),
-                                                    }
-                                                }
-                                            };
-
-                                            let rmp_review_fut = async {
-                                                if should_scrape_rmp_reviews {
-                                                    match Self::sync_rmp_reviews(db.pool()).await {
-                                                        Ok(()) => {
-                                                            if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_REVIEW_SCRAPE, Utc::now()).await {
-                                                                telemetry::record_db_failure(&e);
-                                                                warn!(error = ?e, "Failed to persist RMP review scrape timestamp");
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            telemetry::record_db_failure(&e);
-                                                            error!(error = ?e, "Failed to sync RMP reviews");
-                                                        }
-                                                    }
-                                                }
-                                            };
-
-                                            tokio::join!(term_fut, rmp_fut, ref_fut, bb_fut, rmp_review_fut);
-
-                                            // Recompute instructor scores when rating data may have changed
-                                            if should_sync_rmp || should_sync_bluebook || should_scrape_rmp_reviews {
-                                                match crate::data::scoring::recompute_all_scores(db.pool()).await {
-                                                    Ok(n) => info!(count = n, "Recomputed instructor scores after sync"),
-                                                    Err(e) => {
-                                                        telemetry::record_db_failure(&e);
-                                                        error!(error = ?e, "Failed to recompute instructor scores after sync");
-                                                    }
-                                                }
-                                            }
-
-                                            if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
-                                                telemetry::record_db_failure(&e);
-                                                error!(error = ?e, "Failed to schedule jobs");
-                                            }
-
-                                            // Runs last: the rewrite holds an exclusive lock on
-                                            // courses, so nothing else in this cycle should be
-                                            // waiting behind it for a pool connection.
-                                            if should_cluster_courses {
-                                                match Self::cluster_courses(db.pool()).await {
-                                                    Ok(()) => {
-                                                        if let Err(e) = kv::set_timestamp(db.pool(), KV_CLUSTER_COURSES, Utc::now()).await {
-                                                            telemetry::record_db_failure(&e);
-                                                            warn!(error = ?e, "Failed to persist cluster timestamp");
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        telemetry::record_db_failure(&e);
-                                                        error!(error = ?e, "Failed to cluster courses");
-                                                    }
-                                                }
-                                            }
-                                        } => {}
-                                        () = cancel_token.cancelled() => {
-                                            trace!("Scheduling work cancelled gracefully");
-                                        }
-                                    }
-                                }
-                    });
+                    let work_handle = self.spawn_scheduling_work(cancel_token.clone(), flags);
 
                     // Update in-memory timestamps to prevent re-triggering while
                     // the spawned task is still running. The DB is updated on
                     // success inside the task above.
-                    if should_scrape_ref {
+                    if flags.scrape_ref {
                         last_ref_scrape = Instant::now();
                     }
-                    if should_sync_rmp {
+                    if flags.sync_rmp {
                         last_rmp_sync = Instant::now();
                     }
-                    if should_sync_terms {
+                    if flags.sync_terms {
                         last_term_sync = Instant::now();
                     }
-                    if should_sync_bluebook {
+                    if flags.sync_bluebook {
                         last_bluebook_sync = Instant::now();
                     }
-                    if should_scrape_rmp_reviews {
+                    if flags.scrape_rmp_reviews {
                         last_rmp_review_scrape = Instant::now();
                     }
-                    if should_cluster_courses {
+                    if flags.cluster_courses {
                         last_cluster_courses = Instant::now();
                     }
 
@@ -413,6 +281,227 @@ impl Scheduler {
                     info!("Scheduler exiting gracefully");
                     break;
                 }
+            }
+        }
+    }
+
+    /// Loads persisted scheduler timestamps and converts each to an `Instant`,
+    /// preserving whatever cooldown remained across a restart.
+    async fn load_scheduler_timestamps(pool: &PgPool) -> SchedulerTimestamps {
+        let persisted_ref = persisted_timestamp(pool, KV_REF_SCRAPE).await;
+        let persisted_rmp = persisted_timestamp(pool, KV_RMP_SYNC).await;
+        let persisted_term = persisted_timestamp(pool, KV_TERM_SYNC).await;
+        let persisted_bb = persisted_timestamp(pool, KV_BLUEBOOK_SYNC).await;
+        let persisted_rmp_reviews = persisted_timestamp(pool, KV_RMP_REVIEW_SCRAPE).await;
+        let persisted_cluster = persisted_timestamp(pool, KV_CLUSTER_COURSES).await;
+
+        if persisted_ref.is_some()
+            || persisted_rmp.is_some()
+            || persisted_term.is_some()
+            || persisted_bb.is_some()
+            || persisted_rmp_reviews.is_some()
+        {
+            info!(
+                last_ref_scrape = persisted_ref.map(|v| v.to_rfc3339()).as_deref(),
+                last_rmp_sync = persisted_rmp.map(|v| v.to_rfc3339()).as_deref(),
+                last_term_sync = persisted_term.map(|v| v.to_rfc3339()).as_deref(),
+                last_bluebook_sync = persisted_bb.map(|v| v.to_rfc3339()).as_deref(),
+                last_rmp_review_scrape = persisted_rmp_reviews.map(|v| v.to_rfc3339()).as_deref(),
+                "Loaded persisted scheduler timestamps"
+            );
+        }
+
+        SchedulerTimestamps {
+            ref_scrape: persisted_to_instant(persisted_ref, REFERENCE_DATA_INTERVAL),
+            rmp_sync: persisted_to_instant(persisted_rmp, RMP_SYNC_INTERVAL),
+            term_sync: persisted_to_instant(persisted_term, TERM_SYNC_INTERVAL),
+            bluebook_sync: persisted_to_instant(persisted_bb, BLUEBOOK_SYNC_INTERVAL),
+            rmp_review_scrape: persisted_to_instant(persisted_rmp_reviews, RMP_REVIEW_SCRAPE_INTERVAL),
+            cluster_courses: persisted_to_instant(persisted_cluster, CLUSTER_COURSES_INTERVAL),
+        }
+    }
+
+    /// Spawns one scheduling cycle in its own task so it can be cancelled gracefully on shutdown.
+    fn spawn_scheduling_work(&self, cancel_token: CancellationToken, flags: CycleFlags) -> tokio::task::JoinHandle<()> {
+        let db = self.db.clone();
+        let banner_api = self.banner_api.clone();
+        let reference_cache = self.reference_cache.clone();
+        let archived_eval_times = self.archived_eval_times.clone();
+
+        tokio::spawn(async move {
+            tokio::select! {
+                () = Self::run_scheduling_cycle(
+                    db,
+                    banner_api,
+                    reference_cache,
+                    archived_eval_times,
+                    flags,
+                ) => {}
+                () = cancel_token.cancelled() => {
+                    trace!("Scheduling work cancelled gracefully");
+                }
+            }
+        })
+    }
+
+    /// Runs term sync, RMP sync, reference scraping, `BlueBook` sync, RMP review
+    /// scraping, subject job scheduling, and courses clustering for one cycle.
+    ///
+    /// Term sync, RMP sync, and reference data are independent, so they run
+    /// concurrently instead of waiting behind each other.
+    async fn run_scheduling_cycle(
+        db: DbContext,
+        banner_api: Arc<BannerApi>,
+        reference_cache: Arc<RwLock<ReferenceCache>>,
+        archived_eval_times: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
+        flags: CycleFlags,
+    ) {
+        tokio::join!(
+            Self::maybe_sync_terms(&db, &banner_api, flags.sync_terms),
+            Self::maybe_sync_rmp_data(&db, flags.sync_rmp),
+            Self::maybe_scrape_reference_data(&db, &banner_api, &reference_cache, flags.scrape_ref),
+            Self::maybe_sync_bluebook(&db, flags.sync_bluebook, flags.bluebook_force),
+            Self::maybe_sync_rmp_reviews(&db, flags.scrape_rmp_reviews),
+        );
+
+        Self::maybe_recompute_scores(&db, flags.sync_rmp, flags.sync_bluebook, flags.scrape_rmp_reviews).await;
+
+        if let Err(e) = Self::schedule_jobs_impl(&db, &banner_api, &archived_eval_times).await {
+            telemetry::record_db_failure(&e);
+            error!(error = ?e, "Failed to schedule jobs");
+        }
+
+        // Runs last: the rewrite holds an exclusive lock on
+        // courses, so nothing else in this cycle should be
+        // waiting behind it for a pool connection.
+        Self::maybe_cluster_courses(&db, flags.cluster_courses).await;
+    }
+
+    /// Syncs terms from Banner if due, persisting the sync timestamp on success.
+    async fn maybe_sync_terms(db: &DbContext, banner_api: &BannerApi, should_sync_terms: bool) {
+        if !should_sync_terms {
+            return;
+        }
+        match Self::sync_terms(db.pool(), banner_api).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_TERM_SYNC, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist term sync timestamp");
+                }
+            }
+            Err(e) => error!(error = ?e, "Failed to sync terms"),
+        }
+    }
+
+    /// Syncs RMP professor data if due, persisting the sync timestamp on success.
+    async fn maybe_sync_rmp_data(db: &DbContext, should_sync_rmp: bool) {
+        if !should_sync_rmp {
+            return;
+        }
+        match Self::sync_rmp_data(db.pool()).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_SYNC, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist RMP sync timestamp");
+                }
+            }
+            Err(e) => error!(error = ?e, "Failed to sync RMP data"),
+        }
+    }
+
+    /// Scrapes reference data if due, persisting the scrape timestamp on success.
+    async fn maybe_scrape_reference_data(
+        db: &DbContext,
+        banner_api: &BannerApi,
+        reference_cache: &Arc<RwLock<ReferenceCache>>,
+        should_scrape_ref: bool,
+    ) {
+        if !should_scrape_ref {
+            return;
+        }
+        match Self::scrape_reference_data(db.pool(), banner_api, reference_cache).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_REF_SCRAPE, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist ref scrape timestamp");
+                }
+            }
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                error!(error = ?e, "Failed to scrape reference data");
+            }
+        }
+    }
+
+    /// Syncs `BlueBook` evaluations if due, persisting the sync timestamp on success.
+    async fn maybe_sync_bluebook(db: &DbContext, should_sync_bluebook: bool, bluebook_force: bool) {
+        if !should_sync_bluebook {
+            return;
+        }
+        match Self::sync_bluebook(db.pool(), bluebook_force).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_BLUEBOOK_SYNC, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist BlueBook sync timestamp");
+                }
+            }
+            Err(e) => error!(error = ?e, "Failed to sync BlueBook data"),
+        }
+    }
+
+    /// Scrapes RMP reviews if due, persisting the scrape timestamp on success.
+    async fn maybe_sync_rmp_reviews(db: &DbContext, should_scrape_rmp_reviews: bool) {
+        if !should_scrape_rmp_reviews {
+            return;
+        }
+        match Self::sync_rmp_reviews(db.pool()).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_RMP_REVIEW_SCRAPE, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist RMP review scrape timestamp");
+                }
+            }
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                error!(error = ?e, "Failed to sync RMP reviews");
+            }
+        }
+    }
+
+    /// Recomputes instructor scores if any rating data may have changed this cycle.
+    async fn maybe_recompute_scores(
+        db: &DbContext,
+        should_sync_rmp: bool,
+        should_sync_bluebook: bool,
+        should_scrape_rmp_reviews: bool,
+    ) {
+        if !(should_sync_rmp || should_sync_bluebook || should_scrape_rmp_reviews) {
+            return;
+        }
+        match crate::data::scoring::recompute_all_scores(db.pool()).await {
+            Ok(n) => info!(count = n, "Recomputed instructor scores after sync"),
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                error!(error = ?e, "Failed to recompute instructor scores after sync");
+            }
+        }
+    }
+
+    /// Re-clusters courses if due, persisting the cluster timestamp on success.
+    async fn maybe_cluster_courses(db: &DbContext, should_cluster_courses: bool) {
+        if !should_cluster_courses {
+            return;
+        }
+        match Self::cluster_courses(db.pool()).await {
+            Ok(()) => {
+                if let Err(e) = kv::set_timestamp(db.pool(), KV_CLUSTER_COURSES, Utc::now()).await {
+                    telemetry::record_db_failure(&e);
+                    warn!(error = ?e, "Failed to persist cluster timestamp");
+                }
+            }
+            Err(e) => {
+                telemetry::record_db_failure(&e);
+                error!(error = ?e, "Failed to cluster courses");
             }
         }
     }
@@ -551,34 +640,81 @@ impl Scheduler {
     ) -> Result<()> {
         trace!(?category, "Enqueuing subject jobs for term");
 
-        let subjects = match category {
+        let subjects = Self::resolve_term_subjects(db, banner_api, term_code, category).await?;
+
+        let now = Utc::now();
+        let (eligible_subjects, cooldown_count, paused_count) =
+            Self::evaluate_subject_eligibility(&subjects, term_code, stats_map, category, now);
+
+        if eligible_subjects.is_empty() {
+            trace!(
+                total = subjects.len(),
+                cooldown = cooldown_count,
+                paused = paused_count,
+                ?category,
+                "No eligible subjects"
+            );
+            return Ok(());
+        }
+
+        info!(
+            total = subjects.len(),
+            eligible = eligible_subjects.len(),
+            cooldown = cooldown_count,
+            paused = paused_count,
+            ?category,
+            "Scheduling subjects"
+        );
+
+        Self::insert_new_subject_jobs(db, eligible_subjects, term_code).await
+    }
+
+    /// Resolves the subject list for a term.
+    ///
+    /// Past/archived terms are read from the database cache, populating it on
+    /// first access; current/future terms always fetch fresh from Banner.
+    async fn resolve_term_subjects(
+        db: &DbContext,
+        banner_api: &BannerApi,
+        term_code: &str,
+        category: TermCategory,
+    ) -> Result<Vec<Pair>> {
+        match category {
             TermCategory::Past | TermCategory::Archived => {
                 let cached = term_subjects::get_cached(term_code, db.pool()).await?;
                 if cached.is_empty() {
                     let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
                     trace!(count = fetched.len(), "Fetched subjects from API (cold cache)");
                     term_subjects::cache(term_code, &fetched, db.pool()).await?;
-                    fetched
+                    Ok(fetched)
                 } else {
                     trace!(count = cached.len(), "Using cached subjects");
-                    cached
+                    Ok(cached)
                 }
             }
             _ => {
                 let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
                 trace!(count = fetched.len(), "Fetched subjects from API");
                 term_subjects::cache(term_code, &fetched, db.pool()).await?;
-                fetched
+                Ok(fetched)
             }
-        };
+        }
+    }
 
-        // Evaluate each subject using adaptive scheduling
-        let now = Utc::now();
+    /// Evaluates each subject with adaptive scheduling, returning eligible subject
+    /// codes plus counts of subjects still on cooldown or paused.
+    fn evaluate_subject_eligibility(
+        subjects: &[Pair],
+        term_code: &str,
+        stats_map: &HashMap<(String, String), SubjectStats>,
+        category: TermCategory,
+        now: DateTime<Utc>,
+    ) -> (Vec<String>, usize, usize) {
         let mut eligible_subjects: Vec<String> = Vec::new();
         let mut cooldown_count: usize = 0;
         let mut paused_count: usize = 0;
 
-        for subject in &subjects {
+        for subject in subjects {
             let key = (subject.code.clone(), term_code.to_string());
             let stats = stats_map.get(&key).cloned().unwrap_or_else(|| SubjectStats {
                 subject: subject.code.clone(),
@@ -601,26 +737,12 @@ impl Scheduler {
             }
         }
 
-        if eligible_subjects.is_empty() {
-            trace!(
-                total = subjects.len(),
-                cooldown = cooldown_count,
-                paused = paused_count,
-                ?category,
-                "No eligible subjects"
-            );
-            return Ok(());
-        }
+        (eligible_subjects, cooldown_count, paused_count)
+    }
 
-        info!(
-            total = subjects.len(),
-            eligible = eligible_subjects.len(),
-            cooldown = cooldown_count,
-            paused = paused_count,
-            ?category,
-            "Scheduling subjects"
-        );
-
+    /// Enqueues scrape jobs for eligible subjects that don't already have a pending
+    /// job, inserting all new jobs in a single batch.
+    async fn insert_new_subject_jobs(db: &DbContext, eligible_subjects: Vec<String>, term_code: &str) -> Result<()> {
         // Create payloads with term field for eligible subjects
         let subject_payloads: Vec<TargetPayload> = eligible_subjects
             .iter()

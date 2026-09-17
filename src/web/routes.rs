@@ -54,18 +54,9 @@ pub fn with_cache_control<T: serde::Serialize>(value: T, header: &'static str) -
     response
 }
 
-/// Creates the web server router
-pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
-    // Without it every asset falls through to the SSR server, which serves them uncompressed.
-    #[cfg(feature = "serve-assets")]
-    if !crate::web::assets::assets_dir().is_dir() {
-        tracing::warn!(
-            dir = %crate::web::assets::assets_dir().display(),
-            "client build directory missing"
-        );
-    }
-
-    let api_router = Router::new()
+/// `/api` routes: courses, reference data, search, instructors, and streaming.
+fn build_api_router(app_state: AppState) -> Router<AppState> {
+    Router::new()
         .route("/health", get(status::health))
         .route("/ready", get(status::ready))
         .route("/status", get(status::status))
@@ -93,23 +84,34 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/timeline", post(timeline::timeline))
         .route("/ws", get(stream::stream_ws))
         .route("/csp-report", post(csp_report::csp_report))
-        .with_state(app_state.clone());
+        .with_state(app_state)
+}
 
-    let auth_router = Router::new()
+/// `/api/auth` routes: Discord OAuth login, callback, logout, and session lookup.
+fn build_auth_router(app_state: AppState, auth_config: AuthConfig) -> Router<AppState> {
+    Router::new()
         .route("/auth/login", get(auth::auth_login))
         .route("/auth/callback", get(auth::auth_callback))
         .route("/auth/logout", post(auth::auth_logout))
         .route("/auth/me", get(auth::auth_me))
         .layer(Extension(auth_config))
-        .with_state(app_state.clone());
+        .with_state(app_state)
+}
 
-    let admin_router = Router::new()
+/// User and audit-log admin routes.
+fn admin_user_routes() -> Router<AppState> {
+    Router::new()
         .route("/admin/status", get(admin::admin_status))
         .route("/admin/users", get(admin::list_users))
         .route("/admin/users/{discord_id}/admin", put(admin::set_user_admin))
         .route("/admin/scrape-jobs", get(admin::list_scrape_jobs))
         .route("/admin/audit-log", get(admin::list_audit_log))
         .route("/admin/action-log", get(admin::action_log::list_action_log))
+}
+
+/// Instructor matching, duplicate resolution, and RMP scoring admin routes.
+fn admin_instructor_routes() -> Router<AppState> {
+    Router::new()
         .route("/admin/instructors", get(admin::rmp::list_instructors))
         .route("/admin/instructors/duplicates", get(admin::duplicates::list_duplicates))
         .route("/admin/instructors/merge", post(admin::duplicates::merge))
@@ -132,6 +134,11 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/admin/instructors/{id}/reject-all", post(admin::rmp::reject_all))
         .route("/admin/instructors/{id}/unmatch", post(admin::rmp::unmatch_instructor))
         .route("/admin/rmp/rescore", post(admin::rmp::rescore))
+}
+
+/// Scraper stats, `BlueBook` matching, and term-management admin routes.
+fn admin_scraper_routes() -> Router<AppState> {
+    Router::new()
         .route("/admin/scraper/stats", get(admin::scraper::scraper_stats))
         .route("/admin/scraper/timeseries", get(admin::scraper::scraper_timeseries))
         .route("/admin/scraper/subjects", get(admin::scraper::scraper_subjects))
@@ -153,6 +160,14 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         .route("/admin/terms/sync", post(admin::terms::sync_terms))
         .route("/admin/terms/{code}/enable", post(admin::terms::enable_term))
         .route("/admin/terms/{code}/disable", post(admin::terms::disable_term))
+}
+
+/// `/api/admin` routes: merges the user, instructor, and scraper route groups and
+/// forces every response to `Cache-Control: no-store`.
+fn build_admin_router(app_state: AppState) -> Router<AppState> {
+    admin_user_routes()
+        .merge(admin_instructor_routes())
+        .merge(admin_scraper_routes())
         .layer(axum::middleware::map_response(|mut resp: Response| async move {
             resp.headers_mut().insert(
                 axum::http::header::CACHE_CONTROL,
@@ -160,7 +175,23 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
             );
             resp
         }))
-        .with_state(app_state.clone());
+        .with_state(app_state)
+}
+
+/// Creates the web server router
+pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
+    // Without it every asset falls through to the SSR server, which serves them uncompressed.
+    #[cfg(feature = "serve-assets")]
+    if !crate::web::assets::assets_dir().is_dir() {
+        tracing::warn!(
+            dir = %crate::web::assets::assets_dir().display(),
+            "client build directory missing"
+        );
+    }
+
+    let api_router = build_api_router(app_state.clone());
+    let auth_router = build_auth_router(app_state.clone(), auth_config);
+    let admin_router = build_admin_router(app_state.clone());
 
     let rate_limit_state = app_state.rate_limit.clone();
 

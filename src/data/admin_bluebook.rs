@@ -148,12 +148,8 @@ pub struct ListBluebookLinksFilter {
     pub per_page: i32,
 }
 
-/// List `BlueBook` links with filtering and pagination.
-pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Result<ListBluebookLinksResponse> {
-    let page = filter.page.max(1);
-    let per_page = filter.per_page.clamp(1, 100);
-    let offset = (page - 1) * per_page;
-
+/// Build the WHERE clause and next unused bind index for the link list filters.
+fn build_link_where_clause(filter: &ListBluebookLinksFilter) -> (String, u32) {
     let mut conditions = Vec::new();
     let mut bind_idx = 0u32;
 
@@ -174,6 +170,20 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
         format!("WHERE {}", conditions.join(" AND "))
     };
 
+    (where_clause, bind_idx)
+}
+
+/// Fetch a page of link rows matching the filter.
+/// The WHERE clause and its bind positions are assembled per filter, so this
+/// query stays runtime-checked rather than `query_as!`.
+async fn fetch_link_rows(
+    pool: &PgPool,
+    filter: &ListBluebookLinksFilter,
+    where_clause: &str,
+    bind_idx: u32,
+    per_page: i32,
+    offset: i32,
+) -> Result<Vec<LinkListRow>> {
     let limit_idx = bind_idx + 1;
     let offset_idx = bind_idx + 2;
 
@@ -201,8 +211,6 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
         "
     );
 
-    // The WHERE clause and its bind positions are assembled per filter, so this query
-    // and its count below stay runtime-checked.
     let mut query = sqlx::query_as::<_, LinkListRow>(AssertSqlSafe(query_str));
     if let Some(status) = filter.status {
         query = query.bind(status);
@@ -212,9 +220,11 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
     }
     query = query.bind(per_page).bind(offset);
 
-    let rows = query.fetch_all(pool).await.context("failed to list bluebook links")?;
+    query.fetch_all(pool).await.context("failed to list bluebook links")
+}
 
-    // Count total with filters
+/// Count links matching the filter, ignoring pagination.
+async fn count_links(pool: &PgPool, filter: &ListBluebookLinksFilter, where_clause: &str) -> Result<i64> {
     let count_query_str = format!(
         "SELECT COUNT(*) FROM instructor_bluebook_links bl LEFT JOIN instructors i ON i.id = bl.instructor_id {where_clause}"
     );
@@ -231,7 +241,11 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
         .await
         .context("failed to count bluebook links")?;
 
-    // Aggregate stats (unfiltered)
+    Ok(total)
+}
+
+/// Aggregate unfiltered status counts across all links.
+async fn fetch_link_stats(pool: &PgPool) -> Result<BluebookLinkStats> {
     let stats_rows = sqlx::query_as!(
         StatusCount,
         r#"
@@ -261,6 +275,21 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
             BluebookLinkStatus::Rejected => stats.rejected = count,
         }
     }
+
+    Ok(stats)
+}
+
+/// List `BlueBook` links with filtering and pagination.
+pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Result<ListBluebookLinksResponse> {
+    let page = filter.page.max(1);
+    let per_page = filter.per_page.clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let (where_clause, bind_idx) = build_link_where_clause(filter);
+
+    let rows = fetch_link_rows(pool, filter, &where_clause, bind_idx, per_page, offset).await?;
+    let total = count_links(pool, filter, &where_clause).await?;
+    let stats = fetch_link_stats(pool).await?;
 
     let links = rows
         .into_iter()
@@ -545,84 +574,15 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     let mut no_match = 0usize;
 
     for name in &unlinked {
-        // Step 1: CRN+term join finds instructor candidates via course matching
-        let crn_candidates = sqlx::query_as!(
-            MatchCandidate,
-            r#"
-            SELECT DISTINCT i.id AS instructor_id, i.display_name
-            FROM bluebook_evaluations be
-            JOIN courses c ON c.crn = be.crn AND c.term_code = be.term
-            JOIN course_instructors ci ON ci.course_id = c.id
-            JOIN instructors i ON i.id = ci.instructor_id
-            WHERE be.instructor_name = $1
-              AND be.crn IS NOT NULL
-              AND be.crn != ''
-            "#,
-            name
+        match_one_name(
+            &mut tx,
+            name,
+            &all_match_candidates,
+            &mut auto_matched,
+            &mut pending_review,
+            &mut no_match,
         )
-        .fetch_all(&mut *tx)
-        .await
-        .context("failed to find CRN candidates")?;
-
-        if crn_candidates.is_empty() {
-            // No CRN join, try name-only matching against pre-fetched instructors
-            match find_best_candidate(name, &all_match_candidates) {
-                Some(best) if best.result.quality == NameMatchQuality::Full => {
-                    // Exact name match but no CRN confirmation, so mark pending
-                    insert_link(
-                        &mut *tx,
-                        name,
-                        Some(best.instructor_id),
-                        BluebookLinkStatus::Pending,
-                        Some(0.5),
-                    )
-                    .await?;
-                    pending_review += 1;
-                }
-                Some(best) => {
-                    // Partial name match, no CRN, so low confidence pending
-                    insert_link(
-                        &mut *tx,
-                        name,
-                        Some(best.instructor_id),
-                        BluebookLinkStatus::Pending,
-                        Some(0.3),
-                    )
-                    .await?;
-                    pending_review += 1;
-                }
-                None => {
-                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, None).await?;
-                    no_match += 1;
-                }
-            }
-        } else {
-            let has_single_crn = crn_candidates.len() == 1;
-
-            // Step 2: Confirm name match among CRN candidates
-            if let Some(best) = find_best_candidate(name, &crn_candidates) {
-                // CRN evidence + name confirmation -> auto
-                let confidence = match best.result.quality {
-                    NameMatchQuality::Full => best.result.confidence,
-                    NameMatchQuality::Partial if has_single_crn => 0.9 * best.result.confidence,
-                    NameMatchQuality::Partial => 0.8 * best.result.confidence,
-                    NameMatchQuality::None => unreachable!("find_best_candidate filters None"),
-                };
-                insert_link(
-                    &mut *tx,
-                    name,
-                    Some(best.instructor_id),
-                    BluebookLinkStatus::Auto,
-                    Some(confidence),
-                )
-                .await?;
-                auto_matched += 1;
-            } else {
-                // CRN candidates exist but no name match, pending review
-                insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1)).await?;
-                pending_review += 1;
-            }
-        }
+        .await?;
     }
 
     tx.commit().await.context("failed to commit matching results")?;
@@ -640,6 +600,98 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
         skipped_manual,
         deleted_stale,
     })
+}
+
+/// Match a single unlinked name against CRN and name candidates, insert the
+/// resulting link, and bump whichever outcome counter it fell into.
+async fn match_one_name(
+    tx: &mut sqlx::PgConnection,
+    name: &str,
+    all_match_candidates: &[MatchCandidate],
+    auto_matched: &mut usize,
+    pending_review: &mut usize,
+    no_match: &mut usize,
+) -> Result<()> {
+    // Step 1: CRN+term join finds instructor candidates via course matching
+    let crn_candidates = sqlx::query_as!(
+        MatchCandidate,
+        r#"
+            SELECT DISTINCT i.id AS instructor_id, i.display_name
+            FROM bluebook_evaluations be
+            JOIN courses c ON c.crn = be.crn AND c.term_code = be.term
+            JOIN course_instructors ci ON ci.course_id = c.id
+            JOIN instructors i ON i.id = ci.instructor_id
+            WHERE be.instructor_name = $1
+              AND be.crn IS NOT NULL
+              AND be.crn != ''
+            "#,
+        name
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("failed to find CRN candidates")?;
+
+    if crn_candidates.is_empty() {
+        // No CRN join, try name-only matching against pre-fetched instructors
+        match find_best_candidate(name, all_match_candidates) {
+            Some(best) if best.result.quality == NameMatchQuality::Full => {
+                // Exact name match but no CRN confirmation, so mark pending
+                insert_link(
+                    &mut *tx,
+                    name,
+                    Some(best.instructor_id),
+                    BluebookLinkStatus::Pending,
+                    Some(0.5),
+                )
+                .await?;
+                *pending_review += 1;
+            }
+            Some(best) => {
+                // Partial name match, no CRN, so low confidence pending
+                insert_link(
+                    &mut *tx,
+                    name,
+                    Some(best.instructor_id),
+                    BluebookLinkStatus::Pending,
+                    Some(0.3),
+                )
+                .await?;
+                *pending_review += 1;
+            }
+            None => {
+                insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, None).await?;
+                *no_match += 1;
+            }
+        }
+    } else {
+        let has_single_crn = crn_candidates.len() == 1;
+
+        // Step 2: Confirm name match among CRN candidates
+        if let Some(best) = find_best_candidate(name, &crn_candidates) {
+            // CRN evidence + name confirmation -> auto
+            let confidence = match best.result.quality {
+                NameMatchQuality::Full => best.result.confidence,
+                NameMatchQuality::Partial if has_single_crn => 0.9 * best.result.confidence,
+                NameMatchQuality::Partial => 0.8 * best.result.confidence,
+                NameMatchQuality::None => unreachable!("find_best_candidate filters None"),
+            };
+            insert_link(
+                &mut *tx,
+                name,
+                Some(best.instructor_id),
+                BluebookLinkStatus::Auto,
+                Some(confidence),
+            )
+            .await?;
+            *auto_matched += 1;
+        } else {
+            // CRN candidates exist but no name match, pending review
+            insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1)).await?;
+            *pending_review += 1;
+        }
+    }
+
+    Ok(())
 }
 
 /// Insert a new link into `instructor_bluebook_links`.

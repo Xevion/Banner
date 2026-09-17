@@ -96,159 +96,189 @@ fn parse_flexible_date(s: &str) -> Option<NaiveDate> {
         .ok()
 }
 
+/// Intermediate representation that accepts both old and new JSON formats for `DbMeetingTime`.
+#[derive(Deserialize)]
+struct RawMeetingTime {
+    // New-format fields (camelCase in JSON)
+    #[serde(rename = "timeRange")]
+    time_range: Option<TimeRange>,
+    #[serde(rename = "dateRange")]
+    date_range: Option<DateRange>,
+    days: Option<BTreeSet<DayOfWeek>>,
+    location: Option<MeetingLocation>,
+
+    // Old-format fields (snake_case in JSON)
+    begin_time: Option<String>,
+    end_time: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
+    #[serde(default)]
+    monday: bool,
+    #[serde(default)]
+    tuesday: bool,
+    #[serde(default)]
+    wednesday: bool,
+    #[serde(default)]
+    thursday: bool,
+    #[serde(default)]
+    friday: bool,
+    #[serde(default)]
+    saturday: bool,
+    #[serde(default)]
+    sunday: bool,
+    building: Option<String>,
+    building_description: Option<String>,
+    room: Option<String>,
+    campus: Option<String>,
+
+    // Always present (camelCase in new format, snake_case in old format)
+    #[serde(rename = "meetingType", alias = "meeting_type")]
+    meeting_type: String,
+    #[serde(rename = "meetingScheduleType", alias = "meeting_schedule_type")]
+    meeting_schedule_type: String,
+
+    // Legacy computed fields (ignored on read)
+    #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "accepted for backward compatibility with old-format JSON but never read"
+    )]
+    is_days_tba: bool,
+    #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "accepted for backward compatibility with old-format JSON but never read"
+    )]
+    is_time_tba: bool,
+    #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "accepted for backward compatibility with old-format JSON but never read"
+    )]
+    active_days: Vec<DayOfWeek>,
+}
+
+/// Resolve `time_range`, preferring the new field and falling back to old `begin_time`/`end_time`.
+fn resolve_time_range(new: Option<TimeRange>, begin: Option<&str>, end: Option<&str>) -> Option<TimeRange> {
+    new.or_else(|| match (begin, end) {
+        (Some(begin), Some(end)) => {
+            let result = TimeRange::from_hhmm(begin, end);
+            if result.is_none() {
+                tracing::warn!(begin, end, "failed to parse old-format time range");
+            }
+            result
+        }
+        _ => None,
+    })
+}
+
+/// Resolve `date_range`, preferring the new field and falling back to old `start_date`/`end_date`.
+fn resolve_date_range(new: Option<DateRange>, start: Option<&str>, end: Option<&str>) -> DateRange {
+    if let Some(dr) = new {
+        return dr;
+    }
+    let start_str = start.unwrap_or("");
+    let end_str = end.unwrap_or("");
+    let start = parse_flexible_date(start_str);
+    let end = parse_flexible_date(end_str);
+    if let (Some(s), Some(e)) = (start, end) {
+        return DateRange { start: s, end: e };
+    }
+    tracing::warn!(
+        start_date = start_str,
+        end_date = end_str,
+        "failed to parse old-format date range, using epoch fallback"
+    );
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+    DateRange {
+        start: epoch,
+        end: epoch,
+    }
+}
+
+/// Resolve `days`, preferring the new field and falling back to old boolean flags
+/// in Monday..Sunday order.
+fn resolve_days(new: Option<BTreeSet<DayOfWeek>>, flags: [bool; 7]) -> BTreeSet<DayOfWeek> {
+    new.unwrap_or_else(|| {
+        let [monday, tuesday, wednesday, thursday, friday, saturday, sunday] = flags;
+        let mut set = BTreeSet::new();
+        if monday {
+            set.insert(DayOfWeek::Monday);
+        }
+        if tuesday {
+            set.insert(DayOfWeek::Tuesday);
+        }
+        if wednesday {
+            set.insert(DayOfWeek::Wednesday);
+        }
+        if thursday {
+            set.insert(DayOfWeek::Thursday);
+        }
+        if friday {
+            set.insert(DayOfWeek::Friday);
+        }
+        if saturday {
+            set.insert(DayOfWeek::Saturday);
+        }
+        if sunday {
+            set.insert(DayOfWeek::Sunday);
+        }
+        set
+    })
+}
+
+/// Resolve `location`, preferring the new field and falling back to old
+/// building/room/campus fields. `None` unless at least one field is present.
+fn resolve_location(
+    new: Option<MeetingLocation>,
+    building: Option<String>,
+    building_description: Option<String>,
+    room: Option<String>,
+    campus: Option<String>,
+) -> Option<MeetingLocation> {
+    new.or_else(|| {
+        let loc = MeetingLocation {
+            building,
+            building_description,
+            room,
+            campus,
+        };
+        if loc.building.is_some() || loc.building_description.is_some() || loc.room.is_some() || loc.campus.is_some() {
+            Some(loc)
+        } else {
+            None
+        }
+    })
+}
+
 impl<'de> Deserialize<'de> for DbMeetingTime {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        /// Intermediate representation that accepts both old and new JSON formats.
-        #[derive(Deserialize)]
-        struct Raw {
-            // New-format fields (camelCase in JSON)
-            #[serde(rename = "timeRange")]
-            time_range: Option<TimeRange>,
-            #[serde(rename = "dateRange")]
-            date_range: Option<DateRange>,
-            days: Option<BTreeSet<DayOfWeek>>,
-            location: Option<MeetingLocation>,
+        let raw = RawMeetingTime::deserialize(deserializer)?;
 
-            // Old-format fields (snake_case in JSON)
-            begin_time: Option<String>,
-            end_time: Option<String>,
-            start_date: Option<String>,
-            end_date: Option<String>,
-            #[serde(default)]
-            monday: bool,
-            #[serde(default)]
-            tuesday: bool,
-            #[serde(default)]
-            wednesday: bool,
-            #[serde(default)]
-            thursday: bool,
-            #[serde(default)]
-            friday: bool,
-            #[serde(default)]
-            saturday: bool,
-            #[serde(default)]
-            sunday: bool,
-            building: Option<String>,
-            building_description: Option<String>,
-            room: Option<String>,
-            campus: Option<String>,
-
-            // Always present (camelCase in new format, snake_case in old format)
-            #[serde(rename = "meetingType", alias = "meeting_type")]
-            meeting_type: String,
-            #[serde(rename = "meetingScheduleType", alias = "meeting_schedule_type")]
-            meeting_schedule_type: String,
-
-            // Legacy computed fields (ignored on read)
-            #[serde(default)]
-            #[expect(
-                dead_code,
-                reason = "accepted for backward compatibility with old-format JSON but never read"
-            )]
-            is_days_tba: bool,
-            #[serde(default)]
-            #[expect(
-                dead_code,
-                reason = "accepted for backward compatibility with old-format JSON but never read"
-            )]
-            is_time_tba: bool,
-            #[serde(default)]
-            #[expect(
-                dead_code,
-                reason = "accepted for backward compatibility with old-format JSON but never read"
-            )]
-            active_days: Vec<DayOfWeek>,
-        }
-
-        let raw = Raw::deserialize(deserializer)?;
-
-        // Resolve time_range: prefer new field, fall back to old begin_time/end_time
-        let time_range = raw
-            .time_range
-            .or_else(|| match (raw.begin_time.as_deref(), raw.end_time.as_deref()) {
-                (Some(begin), Some(end)) => {
-                    let result = TimeRange::from_hhmm(begin, end);
-                    if result.is_none() {
-                        tracing::warn!(begin, end, "failed to parse old-format time range");
-                    }
-                    result
-                }
-                _ => None,
-            });
-
-        // Resolve date_range: prefer new field, fall back to old start_date/end_date
-        let date_range = if let Some(dr) = raw.date_range {
-            dr
-        } else {
-            let start_str = raw.start_date.as_deref().unwrap_or("");
-            let end_str = raw.end_date.as_deref().unwrap_or("");
-            let start = parse_flexible_date(start_str);
-            let end = parse_flexible_date(end_str);
-            if let (Some(s), Some(e)) = (start, end) {
-                DateRange { start: s, end: e }
-            } else {
-                tracing::warn!(
-                    start_date = start_str,
-                    end_date = end_str,
-                    "failed to parse old-format date range, using epoch fallback"
-                );
-                let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                DateRange {
-                    start: epoch,
-                    end: epoch,
-                }
-            }
-        };
-
-        // Resolve days: prefer new field, fall back to old boolean flags
-        let days = raw.days.unwrap_or_else(|| {
-            let mut set = BTreeSet::new();
-            if raw.monday {
-                set.insert(DayOfWeek::Monday);
-            }
-            if raw.tuesday {
-                set.insert(DayOfWeek::Tuesday);
-            }
-            if raw.wednesday {
-                set.insert(DayOfWeek::Wednesday);
-            }
-            if raw.thursday {
-                set.insert(DayOfWeek::Thursday);
-            }
-            if raw.friday {
-                set.insert(DayOfWeek::Friday);
-            }
-            if raw.saturday {
-                set.insert(DayOfWeek::Saturday);
-            }
-            if raw.sunday {
-                set.insert(DayOfWeek::Sunday);
-            }
-            set
-        });
-
-        // Resolve location: prefer new field, fall back to old building/room/campus fields
-        let location = raw.location.or_else(|| {
-            let loc = MeetingLocation {
-                building: raw.building,
-                building_description: raw.building_description,
-                room: raw.room,
-                campus: raw.campus,
-            };
-            // Only produce Some if at least one field is present
-            if loc.building.is_some()
-                || loc.building_description.is_some()
-                || loc.room.is_some()
-                || loc.campus.is_some()
-            {
-                Some(loc)
-            } else {
-                None
-            }
-        });
+        let time_range = resolve_time_range(raw.time_range, raw.begin_time.as_deref(), raw.end_time.as_deref());
+        let date_range = resolve_date_range(raw.date_range, raw.start_date.as_deref(), raw.end_date.as_deref());
+        let days = resolve_days(
+            raw.days,
+            [
+                raw.monday,
+                raw.tuesday,
+                raw.wednesday,
+                raw.thursday,
+                raw.friday,
+                raw.saturday,
+                raw.sunday,
+            ],
+        );
+        let location = resolve_location(
+            raw.location,
+            raw.building,
+            raw.building_description,
+            raw.room,
+            raw.campus,
+        );
 
         Ok(Self {
             time_range,

@@ -230,12 +230,9 @@ pub struct SearchParams {
     pub instructor: Vec<String>,
 }
 
-/// Build a `CourseResponse` from a DB course with pre-fetched instructor details.
-pub fn build_course_response(
-    course: &models::Course,
-    instructors: Vec<models::CourseInstructorDetail>,
-) -> CourseResponse {
-    let instructors: Vec<InstructorResponse> = instructors
+/// Convert pre-fetched instructor detail rows into their response shape.
+fn build_instructor_responses(instructors: Vec<models::CourseInstructorDetail>) -> Vec<InstructorResponse> {
+    instructors
         .into_iter()
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
@@ -290,27 +287,16 @@ pub fn build_course_response(
                 rating,
             }
         })
-        .collect();
+        .collect()
+}
 
-    let primary_instructor_id = instructors
-        .iter()
-        .find(|i| i.is_primary)
-        .or_else(|| instructors.first())
-        .map(|i| i.instructor_id);
-
-    let meeting_times: Vec<models::DbMeetingTime> = course.meeting_times.0.clone();
-
-    let attributes: Vec<Attribute> = course
-        .attributes
-        .iter()
-        .map(|code| Attribute::from_code(code, None))
-        .collect();
-
-    #[expect(
-        clippy::option_if_let_else,
-        reason = "nesting a Result map_or_else inside an Option map_or splits the warn! call across two closures, worse than the current match"
-    )]
-    let (instructional_method, instructional_method_code) = match &course.instructional_method {
+/// Resolve the typed instructional method, falling back to the raw code when unknown.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "nesting a Result map_or_else inside an Option map_or splits the warn! call across two closures, worse than the current match"
+)]
+fn resolve_instructional_method(course: &models::Course) -> (Option<InstructionalMethod>, Option<String>) {
+    match &course.instructional_method {
         Some(code) => {
             if let Ok(method) = InstructionalMethod::from_code(code) {
                 (Some(method), None)
@@ -325,14 +311,15 @@ pub fn build_course_response(
             }
         }
         None => (None, None),
-    };
+    }
+}
 
-    let campus = course.campus.as_ref().map(|code| Campus::from_code(code, None));
-    let part_of_term = course
-        .part_of_term
-        .as_ref()
-        .map(|code| PartOfTerm::from_code(code, None));
-
+/// Resolve async-online status, best display location, and whether it's a physical room.
+fn resolve_location(
+    meeting_times: &[models::DbMeetingTime],
+    instructional_method: Option<&InstructionalMethod>,
+    campus: Option<&Campus>,
+) -> (bool, Option<String>, bool) {
     let is_async_online = meeting_times.first().is_some_and(|mt| {
         mt.location.as_ref().and_then(|loc| loc.building.as_deref()) == Some("INT") && mt.is_time_tba()
     });
@@ -350,15 +337,9 @@ pub fn build_course_response(
     let has_physical_location = physical_location.is_some();
 
     let primary_location = physical_location.or_else(|| {
-        let is_hybrid = instructional_method
-            .as_ref()
-            .is_some_and(|m| matches!(m, InstructionalMethod::Hybrid(_)));
-        let is_online_method = instructional_method
-            .as_ref()
-            .is_some_and(|m| matches!(m, InstructionalMethod::Online(_)));
-        let is_virtual_campus = campus
-            .as_ref()
-            .is_some_and(|c| matches!(c, Campus::Internet | Campus::OnlinePrograms));
+        let is_hybrid = instructional_method.is_some_and(|m| matches!(m, InstructionalMethod::Hybrid(_)));
+        let is_online_method = instructional_method.is_some_and(|m| matches!(m, InstructionalMethod::Online(_)));
+        let is_virtual_campus = campus.is_some_and(|c| matches!(c, Campus::Internet | Campus::OnlinePrograms));
         if is_hybrid {
             Some("Hybrid".to_string())
         } else if is_online_method || is_virtual_campus {
@@ -368,14 +349,12 @@ pub fn build_course_response(
         }
     });
 
-    let enrollment = Enrollment {
-        current: course.enrollment,
-        max: course.max_enrollment,
-        wait_count: course.wait_count,
-        wait_capacity: course.wait_capacity,
-    };
+    (is_async_online, primary_location, has_physical_location)
+}
 
-    let credit_hours = match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {
+/// Resolve credit hours as either a fixed value or a low/high range.
+fn resolve_credit_hours(course: &models::Course) -> Option<CreditHours> {
+    match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {
         (Some(fixed), _, _) => Some(CreditHours::Fixed { hours: fixed }),
         #[expect(
             clippy::float_cmp,
@@ -384,7 +363,49 @@ pub fn build_course_response(
         (None, Some(low), Some(high)) if low != high => Some(CreditHours::Range { low, high }),
         (None, Some(hours), None) | (None, None, Some(hours)) => Some(CreditHours::Fixed { hours }),
         _ => None,
+    }
+}
+
+/// Build a `CourseResponse` from a DB course with pre-fetched instructor details.
+pub fn build_course_response(
+    course: &models::Course,
+    instructors: Vec<models::CourseInstructorDetail>,
+) -> CourseResponse {
+    let instructors = build_instructor_responses(instructors);
+
+    let primary_instructor_id = instructors
+        .iter()
+        .find(|i| i.is_primary)
+        .or_else(|| instructors.first())
+        .map(|i| i.instructor_id);
+
+    let meeting_times: Vec<models::DbMeetingTime> = course.meeting_times.0.clone();
+
+    let attributes: Vec<Attribute> = course
+        .attributes
+        .iter()
+        .map(|code| Attribute::from_code(code, None))
+        .collect();
+
+    let (instructional_method, instructional_method_code) = resolve_instructional_method(course);
+
+    let campus = course.campus.as_ref().map(|code| Campus::from_code(code, None));
+    let part_of_term = course
+        .part_of_term
+        .as_ref()
+        .map(|code| PartOfTerm::from_code(code, None));
+
+    let (is_async_online, primary_location, has_physical_location) =
+        resolve_location(&meeting_times, instructional_method.as_ref(), campus.as_ref());
+
+    let enrollment = Enrollment {
+        current: course.enrollment,
+        max: course.max_enrollment,
+        wait_count: course.wait_count,
+        wait_capacity: course.wait_capacity,
     };
+
+    let credit_hours = resolve_credit_hours(course);
 
     let cross_list = course.cross_list.as_ref().and_then(|identifier| {
         course.cross_list_capacity.and_then(|capacity| {
