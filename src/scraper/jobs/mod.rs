@@ -46,7 +46,7 @@ impl JobType {
         payload: TargetPayload,
     ) -> Result<Self, JobParseError> {
         match (target_type, payload) {
-            (TargetType::Subject, TargetPayload::Subject(job)) => Ok(JobType::Subject(job)),
+            (TargetType::Subject, TargetPayload::Subject(job)) => Ok(Self::Subject(job)),
             (TargetType::Subject, _) => Err(JobParseError::PayloadMismatch(TargetType::Subject)),
             (other, _) => Err(JobParseError::UnsupportedTargetType(other)),
         }
@@ -56,7 +56,7 @@ impl JobType {
     #[must_use]
     pub fn boxed(self) -> Box<dyn Job> {
         match self {
-            JobType::Subject(job) => Box::new(job),
+            Self::Subject(job) => Box::new(job),
         }
     }
 }

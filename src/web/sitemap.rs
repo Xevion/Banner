@@ -188,14 +188,13 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
     };
 
     // Look up last_scraped_at for <lastmod>
-    let lastmod = match data::terms::get_all_terms(&state.db_pool).await {
-        Ok(terms) => terms
+    let lastmod = data::terms::get_all_terms(&state.db_pool).await.map_or(None, |terms| {
+        terms
             .iter()
             .find(|t| t.code == term_code)
             .and_then(|t| t.last_scraped_at)
-            .map(|dt| dt.format("%Y-%m-%d").to_string()),
-        Err(_) => None,
-    };
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+    });
 
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\

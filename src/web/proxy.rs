@@ -22,10 +22,10 @@ pub async fn proxy_to_ssr(
         return StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
 
-    let url = match query {
-        Some(q) => format!("{}{path}?{q}", state.ssr_downstream),
-        None => format!("{}{path}", state.ssr_downstream),
-    };
+    let url = query.map_or_else(
+        || format!("{}{path}", state.ssr_downstream),
+        |q| format!("{}{path}?{q}", state.ssr_downstream),
+    );
 
     debug!(url = %url, "proxying to SSR");
 

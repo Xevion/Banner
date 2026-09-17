@@ -39,7 +39,7 @@ async fn load_calendar_course(
     let primary_instructor = instructors
         .iter()
         .find(|i| i.is_primary)
-        .or(instructors.first())
+        .or_else(|| instructors.first())
         .map(|i| i.display_name.clone());
 
     let meeting_times: Vec<DbMeetingTime> = course.meeting_times.0.clone();

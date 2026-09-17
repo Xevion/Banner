@@ -56,7 +56,7 @@ pub enum DuplicateTier {
 impl DuplicateTier {
     /// Whether this tier may merge without a human confirming it.
     #[must_use]
-    pub fn is_auto_mergeable(self) -> bool {
+    pub const fn is_auto_mergeable(self) -> bool {
         matches!(self, Self::SameAccount)
     }
 }
@@ -264,7 +264,7 @@ pub async fn find_dismissed_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
         return Ok(Vec::new());
     }
 
-    let ids: Vec<i32> = dismissed.iter().flat_map(|&(a, b)| [a, b]).collect();
+    let ids: Vec<i32> = dismissed.iter().flat_map(|&pair| <[i32; 2]>::from(pair)).collect();
     let rows = sqlx::query_as!(
         InstructorRow,
         r#"

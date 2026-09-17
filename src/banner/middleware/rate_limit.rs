@@ -139,7 +139,7 @@ fn endpoint_label(path: &str) -> &'static str {
 }
 
 /// Bounded outcome label for an upstream HTTP status code.
-fn outcome_for_status(status: u16) -> &'static str {
+const fn outcome_for_status(status: u16) -> &'static str {
     match status {
         429 => "rate_limited",
         200..=299 => "success",
@@ -202,7 +202,7 @@ impl BannerRateLimiter {
     }
 
     /// Returns the configured requests-per-minute for the given type.
-    pub fn rpm(&self, request_type: RequestType) -> u32 {
+    pub const fn rpm(&self, request_type: RequestType) -> u32 {
         match request_type {
             RequestType::Session => self.config.session_rpm,
             RequestType::Search => self.config.search_rpm,
@@ -228,7 +228,7 @@ pub struct RateLimitMiddleware {
 
 impl RateLimitMiddleware {
     /// Creates a new rate limiting middleware.
-    pub fn new(rate_limiter: SharedRateLimiter) -> Self {
+    pub const fn new(rate_limiter: SharedRateLimiter) -> Self {
         Self { rate_limiter }
     }
 }

@@ -25,12 +25,12 @@ pub enum PageAction {
 
 impl PageAction {
     /// Stable token used inside the component custom ID.
-    fn token(self) -> &'static str {
+    const fn token(self) -> &'static str {
         match self {
-            PageAction::First => "first",
-            PageAction::Prev => "prev",
-            PageAction::Next => "next",
-            PageAction::Last => "last",
+            Self::First => "first",
+            Self::Prev => "prev",
+            Self::Next => "next",
+            Self::Last => "last",
         }
     }
 
@@ -48,10 +48,10 @@ impl PageAction {
     pub fn decode(custom_id: &str, invocation_id: u64) -> Option<Self> {
         let rest = custom_id.strip_prefix(&custom_id_prefix(invocation_id))?;
         match rest {
-            "first" => Some(PageAction::First),
-            "prev" => Some(PageAction::Prev),
-            "next" => Some(PageAction::Next),
-            "last" => Some(PageAction::Last),
+            "first" => Some(Self::First),
+            "prev" => Some(Self::Prev),
+            "next" => Some(Self::Next),
+            "last" => Some(Self::Last),
             _ => None,
         }
     }
@@ -61,10 +61,10 @@ impl PageAction {
     pub fn apply(self, page: usize, page_count: usize) -> usize {
         let last = page_count.saturating_sub(1);
         match self {
-            PageAction::First => 0,
-            PageAction::Prev => page.saturating_sub(1),
-            PageAction::Next => (page + 1).min(last),
-            PageAction::Last => last,
+            Self::First => 0,
+            Self::Prev => page.saturating_sub(1),
+            Self::Next => (page + 1).min(last),
+            Self::Last => last,
         }
     }
 }
@@ -86,10 +86,10 @@ pub struct ButtonStates {
 impl ButtonStates {
     /// Backwards controls are live off page one, forwards controls off the final page.
     #[must_use]
-    pub fn for_page(page: usize, page_count: usize) -> Self {
+    pub const fn for_page(page: usize, page_count: usize) -> Self {
         let has_prev = page > 0;
         let has_next = page + 1 < page_count;
-        ButtonStates {
+        Self {
             first: has_prev,
             prev: has_prev,
             next: has_next,
@@ -97,7 +97,7 @@ impl ButtonStates {
         }
     }
 
-    fn enabled(self, action: PageAction) -> bool {
+    const fn enabled(self, action: PageAction) -> bool {
         match action {
             PageAction::First => self.first,
             PageAction::Prev => self.prev,
@@ -184,7 +184,8 @@ pub async fn paginate<T, F>(
     render: F,
 ) -> Result<(), Error>
 where
-    F: Fn(&[T], PageInfo) -> CreateEmbed,
+    T: Sync,
+    F: Fn(&[T], PageInfo) -> CreateEmbed + Send + Sync,
 {
     let invocation_id = ctx.id();
     let author_id = ctx.author().id;

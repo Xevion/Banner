@@ -199,7 +199,7 @@ impl App {
             }
         }
 
-        Ok(App {
+        Ok(Self {
             config,
             db_pool,
             banner_api: banner_api_arc,

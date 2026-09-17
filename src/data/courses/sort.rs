@@ -46,7 +46,7 @@ struct KeyDef {
 
 impl SortKey {
     /// Every variant, derived by strum so a new one cannot be left unreachable.
-    pub const ALL: &'static [SortKey] = Self::VARIANTS;
+    pub const ALL: &'static [Self] = Self::VARIANTS;
 
     const fn def(self) -> KeyDef {
         match self {
@@ -234,12 +234,11 @@ impl FromStr for SortTerm {
     type Err = SortParseError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let (direction, name) = match s.strip_prefix('-') {
-            Some(rest) => (SortDirection::Desc, rest),
-            None => (SortDirection::Asc, s),
-        };
+        let (direction, name) = s
+            .strip_prefix('-')
+            .map_or((SortDirection::Asc, s), |rest| (SortDirection::Desc, rest));
         SortKey::from_name(name)
-            .map(|key| SortTerm { key, direction })
+            .map(|key| Self { key, direction })
             .ok_or_else(|| SortParseError::UnknownKey(name.to_owned()))
     }
 }

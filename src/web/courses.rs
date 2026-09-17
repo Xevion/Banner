@@ -21,11 +21,11 @@ use crate::state::AppState;
 use crate::web::error::{ApiError, ApiErrorCode, DbResultExt, OptionNotFoundExt};
 use crate::web::routes::{cache, with_cache_control};
 
-fn default_page() -> i32 {
+const fn default_page() -> i32 {
     1
 }
 
-fn default_per_page() -> i32 {
+const fn default_per_page() -> i32 {
     25
 }
 
@@ -295,7 +295,7 @@ pub fn build_course_response(
     let primary_instructor_id = instructors
         .iter()
         .find(|i| i.is_primary)
-        .or(instructors.first())
+        .or_else(|| instructors.first())
         .map(|i| i.instructor_id);
 
     let meeting_times: Vec<models::DbMeetingTime> = course.meeting_times.0.clone();
@@ -306,6 +306,10 @@ pub fn build_course_response(
         .map(|code| Attribute::from_code(code, None))
         .collect();
 
+    #[expect(
+        clippy::option_if_let_else,
+        reason = "nesting a Result map_or_else inside an Option map_or splits the warn! call across two closures, worse than the current match"
+    )]
     let (instructional_method, instructional_method_code) = match &course.instructional_method {
         Some(code) => {
             if let Ok(method) = InstructionalMethod::from_code(code) {
@@ -338,10 +342,9 @@ pub fn build_course_response(
         .filter(|mt| mt.location.as_ref().and_then(|loc| loc.building.as_deref()) != Some("INT"))
         .find_map(|mt| {
             mt.location.as_ref().and_then(|loc| {
-                loc.building.as_ref().map(|b| match &loc.room {
-                    Some(r) => format!("{b} {r}"),
-                    None => b.clone(),
-                })
+                loc.building
+                    .as_ref()
+                    .map(|b| loc.room.as_ref().map_or_else(|| b.clone(), |r| format!("{b} {r}")))
             })
         });
     let has_physical_location = physical_location.is_some();

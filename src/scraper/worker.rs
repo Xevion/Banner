@@ -32,7 +32,7 @@ pub struct Worker {
 
 impl Worker {
     #[must_use]
-    pub fn new(id: usize, db: DbContext, banner_api: Arc<BannerApi>) -> Self {
+    pub const fn new(id: usize, db: DbContext, banner_api: Arc<BannerApi>) -> Self {
         Self { id, db, banner_api }
     }
 

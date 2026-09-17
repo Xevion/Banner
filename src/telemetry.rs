@@ -185,7 +185,7 @@ fn describe() {
 /// Standard verbs only. `http::Method` accepts arbitrary extension tokens and axum produces a 405
 /// inside this layer, so an unfiltered method label lets any caller mint unbounded series.
 #[must_use]
-pub fn method_label(method: &axum::http::Method) -> &'static str {
+pub const fn method_label(method: &axum::http::Method) -> &'static str {
     use axum::http::Method;
     match *method {
         Method::GET => "GET",

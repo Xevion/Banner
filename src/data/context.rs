@@ -19,13 +19,13 @@ pub struct DbContext {
 impl DbContext {
     /// Create a new `DbContext`.
     #[must_use]
-    pub fn new(pool: PgPool, events: Arc<EventBuffer>) -> Self {
+    pub const fn new(pool: PgPool, events: Arc<EventBuffer>) -> Self {
         Self { pool, events }
     }
 
     /// Get the underlying database pool.
     #[must_use]
-    pub fn pool(&self) -> &PgPool {
+    pub const fn pool(&self) -> &PgPool {
         &self.pool
     }
 
@@ -37,13 +37,13 @@ impl DbContext {
 
     /// Get scrape job operations.
     #[must_use]
-    pub fn scrape_jobs(&self) -> ScrapeJobOps<'_> {
+    pub const fn scrape_jobs(&self) -> ScrapeJobOps<'_> {
         ScrapeJobOps::new(self)
     }
 
     /// Get course operations.
     #[must_use]
-    pub fn courses(&self) -> CourseOps<'_> {
+    pub const fn courses(&self) -> CourseOps<'_> {
         CourseOps::new(self)
     }
 }

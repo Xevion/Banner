@@ -28,18 +28,18 @@ pub enum Subscription {
 
 impl Subscription {
     #[must_use]
-    pub fn kind(&self) -> StreamKind {
+    pub const fn kind(&self) -> StreamKind {
         match self {
-            Subscription::ScrapeJobs { .. } => StreamKind::ScrapeJobs,
-            Subscription::AuditLog { .. } => StreamKind::AuditLog,
-            Subscription::ScraperStats { .. } => StreamKind::ScraperStats,
-            Subscription::ScraperTimeseries { .. } => StreamKind::ScraperTimeseries,
-            Subscription::ScraperSubjects => StreamKind::ScraperSubjects,
+            Self::ScrapeJobs { .. } => StreamKind::ScrapeJobs,
+            Self::AuditLog { .. } => StreamKind::AuditLog,
+            Self::ScraperStats { .. } => StreamKind::ScraperStats,
+            Self::ScraperTimeseries { .. } => StreamKind::ScraperTimeseries,
+            Self::ScraperSubjects => StreamKind::ScraperSubjects,
         }
     }
 
     #[must_use]
-    pub fn is_computed(&self) -> bool {
+    pub const fn is_computed(&self) -> bool {
         matches!(
             self,
             Self::ScraperStats { .. } | Self::ScraperTimeseries { .. } | Self::ScraperSubjects

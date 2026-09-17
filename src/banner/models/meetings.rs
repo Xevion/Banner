@@ -12,26 +12,26 @@ impl Weekday {
     /// Short two-letter representation (used for ICS generation)
     fn to_short_string(self) -> &'static str {
         match self {
-            Weekday::Mon => "Mo",
-            Weekday::Tue => "Tu",
-            Weekday::Wed => "We",
-            Weekday::Thu => "Th",
-            Weekday::Fri => "Fr",
-            Weekday::Sat => "Sa",
-            Weekday::Sun => "Su",
+            Self::Mon => "Mo",
+            Self::Tue => "Tu",
+            Self::Wed => "We",
+            Self::Thu => "Th",
+            Self::Fri => "Fr",
+            Self::Sat => "Sa",
+            Self::Sun => "Su",
         }
     }
 
     /// Full day name
     fn to_full_string(self) -> &'static str {
         match self {
-            Weekday::Mon => "Monday",
-            Weekday::Tue => "Tuesday",
-            Weekday::Wed => "Wednesday",
-            Weekday::Thu => "Thursday",
-            Weekday::Fri => "Friday",
-            Weekday::Sat => "Saturday",
-            Weekday::Sun => "Sunday",
+            Self::Mon => "Monday",
+            Self::Tue => "Tuesday",
+            Self::Wed => "Wednesday",
+            Self::Thu => "Thursday",
+            Self::Fri => "Friday",
+            Self::Sat => "Saturday",
+            Self::Sun => "Sunday",
         }
     }
 }
@@ -117,29 +117,29 @@ bitflags! {
 impl MeetingDays {
     /// Convert from the boolean flags in the raw API response
     #[must_use]
-    pub fn from_meeting_time(meeting_time: &MeetingTime) -> MeetingDays {
-        let mut days = MeetingDays::empty();
+    pub fn from_meeting_time(meeting_time: &MeetingTime) -> Self {
+        let mut days = Self::empty();
 
         if meeting_time.monday {
-            days.insert(MeetingDays::Monday);
+            days.insert(Self::Monday);
         }
         if meeting_time.tuesday {
-            days.insert(MeetingDays::Tuesday);
+            days.insert(Self::Tuesday);
         }
         if meeting_time.wednesday {
-            days.insert(MeetingDays::Wednesday);
+            days.insert(Self::Wednesday);
         }
         if meeting_time.thursday {
-            days.insert(MeetingDays::Thursday);
+            days.insert(Self::Thursday);
         }
         if meeting_time.friday {
-            days.insert(MeetingDays::Friday);
+            days.insert(Self::Friday);
         }
         if meeting_time.saturday {
-            days.insert(MeetingDays::Saturday);
+            days.insert(Self::Saturday);
         }
         if meeting_time.sunday {
-            days.insert(MeetingDays::Sunday);
+            days.insert(Self::Sunday);
         }
 
         days
@@ -161,13 +161,13 @@ impl PartialOrd for MeetingDays {
 impl From<Weekday> for MeetingDays {
     fn from(day: Weekday) -> Self {
         match day {
-            Weekday::Mon => MeetingDays::Monday,
-            Weekday::Tue => MeetingDays::Tuesday,
-            Weekday::Wed => MeetingDays::Wednesday,
-            Weekday::Thu => MeetingDays::Thursday,
-            Weekday::Fri => MeetingDays::Friday,
-            Weekday::Sat => MeetingDays::Saturday,
-            Weekday::Sun => MeetingDays::Sunday,
+            Weekday::Mon => Self::Monday,
+            Weekday::Tue => Self::Tuesday,
+            Weekday::Wed => Self::Wednesday,
+            Weekday::Thu => Self::Thursday,
+            Weekday::Fri => Self::Friday,
+            Weekday::Sat => Self::Saturday,
+            Weekday::Sun => Self::Sunday,
         }
     }
 }
@@ -183,13 +183,13 @@ impl TryFrom<MeetingDays> for Weekday {
         let count = days.into_iter().count();
         if count == 1 {
             return Ok(match days {
-                MeetingDays::Monday => Weekday::Mon,
-                MeetingDays::Tuesday => Weekday::Tue,
-                MeetingDays::Wednesday => Weekday::Wed,
-                MeetingDays::Thursday => Weekday::Thu,
-                MeetingDays::Friday => Weekday::Fri,
-                MeetingDays::Saturday => Weekday::Sat,
-                MeetingDays::Sunday => Weekday::Sun,
+                MeetingDays::Monday => Self::Mon,
+                MeetingDays::Tuesday => Self::Tue,
+                MeetingDays::Wednesday => Self::Wed,
+                MeetingDays::Thursday => Self::Thu,
+                MeetingDays::Friday => Self::Fri,
+                MeetingDays::Saturday => Self::Sat,
+                MeetingDays::Sunday => Self::Sun,
                 _ => unreachable!(),
             });
         }
@@ -201,7 +201,7 @@ impl TryFrom<MeetingDays> for Weekday {
 }
 
 /// Time range for meetings
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[ts(export)]
 pub struct TimeRange {
     pub start: NaiveTime,
@@ -215,7 +215,7 @@ impl TimeRange {
         let start_time = Self::parse_hhmm(start)?;
         let end_time = Self::parse_hhmm(end)?;
 
-        Some(TimeRange {
+        Some(Self {
             start: start_time,
             end: end_time,
         })
@@ -282,7 +282,7 @@ impl DateRange {
         let start_date = Self::parse_mm_dd_yyyy(start)?;
         let end_date = Self::parse_mm_dd_yyyy(end)?;
 
-        Some(DateRange {
+        Some(Self {
             start: start_date,
             end: end_date,
         })
@@ -318,13 +318,13 @@ impl std::str::FromStr for MeetingType {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Ok(match s {
-            "HB" | "H2" | "H1" => MeetingType::HybridBlended,
-            "OS" => MeetingType::OnlineSynchronous,
-            "OA" => MeetingType::OnlineAsynchronous,
-            "OH" => MeetingType::OnlineHybrid,
-            "ID" => MeetingType::IndependentStudy,
-            "FF" => MeetingType::FaceToFace,
-            other => MeetingType::Unknown(other.to_string()),
+            "HB" | "H2" | "H1" => Self::HybridBlended,
+            "OS" => Self::OnlineSynchronous,
+            "OA" => Self::OnlineAsynchronous,
+            "OH" => Self::OnlineHybrid,
+            "ID" => Self::IndependentStudy,
+            "FF" => Self::FaceToFace,
+            other => Self::Unknown(other.to_string()),
         })
     }
 }
@@ -332,15 +332,15 @@ impl std::str::FromStr for MeetingType {
 impl MeetingType {
     /// Get description for the meeting type
     #[must_use]
-    pub fn description(&self) -> &'static str {
+    pub const fn description(&self) -> &'static str {
         match self {
-            MeetingType::HybridBlended => "Hybrid",
-            MeetingType::OnlineSynchronous => "Online Only",
-            MeetingType::OnlineAsynchronous => "Online Asynchronous",
-            MeetingType::OnlineHybrid => "Online Partial",
-            MeetingType::IndependentStudy => "To Be Arranged",
-            MeetingType::FaceToFace => "Face to Face",
-            MeetingType::Unknown(_) => "Unknown",
+            Self::HybridBlended => "Hybrid",
+            Self::OnlineSynchronous => "Online Only",
+            Self::OnlineAsynchronous => "Online Asynchronous",
+            Self::OnlineHybrid => "Online Partial",
+            Self::IndependentStudy => "To Be Arranged",
+            Self::FaceToFace => "Face to Face",
+            Self::Unknown(_) => "Unknown",
         }
     }
 }
@@ -370,10 +370,10 @@ impl MeetingLocation {
             &meeting_time.room,
         ) {
             if campus_description == "Internet" {
-                return MeetingLocation::Online;
+                return Self::Online;
             }
 
-            MeetingLocation::InPerson {
+            Self::InPerson {
                 campus: campus.clone(),
                 campus_description: campus_description.clone(),
                 building: building.clone(),
@@ -381,7 +381,7 @@ impl MeetingLocation {
                 room: room.clone(),
             }
         } else {
-            MeetingLocation::Online
+            Self::Online
         }
     }
 }
@@ -422,7 +422,7 @@ impl MeetingScheduleInfo {
         let location = MeetingLocation::from_meeting_time(meeting_time);
         let duration_weeks = date_range.weeks_duration();
 
-        MeetingScheduleInfo {
+        Self {
             days,
             time_range,
             date_range,
@@ -495,7 +495,7 @@ impl MeetingScheduleInfo {
     ///
     /// Meetings with a time range sort before those without one.
     /// Among meetings without a time range, ties break by day-of-week bits.
-    pub fn sort_by_start_time(meetings: &mut [MeetingScheduleInfo]) {
+    pub fn sort_by_start_time(meetings: &mut [Self]) {
         meetings.sort_unstable_by(|a, b| match (&a.time_range, &b.time_range) {
             (Some(a_time), Some(b_time)) => a_time.start.cmp(&b_time.start),
             (Some(_), None) => std::cmp::Ordering::Less,
@@ -514,7 +514,7 @@ impl MeetingScheduleInfo {
     ///
     /// Never panics in practice: midnight is always a valid time.
     #[must_use]
-    pub fn datetime_range(&self) -> (DateTime<Utc>, DateTime<Utc>) {
+    pub const fn datetime_range(&self) -> (DateTime<Utc>, DateTime<Utc>) {
         let (start, end) = if let Some(time_range) = &self.time_range {
             let start = self.date_range.start.and_time(time_range.start);
             let end = self.date_range.end.and_time(time_range.end);

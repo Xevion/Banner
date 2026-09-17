@@ -73,10 +73,17 @@ metrics-util = "0.20"
 [dev-dependencies]
 assert2 = "0.4.1"
 dotenvy = "0.15.7"
+rstest = "0.27.0"
 
 # A 'release mode' profile that compiles quickly, but still 'appears' like a release build, useful for debugging
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# All six offenders are in src/data/scoring.rs. mul_add fuses the multiply and add
+# into one rounding step, which changes the calibration math's output; that tradeoff
+# belongs to whoever owns the scoring model, not to a lint-driven rewrite.
+suboptimal_flops = "allow"
 
 # Enforced where an error set is an API contract instead: src/web/mod.rs re-warns this,
 # because a handler's variants are its HTTP status codes and cannot be read off the type.

@@ -17,10 +17,8 @@ use crate::web::error::{ApiError, DbResultExt, db_error};
 /// Every merge failure names something the caller can correct, so all of them
 /// are 400s; anything else is a genuine fault and stays a generic 500.
 fn merge_error(context: &str, e: &anyhow::Error) -> ApiError {
-    match e.downcast_ref::<MergeError>() {
-        Some(err) => ApiError::bad_request(err.to_string()),
-        None => db_error(context, e),
-    }
+    e.downcast_ref::<MergeError>()
+        .map_or_else(|| db_error(context, e), |err| ApiError::bad_request(err.to_string()))
 }
 
 /// Read the dismissal list before a merge, since deleting the loser cascades

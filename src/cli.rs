@@ -22,7 +22,7 @@ pub enum TracingFormat {
     Json,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug, PartialEq)]
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
 pub enum ServiceName {
     /// Discord bot for course monitoring commands
     Bot,
@@ -35,17 +35,17 @@ pub enum ServiceName {
 impl ServiceName {
     /// Get all available services
     #[must_use]
-    pub fn all() -> Vec<ServiceName> {
-        vec![ServiceName::Bot, ServiceName::Web, ServiceName::Scraper]
+    pub fn all() -> Vec<Self> {
+        vec![Self::Bot, Self::Web, Self::Scraper]
     }
 
     /// Convert to string for service registration
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            ServiceName::Bot => "bot",
-            ServiceName::Web => "web",
-            ServiceName::Scraper => "scraper",
+            Self::Bot => "bot",
+            Self::Web => "web",
+            Self::Scraper => "scraper",
         }
     }
 }
@@ -55,7 +55,7 @@ const DEFAULT_TRACING_FORMAT: TracingFormat = TracingFormat::Pretty;
 #[cfg(not(debug_assertions))]
 const DEFAULT_TRACING_FORMAT: TracingFormat = TracingFormat::Json;
 
-fn default_tracing_format() -> TracingFormat {
+const fn default_tracing_format() -> TracingFormat {
     DEFAULT_TRACING_FORMAT
 }
 

@@ -124,14 +124,16 @@ pub async fn ics(ctx: Context<'_>, #[description = "Course Reference Number (CRN
             .iter()
             .enumerate()
             .map(|(i, m)| {
-                let time_info = match &m.time_range {
-                    Some(range) => format!(
-                        "{} {}",
-                        m.days_string().unwrap_or("TBA".to_string()),
-                        range.format_12hr()
-                    ),
-                    None => m.days_string().unwrap_or("TBA".to_string()),
-                };
+                let time_info = m.time_range.as_ref().map_or_else(
+                    || m.days_string().unwrap_or_else(|| "TBA".to_string()),
+                    |range| {
+                        format!(
+                            "{} {}",
+                            m.days_string().unwrap_or_else(|| "TBA".to_string()),
+                            range.format_12hr()
+                        )
+                    },
+                );
                 format!("{}. {}", i + 1, time_info)
             })
             .collect::<Vec<_>>()
@@ -209,7 +211,7 @@ fn generate_event_content(course: &Course, meeting_time: &MeetingScheduleInfo, i
         "CRN: {}\\nInstructor: {}\\nDays: {}\\nMeeting Type: {}",
         course.course_reference_number,
         instructor_name,
-        meeting_time.days_string().unwrap_or("TBA".to_string()),
+        meeting_time.days_string().unwrap_or_else(|| "TBA".to_string()),
         meeting_time.meeting_type.description()
     );
 

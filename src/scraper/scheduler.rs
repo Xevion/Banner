@@ -105,17 +105,17 @@ fn persisted_to_instant(persisted: Option<DateTime<Utc>>, interval: Duration) ->
     // form keeps that a platform detail rather than an assumption baked into the scheduler.
     let far_enough_back = |d: Duration| Instant::now().checked_sub(d).unwrap_or_else(Instant::now);
 
-    match persisted {
-        None => far_enough_back(interval),
-        Some(ts) => {
+    persisted.map_or_else(
+        || far_enough_back(interval),
+        |ts| {
             let elapsed = (Utc::now() - ts).to_std().unwrap_or(interval);
             if elapsed >= interval {
                 far_enough_back(interval)
             } else {
                 far_enough_back(elapsed)
             }
-        }
-    }
+        },
+    )
 }
 
 /// Periodically analyzes data and enqueues prioritized scrape jobs.

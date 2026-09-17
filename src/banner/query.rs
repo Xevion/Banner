@@ -78,7 +78,7 @@ impl SearchQuery {
 
     /// Sets whether to search for open courses only
     #[must_use]
-    pub fn open_only(mut self, open_only: bool) -> Self {
+    pub const fn open_only(mut self, open_only: bool) -> Self {
         self.open_only = Some(open_only);
         self
     }
@@ -120,21 +120,21 @@ impl SearchQuery {
 
     /// Sets the start time for the query
     #[must_use]
-    pub fn start_time(mut self, start_time: NaiveTime) -> Self {
+    pub const fn start_time(mut self, start_time: NaiveTime) -> Self {
         self.start_time = Some(start_time);
         self
     }
 
     /// Sets the end time for the query
     #[must_use]
-    pub fn end_time(mut self, end_time: NaiveTime) -> Self {
+    pub const fn end_time(mut self, end_time: NaiveTime) -> Self {
         self.end_time = Some(end_time);
         self
     }
 
     /// Sets the credit range for the query
     #[must_use]
-    pub fn credits(mut self, low: i32, high: i32) -> Self {
+    pub const fn credits(mut self, low: i32, high: i32) -> Self {
         self.min_credits = Some(low);
         self.max_credits = Some(high);
         self
@@ -142,21 +142,21 @@ impl SearchQuery {
 
     /// Sets the minimum credits for the query
     #[must_use]
-    pub fn min_credits(mut self, value: i32) -> Self {
+    pub const fn min_credits(mut self, value: i32) -> Self {
         self.min_credits = Some(value);
         self
     }
 
     /// Sets the maximum credits for the query
     #[must_use]
-    pub fn max_credits(mut self, value: i32) -> Self {
+    pub const fn max_credits(mut self, value: i32) -> Self {
         self.max_credits = Some(value);
         self
     }
 
     /// Sets the course number range for the query
     #[must_use]
-    pub fn course_numbers(mut self, low: i32, high: i32) -> Self {
+    pub const fn course_numbers(mut self, low: i32, high: i32) -> Self {
         self.course_number_low = Some(low);
         self.course_number_high = Some(high);
         self
@@ -164,7 +164,7 @@ impl SearchQuery {
 
     /// Sets the offset for pagination
     #[must_use]
-    pub fn offset(mut self, offset: i32) -> Self {
+    pub const fn offset(mut self, offset: i32) -> Self {
         self.offset = offset;
         self
     }
@@ -185,7 +185,7 @@ impl SearchQuery {
 
     /// Gets the `max_results` field
     #[must_use]
-    pub fn get_max_results(&self) -> i32 {
+    pub const fn get_max_results(&self) -> i32 {
         self.max_results
     }
 
@@ -323,7 +323,7 @@ enum QueryField {
 }
 
 impl QueryField {
-    fn single(param_key: &'static str, display_name: &'static str, value: String) -> Self {
+    const fn single(param_key: &'static str, display_name: &'static str, value: String) -> Self {
         Self::Single {
             param_key,
             display_name,

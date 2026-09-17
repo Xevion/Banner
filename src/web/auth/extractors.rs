@@ -41,7 +41,7 @@ impl FromRequestParts<AppState> for AuthUser {
             )
         })?;
 
-        Ok(AuthUser(user))
+        Ok(Self(user))
     }
 }
 
@@ -63,6 +63,6 @@ impl FromRequestParts<AppState> for AdminUser {
             ));
         }
 
-        Ok(AdminUser(user))
+        Ok(Self(user))
     }
 }

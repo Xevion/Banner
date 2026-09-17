@@ -88,16 +88,16 @@ fn default_log_level() -> String {
 }
 
 /// Default port of 8080
-fn default_port() -> u16 {
+const fn default_port() -> u16 {
     8080
 }
 
-fn default_metrics_port() -> u16 {
+const fn default_metrics_port() -> u16 {
     9090
 }
 
 /// Default shutdown timeout of 8 seconds
-fn default_shutdown_timeout() -> Duration {
+const fn default_shutdown_timeout() -> Duration {
     Duration::from_secs(8)
 }
 
@@ -144,27 +144,27 @@ impl Default for RateLimitingConfig {
 }
 
 /// Default session requests per minute (20 = 1 every 3 seconds)
-fn default_session_rpm() -> u32 {
+const fn default_session_rpm() -> u32 {
     20
 }
 
 /// Default search requests per minute (60 = 1 per second)
-fn default_search_rpm() -> u32 {
+const fn default_search_rpm() -> u32 {
     60
 }
 
 /// Default metadata requests per minute (40 = 1 every 1.5 seconds)
-fn default_metadata_rpm() -> u32 {
+const fn default_metadata_rpm() -> u32 {
     40
 }
 
 /// Default reset requests per minute (30 = 1 every 2 seconds)
-fn default_reset_rpm() -> u32 {
+const fn default_reset_rpm() -> u32 {
     30
 }
 
 /// Default burst allowance (5 extra requests)
-fn default_burst_allowance() -> u32 {
+const fn default_burst_allowance() -> u32 {
     5
 }
 

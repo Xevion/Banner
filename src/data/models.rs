@@ -84,7 +84,7 @@ pub struct DbMeetingTime {
 impl DbMeetingTime {
     /// Whether no time range is set (i.e. time is TBA).
     #[must_use]
-    pub fn is_time_tba(&self) -> bool {
+    pub const fn is_time_tba(&self) -> bool {
         self.time_range.is_none()
     }
 }
@@ -250,7 +250,7 @@ impl<'de> Deserialize<'de> for DbMeetingTime {
             }
         });
 
-        Ok(DbMeetingTime {
+        Ok(Self {
             time_range,
             date_range,
             days,

@@ -14,7 +14,7 @@ use crate::state::{AppState, ServiceStatus};
 use crate::utils::fmt_duration;
 use crate::web::error::{ApiError, ApiErrorCode, DbResultExt};
 
-fn default_metrics_limit() -> i32 {
+const fn default_metrics_limit() -> i32 {
     500
 }
 

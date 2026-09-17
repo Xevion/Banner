@@ -23,11 +23,11 @@ macro_rules! unsigned_newtype {
         pub struct $name(u32);
 
         impl $name {
-            pub fn new(val: u32) -> Self {
+            pub const fn new(val: u32) -> Self {
                 Self(val)
             }
 
-            pub fn get(self) -> u32 {
+            pub const fn get(self) -> u32 {
                 self.0
             }
         }

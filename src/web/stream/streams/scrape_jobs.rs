@@ -91,15 +91,13 @@ pub async fn event_matches<S: std::hash::BuildHasher>(
                 if job_details.is_none() {
                     *job_details = fetch_by_id(db_pool, *id).await.ok();
                 }
-                if let Some(job) = job_details.as_ref() {
+                job_details.as_ref().is_some_and(|job| {
                     let matches = matches_filter(filter, job);
                     if matches {
                         known_ids.insert(*id);
                     }
                     matches
-                } else {
-                    false
-                }
+                })
             }
         }
         ScrapeJobEvent::Completed { id, .. } | ScrapeJobEvent::Deleted { id } => known_ids.remove(id),

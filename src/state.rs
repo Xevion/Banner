@@ -20,7 +20,7 @@ use tokio::sync::{Notify, RwLock};
 use ts_rs::TS;
 
 /// Health status of a service.
-#[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum ServiceStatus {

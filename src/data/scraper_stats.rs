@@ -132,13 +132,12 @@ pub async fn compute_subjects(
     let multiplier = adaptive::time_of_day_multiplier(now);
 
     let term = Term::get_current().inner().to_string();
-
-    // Filter to current term stats only for the admin dashboard.
-    let raw_stats: Vec<_> = all_stats.into_iter().filter(|s| s.term == term).collect();
     let course_counts = crate::data::courses::count_by_subject(pool, &term).await?;
 
-    let subjects: Vec<SubjectData> = raw_stats
+    // Filter to current term stats only for the admin dashboard.
+    let subjects: Vec<SubjectData> = all_stats
         .into_iter()
+        .filter(|s| s.term == term)
         .map(|row| {
             let stats: SubjectStats = row.into();
             let schedule = adaptive::evaluate_subject(&stats, now, adaptive::TermCategory::Current);

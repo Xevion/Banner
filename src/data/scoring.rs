@@ -334,7 +334,7 @@ pub struct ScoreRow {
 
 /// Load an instructor rating from a pre-joined `instructor_scores` row.
 #[must_use]
-pub fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
+pub const fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
     InstructorRating {
         score: row.display_score,
         rank_score: row.sort_score,
@@ -349,51 +349,34 @@ pub fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn test_compute_score_both_sources() {
+    #[rstest]
+    #[case::both_sources(Some(4.5), 25, Some(4.8), 100, RatingSource::Both)]
+    #[case::rmp_only(Some(3.0), 10, None, 0, RatingSource::Rmp)]
+    #[case::bb_only(None, 0, Some(4.2), 50, RatingSource::BlueBook)]
+    fn test_compute_score_sources(
+        #[case] rmp_rating: Option<f32>,
+        #[case] rmp_num_ratings: i32,
+        #[case] bb_avg_instructor_rating: Option<f32>,
+        #[case] bb_total_responses: i32,
+        #[case] expected_source: RatingSource,
+    ) {
         let data = RawInstructorData {
             instructor_id: 1,
-            rmp_rating: Some(4.5),
-            rmp_num_ratings: 25,
-            bb_avg_instructor_rating: Some(4.8),
-            bb_total_responses: 100,
+            rmp_rating,
+            rmp_num_ratings,
+            bb_avg_instructor_rating,
+            bb_total_responses,
         };
         let score = compute_score(&data);
-        assert_eq!(score.source, RatingSource::Both);
+        assert_eq!(score.source, expected_source);
+        assert_eq!(score.calibrated_bb.is_some(), bb_avg_instructor_rating.is_some());
+        assert_eq!(score.rmp_rating.is_some(), rmp_rating.is_some());
         assert!(score.score > 1.0 && score.score < 5.0);
         assert!(score.ci_lower <= score.score);
         assert!(score.ci_upper >= score.score);
         assert!(score.confidence > 0.0);
-        assert!(score.calibrated_bb.is_some());
-    }
-
-    #[test]
-    fn test_compute_score_rmp_only() {
-        let data = RawInstructorData {
-            instructor_id: 2,
-            rmp_rating: Some(3.0),
-            rmp_num_ratings: 10,
-            bb_avg_instructor_rating: None,
-            bb_total_responses: 0,
-        };
-        let score = compute_score(&data);
-        assert_eq!(score.source, RatingSource::Rmp);
-        assert!(score.calibrated_bb.is_none());
-    }
-
-    #[test]
-    fn test_compute_score_bb_only() {
-        let data = RawInstructorData {
-            instructor_id: 3,
-            rmp_rating: None,
-            rmp_num_ratings: 0,
-            bb_avg_instructor_rating: Some(4.2),
-            bb_total_responses: 50,
-        };
-        let score = compute_score(&data);
-        assert_eq!(score.source, RatingSource::BlueBook);
-        assert!(score.rmp_rating.is_none());
     }
 
     #[test]

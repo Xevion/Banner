@@ -34,13 +34,15 @@ impl EventBuffer {
     ///
     /// Panics if the internal lock is poisoned.
     pub fn publish(&self, event: DomainEvent) {
-        let mut events = self.events.write().expect("lock poisoned");
-        if events.len() >= self.capacity {
-            events.pop_front();
-            self.base_offset.fetch_add(1, Ordering::Release);
-        }
-        events.push_back(event);
-        let new_head = self.base_offset.load(Ordering::Acquire) + events.len() as u64;
+        let new_head = {
+            let mut events = self.events.write().expect("lock poisoned");
+            if events.len() >= self.capacity {
+                events.pop_front();
+                self.base_offset.fetch_add(1, Ordering::Release);
+            }
+            events.push_back(event);
+            self.base_offset.load(Ordering::Acquire) + events.len() as u64
+        };
         let _ = self.head.send(new_head);
     }
 

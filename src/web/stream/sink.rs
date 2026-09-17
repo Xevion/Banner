@@ -16,7 +16,7 @@ pub struct StreamSink {
 }
 
 impl StreamSink {
-    pub fn new(sink: SplitSink<WebSocket, Message>) -> Self {
+    pub const fn new(sink: SplitSink<WebSocket, Message>) -> Self {
         Self { sink }
     }
 

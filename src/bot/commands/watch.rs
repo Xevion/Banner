@@ -20,14 +20,14 @@ pub enum WatchTypeChoice {
 impl From<WatchTypeChoice> for WatchType {
     fn from(c: WatchTypeChoice) -> Self {
         match c {
-            WatchTypeChoice::SeatsAvailable => WatchType::SeatsAvailable,
-            WatchTypeChoice::WaitlistOpen => WatchType::WaitlistOpen,
-            WatchTypeChoice::AnyChange => WatchType::AnyChange,
+            WatchTypeChoice::SeatsAvailable => Self::SeatsAvailable,
+            WatchTypeChoice::WaitlistOpen => Self::WaitlistOpen,
+            WatchTypeChoice::AnyChange => Self::AnyChange,
         }
     }
 }
 
-fn watch_type_label(watch_type: WatchType) -> &'static str {
+const fn watch_type_label(watch_type: WatchType) -> &'static str {
     match watch_type {
         WatchType::SeatsAvailable => "Seats Available",
         WatchType::WaitlistOpen => "Waitlist Open",

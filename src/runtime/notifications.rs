@@ -20,7 +20,7 @@ pub struct NotificationService {
 }
 
 impl NotificationService {
-    pub fn new(
+    pub const fn new(
         pool: PgPool,
         events: Arc<EventBuffer>,
         http: Arc<serenity::http::Http>,

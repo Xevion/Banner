@@ -39,7 +39,7 @@ impl CalendarCourse {
 }
 
 /// Convert a `DayOfWeek` to a chrono `Weekday`.
-fn to_weekday(day: DayOfWeek) -> Weekday {
+const fn to_weekday(day: DayOfWeek) -> Weekday {
     match day {
         DayOfWeek::Monday => Weekday::Mon,
         DayOfWeek::Tuesday => Weekday::Tue,
@@ -57,7 +57,7 @@ fn active_weekdays(mt: &DbMeetingTime) -> Vec<Weekday> {
 }
 
 /// ICS two-letter day code for RRULE BYDAY.
-fn ics_day_code(day: Weekday) -> &'static str {
+const fn ics_day_code(day: Weekday) -> &'static str {
     match day {
         Weekday::Mon => "MO",
         Weekday::Tue => "TU",
@@ -297,9 +297,8 @@ fn generate_ics_event(course: &CalendarCourse, mt: &DbMeetingTime, index: usize)
     write!(event, "LOCATION:{}\r\n", escape_ics(&location)).unwrap();
 
     let weekdays = active_weekdays(mt);
-    let mut holiday_names = Vec::new();
 
-    if let (false, Some(st)) = (weekdays.is_empty(), start_time) {
+    let holiday_names = if let (false, Some(st)) = (weekdays.is_empty(), start_time) {
         let by_day: Vec<&str> = weekdays.iter().map(|d| ics_day_code(*d)).collect();
         let until = end_date.format("%Y%m%dT000000Z").to_string();
 
@@ -327,8 +326,10 @@ fn generate_ics_event(course: &CalendarCourse, mt: &DbMeetingTime, index: usize)
             write!(event, "EXDATE:{}\r\n", exdates.join(",")).unwrap();
         }
 
-        holiday_names = excluded_holiday_names(start_date, end_date, &exceptions);
-    }
+        excluded_holiday_names(start_date, end_date, &exceptions)
+    } else {
+        Vec::new()
+    };
 
     event.push_str("END:VEVENT\r\n");
     (event, holiday_names)

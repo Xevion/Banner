@@ -22,7 +22,7 @@ const NANOID_LEN: usize = 3;
     clippy::cast_possible_truncation,
     reason = "ratings carry a few decimal digits, far under f32 precision"
 )]
-fn narrow_rating(v: f64) -> f32 {
+const fn narrow_rating(v: f64) -> f32 {
     v as f32
 }
 
@@ -164,10 +164,10 @@ pub struct PublicInstructorListParams {
 fn default_sort() -> String {
     "name_asc".to_string()
 }
-fn default_page() -> i32 {
+const fn default_page() -> i32 {
     1
 }
-fn default_per_page() -> i32 {
+const fn default_per_page() -> i32 {
     24
 }
 
@@ -516,8 +516,9 @@ pub async fn get_public_instructor_by_slug(
         })
     });
 
-    let bluebook_summary = match bb {
-        Some(ref r) => match (r.avg_instructor_rating, r.total_responses) {
+    let bluebook_summary = bb
+        .as_ref()
+        .and_then(|r| match (r.avg_instructor_rating, r.total_responses) {
             (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
                 let total_responses = Count::try_from(n).ok();
                 let eval_count = Count::try_from(r.eval_count).ok();
@@ -539,9 +540,7 @@ pub async fn get_public_instructor_by_slug(
                 }
             }
             _ => None,
-        },
-        None => None,
-    };
+        });
 
     // Teaching history
     let teaching_history = get_teaching_history(pool, inst.id).await?;
@@ -735,6 +734,10 @@ pub enum IdentifierKind {
 }
 
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the three-way cascade reads as numeric, then email, then slug; map_or_else buries that order in nested closures"
+)]
 pub fn classify_identifier(s: &str) -> IdentifierKind {
     if let Ok(id) = s.parse::<i32>() {
         IdentifierKind::NumericId(id)

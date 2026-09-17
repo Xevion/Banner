@@ -23,7 +23,7 @@ pub struct SsrService {
 
 impl SsrService {
     #[must_use]
-    pub fn new(command: String, port: u16, backend_url: String) -> Self {
+    pub const fn new(command: String, port: u16, backend_url: String) -> Self {
         Self {
             command,
             port,

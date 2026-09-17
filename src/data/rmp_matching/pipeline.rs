@@ -238,13 +238,11 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
     // Instructors with candidates but no auto-link get a distinct status so
     // they appear in the review queue.
-    let pending_instructor_ids: Vec<i32> = collected
+    let pending_review = collected
         .with_candidates
         .iter()
         .filter(|id| !auto_instructor_ids.contains(id))
-        .copied()
-        .collect();
-    let pending_review = pending_instructor_ids.len();
+        .count();
 
     tx.commit().await?;
     crate::data::rmp::refresh_rmp_summary(db_pool).await?;
@@ -408,11 +406,10 @@ async fn build_name_index(conn: &mut PgConnection, reviews: &ReviewData) -> Resu
     for row in &prof_rows {
         if let Some(parts) = parse_rmp_name(&row.first_name, &row.last_name) {
             // Prefer subjects from actual reviews; fall back to course_codes from RMP detail.
-            let review_subjects = if let Some(subjs) = reviews.subjects.get(&row.legacy_id) {
-                subjs.iter().map(|(k, v)| (k.clone(), *v)).collect()
-            } else {
-                extract_review_subjects(row.course_codes.as_deref().map(Vec::as_slice))
-            };
+            let review_subjects = reviews.subjects.get(&row.legacy_id).map_or_else(
+                || extract_review_subjects(row.course_codes.as_deref().map(Vec::as_slice)),
+                |subjs| subjs.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            );
             let keys = matching_keys(&parts);
             let norm_name = (
                 crate::data::names::normalize_for_matching(&parts.last),

@@ -38,7 +38,7 @@ fn parse_review_date(raw: &str) -> Option<DateTime<Utc>> {
     clippy::cast_possible_truncation,
     reason = "RMP ratings and percentages are bounded to 0..=100, so f32 rounding is negligible"
 )]
-fn narrow_rating(v: f64) -> f32 {
+const fn narrow_rating(v: f64) -> f32 {
     v as f32
 }
 
@@ -133,10 +133,9 @@ impl RmpClient {
         let mut cursor: Option<String> = None;
 
         loop {
-            let after_clause = match &cursor {
-                Some(c) => format!(r#", after: "{c}""#),
-                None => String::new(),
-            };
+            let after_clause = cursor
+                .as_ref()
+                .map_or_else(String::new, |c| format!(r#", after: "{c}""#));
 
             let query = format!(
                 r#"query {{

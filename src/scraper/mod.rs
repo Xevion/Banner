@@ -39,7 +39,7 @@ pub struct ScraperService {
 
 impl ScraperService {
     /// Creates a new `ScraperService`.
-    pub fn new(
+    pub const fn new(
         db_pool: PgPool,
         banner_api: Arc<BannerApi>,
         reference_cache: Arc<RwLock<ReferenceCache>>,

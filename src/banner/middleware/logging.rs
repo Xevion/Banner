@@ -50,11 +50,10 @@ impl Middleware for LoggingMiddleware {
                             "Request completed"
                         );
                     }
-                    Ok(response)
                 } else {
                     warn!(method, url, status, duration = fmt_duration(duration), "Request failed");
-                    Ok(response)
                 }
+                Ok(response)
             }
             Err(error) => {
                 warn!(method, url, duration = fmt_duration(duration), "Request failed");

@@ -603,7 +603,7 @@ pub struct CourseOps<'a> {
 }
 
 impl<'a> CourseOps<'a> {
-    pub(crate) fn new(ctx: &'a DbContext) -> Self {
+    pub(crate) const fn new(ctx: &'a DbContext) -> Self {
         Self { ctx }
     }
 

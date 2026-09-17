@@ -52,7 +52,7 @@ impl BlueBookSeason {
     }
 
     /// Collapse to the canonical Banner [`Season`].
-    fn to_season(self) -> Season {
+    const fn to_season(self) -> Season {
         match self {
             Self::Spring => Season::Spring,
             Self::SummerI | Self::SummerII => Season::Summer,

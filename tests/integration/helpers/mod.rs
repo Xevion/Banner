@@ -122,7 +122,7 @@ impl MeetingTimeBuilder {
     /// Set which days of the week this meeting occurs on.
     ///
     /// Days are ordered `[mon, tue, wed, thu, fri, sat, sun]`.
-    pub fn days(mut self, [mon, tue, wed, thu, fri, sat, sun]: [bool; 7]) -> Self {
+    pub const fn days(mut self, [mon, tue, wed, thu, fri, sat, sun]: [bool; 7]) -> Self {
         self.monday = mon;
         self.tuesday = tue;
         self.wednesday = wed;

@@ -99,7 +99,7 @@ impl BannerSession {
     }
 
     #[must_use]
-    pub fn been_used(&self) -> bool {
+    pub const fn been_used(&self) -> bool {
         self.last_activity.is_some()
     }
 

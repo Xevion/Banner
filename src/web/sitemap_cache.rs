@@ -25,12 +25,10 @@ impl SitemapCache {
     /// Return a cached XML string if it exists and is fresh.
     pub(crate) fn get(&self, key: &str) -> Option<Arc<String>> {
         let entry = self.entries.get(key)?;
-        let (cached_at, ref value) = *entry;
-        if cached_at.elapsed() < TTL {
-            Some(value.clone())
-        } else {
-            None
-        }
+        let fresh = entry.0.elapsed() < TTL;
+        let value = fresh.then(|| entry.1.clone());
+        drop(entry);
+        value
     }
 
     /// Return a cached XML string even if stale (for singleflight contention fallback).

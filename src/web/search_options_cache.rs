@@ -28,12 +28,10 @@ impl SearchOptionsCache {
     /// Return a cached entry if it exists and is fresh.
     pub(crate) fn get(&self, term_code: &str) -> Option<Arc<SearchOptionsResponse>> {
         let entry = self.entries.get(term_code)?;
-        let (cached_at, ref value) = *entry;
-        if cached_at.elapsed() < TTL {
-            Some(value.clone())
-        } else {
-            None
-        }
+        let fresh = entry.0.elapsed() < TTL;
+        let value = fresh.then(|| entry.1.clone());
+        drop(entry);
+        value
     }
 
     /// Store a fresh response for the given term.

@@ -24,11 +24,8 @@ pub use crate::data::admin_bluebook::{BluebookLinkDetail, BluebookMatchResponse,
 /// indicates a "not found" condition, and return the appropriate 404 response.
 /// Falls back to a generic 500 via [`db_error`].
 fn bluebook_not_found_or_db(context: &str, e: &anyhow::Error) -> ApiError {
-    if let Some(bb) = e.downcast_ref::<BluebookError>() {
-        ApiError::not_found(bb.to_string())
-    } else {
-        db_error(context, e)
-    }
+    e.downcast_ref::<BluebookError>()
+        .map_or_else(|| db_error(context, e), |bb| ApiError::not_found(bb.to_string()))
 }
 
 /// Response for `POST /api/admin/bluebook/sync`.

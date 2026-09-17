@@ -39,7 +39,7 @@ enum ClientMessageResult {
 
 impl ClientMessageResult {
     /// Convert the result of a `send_error` call (true = sent, false = send failed).
-    fn from_error_send(sent: bool) -> Self {
+    const fn from_error_send(sent: bool) -> Self {
         if sent { Self::ErrorSent } else { Self::Disconnected }
     }
 }

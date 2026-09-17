@@ -191,7 +191,7 @@ impl InstructionalMethod {
 
     /// Convert to raw Banner code.
     #[must_use]
-    pub fn to_code(self) -> &'static str {
+    pub const fn to_code(self) -> &'static str {
         match self {
             Self::InPerson => "FF",
             Self::Online(OnlineVariant::Async) => "OA",
@@ -224,7 +224,7 @@ impl InstructionalMethod {
 
     /// Serialize to dot-notation filter string.
     #[must_use]
-    pub fn to_filter_str(self) -> &'static str {
+    pub const fn to_filter_str(self) -> &'static str {
         match self {
             Self::InPerson => "InPerson",
             Self::Online(OnlineVariant::Async) => "Online.Async",

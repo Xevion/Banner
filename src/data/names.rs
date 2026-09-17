@@ -120,7 +120,7 @@ pub(crate) fn decode_html_entities(s: &str) -> String {
 fn extract_nicknames(s: &str) -> (String, Vec<String>) {
     let mut nicknames = Vec::new();
     let mut cleaned = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
+    let mut chars = s.chars();
 
     while let Some(ch) = chars.next() {
         if ch == '(' {

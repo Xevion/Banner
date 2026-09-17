@@ -143,22 +143,22 @@ impl WriteColored for FieldValue {
     fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
         let ansi = writer.has_ansi_escapes();
         match self {
-            FieldValue::Debug(s) | FieldValue::Display(s) => writer.write_str_value_colored(s, truncate),
-            FieldValue::Signed(n) => {
+            Self::Debug(s) | Self::Display(s) => writer.write_str_value_colored(s, truncate),
+            Self::Signed(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
                 } else {
                     write!(writer, "{n}")
                 }
             }
-            FieldValue::Unsigned(n) => {
+            Self::Unsigned(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
                 } else {
                     write!(writer, "{n}")
                 }
             }
-            FieldValue::Bool(b) => {
+            Self::Bool(b) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(b).magenta())
                 } else {
@@ -615,12 +615,15 @@ where
                 writer.write_bold(span.metadata().name())?;
                 saw_any = true;
 
-                let ext = span.extensions();
-                if let Some(fields) = ext.get::<FormattedFields<N>>()
-                    && !fields.fields.is_empty()
-                {
+                let span_fields = {
+                    let ext = span.extensions();
+                    ext.get::<FormattedFields<N>>()
+                        .filter(|fields| !fields.fields.is_empty())
+                        .map(|fields| fields.fields.clone())
+                };
+                if let Some(span_fields) = span_fields {
                     writer.write_dim_char('{')?;
-                    writer.write_span_fields_colored(fields.fields.as_str())?;
+                    writer.write_span_fields_colored(&span_fields)?;
                     writer.write_dim_char('}')?;
                 }
                 writer.write_dimmed(":")?;
@@ -752,19 +755,17 @@ where
                     let mut span_fields: Map<String, Value> = Map::new();
 
                     // Try to extract fields from FormattedFields
-                    let ext = span.extensions();
-                    if let Some(formatted_fields) = ext.get::<FormattedFields<N>>() {
+                    let raw_fields = {
+                        let ext = span.extensions();
+                        ext.get::<FormattedFields<N>>().map(|fields| fields.fields.clone())
+                    };
+                    if let Some(raw_fields) = raw_fields {
                         // Try to parse as JSON first
-                        if let Ok(json_fields) =
-                            serde_json::from_str::<Map<String, Value>>(formatted_fields.fields.as_str())
-                        {
+                        if let Ok(json_fields) = serde_json::from_str::<Map<String, Value>>(&raw_fields) {
                             span_fields.extend(json_fields);
                         } else {
                             // If not valid JSON, treat the entire field string as a single field
-                            span_fields.insert(
-                                "raw".to_string(),
-                                Value::String(formatted_fields.fields.as_str().to_string()),
-                            );
+                            span_fields.insert("raw".to_string(), Value::String(raw_fields));
                         }
                     }
 
@@ -811,7 +812,7 @@ pub struct CompactFields {
 }
 
 impl CompactFields {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { rules: vec![] }
     }
 

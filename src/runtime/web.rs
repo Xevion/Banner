@@ -18,7 +18,7 @@ pub struct WebService {
 
 impl WebService {
     #[must_use]
-    pub fn new(port: u16, app_state: AppState, auth_config: AuthConfig) -> Self {
+    pub const fn new(port: u16, app_state: AppState, auth_config: AuthConfig) -> Self {
         Self {
             port,
             app_state,

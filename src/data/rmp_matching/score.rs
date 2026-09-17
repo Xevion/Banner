@@ -298,6 +298,7 @@ pub(super) fn extract_review_subjects(course_codes: Option<&[RmpCourseCode]>) ->
 )]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn test_ideal_candidate_high_score() {
@@ -374,22 +375,13 @@ mod tests {
         assert_eq!(ambiguous.breakdown.uniqueness, 0.2);
     }
 
-    #[test]
-    fn test_no_department_neutral() {
-        let ms = compute_match_score(&[("CS".to_string(), 20)], None, 1, 10, false, &[]);
-        assert_eq!(ms.breakdown.department, 0.5);
-    }
-
-    #[test]
-    fn test_department_match() {
-        let ms = compute_match_score(&[("CS".to_string(), 20)], Some("Computer Science"), 1, 10, false, &[]);
-        assert_eq!(ms.breakdown.department, 1.0);
-    }
-
-    #[test]
-    fn test_department_mismatch() {
-        let ms = compute_match_score(&[("CS".to_string(), 20)], Some("History"), 1, 10, false, &[]);
-        assert_eq!(ms.breakdown.department, 0.2);
+    #[rstest]
+    #[case::no_department(None, 0.5)]
+    #[case::department_match(Some("Computer Science"), 1.0)]
+    #[case::department_mismatch(Some("History"), 0.2)]
+    fn test_department_similarity_cases(#[case] department: Option<&str>, #[case] expected: f32) {
+        let ms = compute_match_score(&[("CS".to_string(), 20)], department, 1, 10, false, &[]);
+        assert_eq!(ms.breakdown.department, expected);
     }
 
     #[test]

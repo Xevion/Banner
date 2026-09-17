@@ -227,15 +227,10 @@ impl RateLimitState {
                 }
             };
 
-        let mut rejected = false;
-
-        // Global per-IP
-        if !check_limiter(&self.global_burst, &ip, &mut max_wait) {
-            rejected = true;
-        }
-        if !check_limiter(&self.global_sustained, &ip, &mut max_wait) {
-            rejected = true;
-        }
+        // Global per-IP. Every limiter below must run regardless of earlier
+        // rejections so `max_wait` reflects the longest retry-after.
+        let mut rejected = !check_limiter(&self.global_burst, &ip, &mut max_wait);
+        rejected |= !check_limiter(&self.global_sustained, &ip, &mut max_wait);
 
         // Route-group (Static already short-circuited above)
         match group {
@@ -325,7 +320,7 @@ pub struct RateLimitLayer {
 
 impl RateLimitLayer {
     #[must_use]
-    pub fn new(state: SharedRateLimitState) -> Self {
+    pub const fn new(state: SharedRateLimitState) -> Self {
         Self { state }
     }
 }

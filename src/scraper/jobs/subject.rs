@@ -14,7 +14,7 @@ pub use crate::data::models::SubjectTarget as SubjectJob;
 impl SubjectJob {
     /// Create a new subject job for a specific term.
     #[must_use]
-    pub fn new(subject: String, term: String) -> Self {
+    pub const fn new(subject: String, term: String) -> Self {
         Self {
             subject,
             term: Some(term),

@@ -44,7 +44,7 @@ impl BannerApi {
                 .context("Failed to create HTTP client")?,
         )
         .with(LoggingMiddleware)
-        .with(RateLimitMiddleware::new(rate_limiter.clone()))
+        .with(RateLimitMiddleware::new(rate_limiter))
         .build();
 
         Ok(Self {

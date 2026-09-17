@@ -95,8 +95,8 @@ impl ScheduleCache {
     /// Check freshness and trigger a background refresh if stale.
     /// Always returns immediately because the caller uses the current snapshot.
     pub(crate) fn ensure_fresh(&self) {
-        let snap = self.rx.borrow();
-        if snap.refreshed_at.elapsed() < REFRESH_INTERVAL {
+        let is_stale = self.rx.borrow().refreshed_at.elapsed() >= REFRESH_INTERVAL;
+        if !is_stale {
             return;
         }
         if self
@@ -248,7 +248,7 @@ fn intern_subject(set: &mut HashSet<Arc<str>>, subject: &str) -> Arc<str> {
 
 /// Day-of-week as our bitmask index (Monday = 0 .. Sunday = 6).
 /// Chrono's `weekday().num_days_from_monday()` already gives 0=Mon..6=Sun.
-pub(crate) fn weekday_bit(day: chrono::Weekday) -> u8 {
+pub(crate) const fn weekday_bit(day: chrono::Weekday) -> u8 {
     1 << day.num_days_from_monday()
 }
 

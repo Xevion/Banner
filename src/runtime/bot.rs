@@ -66,7 +66,11 @@ impl BotService {
                             poise::Context::Application(_) => ctx.invocation_string(),
                             poise::Context::Prefix(prefix) => prefix.msg.content.clone(),
                         };
-                        let channel_name = ctx.channel_id().name(ctx.http()).await.unwrap_or("unknown".to_string());
+                        let channel_name = ctx
+                            .channel_id()
+                            .name(ctx.http())
+                            .await
+                            .unwrap_or_else(|_| "unknown".to_string());
 
                         let span = tracing::Span::current();
                         span.record("command_name", &*ctx.command().qualified_name);
@@ -291,7 +295,8 @@ impl Service for BotService {
             }
         }
 
-        if let Some(shard_manager) = self.shard_manager.lock().await.take() {
+        let shard_manager = self.shard_manager.lock().await.take();
+        if let Some(shard_manager) = shard_manager {
             shard_manager.shutdown_all().await;
         }
 

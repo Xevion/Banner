@@ -264,14 +264,15 @@ pub async fn scraper_subjects(
     State(state): State<AppState>,
 ) -> Result<Json<SubjectsResponse>, ApiError> {
     let start = Instant::now();
-    let ref_cache = state.reference_cache.read().await;
-
-    let data = crate::data::scraper_stats::compute_subjects(&state.db_pool, &state.events, &ref_cache)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "failed to fetch subject stats");
-            ApiError::internal_error("Failed to fetch subject stats")
-        })?;
+    let data = {
+        let ref_cache = state.reference_cache.read().await;
+        crate::data::scraper_stats::compute_subjects(&state.db_pool, &state.events, &ref_cache)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "failed to fetch subject stats");
+                ApiError::internal_error("Failed to fetch subject stats")
+            })?
+    };
 
     let subjects: Vec<SubjectSummary> = data
         .into_iter()
@@ -306,7 +307,7 @@ pub struct SubjectDetailParams {
     pub limit: i32,
 }
 
-fn default_detail_limit() -> i32 {
+const fn default_detail_limit() -> i32 {
     50
 }
 

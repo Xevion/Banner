@@ -82,7 +82,7 @@ impl ApiError {
         }
     }
 
-    fn status_code(&self) -> StatusCode {
+    const fn status_code(&self) -> StatusCode {
         match self.code {
             ApiErrorCode::NotFound => StatusCode::NOT_FOUND,
             ApiErrorCode::BadRequest

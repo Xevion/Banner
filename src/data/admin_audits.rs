@@ -65,7 +65,7 @@ pub enum AdminEntity {
 impl AdminAction {
     /// The entity kind this action always targets.
     #[must_use]
-    pub fn entity(self) -> AdminEntity {
+    pub const fn entity(self) -> AdminEntity {
         match self {
             Self::InstructorMerge
             | Self::InstructorMergeClaimant

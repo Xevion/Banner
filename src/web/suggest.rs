@@ -12,7 +12,7 @@ use crate::state::AppState;
 use crate::web::error::{ApiError, DbResultExt};
 use crate::web::routes::{cache, with_cache_control};
 
-fn default_suggest_limit() -> i32 {
+const fn default_suggest_limit() -> i32 {
     10
 }
 
