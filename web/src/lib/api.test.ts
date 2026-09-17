@@ -56,8 +56,10 @@ describe("BannerApiClient", () => {
 
   it("should search courses with all params", async () => {
     const mockResponse = {
-      courses: [],
-      totalCount: 0,
+      items: [],
+      total: 0,
+      page: 1,
+      perPage: 25,
     };
 
     vi.mocked(fetch).mockResolvedValueOnce({
@@ -86,8 +88,10 @@ describe("BannerApiClient", () => {
 
   it("should search courses with minimal params", async () => {
     const mockResponse = {
-      courses: [],
-      totalCount: 0,
+      items: [],
+      total: 0,
+      page: 1,
+      perPage: 25,
     };
 
     vi.mocked(fetch).mockResolvedValueOnce({
