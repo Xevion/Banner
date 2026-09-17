@@ -13,7 +13,7 @@ import { CourseTable } from "$lib/components/course-table";
 import SourceScoreCard from "$lib/components/score/SourceScoreCard.svelte";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import { formatInstructorName, rmpUrl } from "$lib/course";
-import { dependOn } from "$lib/utils";
+import { dependOn, range } from "$lib/utils";
 import { Copy, ExternalLink, Mail } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
 import { untrack } from "svelte";
@@ -257,7 +257,7 @@ const scoreBarProps: ScoreBarProps | null = $derived.by(() => {
         <!-- Skeleton rows while sections load -->
         <div class="rounded-lg border border-border overflow-hidden">
           <div class="animate-pulse">
-            {#each Array(5) as _, i (i)}
+            {#each range(5) as i (i)}
               <div class="flex gap-4 px-4 py-3 {i > 0 ? 'border-t border-border' : ''}">
                 <div class="h-4 w-12 bg-muted rounded"></div>
                 <div class="h-4 w-16 bg-muted rounded"></div>

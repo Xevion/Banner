@@ -1,4 +1,5 @@
 <script lang="ts">
+import { range } from "$lib/utils";
 import { client } from "$lib/api";
 import type { ScheduleState, SubjectDetailResponse, SubjectSummary } from "$lib/bindings";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
@@ -334,7 +335,7 @@ const detailGridCols = "grid-cols-[7fr_5fr_3fr_4fr_4fr_3fr_4fr_minmax(6rem,1fr)]
                           <!-- Body (scrollable vertically, horizontal clipped to match header) -->
                           <div class="max-h-[280px] overflow-y-auto overflow-x-hidden">
                             {#if detailLoading}
-                              {#each Array(8) as _, i (i)}
+                              {#each range(8) as i (i)}
                                 <div class="grid {detailGridCols} border-border/50 border-t">
                                   <div class="px-3 py-1.5"><div class="h-3.5 w-16 rounded bg-muted animate-pulse"></div></div>
                                   <div class="px-3 py-1.5"><div class="h-3.5 w-12 rounded bg-muted animate-pulse"></div></div>

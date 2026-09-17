@@ -1,24 +1,9 @@
-<script lang="ts">
+<script lang="ts" generics="TData extends RowData">
 import { FlexRender } from "$lib/components/ui/data-table/index.js";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "@lucide/svelte";
 import type { AppTableFeatures } from "$lib/components/ui/data-table/index.js";
-import type { HeaderGroup } from "@tanstack/table-core";
-
-/**
- * Replaces a header's asc/desc/none behavior, for a column whose header drives a
- * longer cycle or a different key than its own. Returning null keeps the default.
- */
-export interface HeaderOverride {
-  /** Replaces the column's own label, with the active sort key or a shared heading. */
-  label?: string;
-  /** Keeps the label for screen readers only, for a column its neighbour heads. */
-  labelHidden?: boolean;
-  indicator?: "asc" | "desc" | "none";
-  /** Native tooltip, describing what the next click does. */
-  title?: string;
-  /** Replaces the column's own sort toggle. Omitted, the column keeps it. */
-  onclick?: () => void;
-}
+import type { HeaderOverride } from "$lib/components/sortable-header";
+import type { HeaderGroup, RowData } from "@tanstack/table-core";
 
 let {
   headerGroups,
@@ -28,8 +13,7 @@ let {
   headerClass,
   headerOverride,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic component accepts any row type
-  headerGroups: HeaderGroup<AppTableFeatures, any>[];
+  headerGroups: HeaderGroup<AppTableFeatures, TData>[];
   thClass?: string;
   sortSpanClass?: string;
   checkVisibility?: boolean;

@@ -201,30 +201,8 @@ const PART_OF_TERM_LABELS: Record<
   SecondHalf: { filter: "Second Half", detail: "Second Half", tooltip: "Second half of semester" },
 };
 
-export function getPartOfTermLabel(pot: PartOfTerm, context: DisplayContext): string {
-  if (pot.type === "Unknown") {
-    return context === "filter" ? pot.code : pot.description || pot.code;
-  }
-  return PART_OF_TERM_LABELS[pot.type][context];
-}
-
 function stripRawPrefix(value: string): string {
   return value.startsWith("raw:") ? value.slice(4) : value;
-}
-
-const IM_FILTER_LABELS: Record<string, string> = {
-  InPerson: "In Person",
-  "Online.Async": "Online Async",
-  "Online.Sync": "Online Sync",
-  "Online.Mixed": "Online Mix",
-  "Hybrid.Half": "Hybrid Half",
-  "Hybrid.OneThird": "Hybrid One Third",
-  "Hybrid.TwoThirds": "Hybrid Two Thirds",
-  Independent: "Independent",
-};
-
-export function getInstructionalMethodFilterLabel(filterValue: string): string {
-  return IM_FILTER_LABELS[filterValue] ?? stripRawPrefix(filterValue);
 }
 
 const CAMPUS_FILTER_LABELS: Record<string, string> = Object.fromEntries(
@@ -249,22 +227,6 @@ const POT_FILTER_LABELS: Record<string, string> = Object.fromEntries(
 
 export function getPartOfTermFilterLabel(filterValue: string): string {
   return POT_FILTER_LABELS[filterValue] ?? stripRawPrefix(filterValue);
-}
-
-export function getFilterLabel(
-  category: "instructionalMethod" | "campus" | "attribute" | "partOfTerm",
-  filterValue: string
-): string {
-  switch (category) {
-    case "instructionalMethod":
-      return getInstructionalMethodFilterLabel(filterValue);
-    case "campus":
-      return getCampusFilterLabel(filterValue);
-    case "attribute":
-      return getAttributeFilterLabel(filterValue);
-    case "partOfTerm":
-      return getPartOfTermFilterLabel(filterValue);
-  }
 }
 
 /** Attribute filter value groupings for UI categorization */

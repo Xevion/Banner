@@ -24,6 +24,11 @@ export function compact<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[
   };
 }
 
+/** `0..count-1`, for an `{#each}` over a fixed number of placeholders. */
+export function range(count: number): number[] {
+  return Array.from({ length: count }, (_, i) => i);
+}
+
 /** Shared tooltip content styling for bits-ui Tooltip.Content */
 export const tooltipContentClass =
   "z-50 bg-card text-card-foreground text-xs border border-border rounded-md px-2.5 py-1.5 shadow-md max-w-72";

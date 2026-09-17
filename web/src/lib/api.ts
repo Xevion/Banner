@@ -50,6 +50,7 @@ import type {
   TimeseriesResponse,
   User,
 } from "$lib/bindings";
+import { SingleFlight } from "$lib/singleflight";
 import type Result from "true-myth/result";
 import { err, ok } from "true-myth/result";
 
@@ -181,11 +182,24 @@ const _searchOptionsCache = new Map<string, { data: SearchOptionsResponse; fetch
 const SEARCH_OPTIONS_TTL = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Plain GETs this tab is already waiting on, keyed by URL and dropped the moment
- * they settle, so two callers asking in the same tick share one request without
- * this ever holding an answer. The server keeps none, for the reason above.
+ * One coalescer per fetch function, so two callers share a GET only when it
+ * would go through the same transport.
+ *
+ * Every client built on the browser's own fetch shares one, which is what makes
+ * two components mounting at once cost a single request. A load's fetch is its
+ * own function and gets its own: SvelteKit registers the URL as a dependency
+ * inside that call, and handing the load someone else's promise would skip the
+ * registration while looking like it worked.
  */
-const _inFlightGets = new Map<string, Promise<Result<unknown, ApiErrorClass>>>();
+const _coalescers = new WeakMap<typeof fetch, SingleFlight>();
+
+function coalescerFor(fetchFn: typeof fetch): SingleFlight {
+  const existing = _coalescers.get(fetchFn);
+  if (existing) return existing;
+  const created = new SingleFlight();
+  _coalescers.set(fetchFn, created);
+  return created;
+}
 
 /** What a caller may vary about a request; everything else is fixed. */
 interface RequestOptions {
@@ -309,22 +323,22 @@ export class BannerApiClient {
   /**
    * Shares a GET already in flight instead of opening a second one.
    *
-   * Only a bare GET qualifies: anything carrying a method or a body builds an
-   * init, and the URL on its own would no longer name the request.
+   * Only a bodyless GET qualifies, because the URL has to name the request on
+   * its own for the key to mean anything. The server shares nothing: one module
+   * instance serves every request there, so a coalescer would reach across
+   * users.
    */
   private request<T>(
     endpoint: string,
     options?: RequestOptions
   ): Promise<Result<T, ApiErrorClass>> {
-    if (!browser || options !== undefined) return this.fetchJson<T>(endpoint, options);
+    const method = options?.method ?? "GET";
+    const shareable = browser && method === "GET" && options?.body === undefined;
+    if (!shareable) return this.fetchJson<T>(endpoint, options);
 
-    const url = `${this.baseUrl}${endpoint}`;
-    const inFlight = _inFlightGets.get(url);
-    if (inFlight) return inFlight as Promise<Result<T, ApiErrorClass>>;
-
-    const pending = this.fetchJson<T>(endpoint).finally(() => _inFlightGets.delete(url));
-    _inFlightGets.set(url, pending);
-    return pending;
+    return coalescerFor(this.fetchFn).run(`${this.baseUrl}${endpoint}`, () =>
+      this.fetchJson<T>(endpoint, options)
+    );
   }
 
   private async fetchJson<T>(

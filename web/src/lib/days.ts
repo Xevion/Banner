@@ -16,16 +16,6 @@ export function dayCode(d: DayOfWeek): string {
   return DAYS[d].code;
 }
 
-/** Three-letter abbreviation: "Mon", "Thu" */
-export function dayShort(d: DayOfWeek): string {
-  return DAYS[d].short;
-}
-
-/** Plural name: "Mondays", "Thursdays" */
-export function dayPlural(d: DayOfWeek): string {
-  return DAYS[d].plural;
-}
-
 /**
  * Compact concatenated codes for table cells.
  * Single day -> 3-letter: "Mon", "Thu"

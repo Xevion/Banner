@@ -4,7 +4,7 @@ import type { ServiceInfo, ServiceStatus, StatusResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
-import { formatNumber } from "$lib/utils";
+import { formatNumber, range } from "$lib/utils";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import {
   Bot,
@@ -285,7 +285,7 @@ onMount(() => {
       <!-- Services -->
       <div class="rounded-lg border border-border overflow-hidden">
         {#if shouldShowSkeleton}
-          {#each Array(3) as _, i (i)}
+          {#each range(3) as i (i)}
             <div
               class="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0"
             >

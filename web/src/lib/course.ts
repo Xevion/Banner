@@ -1,10 +1,4 @@
-import type {
-  Campus,
-  CourseResponse,
-  DbMeetingTime,
-  InstructionalMethod,
-  InstructorResponse,
-} from "$lib/bindings";
+import type { CourseResponse, DbMeetingTime, InstructorResponse } from "$lib/bindings";
 import { formatDateShort } from "$lib/date";
 import { formatDayCodes, formatDayList, formatDayVerbose } from "$lib/days";
 
@@ -196,70 +190,6 @@ export function formatMeetingTimesTooltip(
 ): string {
   if (meetingTimes.length === 0) return untimedLabel;
   return meetingTimes.map((mt) => formatMeetingTimeTooltip(mt, untimedLabel)).join("\n\n");
-}
-
-/** Border accent class based on instructional method and campus. */
-export function concernAccentClass(
-  method: InstructionalMethod | null,
-  campus: Campus | null
-): string | null {
-  if (method?.type === "Online") return "border-l-2 border-l-blue-500";
-  if (method?.type === "Hybrid") return "border-l-2 border-l-purple-500";
-  if (campus?.type === "OnlinePrograms") return "border-l-2 border-l-cyan-500";
-  if (
-    campus?.type === "Downtown" ||
-    campus?.type === "Southwest" ||
-    campus?.type === "Laredo" ||
-    campus?.type === "Unknown"
-  )
-    return "border-l-2 border-l-amber-500";
-  return null;
-}
-
-/** Tooltip text for the location column: long-form location + delivery note */
-export function formatLocationTooltip(course: CourseResponse): string | null {
-  const parts: string[] = [];
-
-  for (const mt of course.meetingTimes) {
-    const loc = formatLocationLong(mt);
-    if (loc && !parts.includes(loc)) parts.push(loc);
-  }
-
-  const locationLine = parts.length > 0 ? parts.join(", ") : null;
-
-  // Build delivery note from instructional method
-  let deliveryNote: string | null = null;
-  const method = course.instructionalMethod;
-  if (method) {
-    switch (method.type) {
-      case "Online":
-        deliveryNote =
-          method.variant === "Async"
-            ? "Online (Async)"
-            : method.variant === "Sync"
-              ? "Online (Sync)"
-              : "Online";
-        break;
-      case "Hybrid":
-        deliveryNote = "Hybrid";
-        break;
-      case "Independent":
-        deliveryNote = "Independent Study";
-        break;
-    }
-  }
-
-  // Add campus restriction note
-  if (course.campus?.type === "OnlinePrograms") {
-    deliveryNote = deliveryNote
-      ? `${deliveryNote} -- Online Programs only`
-      : "Online Programs only";
-  }
-
-  if (locationLine && deliveryNote) return `${locationLine}\n${deliveryNote}`;
-  if (locationLine) return locationLine;
-  if (deliveryNote) return deliveryNote;
-  return null;
 }
 
 /** Text color class for seat availability: purple (overenrolled), red (full), yellow (low), green (open) */

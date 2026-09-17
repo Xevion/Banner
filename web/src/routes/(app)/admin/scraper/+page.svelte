@@ -6,7 +6,7 @@ import StyledSelect from "$lib/components/StyledSelect.svelte";
 import { mergeByKey } from "$lib/composables/reducers";
 import { useStream } from "$lib/composables/useStream.svelte";
 import { formatDurationMs } from "$lib/time";
-import { formatNumber } from "$lib/utils";
+import { formatNumber, range } from "$lib/utils";
 import { Info } from "@lucide/svelte";
 import { Tabs } from "bits-ui";
 import type { PageData } from "./$types";
@@ -259,7 +259,7 @@ function successRateColor(rate: number): string {
   {:else}
     <!-- Initial loading skeleton -->
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {#each Array(8) as _, i (i)}
+      {#each range(8) as i (i)}
         <div class="bg-card border-border rounded-lg border p-4">
           <div class="h-4 w-24 rounded bg-muted animate-pulse"></div>
           <div class="mt-2 h-8 w-16 rounded bg-muted animate-pulse"></div>

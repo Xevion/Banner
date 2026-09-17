@@ -1,5 +1,5 @@
 import type { SortKey, SortKeyOption } from "$lib/bindings";
-import type { HeaderOverride } from "$lib/components/SortableHeader.svelte";
+import type { HeaderOverride } from "$lib/components/sortable-header";
 import { headerSortStep, type SortTerm } from "$lib/sort";
 
 /** What a header needs to know about the table around it to describe itself. */

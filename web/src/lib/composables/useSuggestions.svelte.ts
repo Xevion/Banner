@@ -10,6 +10,7 @@
  */
 
 import type { ApiErrorClass } from "$lib/api";
+import { MIN_QUERY_LENGTH } from "$lib/suggestions";
 import type Result from "true-myth/result";
 
 export interface SuggestionQueryOptions<T> {
@@ -22,7 +23,6 @@ export interface SuggestionQueryOptions<T> {
 }
 
 const DEFAULT_DEBOUNCE_MS = 250;
-const DEFAULT_MIN_LENGTH = 2;
 
 export class SuggestionQuery<T> {
   /** The raw text in the box, including whitespace the user typed. */
@@ -47,7 +47,7 @@ export class SuggestionQuery<T> {
     this.#fetcher = options.fetcher;
     this.#empty = options.empty;
     this.#debounceMs = options.debounce ?? DEFAULT_DEBOUNCE_MS;
-    this.#minLength = options.minLength ?? DEFAULT_MIN_LENGTH;
+    this.#minLength = options.minLength ?? MIN_QUERY_LENGTH;
     this.data = options.empty;
   }
 

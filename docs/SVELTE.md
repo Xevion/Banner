@@ -337,7 +337,7 @@ const course = await api.getCourse(term, crn);               // Result<CourseRes
 - All methods return `Result<T, ApiError>` -- never throw
 - SSR-compatible via `fetch` parameter injection in the constructor
 - Search options cached in-memory with TTL (10 minutes)
-- In the browser, a plain GET already in flight is shared rather than reissued, so two components mounting at once cost one request
+- In the browser, a bodyless GET already in flight is shared rather than reissued (`SingleFlight` in `$lib/singleflight.ts`), so two components mounting at once cost one request. Coalescing is scoped per fetch function, so a load's own `fetch` always runs and keeps the dependency SvelteKit records inside it
 - 401 responses trigger `authStore.handleUnauthorized()` automatically
 
 ## WebSocket Client

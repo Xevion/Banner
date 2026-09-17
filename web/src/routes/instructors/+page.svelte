@@ -9,7 +9,7 @@ import InstructorCard from "$lib/components/InstructorCard.svelte";
 import SubjectCombobox from "$lib/components/SubjectCombobox.svelte";
 import SortSelect from "$lib/components/SortSelect.svelte";
 import type { SortOption } from "$lib/components/SortSelect.svelte";
-import { compact, formatNumber } from "$lib/utils";
+import { compact, formatNumber, range } from "$lib/utils";
 import { Search } from "@lucide/svelte";
 import { untrack } from "svelte";
 import type { PageProps } from "./$types";
@@ -74,7 +74,7 @@ $effect(() => {
 
 // Sync filters to URL
 $effect(() => {
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built for the URL, never stored
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   const onlySubject = selectedSubjects.length === 1 ? selectedSubjects[0] : undefined;
@@ -128,7 +128,7 @@ function resolveSubject(code: string): string {
     {#if query.isLoading && !query.data}
       <!-- Skeleton grid for initial load -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {#each Array(12) as _, i (i)}
+        {#each range(12) as i (i)}
           <div class="rounded-lg border border-border bg-card p-4 animate-pulse">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0 flex-1 space-y-2">

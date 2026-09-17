@@ -36,7 +36,7 @@ type StackPoint = Series<TimeSlot, string>[number];
 export type VisibleStack = Series<TimeSlot, string>[];
 
 /** Choose the number of x-axis ticks based on the viewport span. */
-export function chooseTickCount(viewSpan: number): number {
+function chooseTickCount(viewSpan: number): number {
   const spanHours = viewSpan / (60 * 60 * 1000);
   if (spanHours <= 1) return 12;
   if (spanHours <= 3) return 12;

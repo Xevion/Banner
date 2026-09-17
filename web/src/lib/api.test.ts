@@ -191,6 +191,22 @@ describe("concurrent GETs", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("does not share across transports, so a load's own fetch still runs", async () => {
+    const response = { ok: true, json: () => Promise.resolve([]) } as Response;
+    vi.mocked(fetch).mockResolvedValue(response);
+    // Stands in for the instrumented fetch SvelteKit hands a load, which has to
+    // be called for SvelteKit to record the URL as that load's dependency.
+    const loadFetch = vi.fn().mockResolvedValue(response);
+
+    await Promise.all([
+      new BannerApiClient().getRelatedSections("fall-2026", "CS", "3443"),
+      new BannerApiClient(undefined, loadFetch).getRelatedSections("fall-2026", "CS", "3443"),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(loadFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not share a request that carries a body", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,

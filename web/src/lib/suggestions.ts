@@ -10,7 +10,7 @@ export type Suggestion =
   | { kind: "course"; course: CourseSuggestion }
   | { kind: "instructor"; instructor: InstructorSuggestion };
 
-export type SubjectSearch = (query: string) => { item: Subject; score: number }[];
+type SubjectSearch = (query: string) => { item: Subject; score: number }[];
 
 // microfuzz is CJS with an `__esModule` default, and rolldown hands the default
 // import the whole exports object instead of unwrapping it.

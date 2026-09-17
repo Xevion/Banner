@@ -1,6 +1,7 @@
-<script lang="ts">
+<script lang="ts" generics="TData extends RowData">
+import { range } from "$lib/utils";
 import type { AppTableFeatures } from "$lib/components/ui/data-table/index.js";
-import type { ColumnDef } from "@tanstack/table-core";
+import type { ColumnDef, RowData } from "@tanstack/table-core";
 
 let {
   columns,
@@ -10,8 +11,7 @@ let {
   rowHeight = "h-3.5",
   defaultWidth = "w-20",
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic component accepts any column type
-  columns: ColumnDef<AppTableFeatures, any, any>[];
+  columns: ColumnDef<AppTableFeatures, TData>[];
   rowCount?: number;
   skeletonWidths?: Record<string, string>;
   cellClass?: string;
@@ -21,7 +21,7 @@ let {
 </script>
 
 <tbody>
-  {#each Array(rowCount) as _, i (i)}
+  {#each range(rowCount) as i (i)}
     <tr class="border-b border-border">
       {#each columns as col (col.id)}
         <td class={cellClass}>

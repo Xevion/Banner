@@ -57,7 +57,7 @@ const FADE = 0;
 const INSET = 4;
 
 const pad = HIDDEN + FADE + INSET;
-const fadeMask = `linear-gradient(to bottom, transparent 16px, black 16px, black calc(100% - 24px), transparent`;
+const fadeMask = `linear-gradient(to bottom, transparent ${HIDDEN}px, black ${HIDDEN + FADE}px, black calc(100% - ${OVERLAP}px), transparent)`;
 let maskStyle = $derived(sectionCount >= 2 ? fadeMask : "none");
 
 function handleNavigate(crn: string) {
@@ -97,6 +97,10 @@ function handleNavigate(crn: string) {
                     section.instructors,
                     section.primaryInstructorId,
                 )}
+                {@const hasFooter =
+                    Boolean(section.primaryLocation) ||
+                    (section.enrollment.waitCapacity > 0 &&
+                        section.enrollment.waitCount > 0)}
                 <!-- The card is a plain container with the section link stretched
                      over it, so the instructor link beside it stays reachable
                      without one control sitting inside another. -->
@@ -173,8 +177,7 @@ function handleNavigate(crn: string) {
                         </span>
                     </div>
 
-                    <!-- eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -->
-                    {#if section.primaryLocation || (section.enrollment.waitCapacity > 0 && section.enrollment.waitCount > 0)}
+                    {#if hasFooter}
                         <div
                             class="flex items-center justify-between gap-2 mt-0.5"
                         >

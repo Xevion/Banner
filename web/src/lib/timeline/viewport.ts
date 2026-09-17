@@ -9,7 +9,7 @@ import type { TimeSlot } from "./types";
  * Binary-search for the index of the first slot whose time >= target.
  * `slots` must be sorted ascending by time.
  */
-export function lowerBound(slots: TimeSlot[], targetMs: number): number {
+function lowerBound(slots: TimeSlot[], targetMs: number): number {
   let lo = 0;
   let hi = slots.length;
   while (lo < hi) {

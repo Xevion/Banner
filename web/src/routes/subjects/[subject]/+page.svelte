@@ -2,7 +2,7 @@
 import { goto } from "$app/navigation";
 import { client, type SearchResponse } from "$lib/api";
 import { formatInstructorName, NameFormat } from "$lib/course";
-import { dependOn } from "$lib/utils";
+import { dependOn, range } from "$lib/utils";
 import type { PublicInstructorListItem, SearchOptionsResponse } from "$lib/bindings";
 import Breadcrumb from "$lib/components/Breadcrumb.svelte";
 import Footer from "$lib/components/Footer.svelte";
@@ -147,7 +147,7 @@ $effect(() => {
     {#if loading}
       <div class="rounded-lg border border-border overflow-hidden">
         <div class="animate-pulse">
-          {#each Array(8) as _, i (i)}
+          {#each range(8) as i (i)}
             <div class="flex gap-4 px-4 py-3 {i > 0 ? 'border-t border-border' : ''}">
               <div class="h-4 w-16 bg-muted rounded"></div>
               <div class="h-4 w-40 bg-muted rounded flex-1"></div>
