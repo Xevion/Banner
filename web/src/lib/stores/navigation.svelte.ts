@@ -62,6 +62,20 @@ function computeAxis(from: string, to: string): NavAxis {
   return fromIsApp && toIsApp ? "vertical" : "horizontal";
 }
 
+/**
+ * Settles when the promise does, either way.
+ *
+ * A navigation the router abandons rejects with "navigation aborted", and every
+ * caller here only wants to put the page back in a consistent state afterwards.
+ * Left unhandled these surface as uncaught exceptions in the console.
+ */
+function settled(promise: Promise<unknown>): Promise<void> {
+  return promise.then(
+    () => undefined,
+    () => undefined
+  );
+}
+
 /** Call once from root layout to start tracking navigation direction */
 export function initNavigation() {
   if (browser) {
@@ -88,7 +102,7 @@ export function initNavigation() {
     // without view transitions do not ship it.
     const startViewTransition = (document as Partial<Document>).startViewTransition?.bind(document);
     if (!startViewTransition) {
-      void navigation.complete.then(() => {
+      void settled(navigation.complete).then(() => {
         navbar.path = window.location.pathname;
       });
       return;
@@ -105,12 +119,12 @@ export function initNavigation() {
         return new Promise((resolve) => {
           (tableEl as unknown as ScopedVT).startViewTransition(async () => {
             resolve();
-            await navigation.complete;
+            await settled(navigation.complete);
           });
         });
       }
       // No table element (different page or not mounted yet) -- skip transition
-      void navigation.complete.then(() => {
+      void settled(navigation.complete).then(() => {
         navbar.path = window.location.pathname;
       });
       return;
@@ -123,12 +137,12 @@ export function initNavigation() {
 
       const vt = startViewTransition(async () => {
         resolve();
-        await navigation.complete;
+        await settled(navigation.complete);
       });
 
       // Update navbar path only after the view transition finishes and the
       // real DOM is visible again, so CSS transitions can actually run.
-      void vt.finished.finally(() => {
+      void settled(vt.finished).then(() => {
         document.documentElement.classList.remove("nav-transitioning");
         navbar.path = window.location.pathname;
       });
