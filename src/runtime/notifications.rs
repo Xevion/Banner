@@ -124,14 +124,14 @@ fn build_embed(watch: &TriggeredWatch, course_url: Option<&str>) -> CreateEmbed 
         WatchType::SeatsAvailable => {
             let seats = watch.max_enrollment - watch.enrollment;
             (
-                format!("A seat has opened up! {} seat(s) available.", seats),
+                format!("A seat has opened up! {seats} seat(s) available."),
                 Color::from_rgb(0, 200, 100),
             )
         }
         WatchType::WaitlistOpen => {
             let slots = watch.wait_capacity - watch.wait_count;
             (
-                format!("A waitlist spot is available! {} slot(s) open.", slots),
+                format!("A waitlist spot is available! {slots} slot(s) open."),
                 Color::from_rgb(0, 150, 200),
             )
         }

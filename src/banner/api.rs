@@ -105,13 +105,13 @@ impl BannerApi {
             .query(&params)
             .send()
             .await
-            .with_context(|| format!("Failed to get {}", endpoint))?;
+            .with_context(|| format!("Failed to get {endpoint}"))?;
 
         let data: Vec<T> = response
             .json()
             .await
             .inspect_err(|_| crate::banner::middleware::rate_limit::record_decode_failure(&url))
-            .with_context(|| format!("Failed to parse {} response", endpoint))?;
+            .with_context(|| format!("Failed to parse {endpoint} response"))?;
 
         Ok(data)
     }

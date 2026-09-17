@@ -150,7 +150,7 @@ impl Service for ScraperService {
         let failed = results.iter().filter(|r| r.is_err()).count();
         if failed > 0 {
             warn!(failed_count = failed, "Some scraper tasks panicked during shutdown");
-            return Err(anyhow::anyhow!("{} task(s) panicked", failed));
+            return Err(anyhow::anyhow!("{failed} task(s) panicked"));
         }
 
         info!("All scraper tasks shutdown gracefully");

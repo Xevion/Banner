@@ -43,7 +43,7 @@ fn generate_session_id() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before UNIX epoch")
         .as_millis();
-    format!("{}{}", random_part, timestamp)
+    format!("{random_part}{timestamp}")
 }
 
 /// Generates a timestamp-based nonce
@@ -316,7 +316,7 @@ impl SessionPool {
             .get("SSB_COOKIE")
             .ok_or_else(|| anyhow::anyhow!("SSB_COOKIE cookie missing"))?
             .clone();
-        let cookie_header = format!("JSESSIONID={}; SSB_COOKIE={}", jsessionid, ssb_cookie);
+        let cookie_header = format!("JSESSIONID={jsessionid}; SSB_COOKIE={ssb_cookie}");
 
         // Navigate through the required pages to initialize the session
         self.http
@@ -489,7 +489,7 @@ mod tests {
             axum::serve(listener, app).await.unwrap();
         });
 
-        let base_url = format!("http://{}/StudentRegistrationSsb", addr);
+        let base_url = format!("http://{addr}/StudentRegistrationSsb");
         let client = reqwest_middleware::ClientBuilder::new(
             reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))

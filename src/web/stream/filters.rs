@@ -136,8 +136,7 @@ pub fn parse_scraper_timeseries_filter(filter: Option<StreamFilter>) -> Result<S
         && validate_bucket(b).is_none()
     {
         return Err(StreamError::invalid_filter(format!(
-            "Invalid bucket '{}'. Valid: 1m, 5m, 15m, 1h, 6h",
-            b
+            "Invalid bucket '{b}'. Valid: 1m, 5m, 15m, 1h, 6h"
         )));
     }
     Ok(f)

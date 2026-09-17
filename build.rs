@@ -30,8 +30,8 @@ fn main() {
     };
 
     // Set the environment variables that will be available at compile time
-    println!("cargo:rustc-env=GIT_COMMIT_HASH={}", git_hash);
-    println!("cargo:rustc-env=GIT_COMMIT_SHORT={}", short_hash);
+    println!("cargo:rustc-env=GIT_COMMIT_HASH={git_hash}");
+    println!("cargo:rustc-env=GIT_COMMIT_SHORT={short_hash}");
 
     // Rebuild if the Git commit changes (only works when .git directory is available)
     if std::path::Path::new(".git/HEAD").exists() {

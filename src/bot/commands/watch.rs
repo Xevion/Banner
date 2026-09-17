@@ -51,11 +51,8 @@ pub async fn watch(
     let course_id = match get_id_by_crn(pool, &term_code, &crn).await? {
         Some(id) => id,
         None => {
-            ctx.say(format!(
-                "No course found with CRN **{}** in term **{}**.",
-                crn, term_code
-            ))
-            .await?;
+            ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
+                .await?;
             return Ok(());
         }
     };
@@ -71,14 +68,12 @@ pub async fn watch(
     let label = watch_type_label(watch_type);
     if is_new {
         ctx.say(format!(
-            "Watch set! I'll DM you when **{}** is triggered for CRN **{}** (term {}).",
-            label, crn, term_code
+            "Watch set! I'll DM you when **{label}** is triggered for CRN **{crn}** (term {term_code})."
         ))
         .await?;
     } else {
         ctx.say(format!(
-            "You're already watching CRN **{}** (term {}) for **{}**. Watch reactivated.",
-            crn, term_code, label
+            "You're already watching CRN **{crn}** (term {term_code}) for **{label}**. Watch reactivated."
         ))
         .await?;
     }
@@ -103,11 +98,8 @@ pub async fn unwatch(
     let course_id = match get_id_by_crn(pool, &term_code, &crn).await? {
         Some(id) => id,
         None => {
-            ctx.say(format!(
-                "No course found with CRN **{}** in term **{}**.",
-                crn, term_code
-            ))
-            .await?;
+            ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
+                .await?;
             return Ok(());
         }
     };
@@ -121,15 +113,11 @@ pub async fn unwatch(
     };
 
     if removed == 0 {
-        ctx.say(format!(
-            "No active watch found for CRN **{}** (term {}).",
-            crn, term_code
-        ))
-        .await?;
+        ctx.say(format!("No active watch found for CRN **{crn}** (term {term_code})."))
+            .await?;
     } else {
         ctx.say(format!(
-            "Removed {} watch(es) for CRN **{}** (term {}).",
-            removed, crn, term_code
+            "Removed {removed} watch(es) for CRN **{crn}** (term {term_code})."
         ))
         .await?;
     }

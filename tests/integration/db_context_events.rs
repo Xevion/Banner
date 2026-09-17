@@ -37,8 +37,7 @@ async fn db_context_emits_event_on_job_lock() {
     let event = events.read(cursor);
     assert!(
         matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Locked { .. }))),
-        "Expected Locked event, got {:?}",
-        event
+        "Expected Locked event, got {event:?}"
     );
 }
 
@@ -75,9 +74,7 @@ async fn db_context_emits_event_on_job_complete() {
     let event = events.read(cursor + 1);
     assert!(
         matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Completed { id, .. })) if id == job_id),
-        "Expected Completed event for job {}, got {:?}",
-        job_id,
-        event
+        "Expected Completed event for job {job_id}, got {event:?}"
     );
 }
 
@@ -116,9 +113,7 @@ async fn db_context_emits_event_on_job_retry() {
     let event = events.read(cursor + 1);
     assert!(
         matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Retried { id, retry_count, .. })) if id == job_id && retry_count == Count::new(1)),
-        "Expected Retried event for job {} with retry_count 1, got {:?}",
-        job_id,
-        event
+        "Expected Retried event for job {job_id} with retry_count 1, got {event:?}"
     );
 }
 
@@ -154,18 +149,14 @@ async fn db_context_emits_events_on_job_exhaust() {
     let event1 = events.read(cursor + 1);
     assert!(
         matches!(event1, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Exhausted { id })) if id == job_id),
-        "Expected Exhausted event for job {}, got {:?}",
-        job_id,
-        event1
+        "Expected Exhausted event for job {job_id}, got {event1:?}"
     );
 
     // Verify Deleted event was also emitted (at position after Exhausted)
     let event2 = events.read(cursor + 2);
     assert!(
         matches!(event2, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id })) if id == job_id),
-        "Expected Deleted event for job {}, got {:?}",
-        job_id,
-        event2
+        "Expected Deleted event for job {job_id}, got {event2:?}"
     );
 }
 
@@ -196,8 +187,6 @@ async fn db_context_emits_event_on_job_delete() {
     let event = events.read(cursor);
     assert!(
         matches!(event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id })) if id == job_id),
-        "Expected Deleted event for job {}, got {:?}",
-        job_id,
-        event
+        "Expected Deleted event for job {job_id}, got {event:?}"
     );
 }

@@ -176,7 +176,7 @@ impl TryFrom<MeetingDays> for Weekday {
 
     fn try_from(days: MeetingDays) -> Result<Self, Self::Error> {
         if days.contains_unknown_bits() {
-            return Err(anyhow::anyhow!("Unknown days: {:?}", days));
+            return Err(anyhow::anyhow!("Unknown days: {days:?}"));
         }
 
         let count = days.into_iter().count();
@@ -472,7 +472,7 @@ impl MeetingScheduleInfo {
                 building_description,
                 room,
                 ..
-            } => format!("{} | {} | {} {}", campus, building_description, building, room),
+            } => format!("{campus} | {building_description} | {building} {room}"),
         }
     }
 

@@ -386,7 +386,7 @@ async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result
     )
     .fetch_all(&mut *conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_audits: {}", e))
+    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_audits: {e}"))
 }
 
 async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Result<()> {
@@ -413,7 +413,7 @@ async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Res
     )
     .execute(&mut *conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_metrics: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_metrics: {e}"))?;
 
     Ok(())
 }
@@ -565,7 +565,7 @@ async fn fetch_audit_entries_by_ids(db_pool: &PgPool, audit_ids: &[i32]) -> Resu
     )
     .fetch_all(db_pool)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to fetch audit entries: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to fetch audit entries: {e}"))?;
 
     Ok(rows.into_iter().map(AuditLogEntry::from).collect())
 }
@@ -729,7 +729,7 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
     )
     .fetch_all(&mut *conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch upsert courses: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to batch upsert courses: {e}"))?;
 
     Ok(rows)
 }
@@ -775,7 +775,7 @@ async fn existing_emails_by_canonical(emails: &[String], conn: &mut PgConnection
     )
     .fetch_all(conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {e}"))?;
 
     let mut stored: HashMap<String, String> = HashMap::new();
     for email in rows {
@@ -930,7 +930,7 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
         )
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {e}"))?;
 
         let by_stored: HashMap<String, i32> = rows.into_iter().map(|r| (r.email, r.id)).collect();
         // Callers look instructors up by the address the scrape reported, so
@@ -986,7 +986,7 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
         )
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {e}"))?;
 
         by_display_name.extend(rows.into_iter().map(|r| (r.display_name, r.id)));
     }
@@ -1097,7 +1097,7 @@ async fn upsert_course_instructors(
     )
     .execute(&mut *conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch upsert course_instructors: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to batch upsert course_instructors: {e}"))?;
 
     // Compare old vs new instructor names and emit audit entries
     let mut audits = Vec::new();
@@ -1235,7 +1235,7 @@ async fn sync_course_meetings(
         )
         .execute(&mut *conn)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {e}"))?;
     }
 
     refresh_meeting_summary(&mut *conn, &unique_cids).await?;
@@ -1277,7 +1277,7 @@ async fn refresh_meeting_summary(conn: &mut sqlx::PgConnection, course_ids: &[i3
     )
     .execute(conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to refresh course meeting summary: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed to refresh course meeting summary: {e}"))?;
 
     Ok(())
 }

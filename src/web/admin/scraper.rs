@@ -342,14 +342,14 @@ pub async fn scraper_subject_detail(
         .map(|row| SubjectResultEntry {
             id: row.id,
             completed_at: row.completed_at,
-            duration_ms: DurationMs::new(row.duration_ms.max(0) as u32),
+            duration_ms: row.duration_ms,
             success: row.success,
             error_message: row.error_message,
-            courses_fetched: row.courses_fetched.and_then(|v| Count::try_from(v).ok()),
-            courses_changed: row.courses_changed.and_then(|v| Count::try_from(v).ok()),
-            courses_unchanged: row.courses_unchanged.and_then(|v| Count::try_from(v).ok()),
-            audits_generated: row.audits_generated.and_then(|v| Count::try_from(v).ok()),
-            metrics_generated: row.metrics_generated.and_then(|v| Count::try_from(v).ok()),
+            courses_fetched: row.courses_fetched,
+            courses_changed: row.courses_changed,
+            courses_unchanged: row.courses_unchanged,
+            audits_generated: row.audits_generated,
+            metrics_generated: row.metrics_generated,
         })
         .collect();
 

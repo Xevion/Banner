@@ -13,6 +13,7 @@ use crate::banner::Course as BannerCourse;
 use crate::data::batch::batch_upsert_courses as batch_upsert_impl;
 use crate::data::course_types::RatingSource;
 use crate::data::models::{Course, CourseInstructorDetail, DbMeetingTime, UpsertCounts};
+use crate::data::unsigned::Count;
 use anyhow::{Context, Result};
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, QueryBuilder};
@@ -229,8 +230,10 @@ pub async fn get_course_by_crn(db_pool: &PgPool, crn: &str, term_code: &str) -> 
     let course = sqlx::query_as!(
         Course,
         r#"
-        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,
-               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,
+        SELECT id, crn, subject, course_number, title, term_code,
+               enrollment AS "enrollment: Count", max_enrollment AS "max_enrollment: Count",
+               wait_count AS "wait_count: Count", wait_capacity AS "wait_capacity: Count",
+               last_scraped_at, sequence_number, part_of_term,
                instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,
                cross_list, cross_list_capacity, cross_list_count, link_identifier,
                is_section_linked,
@@ -382,8 +385,10 @@ pub async fn get_related_sections(
     let courses = sqlx::query_as!(
         Course,
         r#"
-        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,
-               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,
+        SELECT id, crn, subject, course_number, title, term_code,
+               enrollment AS "enrollment: Count", max_enrollment AS "max_enrollment: Count",
+               wait_count AS "wait_count: Count", wait_capacity AS "wait_capacity: Count",
+               last_scraped_at, sequence_number, part_of_term,
                instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,
                cross_list, cross_list_capacity, cross_list_count, link_identifier,
                is_section_linked,

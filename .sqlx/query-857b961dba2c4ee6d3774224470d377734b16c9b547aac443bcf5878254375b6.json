@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, completed_at, duration_ms, success, error_message,\n               courses_fetched, courses_changed, courses_unchanged,\n               audits_generated, metrics_generated\n        FROM scrape_job_results\n        WHERE target_type = 'Subject' AND payload->>'subject' = $1\n        ORDER BY completed_at DESC\n        LIMIT $2\n        ",
+  "query": "\n        SELECT id, completed_at, duration_ms AS \"duration_ms: DurationMs\", success,\n               error_message,\n               courses_fetched AS \"courses_fetched: Count\",\n               courses_changed AS \"courses_changed: Count\",\n               courses_unchanged AS \"courses_unchanged: Count\",\n               audits_generated AS \"audits_generated: Count\",\n               metrics_generated AS \"metrics_generated: Count\"\n        FROM scrape_job_results\n        WHERE target_type = 'Subject' AND payload->>'subject' = $1\n        ORDER BY completed_at DESC\n        LIMIT $2\n        ",
   "describe": {
     "columns": [
       {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "duration_ms",
+        "name": "duration_ms: DurationMs",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 5,
-        "name": "courses_fetched",
+        "name": "courses_fetched: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -71,7 +71,7 @@
       },
       {
         "ordinal": 6,
-        "name": "courses_changed",
+        "name": "courses_changed: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -82,7 +82,7 @@
       },
       {
         "ordinal": 7,
-        "name": "courses_unchanged",
+        "name": "courses_unchanged: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -93,7 +93,7 @@
       },
       {
         "ordinal": 8,
-        "name": "audits_generated",
+        "name": "audits_generated: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -104,7 +104,7 @@
       },
       {
         "ordinal": 9,
-        "name": "metrics_generated",
+        "name": "metrics_generated: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -133,5 +133,5 @@
       true
     ]
   },
-  "hash": "81a1ec57c4360fbe1e3685d67afe04c1430fba3ac2fe349f60be7b426b6a12c8"
+  "hash": "857b961dba2c4ee6d3774224470d377734b16c9b547aac443bcf5878254375b6"
 }

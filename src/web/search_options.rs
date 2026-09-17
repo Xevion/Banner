@@ -53,7 +53,7 @@ pub(super) async fn get_reference(
         drop(cache_guard);
         let rows = data::reference::get_by_category(&state.db_pool, &category)
             .await
-            .map_err(|e| db_error(&format!("Reference lookup for {}", category), e))?;
+            .map_err(|e| db_error(&format!("Reference lookup for {category}"), e))?;
 
         let rows_mapped: Vec<CodeDescription> = rows
             .into_iter()

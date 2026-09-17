@@ -66,7 +66,7 @@ impl ApiError {
     }
 
     pub fn invalid_term(term: impl std::fmt::Display) -> Self {
-        Self::new(ApiErrorCode::InvalidTerm, format!("Invalid term: {}", term))
+        Self::new(ApiErrorCode::InvalidTerm, format!("Invalid term: {term}"))
     }
 
     pub fn conflict(message: impl Into<String>) -> Self {
@@ -76,7 +76,7 @@ impl ApiError {
     pub fn rate_limited(retry_after_secs: u64) -> Self {
         Self {
             code: ApiErrorCode::RateLimited,
-            message: format!("Too many requests. Retry after {} seconds.", retry_after_secs),
+            message: format!("Too many requests. Retry after {retry_after_secs} seconds."),
             details: Some(serde_json::json!({ "retryAfter": retry_after_secs })),
         }
     }
@@ -123,7 +123,7 @@ impl From<(StatusCode, String)> for ApiError {
 pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
     tracing::error!(error = %error, context = context, "Database error");
     crate::telemetry::record_db_failure(&error);
-    ApiError::internal_error(format!("{} failed", context))
+    ApiError::internal_error(format!("{context} failed"))
 }
 
 /// Name what the handler was doing, so a data-layer failure reports it.

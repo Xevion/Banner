@@ -637,7 +637,8 @@ pub async fn get_instructor_sections(
         super::models::Course,
         r#"
         SELECT c.id, c.crn, c.subject, c.course_number, c.title, c.term_code,
-               c.enrollment, c.max_enrollment, c.wait_count, c.wait_capacity,
+               c.enrollment AS "enrollment: Count", c.max_enrollment AS "max_enrollment: Count",
+               c.wait_count AS "wait_count: Count", c.wait_capacity AS "wait_capacity: Count",
                c.last_scraped_at, c.sequence_number, c.part_of_term,
                c.instructional_method, c.campus, c.credit_hours, c.credit_hour_low,
                c.credit_hour_high, c.cross_list, c.cross_list_capacity,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,\n               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,\n               instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,\n               cross_list, cross_list_capacity, cross_list_count, link_identifier,\n               is_section_linked,\n               meeting_times AS \"meeting_times: Json<Vec<DbMeetingTime>>\",\n               attributes AS \"attributes: Json<Vec<String>>\"\n        FROM courses\n        WHERE term_code = $1 AND subject = $2 AND course_number = $3\n        ORDER BY sequence_number ASC NULLS LAST\n        ",
+  "query": "\n        SELECT id, crn, subject, course_number, title, term_code,\n               enrollment AS \"enrollment: Count\", max_enrollment AS \"max_enrollment: Count\",\n               wait_count AS \"wait_count: Count\", wait_capacity AS \"wait_capacity: Count\",\n               last_scraped_at, sequence_number, part_of_term,\n               instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,\n               cross_list, cross_list_capacity, cross_list_count, link_identifier,\n               is_section_linked,\n               meeting_times AS \"meeting_times: Json<Vec<DbMeetingTime>>\",\n               attributes AS \"attributes: Json<Vec<String>>\"\n        FROM courses\n        WHERE term_code = $1 AND subject = $2 AND course_number = $3\n        ORDER BY sequence_number ASC NULLS LAST\n        ",
   "describe": {
     "columns": [
       {
@@ -71,7 +71,7 @@
       },
       {
         "ordinal": 6,
-        "name": "enrollment",
+        "name": "enrollment: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -82,7 +82,7 @@
       },
       {
         "ordinal": 7,
-        "name": "max_enrollment",
+        "name": "max_enrollment: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -93,7 +93,7 @@
       },
       {
         "ordinal": 8,
-        "name": "wait_count",
+        "name": "wait_count: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -104,7 +104,7 @@
       },
       {
         "ordinal": 9,
-        "name": "wait_capacity",
+        "name": "wait_capacity: Count",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -314,5 +314,5 @@
       false
     ]
   },
-  "hash": "4788cbfe1740dbf3f703ab4d5fe67d7725ff3252d385b27ba99cf372a1666eab"
+  "hash": "cb231fa06c1f9586ddd6ed8da53ff1fd40a2c9aea72999292944cb8fde081093"
 }

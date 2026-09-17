@@ -142,13 +142,13 @@ pub async fn ics(ctx: Context<'_>, #[description = "Course Reference Number (CRN
         let count_text = if count == 1 {
             "1 date was".to_string()
         } else {
-            format!("{} dates were", count)
+            format!("{count} dates were")
         };
-        response_content.push_str(&format!("\n\n{} excluded from the ICS file:\n", count_text));
+        response_content.push_str(&format!("\n\n{count_text} excluded from the ICS file:\n"));
         response_content.push_str(
             &excluded_holidays
                 .iter()
-                .map(|s| format!("- {}", s))
+                .map(|s| format!("- {s}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
@@ -241,9 +241,9 @@ fn generate_event_content(
 
     // Event header
     event_content.push_str("BEGIN:VEVENT\r\n");
-    event_content.push_str(&format!("UID:{}\r\n", uid));
-    event_content.push_str(&format!("DTSTART:{}\r\n", start_str));
-    event_content.push_str(&format!("DTEND:{}\r\n", end_str));
+    event_content.push_str(&format!("UID:{uid}\r\n"));
+    event_content.push_str(&format!("DTSTART:{start_str}\r\n"));
+    event_content.push_str(&format!("DTEND:{end_str}\r\n"));
     event_content.push_str(&format!("SUMMARY:{}\r\n", escape_ics_text(&event_title)));
     event_content.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics_text(&description)));
     event_content.push_str(&format!("LOCATION:{}\r\n", escape_ics_text(&location)));
@@ -268,7 +268,7 @@ fn generate_event_content(
             // Add holiday exceptions (EXDATE) if the class would meet on holiday dates
             let holiday_exceptions = get_holiday_exceptions(meeting_time);
             if let Some(exdate_property) = generate_exdate_property(&holiday_exceptions, start_utc) {
-                event_content.push_str(&format!("{}\r\n", exdate_property));
+                event_content.push_str(&format!("{exdate_property}\r\n"));
             }
 
             // Collect holiday names for reporting

@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
 
     // Process and display results
     for (label, search_result) in search_results {
-        println!("\n=== {} ===", label);
+        println!("\n=== {label} ===");
         if let Some(courses) = &search_result.data {
             if courses.is_empty() {
                 println!("  No courses found");

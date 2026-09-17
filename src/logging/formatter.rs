@@ -147,21 +147,21 @@ impl WriteColored for FieldValue {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
                 } else {
-                    write!(writer, "{}", n)
+                    write!(writer, "{n}")
                 }
             }
             FieldValue::Unsigned(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
                 } else {
-                    write!(writer, "{}", n)
+                    write!(writer, "{n}")
                 }
             }
             FieldValue::Bool(b) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(b).magenta())
                 } else {
-                    write!(writer, "{}", b)
+                    write!(writer, "{b}")
                 }
             }
         }
@@ -230,10 +230,10 @@ impl Visit for FieldCollector {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         let name = field.name();
         if name == "message" {
-            self.message = Some(format!("{:?}", value));
+            self.message = Some(format!("{value:?}"));
         } else {
             self.fields
-                .insert(name.to_string(), FieldValue::Debug(format!("{:?}", value)));
+                .insert(name.to_string(), FieldValue::Debug(format!("{value:?}")));
         }
     }
 
@@ -319,7 +319,7 @@ impl<'w> Writer<'w> {
                 if ansi {
                     writeln!(self, "{}{}", indent, Paint::new(line).red())?;
                 } else {
-                    writeln!(self, "{}{}", indent, line)?;
+                    writeln!(self, "{indent}{line}")?;
                 }
             }
             return Ok(());
@@ -331,14 +331,14 @@ impl<'w> Writer<'w> {
             if ansi {
                 write!(self, "{}", Paint::new(s).magenta())
             } else {
-                write!(self, "{}", s)
+                write!(self, "{s}")
             }
         } else {
             let formatted = format_string_value(s, truncate);
             if formatted.starts_with('"') && ansi {
                 write!(self, "{}", Paint::new(&formatted).yellow())
             } else {
-                write!(self, "{}", formatted)
+                write!(self, "{formatted}")
             }
         }
     }
@@ -386,7 +386,7 @@ impl<'w> Writer<'w> {
             if ansi {
                 write!(self, "{}", Paint::new(element).yellow())
             } else {
-                write!(self, "{}", element)
+                write!(self, "{element}")
             }
         } else if element.starts_with('[') && element.ends_with(']') {
             // Nested array - recurse
@@ -396,18 +396,18 @@ impl<'w> Writer<'w> {
             if ansi {
                 write!(self, "{}", Paint::new(element).magenta())
             } else {
-                write!(self, "{}", element)
+                write!(self, "{element}")
             }
         } else if element == "true" || element == "false" {
             // Boolean - magenta
             if ansi {
                 write!(self, "{}", Paint::new(element).magenta())
             } else {
-                write!(self, "{}", element)
+                write!(self, "{element}")
             }
         } else {
             // Other - default
-            write!(self, "{}", element)
+            write!(self, "{element}")
         }
     }
 
@@ -474,7 +474,7 @@ impl<'w> Writer<'w> {
         if self.has_ansi_escapes() {
             write!(self, "{}", Paint::new(key).cyan())
         } else {
-            write!(self, "{}", key)
+            write!(self, "{key}")
         }
     }
 
@@ -550,7 +550,7 @@ impl<'w> Writer<'w> {
                 Level::WARN => Paint::new(" WARN").yellow(),
                 Level::ERROR => Paint::new("ERROR").red(),
             };
-            write!(self, "{}", paint)
+            write!(self, "{paint}")
         } else {
             // Right-pad to width 5 like Full's non-ANSI mode
             match *level {
@@ -567,7 +567,7 @@ impl<'w> Writer<'w> {
         if self.has_ansi_escapes() {
             write!(self, "{}", Paint::new(s).dim())
         } else {
-            write!(self, "{}", s)
+            write!(self, "{s}")
         }
     }
 
@@ -575,7 +575,7 @@ impl<'w> Writer<'w> {
         if self.has_ansi_escapes() {
             write!(self, "{}", Paint::new(s).bold())
         } else {
-            write!(self, "{}", s)
+            write!(self, "{s}")
         }
     }
 }
@@ -598,7 +598,7 @@ where
         // 1) Timestamp (dimmed when ANSI)
         let now = OffsetDateTime::now_utc();
         let formatted_time = now.format(&TIMESTAMP_FORMAT).map_err(|e| {
-            eprintln!("Failed to format timestamp: {}", e);
+            eprintln!("Failed to format timestamp: {e}");
             fmt::Error
         })?;
         writer.write_dimmed(formatted_time)?;
@@ -644,7 +644,7 @@ where
 
         // Write message first if present
         if let Some(msg) = &collector.message {
-            write!(writer, "{}", msg)?;
+            write!(writer, "{msg}")?;
             if !collector.fields.is_empty() {
                 writer.write_char(' ')?;
             }
@@ -697,11 +697,10 @@ where
                 fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
                     let key = field.name();
                     if key == "message" {
-                        *self.message = Some(format!("{:?}", value));
+                        *self.message = Some(format!("{value:?}"));
                     } else {
                         // Use typed methods for better performance
-                        self.fields
-                            .insert(key.to_string(), Value::String(format!("{:?}", value)));
+                        self.fields.insert(key.to_string(), Value::String(format!("{value:?}")));
                     }
                 }
 
@@ -833,7 +832,7 @@ impl Visit for CompactVisitor<'_, '_> {
             return;
         }
         if field.name() == "message" {
-            self.record_debug(field, &format_args!("{}", value))
+            self.record_debug(field, &format_args!("{value}"))
         } else {
             self.record_debug(field, &value)
         }
@@ -849,26 +848,26 @@ impl Visit for CompactVisitor<'_, '_> {
 
         self.result = match rule {
             Some(FieldRule::Transform(f)) => {
-                let formatted = format!("{:?}", value);
+                let formatted = format!("{value:?}");
                 let transformed = f(&formatted);
                 if self.is_empty {
-                    write!(self.writer, "{}={}", name, transformed)
+                    write!(self.writer, "{name}={transformed}")
                 } else {
-                    write!(self.writer, " {}={}", name, transformed)
+                    write!(self.writer, " {name}={transformed}")
                 }
             }
             None if name == "message" => {
                 if self.is_empty {
-                    write!(self.writer, "{:?}", value)
+                    write!(self.writer, "{value:?}")
                 } else {
-                    write!(self.writer, " {:?}", value)
+                    write!(self.writer, " {value:?}")
                 }
             }
             None => {
                 if self.is_empty {
-                    write!(self.writer, "{}={:?}", name, value)
+                    write!(self.writer, "{name}={value:?}")
                 } else {
-                    write!(self.writer, " {}={:?}", name, value)
+                    write!(self.writer, " {name}={value:?}")
                 }
             }
         };

@@ -221,16 +221,14 @@ where
         where
             E: serde::de::Error,
         {
-            DURATION_PARSER
-                .parse(value)
+            DURATION_PARSER.parse(value)
                 .map_err(|e| {
                     serde::de::Error::custom(format!(
-                        "Invalid duration format '{}': {}. Examples: '5' (5 seconds), '3500ms', '30s', '2m', '1.5h'",
-                        value, e
+                        "Invalid duration format '{value}': {e}. Examples: '5' (5 seconds), '3500ms', '30s', '2m', '1.5h'"
                     ))
                 })?
                 .try_into()
-                .map_err(|e| serde::de::Error::custom(format!("Duration conversion error: {}", e)))
+                .map_err(|e| serde::de::Error::custom(format!("Duration conversion error: {e}")))
         }
 
         fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>

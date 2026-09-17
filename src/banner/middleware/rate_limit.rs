@@ -384,7 +384,7 @@ mod tests {
             RequestType::Reset,
         ] {
             let result = tokio::time::timeout(timeout_duration, limiter.wait_for_permission(request_type)).await;
-            assert!(result.is_ok(), "wait_for_permission timed out for {:?}", request_type);
+            assert!(result.is_ok(), "wait_for_permission timed out for {request_type:?}");
         }
     }
 

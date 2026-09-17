@@ -29,14 +29,14 @@ fn payloads_as_json(payloads: &[TargetPayload]) -> Result<Vec<serde_json::Value>
 pub struct SubjectResultRow {
     pub id: i64,
     pub completed_at: chrono::DateTime<chrono::Utc>,
-    pub duration_ms: i32,
+    pub duration_ms: DurationMs,
     pub success: bool,
     pub error_message: Option<String>,
-    pub courses_fetched: Option<i32>,
-    pub courses_changed: Option<i32>,
-    pub courses_unchanged: Option<i32>,
-    pub audits_generated: Option<i32>,
-    pub metrics_generated: Option<i32>,
+    pub courses_fetched: Option<Count>,
+    pub courses_changed: Option<Count>,
+    pub courses_unchanged: Option<Count>,
+    pub audits_generated: Option<Count>,
+    pub metrics_generated: Option<Count>,
 }
 
 /// List scrape jobs ordered by priority descending, then execute_at ascending.
@@ -123,9 +123,13 @@ pub async fn list_results_for_subject(pool: &PgPool, subject: &str, limit: i64) 
     sqlx::query_as!(
         SubjectResultRow,
         r#"
-        SELECT id, completed_at, duration_ms, success, error_message,
-               courses_fetched, courses_changed, courses_unchanged,
-               audits_generated, metrics_generated
+        SELECT id, completed_at, duration_ms AS "duration_ms: DurationMs", success,
+               error_message,
+               courses_fetched AS "courses_fetched: Count",
+               courses_changed AS "courses_changed: Count",
+               courses_unchanged AS "courses_unchanged: Count",
+               audits_generated AS "audits_generated: Count",
+               metrics_generated AS "metrics_generated: Count"
         FROM scrape_job_results
         WHERE target_type = 'Subject' AND payload->>'subject' = $1
         ORDER BY completed_at DESC

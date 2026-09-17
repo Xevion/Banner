@@ -124,14 +124,14 @@ impl RmpClient {
 
         loop {
             let after_clause = match &cursor {
-                Some(c) => format!(r#", after: "{}""#, c),
+                Some(c) => format!(r#", after: "{c}""#),
                 None => String::new(),
             };
 
             let query = format!(
                 r#"query {{
   newSearch {{
-    teachers(query: {{ text: "", schoolID: "{school_id}" }}, first: {page_size}{after}) {{
+    teachers(query: {{ text: "", schoolID: "{UTSA_SCHOOL_ID}" }}, first: {PAGE_SIZE}{after_clause}) {{
       edges {{
         cursor
         node {{
@@ -153,9 +153,6 @@ impl RmpClient {
     }}
   }}
 }}"#,
-                school_id = UTSA_SCHOOL_ID,
-                page_size = PAGE_SIZE,
-                after = after_clause,
             );
 
             let body = serde_json::json!({ "query": query });

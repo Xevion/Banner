@@ -360,10 +360,10 @@ pub fn build_course_response(
     });
 
     let enrollment = Enrollment {
-        current: Count::new(course.enrollment.max(0) as u32),
-        max: Count::new(course.max_enrollment.max(0) as u32),
-        wait_count: Count::new(course.wait_count.max(0) as u32),
-        wait_capacity: Count::new(course.wait_capacity.max(0) as u32),
+        current: course.enrollment,
+        max: course.max_enrollment,
+        wait_count: course.wait_count,
+        wait_capacity: course.wait_capacity,
     };
 
     let credit_hours = match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {

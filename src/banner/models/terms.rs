@@ -116,7 +116,7 @@ impl Term {
             }
         } else {
             // This should never happen, but Rust requires exhaustive matching
-            panic!("Impossible code reached (dayOfYear: {})", day_of_year);
+            panic!("Impossible code reached (dayOfYear: {day_of_year})");
         }
     }
 
@@ -306,7 +306,7 @@ impl FromStr for Term {
         }
 
         let code_year = s[0..4].parse::<u32>().context("Failed to parse year")?;
-        let season = Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {}", e))?;
+        let season = Season::from_str(&s[4..6]).map_err(|e| anyhow::anyhow!("Invalid season: {e}"))?;
 
         // Banner encodes Fall as (display_year + 1)10, so we subtract 1 to get the year
         // that matches the human-readable description (e.g., "200210" -> Fall 2001).
