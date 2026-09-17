@@ -1,0 +1,16 @@
+{
+  "config": {
+    // dprint owns wrapping, and prose lines are left as authored.
+    "line-length": false,
+    // The README opens with a centered HTML banner and badge row.
+    "no-inline-html": false,
+    // dprint aligns table pipes; this rule wants its own style and loses.
+    "table-column-style": false,
+    // "Principles" recurs under Logging and Testing, which reads fine.
+    "no-duplicate-heading": { "siblings_only": true },
+    // The README leads with a centered banner, not a heading.
+    "first-line-heading": false
+  },
+  "globs": ["README.md", "docs/**/*.md"],
+  "ignores": ["docs/plans", "docs/samples"]
+}

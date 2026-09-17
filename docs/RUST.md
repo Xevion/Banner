@@ -8,7 +8,7 @@ General principles in [STYLE.md](STYLE.md).
 
 Strict layering for data integrity:
 
-```
+```text
 web/ (HTTP handlers)
   -> services/ (business logic)
     -> data/ (database access, domain queries)
@@ -22,7 +22,7 @@ web/ (HTTP handlers)
 
 ### Module Organization
 
-```
+```text
 src/
 +-- banner/       # Banner API client (UTSA course system)
 +-- bot/          # Discord bot (Poise framework, slash commands)
@@ -146,7 +146,7 @@ Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashM
   `sqlx::query!`, `sqlx::query_as!` or `sqlx::query_scalar!`. The macro checks the query
   against the live schema and reports each column's real nullability, which is what keeps
   domain types honest.
-- **Runtime queries are the exception**, for queries whose *shape* genuinely varies: a
+- **Runtime queries are the exception**, for queries whose _shape_ genuinely varies: a
   dynamic `ORDER BY` cannot be a bind parameter, and a WHERE clause assembled with
   `format!` is not a literal. Use `sqlx::query_as::<_, T>(sql)` / `sqlx::query(sql)` with
   `.bind()`, and leave a one-line comment at the call site saying why it cannot be a macro.

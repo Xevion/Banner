@@ -3,5 +3,12 @@ bun = "latest"
 # Pinned so a global `node = "latest"` cannot supply a prerelease: Storybook parses
 # the version with Number(), and "26.8.0-alpha" yields NaN, failing its semver gate.
 node = "24"
+just = "1.55.1"
+"npm:@xevion/tempo" = "0.2"
 helm = "4"
 kubectl = "latest"
+
+# Markdown gate: formatting, linting, and link resolution.
+dprint = "latest"
+markdownlint-cli2 = "latest"
+lychee = "latest"

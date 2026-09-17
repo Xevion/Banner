@@ -1,0 +1,8 @@
+# Generated: collapsed in diffs and excluded from language statistics.
+.sqlx/** linguist-generated=true
+web/src/lib/bindings/** linguist-generated=true
+Cargo.lock linguist-generated=true
+web/bun.lock linguist-generated=true
+
+# Captured Banner API responses, kept verbatim as reference material.
+docs/samples/** linguist-documentation=true

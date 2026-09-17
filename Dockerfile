@@ -143,15 +143,15 @@ RUN groupadd --gid $GID $APP_USER \
 COPY --from=frontend-deps --chown=$APP_USER:$APP_USER /app/node_modules ${APP}/web/node_modules
 
 # Console logger preload, normalizing SSR output to the JSON log format
-COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/console-logger.js ${APP}/web/console-logger.js
+COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/console-logger.ts ${APP}/web/console-logger.ts
 
-COPY --chown=$APP_USER:$APP_USER web/scripts/check-ssr-imports.mjs ${APP}/web/scripts/check-ssr-imports.mjs
+COPY --chown=$APP_USER:$APP_USER web/scripts/check-ssr-imports.ts ${APP}/web/scripts/check-ssr-imports.ts
 
 # Copy SvelteKit SSR build output
 COPY --from=frontend-builder --chown=$APP_USER:$APP_USER /app/build ${APP}/web/build
 
 # Turns a package missing from the production install into a build failure, not a crash loop.
-RUN node ${APP}/web/scripts/check-ssr-imports.mjs ${APP}/web/build
+RUN node ${APP}/web/scripts/check-ssr-imports.ts ${APP}/web/build
 
 # Copy Rust binary
 COPY --from=builder --chown=$APP_USER:$APP_USER --chmod=755 /banner ${APP}/banner
@@ -170,7 +170,7 @@ ENV PORT=${PORT}
 
 # Presence of this variable is what makes the Rust process supervise SSR; it is
 # deliberately unset in development, where Vite serves SSR instead.
-ENV SSR_COMMAND="node --import ${APP}/web/console-logger.js ${APP}/web/build/index.js"
+ENV SSR_COMMAND="node --import ${APP}/web/console-logger.ts ${APP}/web/build/index.js"
 
 EXPOSE ${PORT}
 

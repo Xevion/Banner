@@ -1,117 +1,74 @@
 # Architecture
 
-## System Overview
+Banner is a single Rust binary that supervises several long-running services, plus a SvelteKit
+frontend it serves and manages as a child process. This describes the shape of the system and the
+decisions behind it, not its current surface area; endpoints, schema, and feature lists live in the
+code, which is the only copy that can't fall out of date.
 
-The Banner project is built as a multi-service application with the following components:
+## Services
 
-- **Discord Bot Service**: Handles Discord interactions and commands (Serenity/Poise)
-- **Web Service**: Axum HTTP server serving the SvelteKit frontend and REST API endpoints
-- **Scraper Service**: Background data collection and synchronization with job queue
-- **Database Layer**: PostgreSQL 17 for persistent storage (SQLx with compile-time verification)
-- **RateMyProfessors Client**: GraphQL-based bulk sync of professor ratings
+`ServiceManager` (`src/runtime/manager.rs`) owns every long-running task. A service implements
+`Service`, runs until cancelled, and reports back through a completion channel; the manager
+broadcasts one shutdown signal and waits on all of them. Six register today: `web`, `ssr`,
+`scraper`, `metrics`, `notifications`, and `bot`. Which ones start is configuration, so the same
+binary can run the full stack or a single concern.
 
-### Frontend Stack
+A service returning normally is treated as a fault, not success. The contract is to block forever,
+so an unexpected return means something stopped that shouldn't have, and the manager logs it as
+such.
 
-- **SvelteKit** with Svelte 5 runes (`$state`, `$derived`, `$effect`)
-- **Tailwind CSS v4** via `@tailwindcss/vite`
-- **bits-ui** for headless UI primitives (comboboxes, tooltips, dropdowns)
-- **TanStack Table** for interactive data tables with sorting and column control
-- **OverlayScrollbars** for styled, theme-aware scrollable areas
-- **ts-rs** generates TypeScript type bindings from Rust structs
+## The SSR child process
 
-### API Endpoints
+The frontend renders through a Node process that Rust starts and supervises (`src/runtime/ssr.rs`),
+rather than a separate container. Rust is PID 1, holds the public listener, and proxies non-API
+routes downstream to it. `SSR_COMMAND` is what decides this: when set, the process is managed here;
+when unset, Vite is already serving SSR and Rust stays out of the way. That single variable is the
+whole difference between development and production topology.
 
-| Endpoint | Description |
-|---|---|
-| `GET /api/health` | Health check |
-| `GET /api/status` | Service status, version, and commit hash |
-| `GET /api/metrics` | Basic metrics |
-| `GET /api/courses/search` | Paginated course search with filters (term, subject, query, open-only, sort) |
-| `GET /api/courses/:term/:crn` | Single course detail with instructors and RMP ratings |
-| `GET /api/terms` | Available terms from reference cache |
-| `GET /api/subjects?term=` | Subjects for a term, ordered by enrollment |
-| `GET /api/reference/:category` | Reference data lookups (campuses, instructional methods, etc.) |
+## Layering
 
-## Technical Analysis
+```text
+web/     HTTP handlers, extraction, serialization
+  -> data/   every query, and the only code that touches the database
+    -> PostgreSQL
+```
 
-### Banner System Integration
+`src/data/` holds all SQL. Handlers may call it directly for straightforward reads; anything
+spanning several data modules or carrying side effects (scraping, notifications, outbound API
+calls) belongs above it. The rule exists so that a schema change has one blast radius.
 
-Some of the features and architecture of Ellucian's Banner system are not clear.
-The following features, JSON, and more require validation & analysis:
+Queries are verified at compile time by SQLx against the cached metadata in `.sqlx/`, which is why
+a build needs no database and why that directory is regenerated rather than edited.
 
-- Struct Nullability
-  - Much of the responses provided by Ellucian contain nulls, and most of them are uncertain as to when and why they're null.
-  - Analysis must be conducted to be sure of when to use a string and when it should nillable (pointer).
-- Multiple Professors / Primary Indicator
-- Multiple Meeting Times
-- Meeting Schedule Types
-  - AFF vs AIN vs AHB etc.
-- Do CRNs repeat between years?
-- Check whether partOfTerm is always filled in, and it's meaning for various class results.
-- Check which API calls are affected by change in term/sessionID term select
-- SessionIDs
-  - How long does a session ID work?
-  - Do I really require a separate one per term?
-  - How many can I activate, are there any restrictions?
-  - How should session IDs be checked as 'invalid'?
-  - What action(s) keep a session ID 'active', if any?
-- Are there any courses with multiple meeting times?
-- Google Calendar link generation, as an alternative to ICS file generation
+## Types across the boundary
 
-## Change Identification
+Rust structs annotated with `ts-rs` generate the TypeScript definitions under
+`web/src/lib/bindings/`. The frontend never hand-writes an API type, and a backend field rename
+surfaces as a frontend type error rather than an undefined at runtime. Generation is checked in
+preflight, so stale bindings fail before they reach a build.
 
-- Important attributes of a class will be parsed on both the old and new data.
-- These attributes will be compared and given identifiers that can be subscribed to.
-- When a user subscribes to one of these identifiers, any changes identified will be sent to the user.
+The corollary is that structured columns must be structured all the way down: `JSONB` in Postgres
+and `Json<T>` in Rust, never a JSON-encoded `TEXT`. A serialized string types as `string` in the
+bindings, and the type system then cannot tell you that rendering it produces `["a","b"]` on the
+page.
 
-## Real-time Suggestions
+## Scraping
 
-Various commands arguments have the ability to have suggestions appear.
+The scraper is a queue in Postgres rather than an in-process schedule, so work survives restarts
+and is inspectable with a query. Jobs are per-subject, rate limited through `governor`, and
+scheduled adaptively: how often a subject changes and how many courses it carries both feed the
+interval. The intent is to hold total load on the upstream system roughly flat while keeping the
+data that moves fresher than the data that doesn't.
 
-- They must be fast. As ephemeral suggestions that are only relevant for seconds or less, they need to be delivered in less than a second.
-- They need to be easy to acquire. With as many commands & arguments to search as I do, it is paramount that the API be easy to understand & use.
-- It cannot be complicated. I only have so much time to develop this.
-- It does not need to be persistent. Since the data is scraped and rolled periodically from the Banner system, the data used will be deleted and re-requested occasionally.
+## Live updates
 
-For these reasons, I believe PostgreSQL to be the ideal place for this data to be stored.
-It is exceptionally fast, works well in-memory, and is less complicated compared to most other solutions.
+Clients subscribe over a single WebSocket (`src/web/stream/`) to named streams rather than polling.
+Server-side state changes fan out through a broadcast buffer, and each subscription filters the
+feed it cares about.
 
-- Only required data about the class will be stored, along with the JSON-encoded string.
-  - For now, this would only be the CRN (and possibly the Term).
-  - Potentially, a binary encoding could be used for performance, but it is unlikely to be better.
-- Database dumping into R2 would be good to ensure that over-scraping of the Banner system does not occur.
-  - Upon a safe close requested
-    - Must be done quickly (<8 seconds)
-  - Every 30 minutes, if any scraping ocurred.
-    - May cause locking of commands.
+## Instructor scoring
 
-## Scraping System
-
-In order to keep the in-memory database of the bot up-to-date with the Banner system, the API must be scraped.
-Scraping will be separated by major to allow for priority majors (namely, Computer Science) to be scraped more often compared to others.
-This will lower the overall load on the Banner system while ensuring that data presented by the app is still relevant.
-
-For now, all majors will be scraped fully every 4 hours with at least 5 minutes between each one.
-
-- On startup, priority majors will be scraped first (if required).
-- Other majors will be scraped in arbitrary order (if required).
-- Scrape timing will be stored in database.
-- CRNs will be the Primary Key within database
-  - If CRNs are duplicated between terms, then the primary key will be (CRN, Term)
-
-Considerations
-
-- Change in metadata should decrease the interval
-- The number of courses scraped should change the interval (2 hours per 500 courses involved)
-
-## Rate Limiting, Costs & Bursting
-
-Ideally, this application would implement dynamic rate limiting to ensure overload on the server does not occur.
-Better, it would also ensure that priority requests (commands) are dispatched faster than background processes (scraping), while making sure different requests are weighted differently.
-For example, a recent scrape of 350 classes should be weighted 5x more than a search for 8 classes by a user.
-Still, even if the cap does not normally allow for this request to be processed immediately, the small user search should proceed with a small bursting cap.
-
-The requirements to this hypothetical system would be:
-
-- Conditional Bursting: background processes or other requests deemed "low priority" are not allowed to use bursting.
-- Arbitrary Costs: rate limiting is considered in the form of the request size/speed more or less, such that small simple requests can be made more frequently, unlike large requests.
+Instructor ratings are composed from independent sources (RateMyProfessors, BlueBook) into one
+score. Matching upstream records to catalog instructors is fuzzy and therefore wrong sometimes, so
+matches are proposed with a confidence score and confirmed or rejected through admin review rather
+than trusted outright.

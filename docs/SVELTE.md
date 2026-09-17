@@ -8,7 +8,7 @@ General principles in [STYLE.md](STYLE.md).
 
 File-based routing with SvelteKit conventions:
 
-```
+```text
 src/routes/
 +-- +layout.svelte        # Root layout (nav, theme, error boundary)
 +-- +page.svelte           # Home page
@@ -74,6 +74,7 @@ the URL both still name your route, so neither tells you this has happened.
 ### Load Function Error Patterns
 
 **List pages** -- return fallback data + optional error message:
+
 ```typescript
 return result.match({
     Ok: (data) => ({ courses: data.courses }),
@@ -82,6 +83,7 @@ return result.match({
 ```
 
 **Detail pages** -- throw SvelteKit `error()` for the error page:
+
 ```typescript
 return result.match({
     Ok: (course) => ({ course }),

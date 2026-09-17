@@ -52,6 +52,8 @@ function posthogSourceMaps(): Plugin | null {
 }
 
 export default defineConfig({
+  // Shares the repository root .env with the backend; kit.env.dir in svelte.config.ts matches.
+  envDir: resolve(dirname, ".."),
   plugins: [tailwindcss(), sveltekit(), devtoolsJson(), posthogSourceMaps()],
   ...(process.env.VITEST ? { resolve: { conditions: ["browser"] } } : {}),
   test: {

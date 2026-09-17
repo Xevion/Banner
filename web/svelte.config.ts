@@ -1,10 +1,15 @@
-import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+import { fileURLToPath } from "node:url";
 import adapter from "@sveltejs/adapter-node";
+import type { Config } from "@sveltejs/kit";
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 
-const posthogHost = process.env.PUBLIC_POSTHOG_HOST || "https://us.posthog.com";
+const posthogHost = process.env.PUBLIC_POSTHOG_HOST ?? "https://us.posthog.com";
 
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
+// Backend and frontend share one .env at the repository root. Resolved from this file rather
+// than the working directory, because the dev server is launched from both root and web/.
+const envDir = fileURLToPath(new URL("..", import.meta.url));
+
+const config: Config = {
   preprocess: vitePreprocess(),
   kit: {
     // Rust serves /_app/* off disk and compress-assets.ts writes the encoded
@@ -13,6 +18,7 @@ const config = {
       out: "build",
       precompress: false,
     }),
+    env: { dir: envDir },
     csp: {
       mode: "auto",
       reportOnly: {

@@ -5,14 +5,12 @@ target/
 # Documentation
 README.md
 docs/
-observability/
 *.md
 
-# Old Go codebase
-go/
+# Deployment manifests and host configuration, consumed by helm and the host, never the image
+deploy/
 
 # Development configuration
-bacon.toml
 .env
 .env.*
 !.env.example
@@ -23,18 +21,14 @@ bacon.toml
 
 # Development tools
 Justfile
-rust-toolchain.toml
 
 # Frontend build artifacts and cache
 web/node_modules/
 web/dist/
 web/build/
 web/.vite/
-web/.tanstack/
-web/.vscode/
 
 # IDE and editor files
-.vscode/
 .idea/
 *.swp
 *.swo

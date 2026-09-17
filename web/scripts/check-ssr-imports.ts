@@ -11,8 +11,8 @@ import { pathToFileURL } from "node:url";
 const buildDir = process.argv[2] ?? "build";
 const serverDir = join(buildDir, "server");
 
-const modules = [];
-function collect(dir) {
+const modules: string[] = [];
+function collect(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) collect(path);
@@ -29,12 +29,14 @@ for (const path of modules) {
   try {
     await import(pathToFileURL(path).href);
   } catch (error) {
-    if (error.code === "ERR_MODULE_NOT_FOUND") {
+    const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+    if (code === "ERR_MODULE_NOT_FOUND") {
       unresolved++;
-      console.error(`unresolved  ${path}  ${error.message.split("\n")[0]}`);
+      const detail = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`unresolved  ${path}  ${detail}`);
     } else {
       tolerated++;
-      console.warn(`tolerated(${error.code})  ${path}`);
+      console.warn(`tolerated(${code ?? "unknown"})  ${path}`);
     }
   }
 }

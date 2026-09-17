@@ -1,6 +1,2 @@
 .env
 /target
-/scripts/**/node_modules
-
-
-backup/node_modules

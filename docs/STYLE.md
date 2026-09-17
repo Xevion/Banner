@@ -10,24 +10,24 @@ Automated. Rust uses `rustfmt`, frontend uses Biome. Don't think about it -- `ju
 
 Use language-idiomatic casing (snake_case in Rust, camelCase in TypeScript). Use consistent domain terms across all stacks:
 
-| Concept | Name | Notes |
-|---------|------|-------|
-| An academic semester | `Term` | Identified by a term code (e.g. `"202430"`) |
-| A course offering | `Course` | A specific section of a class in a term |
-| A unique section identifier | `CRN` | Course Reference Number -- always a string |
-| An academic department | `Subject` | E.g. `"CS"`, `"MAT"` -- the code, not the full name |
-| A class meeting slot | `MeetingTime` | Days + time range + location + date range |
-| A professor or TA | `Instructor` | Not "professor", "teacher", or "faculty" |
-| A background scrape unit | `ScrapeJob` | A queued unit of work for the scraper |
-| A user's course watch | `Subscription` | A monitored course that triggers notifications |
-| A weekly course layout | `Schedule` | The visual timeline representation of a user's courses |
-| A lookup table entry | `ReferenceData` | Campuses, instruction methods, session types, etc. |
-| An instructor's Bayesian rating | `InstructorRating` | Posterior mean + CI; the headline number everywhere |
-| Which sources contributed data | `RatingSource` | `Both`, `Rmp`, or `BlueBook` |
-| RMP summary (lists/search) | `RmpBrief` | `avgRating`, `numRatings`, `legacyId` |
-| RMP detail (profile page) | `RmpFull` | Adds `avgDifficulty`, `wouldTakeAgainPct` |
-| BlueBook summary (lists/search) | `BlueBookBrief` | `avgInstructorRating`, `totalResponses` |
-| BlueBook detail (profile page) | `BlueBookFull` | Adds `calibratedRating`, `evalCount` |
+| Concept                         | Name               | Notes                                                  |
+| ------------------------------- | ------------------ | ------------------------------------------------------ |
+| An academic semester            | `Term`             | Identified by a term code (e.g. `"202430"`)            |
+| A course offering               | `Course`           | A specific section of a class in a term                |
+| A unique section identifier     | `CRN`              | Course Reference Number -- always a string             |
+| An academic department          | `Subject`          | E.g. `"CS"`, `"MAT"` -- the code, not the full name    |
+| A class meeting slot            | `MeetingTime`      | Days + time range + location + date range              |
+| A professor or TA               | `Instructor`       | Not "professor", "teacher", or "faculty"               |
+| A background scrape unit        | `ScrapeJob`        | A queued unit of work for the scraper                  |
+| A user's course watch           | `Subscription`     | A monitored course that triggers notifications         |
+| A weekly course layout          | `Schedule`         | The visual timeline representation of a user's courses |
+| A lookup table entry            | `ReferenceData`    | Campuses, instruction methods, session types, etc.     |
+| An instructor's Bayesian rating | `InstructorRating` | Posterior mean + CI; the headline number everywhere    |
+| Which sources contributed data  | `RatingSource`     | `Both`, `Rmp`, or `BlueBook`                           |
+| RMP summary (lists/search)      | `RmpBrief`         | `avgRating`, `numRatings`, `legacyId`                  |
+| RMP detail (profile page)       | `RmpFull`          | Adds `avgDifficulty`, `wouldTakeAgainPct`              |
+| BlueBook summary (lists/search) | `BlueBookBrief`    | `avgInstructorRating`, `totalResponses`                |
+| BlueBook detail (profile page)  | `BlueBookFull`     | Adds `calibratedRating`, `evalCount`                   |
 
 These names are used in types, API endpoints, database tables, and UI copy. When in doubt, check the Rust backend models -- they're the source of truth.
 
@@ -49,13 +49,13 @@ Static messages, structured fields. All dynamic content goes in fields, never in
 
 ### Log Levels
 
-| Level | Use for | Examples |
-|-------|---------|----------|
-| ERROR | Failures requiring attention | Database connection lost, scrape job failed permanently |
-| WARN  | Recoverable issues | Retry succeeded, Banner API rate limit hit, fallback used |
+| Level | Use for                      | Examples                                                  |
+| ----- | ---------------------------- | --------------------------------------------------------- |
+| ERROR | Failures requiring attention | Database connection lost, scrape job failed permanently   |
+| WARN  | Recoverable issues           | Retry succeeded, Banner API rate limit hit, fallback used |
 | INFO  | Significant lifecycle events | Service started, scrape job completed, term sync finished |
-| DEBUG | Routine operations | Cache hit, query executed, polling tick |
-| TRACE | Verbose internals | Request/response bodies, full state dumps, SQL parameters |
+| DEBUG | Routine operations           | Cache hit, query executed, polling tick                   |
+| TRACE | Verbose internals            | Request/response bodies, full state dumps, SQL parameters |
 
 Default to quiet. If an operation happens regularly without issue, it's DEBUG or TRACE.
 
@@ -63,17 +63,17 @@ Default to quiet. If an operation happens regularly without issue, it's DEBUG or
 
 Use consistent field names across all stacks for values that may be aggregated or queried:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `duration` | string | Operation timing (via `fmt_duration`) |
-| `count` | number | Item counts |
-| `bytes` | number | Data sizes |
-| `term` | string | Term code (e.g. `"202430"`) |
-| `crn` | string | Course reference number |
-| `subject` | string | Subject code |
-| `job_id` | number | Scrape job identifier |
-| `instructor_id` | number | Instructor identifier |
-| `error` | string | Error with chain |
+| Field           | Type   | Description                           |
+| --------------- | ------ | ------------------------------------- |
+| `duration`      | string | Operation timing (via `fmt_duration`) |
+| `count`         | number | Item counts                           |
+| `bytes`         | number | Data sizes                            |
+| `term`          | string | Term code (e.g. `"202430"`)           |
+| `crn`           | string | Course reference number               |
+| `subject`       | string | Subject code                          |
+| `job_id`        | number | Scrape job identifier                 |
+| `instructor_id` | number | Instructor identifier                 |
+| `error`         | string | Error with chain                      |
 
 ### Duration Formatting
 

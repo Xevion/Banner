@@ -353,3 +353,28 @@ jobs:
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: trivy-results.sarif
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The only job that reads mise.toml; every other job pins its toolchain through a
+      # dedicated action. Tool versions for the docs gate live in one place as a result.
+      # Scoped: mise.toml also pins bun, helm, kubectl and the rest, none of which this job
+      # needs. node comes along because markdownlint-cli2 resolves through the npm backend.
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: node dprint markdownlint-cli2 lychee
+
+      - name: Format
+        run: dprint check -c .config/dprint.json
+
+      - name: Lint
+        run: markdownlint-cli2 --config .config/markdownlint.jsonc
+
+      # Offline: relative links are resolved against the tree, so a moved file fails here.
+      - name: Links
+        run: lychee -c .config/lychee.toml --offline --no-progress README.md 'docs/**/*.md'

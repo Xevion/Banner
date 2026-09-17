@@ -1,0 +1,9 @@
+{
+  "includes": ["README.md", "docs/**/*.md"],
+  "excludes": ["docs/plans", "docs/samples"],
+  "markdown": {
+    "lineWidth": 100,
+    "textWrap": "maintain"
+  },
+  "plugins": ["https://plugins.dprint.dev/markdown-0.23.3.wasm"]
+}

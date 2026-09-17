@@ -8,7 +8,7 @@ import * as customParser from "@xevion/ts-eslint-extra";
 import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import svelteConfig from "./svelte.config.js";
+import svelteConfig from "./svelte.config.ts";
 
 const gitignorePath = path.resolve(import.meta.dirname, ".gitignore");
 
@@ -20,12 +20,9 @@ export default tseslint.config(
       ".svelte-kit/",
       "build/",
       "src/lib/bindings/",
-      "scripts/",
       ".storybook/",
       "src/**/*.stories.svelte",
       "src/**/*.stories.ts",
-      // Docker orchestration script -- not part of SvelteKit source
-      "entrypoint.ts",
     ],
   },
   // Base JS rules
@@ -71,7 +68,7 @@ export default tseslint.config(
   // Svelte files: svelte-eslint-parser (from svelte.configs.recommended) as
   // outer parser, with custom parser for script blocks to resolve .svelte exports
   {
-    files: ["**/*.svelte", "**/*.svelte.ts", "**/*.svelte.js"],
+    files: ["**/*.svelte", "**/*.svelte.ts"],
     languageOptions: {
       parserOptions: {
         parser: customParser,
@@ -93,14 +90,9 @@ export default tseslint.config(
       "@typescript-eslint/no-useless-default-assignment": "off",
     },
   },
-  // Disable type-checked rules for plain JS config files
+  // Config and standalone scripts sit outside the tsconfig project.
   {
-    files: ["**/*.js"],
-    ...tseslint.configs.disableTypeChecked,
-  },
-  // Disable type-checked rules for config files not in project
-  {
-    files: ["vitest.config.ts", "vite.config.ts"],
+    files: ["*.config.ts", "scripts/**/*.ts", "console-logger.ts"],
     ...tseslint.configs.disableTypeChecked,
   },
   storybook.configs["flat/recommended"]

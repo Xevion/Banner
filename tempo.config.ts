@@ -457,6 +457,34 @@ export default defineConfig({
       requires: [{ tool: "actionlint" }],
     }),
 
+    // Markdown rots silently: a moved file leaves a link pointing at nothing, and nothing
+    // fails. lychee --offline resolves relative links against the tree, so a rename breaks
+    // the check the same commit it breaks the doc.
+    task({
+      name: "docs:format",
+      body: "dprint check -c .config/dprint.json",
+      tags: ["check"],
+      requires: [{ tool: "dprint" }],
+    }),
+    task({
+      name: "docs:format-fix",
+      body: "dprint fmt -c .config/dprint.json",
+      tags: ["format"],
+      requires: [{ tool: "dprint" }],
+    }),
+    task({
+      name: "docs:lint",
+      body: "markdownlint-cli2 --config .config/markdownlint.jsonc",
+      tags: ["check"],
+      requires: [{ tool: "markdownlint-cli2" }],
+    }),
+    task({
+      name: "docs:links",
+      body: ["lychee", "-c", ".config/lychee.toml", "--offline", "--no-progress", "README.md", "docs/**/*.md"],
+      tags: ["check"],
+      requires: [{ tool: "lychee" }],
+    }),
+
     // Ordered behind the backend: SSR loads fetch /api through hooks.server.ts,
     // so a Vite that boots first serves a first paint of nothing but errors.
     task({
@@ -626,7 +654,7 @@ export default defineConfig({
         // startupProbe allowing 5 minutes, so the deadline has to clear that.
         const rollout = await ssh(
           ctx,
-          `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install --atomic --timeout 360s ${DEPLOY_RELEASE} ./charts/banner --set image.tag=${tag}`,
+          `cd ${DEPLOY_PATH} && sudo -E env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install --atomic --timeout 360s ${DEPLOY_RELEASE} ./deploy/chart --set image.tag=${tag}`,
         );
         if (rollout !== 0) {
           // Events, not pod logs: --atomic has already scaled the failed ReplicaSet to zero, so

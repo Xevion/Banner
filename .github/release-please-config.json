@@ -21,7 +21,7 @@
 	"packages": {
 		".": {
 			"release-type": "rust",
-			"exclude-paths": [".vscode", "docs"],
+			"exclude-paths": ["deploy", "docs"],
 			"extra-files": [
 				{
 					"type": "toml",

@@ -81,8 +81,8 @@ sync-secrets:
 
 # Lint and render the Helm chart without touching the cluster
 chart-check:
-    helm lint charts/banner
-    helm template banner charts/banner > /dev/null
+    helm lint deploy/chart
+    helm template banner deploy/chart > /dev/null
     @echo "(ok) chart renders"
 
 # Install git pre-commit hooks

@@ -3,6 +3,9 @@ name = "banner"
 version = "0.8.3"
 edition = "2024"
 default-run = "banner"
+license = "AGPL-3.0-only"
+description = "Course catalog search, tracking, and alerting for UTSA's Banner system."
+repository = "https://github.com/Xevion/Banner"
 
 [features]
 default = ["serve-assets"]

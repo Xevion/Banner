@@ -1,0 +1,2 @@
+# Runs with --offline, so only relative links are resolved. Network options would be dead weight.
+exclude_path = ["docs/plans", "docs/samples"]

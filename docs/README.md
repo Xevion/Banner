@@ -1,49 +1,23 @@
 # Documentation
 
-This folder contains detailed documentation for the Banner project. This file acts as the index.
+## Style guides
 
-## Style Guides
-
-- [`STYLE.md`](STYLE.md) - Cross-cutting style guide (naming, logging, errors, API design)
-- [`RUST.md`](RUST.md) - Rust backend style guide
-- [`SVELTE.md`](SVELTE.md) - Svelte frontend style guide
+- [`STYLE.md`](STYLE.md): cross-cutting conventions: naming, logging, errors, API design
+- [`RUST.md`](RUST.md): backend layering, error types, SQLx, the scraper, the Discord bot
+- [`SVELTE.md`](SVELTE.md): frontend runes, components, data fetching, bits-ui, TanStack Table
 
 ## Reference
 
-- [`CHANGELOG.md`](CHANGELOG.md) - Notable changes by version
-- [`ROADMAP.md`](ROADMAP.md) - Planned features and priorities
-- [`BANNER.md`](BANNER.md) - General API documentation on the Banner system
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) - Technical implementation details, system design, and analysis
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): how the services fit together and why
+- [`BANNER.md`](BANNER.md): what we know about Ellucian's Banner system itself
+- [`../CHANGELOG.md`](../CHANGELOG.md): notable changes by version
 
 ## Samples
 
-The `samples/` folder contains real Banner API response examples:
+[`samples/`](samples) holds captured Banner API responses, grouped by the call that produced them:
+`search/` for course searches, `meta/` for reference lookups, and `course/` for section detail. They
+are reference material for understanding response shapes, and fixtures for development.
 
-- `search/` - Course search API responses with various filters
-  - [`searchResults.json`](samples/search/searchResults.json)
-  - [`searchResults_500.json`](samples/search/searchResults_500.json)
-  - [`searchResults_CS500.json`](samples/search/searchResults_CS500.json)
-  - [`searchResults_malware.json`](samples/search/searchResults_malware.json)
-- `meta/` - Metadata API responses (terms, subjects, instructors, etc.)
-  - [`get_attribute.json`](samples/meta/get_attribute.json)
-  - [`get_campus.json`](samples/meta/get_campus.json)
-  - [`get_instructionalMethod.json`](samples/meta/get_instructionalMethod.json)
-  - [`get_instructor.json`](samples/meta/get_instructor.json)
-  - [`get_partOfTerm.json`](samples/meta/get_partOfTerm.json)
-  - [`get_subject.json`](samples/meta/get_subject.json)
-  - [`getTerms.json`](samples/meta/getTerms.json)
-- `course/` - Course detail API responses (HTML and JSON)
-  - [`getFacultyMeetingTimes.json`](samples/course/getFacultyMeetingTimes.json)
-  - [`getClassDetails.html`](samples/course/getClassDetails.html)
-  - [`getCorequisites.html`](samples/course/getCorequisites.html)
-  - [`getCourseDescription.html`](samples/course/getCourseDescription.html)
-  - [`getEnrollmentInfo.html`](samples/course/getEnrollmentInfo.html)
-  - [`getFees.html`](samples/course/getFees.html)
-  - [`getLinkedSections.html`](samples/course/getLinkedSections.html)
-  - [`getRestrictions.html`](samples/course/getRestrictions.html)
-  - [`getSectionAttributes.html`](samples/course/getSectionAttributes.html)
-  - [`getSectionBookstoreDetails.html`](samples/course/getSectionBookstoreDetails.html)
-  - [`getSectionPrerequisites.html`](samples/course/getSectionPrerequisites.html)
-  - [`getXlistSections.html`](samples/course/getXlistSections.html)
-
-These samples are used for development, testing, and understanding the Banner API structure.
+Filenames mirror Banner's own endpoint names, which is why they mix conventions. `get_subject` and
+`getTerms` are both spelled the way upstream spells them. That inconsistency is Ellucian's, and
+normalizing it here would lose the mapping.
