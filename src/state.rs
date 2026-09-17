@@ -181,7 +181,7 @@ impl AppState {
             .expect("Failed to create SSR proxy client");
 
         // Generate a random internal token for SSR -> API bypass.
-        let internal_token = ulid::Ulid::new().to_string();
+        let internal_token = ulid::Ulid::generate().to_string();
         let rate_limit = Arc::new(RateLimitState::new(internal_token));
 
         Self {

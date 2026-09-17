@@ -63,7 +63,7 @@ chrono-tz = "0.10.4"
 htmlize = { version = "1.0.6", features = ["unescape"] }
 unicode-normalization = "0.1.25"
 indexmap = "2.13.0"
-ulid = "1.2.1"
+ulid = "3.0.0"
 tower = { version = "0.5.3", features = ["util"] }
 nanoid = "0.5.0"
 html_scraper = { version = "0.27.0", package = "scraper" }

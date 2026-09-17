@@ -54,7 +54,7 @@ where
             .headers()
             .get(RAILWAY_REQUEST_ID)
             .and_then(|v| v.to_str().ok())
-            .map_or_else(|| ulid::Ulid::new().to_string(), String::from);
+            .map_or_else(|| ulid::Ulid::generate().to_string(), String::from);
 
         // Inject the resolved ID into the request so downstream handlers
         // (including the SSR proxy) can read and propagate it.
