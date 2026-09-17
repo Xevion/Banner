@@ -44,8 +44,19 @@ jobs:
             cargo fmt --all -- --check || echo "::warning::Rust formatting issues found (not failing on push)"
           fi
 
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@cargo-machete
+
+      - name: Check for unused dependencies
+        run: cargo machete
+
       - name: Clippy
-        run: cargo clippy --no-default-features -- -D warnings
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      # serve-assets gates ~300 lines that --all-features always compiles in; this is
+      # the only job that proves the feature-off build still builds.
+      - name: Check no-default-features build
+        run: cargo check --no-default-features
 
   frontend-quality:
     name: Frontend Quality

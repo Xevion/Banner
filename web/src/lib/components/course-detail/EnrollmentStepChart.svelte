@@ -7,7 +7,7 @@ import { Area, Axis, Chart, Highlight, Spline, Svg, Tooltip } from "layerchart";
 
 let { points, height = 240 }: { points: HistoryPoint[]; height?: number } = $props();
 
-// Snapshots are change events, not samples -- the value held until the next one, so the
+// Snapshots are change events, not samples: the value held until the next one, so the
 // mark steps. A smoothed curve would draw enrollments that never existed.
 const curve = curveStepAfter;
 

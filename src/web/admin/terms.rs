@@ -55,7 +55,7 @@ impl From<SyncResult> for TermSyncResponse {
     }
 }
 
-/// `GET /api/admin/terms` -- List all terms with their scraping status.
+/// `GET /api/admin/terms`: List all terms with their scraping status.
 ///
 /// # Errors
 /// Internal error if the terms query fails.
@@ -73,7 +73,7 @@ pub async fn list_terms(_admin: AdminUser, State(state): State<AppState>) -> Res
     Ok(Json(TermsListResponse { terms }))
 }
 
-/// `POST /api/admin/terms/:code/enable` -- Enable scraping for a term.
+/// `POST /api/admin/terms/:code/enable`: Enable scraping for a term.
 ///
 /// # Errors
 /// `NotFound` if no term has that code; internal error if the update or
@@ -114,7 +114,7 @@ pub async fn enable_term(
     Ok(Json(TermUpdateResponse { success: true, term }))
 }
 
-/// `POST /api/admin/terms/:code/disable` -- Disable scraping for a term.
+/// `POST /api/admin/terms/:code/disable`: Disable scraping for a term.
 ///
 /// # Errors
 /// `NotFound` if no term has that code; internal error if the update or
@@ -155,7 +155,7 @@ pub async fn disable_term(
     Ok(Json(TermUpdateResponse { success: true, term }))
 }
 
-/// `POST /api/admin/terms/sync` -- Manually sync terms from the Banner API.
+/// `POST /api/admin/terms/sync`: Manually sync terms from the Banner API.
 ///
 /// # Errors
 /// Internal error if the Banner API fetch or the database sync fails.

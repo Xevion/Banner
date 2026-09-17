@@ -79,7 +79,6 @@ pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
 }
 
 /// Get terms with scraping enabled, ordered by code descending.
-#[allow(dead_code)] // Used by admin API and future features
 pub async fn get_enabled_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
     let terms = sqlx::query_as!(
         DbTerm,
@@ -197,7 +196,7 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
 
 /// Parse a 6-digit term code into (`display_year`, season).
 ///
-/// Returns the **display year** -- the year shown in the term description -- not the raw
+/// Returns the **display year** (the year shown in the term description), not the raw
 /// code prefix. Banner encodes Fall as `(display_year + 1)10`, so "202610" (Fall 2025)
 /// returns `(2025, "Fall")` rather than `(2026, "Fall")`.
 ///

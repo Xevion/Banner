@@ -18,10 +18,10 @@ const NANOID_ALPHABET: &[char] = &[
 const NANOID_LEN: usize = 3;
 
 /// Narrow a `f64` rating average to `f32` for display.
-///
-/// Ratings are bounded to a handful of decimal digits, far under `f32`'s
-/// precision, so this cannot lose meaningful data.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "ratings carry a few decimal digits, far under f32 precision"
+)]
 fn narrow_rating(v: f64) -> f32 {
     v as f32
 }

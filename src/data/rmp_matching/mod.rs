@@ -6,7 +6,5 @@ mod score;
 
 // The bin target recompiles this tree separately from the lib target and does
 // not itself use every re-export; the lib's external consumers (tests) do.
-#[allow(unused_imports)]
 pub use pipeline::{MatchingStats, generate_candidates};
-#[allow(unused_imports)]
 pub use score::{MatchScore, ScoreBreakdown, compute_match_score};

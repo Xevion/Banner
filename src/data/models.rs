@@ -13,8 +13,10 @@ use crate::data::course_types::{DateRange, MeetingLocation, RatingSource};
 use crate::data::unsigned::Count;
 
 /// Serialize an `i64` as a string to avoid JavaScript precision loss for values exceeding 2^53.
-// `serde(serialize_with = ...)` requires the `&T` signature regardless of `T`'s size.
-#[allow(clippy::trivially_copy_pass_by_ref)]
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's serialize_with requires the &T signature regardless of T's size"
+)]
 fn serialize_i64_as_string<S: Serializer>(value: &i64, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_string())
 }
@@ -142,13 +144,22 @@ impl<'de> Deserialize<'de> for DbMeetingTime {
 
             // Legacy computed fields (ignored on read)
             #[serde(default)]
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "accepted for backward compatibility with old-format JSON but never read"
+            )]
             is_days_tba: bool,
             #[serde(default)]
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "accepted for backward compatibility with old-format JSON but never read"
+            )]
             is_time_tba: bool,
             #[serde(default)]
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "accepted for backward compatibility with old-format JSON but never read"
+            )]
             active_days: Vec<DayOfWeek>,
         }
 
@@ -250,7 +261,6 @@ impl<'de> Deserialize<'de> for DbMeetingTime {
     }
 }
 
-#[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct Course {
     pub id: i32,
@@ -283,7 +293,6 @@ pub struct Course {
     pub attributes: Json<Vec<String>>,
 }
 
-#[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct Instructor {
     pub id: i32,
@@ -419,7 +428,6 @@ pub enum BluebookLinkStatus {
 
 text_column_enum!(BluebookLinkStatus);
 
-#[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct CourseInstructor {
     pub course_id: i32,
@@ -456,7 +464,6 @@ pub struct CourseInstructorDetail {
     pub sc_bb_count: Option<i32>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ReferenceData {
     pub category: String,
@@ -464,7 +471,6 @@ pub struct ReferenceData {
     pub description: String,
 }
 
-#[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct CourseMetric {
     pub id: i32,
@@ -472,11 +478,10 @@ pub struct CourseMetric {
     pub timestamp: DateTime<Utc>,
     pub enrollment: Count,
     pub wait_count: Count,
-    /// Legitimately negative for overenrolled courses -- stays as i32.
+    /// Legitimately negative for overenrolled courses, so stays as i32.
     pub seats_available: i32,
 }
 
-#[allow(dead_code)]
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct CourseAudit {
     pub id: i32,
@@ -617,7 +622,6 @@ pub enum ScrapeJobStatus {
 const LOCK_EXPIRY_SECS: i64 = 10 * 60;
 
 /// Represents a queryable job from the database.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ScrapeJob {
     pub id: i32,
@@ -670,7 +674,6 @@ pub struct User {
 }
 
 /// A server-side session for an authenticated user.
-#[allow(dead_code)] // Some fields exist only to mirror the row, never read in Rust
 #[derive(Debug, Clone)]
 pub struct UserSession {
     pub id: String,

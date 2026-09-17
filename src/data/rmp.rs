@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 /// Bulk upsert RMP professors using the UNNEST pattern.
 ///
-/// Deduplicates by `legacy_id` before inserting -- the RMP API can return
+/// Deduplicates by `legacy_id` before inserting, because the RMP API can return
 /// the same professor on multiple pages.
 pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfessor]) -> Result<()> {
     if professors.is_empty() {

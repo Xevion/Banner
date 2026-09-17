@@ -182,7 +182,7 @@ const table = createSvelteTable({
         />
         {#if loading && courses.length === 0}
           <tbody>
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -- Static skeleton markup, no user input -->
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- static skeleton markup, no user input -->
             {@html buildSkeletonHtml(visibleColumnIds, skeletonRowCount)}
           </tbody>
         {:else if courses.length === 0 && !loading}
@@ -202,7 +202,7 @@ const table = createSvelteTable({
             {@const spansTime = timeSpansPair(course, (id) => columnVisibility[id] !== false)}
             <!-- No entry animation: the scoped view transition on [data-search-results]
                  already crossfades the whole table, and a per-row fade layered inside it
-                 reads as a double flash -- including on first paint, over SSR rows that
+                 reads as a double flash, including on first paint, over SSR rows that
                  were never absent. -->
             <tbody
               class="transition-opacity duration-200 {stale ? 'opacity-45 pointer-events-none' : ''}"

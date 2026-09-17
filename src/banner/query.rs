@@ -27,7 +27,6 @@ pub struct SearchQuery {
     course_number_high: Option<i32>,
 }
 
-#[allow(dead_code)]
 impl SearchQuery {
     /// Creates a new `SearchQuery` with default values
     #[must_use]

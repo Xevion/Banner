@@ -91,7 +91,7 @@ impl ActionLogParams {
     }
 }
 
-/// `GET /api/admin/action-log` -- List recorded admin actions, newest first.
+/// `GET /api/admin/action-log`: List recorded admin actions, newest first.
 ///
 /// # Errors
 /// `BadRequest` if `actor` isn't a Discord id; internal error if the log

@@ -70,7 +70,7 @@ pub struct BluebookOkResponse {
     pub ok: bool,
 }
 
-/// `POST /api/admin/bluebook/sync` -- Trigger a `BlueBook` evaluation sync.
+/// `POST /api/admin/bluebook/sync`: Trigger a `BlueBook` evaluation sync.
 #[instrument(skip_all)]
 pub async fn sync_bluebook(
     AdminUser(_user): AdminUser,
@@ -87,7 +87,7 @@ pub async fn sync_bluebook(
     )
 }
 
-/// `GET /api/admin/bluebook/links` -- List `BlueBook` links with filtering and pagination.
+/// `GET /api/admin/bluebook/links`: List `BlueBook` links with filtering and pagination.
 ///
 /// # Errors
 /// Internal error if the link query fails.
@@ -111,7 +111,7 @@ pub async fn list_links(
     Ok(Json(response))
 }
 
-/// `GET /api/admin/bluebook/links/{id}` -- Detail for a specific `BlueBook` link.
+/// `GET /api/admin/bluebook/links/{id}`: Detail for a specific `BlueBook` link.
 ///
 /// # Errors
 /// `NotFound` if no link has that id; internal error if the detail query
@@ -129,7 +129,7 @@ pub async fn get_link(
     Ok(Json(response))
 }
 
-/// `POST /api/admin/bluebook/links/{id}/approve` -- Approve a pending link.
+/// `POST /api/admin/bluebook/links/{id}/approve`: Approve a pending link.
 ///
 /// # Errors
 /// `NotFound` if no link has that id or it isn't auto/pending; internal
@@ -158,7 +158,7 @@ pub async fn approve_link(
     Ok(Json(BluebookOkResponse { ok: true }))
 }
 
-/// `POST /api/admin/bluebook/links/{id}/reject` -- Reject a pending link.
+/// `POST /api/admin/bluebook/links/{id}/reject`: Reject a pending link.
 ///
 /// # Errors
 /// `NotFound` if no link has that id or it isn't auto/pending; internal
@@ -187,7 +187,7 @@ pub async fn reject_link(
     Ok(Json(BluebookOkResponse { ok: true }))
 }
 
-/// `POST /api/admin/bluebook/links/{id}/assign` -- Manually assign an instructor to a link.
+/// `POST /api/admin/bluebook/links/{id}/assign`: Manually assign an instructor to a link.
 ///
 /// # Errors
 /// `NotFound` if no link or no instructor has the given id; internal error
@@ -221,7 +221,7 @@ pub async fn assign_link(
     Ok(Json(BluebookOkResponse { ok: true }))
 }
 
-/// `POST /api/admin/bluebook/match` -- Trigger auto-matching pipeline.
+/// `POST /api/admin/bluebook/match`: Trigger auto-matching pipeline.
 ///
 /// # Errors
 /// Internal error if the auto-matching query fails.

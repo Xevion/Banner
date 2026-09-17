@@ -324,7 +324,7 @@ pub fn normalize_for_matching(s: &str) -> String {
     s.to_lowercase()
         .nfd()
         .filter(|c| {
-            // Keep only non-combining alphabetic characters -- strip everything else
+            // Keep only non-combining alphabetic characters, stripping everything else
             c.is_alphabetic() && !unicode_normalization::char::is_combining_mark(*c)
         })
         .collect()
@@ -367,16 +367,16 @@ fn nickname_expansions(normalized_first: &str) -> Vec<String> {
 /// Generate all matching index keys for a parsed name.
 ///
 /// For a name like "H. Paul" / "`LeBlanc`" with no nicknames, generates:
-/// - `("leblanc", "h paul")` -- full normalized first (Primary)
-/// - `("leblanc", "paul")` -- individual token (Primary)
-/// - `("leblanc", "h")` -- individual token (Primary)
+/// - `("leblanc", "h paul")`: full normalized first (Primary)
+/// - `("leblanc", "paul")`: individual token (Primary)
+/// - `("leblanc", "h")`: individual token (Primary)
 ///
 /// For a name like "William" / "Burchenal" with nickname "Ken":
-/// - `("burchenal", "william")` -- primary
-/// - `("burchenal", "ken")` -- nickname variant from RMP (Primary)
-/// - `("burchenal", "will")` -- common nickname expansion (Nickname)
-/// - `("burchenal", "bill")` -- common nickname expansion (Nickname)
-/// - `("burchenal", "billy")` -- common nickname expansion (Nickname)
+/// - `("burchenal", "william")`: primary
+/// - `("burchenal", "ken")`: nickname variant from RMP (Primary)
+/// - `("burchenal", "will")`: common nickname expansion (Nickname)
+/// - `("burchenal", "bill")`: common nickname expansion (Nickname)
+/// - `("burchenal", "billy")`: common nickname expansion (Nickname)
 #[must_use]
 pub fn matching_keys(parts: &NameParts) -> Vec<MatchingKey> {
     let norm_last = normalize_for_matching(&parts.last);
@@ -484,7 +484,7 @@ pub struct NameCompareResult {
 /// and checks for key overlap. Returns match quality and a confidence score
 /// reflecting how closely the names align.
 ///
-/// Only considers [`KeyOrigin::Primary`] keys -- nickname expansions are not
+/// Only considers [`KeyOrigin::Primary`] keys, because nickname expansions are not
 /// used for `BlueBook` instructor-to-instructor comparison (they're for
 /// cross-source RMP matching where name formats differ significantly).
 ///
@@ -565,7 +565,7 @@ pub struct BestMatch {
 /// if any candidate matches at [`NameMatchQuality::Partial`] or higher.
 ///
 /// When multiple candidates match at the same quality level, returns `None`
-/// (ambiguous -- needs manual review).
+/// (ambiguous, needs manual review).
 #[must_use]
 pub fn find_best_candidate(bluebook_name: &str, candidates: &[MatchCandidate]) -> Option<BestMatch> {
     let mut best: Option<BestMatch> = None;
@@ -671,9 +671,10 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-// Confidence scores are clamped to exact 0.0/1.0 endpoints; the tests assert those
-// exact values on purpose.
-#[allow(clippy::float_cmp)]
+#[expect(
+    clippy::float_cmp,
+    reason = "confidence scores are clamped to exact 0.0/1.0 endpoints, so exact comparison is fine"
+)]
 mod tests {
     use super::*;
 
@@ -996,11 +997,11 @@ mod tests {
         let rmp = parse_rmp_name("Chris", "Packham").unwrap();
         let rmp_keys = matching_keys(&rmp);
 
-        // Both should have ("packham", "chris") -- Banner via nickname, RMP via primary
+        // Both should have ("packham", "chris"): Banner via nickname, RMP via primary
         assert!(has_nickname_key(&banner_keys, "packham", "chris"));
         assert!(has_primary_key(&rmp_keys, "packham", "chris"));
 
-        // And both should have ("packham", "christopher") -- Banner via primary, RMP via nickname
+        // And both should have ("packham", "christopher"): Banner via primary, RMP via nickname
         assert!(has_primary_key(&banner_keys, "packham", "christopher"));
         assert!(has_nickname_key(&rmp_keys, "packham", "christopher"));
     }
@@ -1159,7 +1160,7 @@ mod tests {
     #[test]
     fn compare_banner_has_more_tokens() {
         // Banner: "Christiansen, Martha Sidury" vs BB: "Christiansen, Martha Sidury Juarez Lopez"
-        // Both sides have multi-token first names -- overlap on "martha" and "sidury" tokens
+        // Both sides have multi-token first names, overlapping on "martha" and "sidury" tokens
         let r = compare_instructor_names(
             "Christiansen, Martha Sidury Juarez Lopez",
             "Christiansen, Martha Sidury",
@@ -1188,9 +1189,9 @@ mod tests {
     fn compare_hyphenated_first_with_extra() {
         // "Choo, Kim-Kwang Raymond" vs "Choo, Kim-Kwang"
         // BB first: "Kim-Kwang Raymond", Banner first: "Kim-Kwang"
-        // normalized full: "kimkwangraymond" vs "kimkwang" -- not equal -> Partial
+        // normalized full: "kimkwangraymond" vs "kimkwang" are not equal, so Partial
         // token keys for BB: "kimkwang", "raymond"; for Banner: just "kimkwang"
-        // Wait -- "Kim-Kwang" is one token (no space), so matching_keys won't split it.
+        // "Kim-Kwang" is one token (no space), so matching_keys won't split it.
         // But "Kim-Kwang Raymond" splits to ["Kim-Kwang", "Raymond"]
         // keys for BB: ("choo", "kimkwangraymond"), ("choo", "kimkwang"), ("choo", "raymond")
         // keys for Banner: ("choo", "kimkwang")
@@ -1210,7 +1211,7 @@ mod tests {
 
     #[test]
     fn compare_de_prefix_last_name() {
-        // "De La Garza, Margaret" -- "De La Garza" is the entire last name
+        // "De La Garza, Margaret": "De La Garza" is the entire last name
         let r = compare_instructor_names("De La Garza, Margaret", "De La Garza, Margaret");
         assert_eq!(r.quality, NameMatchQuality::Full);
         assert_eq!(r.confidence, 1.0);
@@ -1218,7 +1219,7 @@ mod tests {
 
     #[test]
     fn compare_el_ghori_hyphenated_multi_word() {
-        // "Kanso El-Ghori, Ali" -- multi-word last name with hyphen in second word
+        // "Kanso El-Ghori, Ali": multi-word last name with hyphen in second word
         let r = compare_instructor_names("Kanso El-Ghori, Ali", "Kanso El-Ghori, Ali");
         assert_eq!(r.quality, NameMatchQuality::Full);
         assert_eq!(r.confidence, 1.0);
@@ -1226,7 +1227,7 @@ mod tests {
 
     #[test]
     fn compare_bou_space_in_last() {
-        // "Bou Harb, Elias" -- space in last name, no hyphen
+        // "Bou Harb, Elias": space in last name, no hyphen
         let r = compare_instructor_names("Bou Harb, Elias", "Bou Harb, Elias");
         assert_eq!(r.quality, NameMatchQuality::Full);
         assert_eq!(r.confidence, 1.0);
@@ -1270,7 +1271,7 @@ mod tests {
 
     #[test]
     fn best_candidate_picks_full_over_partial() {
-        // One exact match, one partial match -- should pick the exact one
+        // One exact match, one partial match, so pick the exact one
         let candidates = vec![
             MatchCandidate {
                 instructor_id: 1,
@@ -1303,8 +1304,8 @@ mod tests {
             },
         ];
         // BB: "Garcia, Maria Isabel" -> keys: ("garcia", "mariaisabel"), ("garcia", "maria"), ("garcia", "isabel")
-        // Candidate 1: ("garcia", "maria") -- Partial (overlap on "maria")
-        // Candidate 2: ("garcia", "mariaelena"), ("garcia", "maria"), ("garcia", "elena") -- Partial (overlap on "maria")
+        // Candidate 1 ("garcia", "maria") is Partial (overlap on "maria")
+        // Candidate 2 ("garcia", "mariaelena"), ("garcia", "maria"), ("garcia", "elena") is Partial (overlap on "maria")
         // Both match at Partial quality -> ambiguous -> None
         let result = find_best_candidate("Garcia, Maria Isabel", &candidates2);
         assert!(result.is_none());

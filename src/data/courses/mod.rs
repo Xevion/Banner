@@ -4,7 +4,6 @@ mod sort;
 
 // The bin target recompiles this tree separately from the lib target and does
 // not itself use every re-export; the lib's external consumers (tests) do.
-#[allow(unused_imports)]
 pub use sort::{SortDirection, SortKey, SortKeyOption, SortParseError, SortSpec, SortTerm};
 
 use super::context::DbContext;
@@ -34,7 +33,7 @@ pub struct FilterRanges {
 
 /// Filter parameters for course search queries.
 ///
-/// Borrows all data from the caller -- the filter is short-lived (one request).
+/// Borrows all data from the caller because the filter is short-lived (one request).
 #[derive(Debug, Default)]
 pub struct SearchFilter<'a> {
     pub term_code: &'a str,
@@ -433,8 +432,10 @@ pub async fn list_all_subjects(db_pool: &PgPool) -> Result<Vec<String>> {
 }
 
 /// Get aggregate filter ranges for a term (course number, credit hours, waitlist).
-// cn_/ch_/wc_ deliberately mirror the course_number_/credit_hour_/wait_count_ column groups.
-#[allow(clippy::similar_names)]
+#[expect(
+    clippy::similar_names,
+    reason = "cn_/ch_/wc_ mirror the course_number_/credit_hour_/wait_count_ column groups"
+)]
 pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<FilterRanges> {
     // An unknown term produces no row here, and every column is nullable in its own
     // right, so both absences funnel into the same defaults below.

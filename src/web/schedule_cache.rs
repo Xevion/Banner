@@ -3,7 +3,7 @@
 //! Loads all courses with their pre-extracted meeting scalars from the
 //! `course_meetings` table into a compact in-memory representation, and caches
 //! the result. The cache is refreshed in the background every hour using a
-//! stale-while-revalidate pattern with singleflight deduplication -- readers
+//! stale-while-revalidate pattern with singleflight deduplication: readers
 //! always get the current cached value instantly, never blocking on a refresh.
 //!
 //! ## Optimizations
@@ -65,7 +65,7 @@ pub struct ScheduleCache {
     rx: watch::Receiver<Arc<ScheduleSnapshot>>,
     /// Sender side, held to push new snapshots.
     tx: Arc<watch::Sender<Arc<ScheduleSnapshot>>>,
-    /// Singleflight guard -- true while a refresh task is in flight.
+    /// Singleflight guard: true while a refresh task is in flight.
     refreshing: Arc<AtomicBool>,
     /// Database pool for refresh queries.
     pool: PgPool,
@@ -93,7 +93,7 @@ impl ScheduleCache {
     }
 
     /// Check freshness and trigger a background refresh if stale.
-    /// Always returns immediately -- the caller uses the current snapshot.
+    /// Always returns immediately because the caller uses the current snapshot.
     pub(crate) fn ensure_fresh(&self) {
         let snap = self.rx.borrow();
         if snap.refreshed_at.elapsed() < REFRESH_INTERVAL {
@@ -199,9 +199,11 @@ async fn load_snapshot(pool: &PgPool) -> anyhow::Result<ScheduleSnapshot> {
             current_enrollment = row.enrollment;
         }
 
-        // day_bits is a 7-bit weekday mask and the minute columns are 0..1440;
-        // all three SMALLINT columns are always non-negative and in range.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "day_bits is a 7-bit weekday mask and the minute columns are 0..1440; all three SMALLINT columns are always non-negative and in range"
+        )]
         let schedule = ParsedSchedule {
             days: row.day_bits as u8,
             begin_minutes: row.begin_minutes as u16,
@@ -335,9 +337,9 @@ mod tests {
         };
 
         let date = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap(); // Monday
-        // Slot 11:00-11:15 -- after the meeting ends
+        // Slot 11:00-11:15, after the meeting ends
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 660, 675));
-        // Slot 9:45-10:00 -- just before meeting starts (end=600, begin=600 -> no overlap)
+        // Slot 9:45-10:00, just before meeting starts (end=600, begin=600 -> no overlap)
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 585, 600));
     }
 
@@ -351,7 +353,7 @@ mod tests {
             end_date: NaiveDate::from_ymd_opt(2025, 12, 13).unwrap(),
         };
 
-        // Monday Jan 6 2025 -- before semester
+        // Monday Jan 6 2025, before semester
         let date = NaiveDate::from_ymd_opt(2025, 1, 6).unwrap();
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 600, 615));
     }
@@ -367,11 +369,11 @@ mod tests {
         };
 
         let date = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap();
-        // Slot 10:45-11:00 -- overlaps last 5 minutes of meeting
+        // Slot 10:45-11:00, overlaps last 5 minutes of meeting
         assert!(sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 645, 660));
-        // Slot 9:45-10:00 -- ends exactly when meeting starts, no overlap
+        // Slot 9:45-10:00, ends exactly when meeting starts, no overlap
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 585, 600));
-        // Slot 10:50-11:05 -- starts exactly when meeting ends, no overlap
+        // Slot 10:50-11:05, starts exactly when meeting ends, no overlap
         assert!(!sched.active_during(date, weekday_bit(chrono::Weekday::Mon), 650, 665));
     }
 }

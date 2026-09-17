@@ -11,8 +11,11 @@ use anyhow::Result;
 
 /// Session lifetime: 7 days (in seconds).
 pub const SESSION_DURATION_SECS: u64 = 7 * 24 * 3600;
-/// `SESSION_DURATION_SECS` as `f64` for interval binding; well under f64's precision limit.
-#[allow(clippy::cast_precision_loss)]
+/// `SESSION_DURATION_SECS` as `f64` for interval binding.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a fixed 7-day duration in seconds is far below f64's 52-bit mantissa limit"
+)]
 const SESSION_DURATION_SECS_F64: f64 = SESSION_DURATION_SECS as f64;
 
 /// Generate a cryptographically random 32-byte hex token.
@@ -28,8 +31,10 @@ fn generate_token() -> String {
 pub async fn create_session(pool: &PgPool, user_id: i64, duration: std::time::Duration) -> Result<UserSession> {
     let token = generate_token();
     let duration_secs = duration.as_secs().cast_signed();
-    // A session duration in seconds stays far below f64's 52-bit mantissa limit.
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a session duration in seconds stays far below f64's 52-bit mantissa limit"
+    )]
     let duration_secs_f64 = duration_secs as f64;
 
     sqlx::query_as!(
@@ -92,7 +97,6 @@ pub async fn delete_session(pool: &PgPool, token: &str) -> Result<()> {
 }
 
 /// Delete all sessions for a user. Returns the number of sessions deleted.
-#[allow(dead_code)] // Available for admin user-deletion flow
 pub async fn delete_user_sessions(pool: &PgPool, user_id: i64) -> Result<u64> {
     let result = sqlx::query!("DELETE FROM user_sessions WHERE user_id = $1", user_id)
         .execute(pool)

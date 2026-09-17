@@ -324,7 +324,10 @@ impl<'a> ScrapeJobOps<'a> {
     }
 
     /// Insert a scrape job result log entry.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is one column of the scrape_job_results row"
+    )]
     pub async fn insert_result(
         &self,
         target_type: TargetType,

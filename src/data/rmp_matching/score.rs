@@ -171,8 +171,10 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
 /// score so that whichever signal is stronger dominates - review data overrides
 /// a noisy department string, and department helps when reviews are absent.
 #[must_use]
-// Course, review, and rating counts stay far below 2^24, so the f32 casts below are exact.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "course, review, and rating counts stay far below 2^24, so f32 casts are exact"
+)]
 pub fn compute_match_score(
     instructor_subjects: &[(String, u32)],
     rmp_department: Option<&str>,
@@ -290,8 +292,10 @@ pub(super) fn extract_review_subjects(course_codes: Option<&[RmpCourseCode]>) ->
 }
 
 #[cfg(test)]
-// Scores are built from quantized constants, so exact comparisons are intentional.
-#[allow(clippy::float_cmp)]
+#[expect(
+    clippy::float_cmp,
+    reason = "scores are built from quantized constants, so exact comparisons are intentional"
+)]
 mod tests {
     use super::*;
 

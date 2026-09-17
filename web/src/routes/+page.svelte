@@ -74,7 +74,7 @@ function resolveState(urlSearch: string, options: SearchOptionsResponse | null) 
   };
 }
 
-// Hydrate initial filter state from URL -- intentionally one-time reads; $effect below handles re-sync
+// Hydrate initial filter state from URL. Intentionally one-time reads; $effect below handles re-sync
 const initial = resolveState(
   untrack(() => page.url.search),
   untrack(() => data.searchOptions)

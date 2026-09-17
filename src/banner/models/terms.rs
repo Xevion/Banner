@@ -9,7 +9,7 @@ use ts_rs::TS;
 use crate::data::models::UnknownVariant;
 
 /// The current year at the time of compilation
-#[allow(clippy::cast_sign_loss)] // compile-time calendar year is always positive
+#[expect(clippy::cast_sign_loss, reason = "compile-time calendar year is always positive")]
 const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 
 /// The valid years for terms, in **display-year** terms (not Banner code prefix).
@@ -17,7 +17,7 @@ const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 /// Banner encodes Fall terms as `(display_year + 1)10`: Fall 2001 -> code `200210`.
 /// This range validates the human-readable year, so Fall 2001 (`display_year` 2001) is accepted.
 ///
-/// Lower bound is 2001 -- the earliest term UTSA's Banner system serves is Fall 2001 (200210).
+/// Lower bound is 2001: the earliest term UTSA's Banner system serves is Fall 2001 (200210).
 /// Upper bound is compile-time year + 10 to stay tight without manual updates.
 const VALID_YEARS: RangeInclusive<u32> = 2001..=(CURRENT_YEAR + 10);
 
@@ -61,7 +61,10 @@ impl Term {
     /// Never panics in practice: the season branches below are exhaustive for any
     /// day of the year, so the final `panic!` is unreachable.
     #[must_use]
-    #[allow(clippy::cast_sign_loss)] // NaiveDate::year() is always positive for real calendar dates
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "callers pass present-day calendar dates, so year() is positive"
+    )]
     pub fn get_status_for_date(date: NaiveDate) -> TermPoint {
         let literal_year = date.year() as u32;
         let day_of_year = date.ordinal();
@@ -131,7 +134,7 @@ impl Term {
 
     /// Returns the start and end day of each term for the given year.
     /// The ranges are inclusive of the start day and exclusive of the end day.
-    #[allow(clippy::cast_possible_wrap)] // year is a calendar year, far under i32::MAX
+    #[expect(clippy::cast_possible_wrap, reason = "year is a calendar year, far under i32::MAX")]
     fn get_season_ranges(year: u32) -> SeasonRanges {
         let spring_start = NaiveDate::from_ymd_opt(year as i32, 1, 14).unwrap().ordinal();
         let spring_end = NaiveDate::from_ymd_opt(year as i32, 5, 1).unwrap().ordinal();
@@ -222,7 +225,7 @@ impl std::fmt::Display for Term {
     /// Returns the Banner term code in the format YYYYXX.
     ///
     /// Banner encodes Fall terms as `(display_year + 1)10`, so `Term { year: 2025, season: Fall }`
-    /// produces `"202610"` -- the prefix is `2025 + 1 = 2026`. Spring and Summer use the
+    /// produces `"202610"`: the prefix is `2025 + 1 = 2026`. Spring and Summer use the
     /// display year directly as the prefix.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code_year = match self.season {
@@ -390,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_term_from_str_fall_earliest() {
-        // Fall 2001 is the earliest UTSA term -- Banner code "200210"
+        // Fall 2001 is the earliest UTSA term, with Banner code "200210"
         let term = Term::from_str("200210").unwrap();
         assert_eq!(term.year, 2001);
         assert_eq!(term.season, Season::Fall);

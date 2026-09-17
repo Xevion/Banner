@@ -147,7 +147,7 @@ export class ApiErrorClass extends Error {
 
 /**
  * Read a structured ApiError body, or undefined when the response carries
- * anything else -- a proxy's own error page, HTML, or an unrelated JSON shape.
+ * anything else: a proxy's own error page, HTML, or an unrelated JSON shape.
  * Trusting an unvalidated body yields an error with every field undefined.
  */
 async function parseApiError(response: Response): Promise<ApiError | undefined> {

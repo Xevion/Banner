@@ -34,7 +34,7 @@ const rangesOf = (call: number): TimelineRange[] =>
 /**
  * A 20-slot viewport starting at slot `n`. The store's 15 % buffer is exactly
  * three slots at this span, so the requested range is [n - 3, n + 23] with no
- * rounding -- which keeps the range assertions below readable.
+ * rounding, which keeps the range assertions below readable.
  */
 const view = (store: { requestRange: (a: number, b: number) => void }, n: number) =>
   store.requestRange(ms(n), ms(n + 20));

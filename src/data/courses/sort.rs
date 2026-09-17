@@ -363,7 +363,7 @@ mod sort_tests {
     }
 
     /// The tiebreaker is what keeps offset paging stable across shared keys, so
-    /// no spec may omit it -- including the empty one.
+    /// no spec may omit it, including the empty one.
     #[test]
     fn every_spec_ends_on_the_tiebreaker() {
         assert!(SortSpec::default().to_sql().ends_with(DEFAULT_ORDER));

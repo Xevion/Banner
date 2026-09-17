@@ -41,7 +41,7 @@ pub struct MeetingLocation {
     pub campus: Option<String>,
 }
 
-/// Credit hours for a course section -- either a fixed value or a range.
+/// Credit hours for a course section: either a fixed value or a range.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export)]
@@ -160,9 +160,9 @@ text_column_enum!(RatingSource);
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct InstructorRating {
-    /// Posterior mean -- the headline number displayed to users.
+    /// Posterior mean: the headline number displayed to users.
     pub score: f32,
-    /// CI lower bound -- used for ranking (penalizes low confidence).
+    /// CI lower bound: used for ranking (penalizes low confidence).
     pub rank_score: f32,
     pub ci_lower: f32,
     pub ci_upper: f32,

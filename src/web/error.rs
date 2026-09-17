@@ -47,7 +47,6 @@ impl ApiError {
         }
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
@@ -146,7 +145,6 @@ impl<T> Option<T> {
     }
 }
 
-#[allow(dead_code)]
 #[extension(pub trait SqlxResultExt)]
 impl<T> Result<T, sqlx::Error> {
     /// Convert a `PostgreSQL` unique-constraint violation (`23505`) into

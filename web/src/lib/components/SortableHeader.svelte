@@ -28,7 +28,7 @@ let {
   headerClass,
   headerOverride,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic component accepts any row type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic component accepts any row type
   headerGroups: HeaderGroup<AppTableFeatures, any>[];
   thClass?: string;
   sortSpanClass?: string;

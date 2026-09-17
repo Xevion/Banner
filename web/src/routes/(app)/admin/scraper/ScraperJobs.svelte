@@ -69,7 +69,7 @@ const stream = useStream("scrapeJobs", null, {
 
 // Expose jobs as a derived binding for the template
 const jobs = $derived(stream.state);
-// Shared tooltip state -- single tooltip for all timing cells via event delegation
+// Shared tooltip state: single tooltip for all timing cells via event delegation
 let tooltipText = $state<string | null>(null);
 let tooltipX = $state(0);
 let tooltipY = $state(0);

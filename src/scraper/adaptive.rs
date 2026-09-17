@@ -25,13 +25,13 @@ const FAILURE_PAUSE_THRESHOLD: i64 = 5;
 /// Scheduling tier for a term based on its temporal status and archive flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TermCategory {
-    /// Active term -- full adaptive scheduling.
+    /// Active term, on full adaptive scheduling.
     Current,
-    /// Upcoming term -- full adaptive scheduling (same as current).
+    /// Upcoming term, on full adaptive scheduling (same as current).
     Future,
-    /// Banner "View Only" term -- fixed 3-week interval.
+    /// Banner "View Only" term, on a fixed 3-week interval.
     Archived,
-    /// Past non-archived term -- fixed 3-week interval (same as Archived).
+    /// Past non-archived term, on a fixed 3-week interval (same as Archived).
     Past,
 }
 
@@ -39,7 +39,6 @@ pub enum TermCategory {
 #[derive(Debug, Clone)]
 pub struct SubjectStats {
     pub subject: String,
-    #[allow(dead_code)]
     pub term: String,
     pub recent_runs: i64,
     pub avg_change_ratio: f64,

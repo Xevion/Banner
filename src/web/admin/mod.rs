@@ -57,7 +57,7 @@ pub struct AdminStatusResponse {
     services: Vec<AdminServiceInfo>,
 }
 
-/// `GET /api/admin/status` -- Enhanced system status for admins.
+/// `GET /api/admin/status`: Enhanced system status for admins.
 ///
 /// # Errors
 /// Internal error if any of the count queries fail.
@@ -107,7 +107,7 @@ pub async fn admin_status(
     }))
 }
 
-/// `GET /api/admin/users` -- List all users.
+/// `GET /api/admin/users`: List all users.
 ///
 /// # Errors
 /// Internal error if the user list query fails.
@@ -130,7 +130,7 @@ pub struct SetAdminBody {
     is_admin: bool,
 }
 
-/// `PUT /api/admin/users/{discord_id}/admin` -- Set admin status for a user.
+/// `PUT /api/admin/users/{discord_id}/admin`: Set admin status for a user.
 ///
 /// # Errors
 /// `NotFound` if no user has that Discord id; internal error if the update
@@ -163,7 +163,7 @@ pub async fn set_user_admin(
     Ok(Json(user))
 }
 
-/// `GET /api/admin/scrape-jobs` -- List scrape jobs.
+/// `GET /api/admin/scrape-jobs`: List scrape jobs.
 ///
 /// # Errors
 /// Internal error if the scrape job query fails.
@@ -194,7 +194,7 @@ fn parse_if_modified_since(headers: &HeaderMap) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc2822(val).ok().map(|dt| dt.with_timezone(&Utc))
 }
 
-/// `GET /api/admin/audit-log` -- List recent audit entries.
+/// `GET /api/admin/audit-log`: List recent audit entries.
 ///
 /// Supports `If-Modified-Since`: returns 304 when the newest entry hasn't changed.
 ///

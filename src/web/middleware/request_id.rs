@@ -94,8 +94,10 @@ where
             async move {
                 let mut result = future.await;
 
-                // A single request cannot run long enough to overflow a u64 of milliseconds.
-                #[allow(clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a single request cannot run long enough to overflow a u64 of milliseconds"
+                )]
                 let duration_ms = start.elapsed().as_millis() as u64;
 
                 match &result {

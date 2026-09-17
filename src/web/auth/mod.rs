@@ -33,7 +33,7 @@ const CALLBACK_PATH: &str = "/api/auth/callback";
 ///
 /// Priority:
 /// 1. Configured `redirect_base` (production override)
-/// 2. `Referer` header -- preserves the real browser origin even through
+/// 2. `Referer` header: preserves the real browser origin even through
 ///    reverse proxies that rewrite `Host` (e.g. Vite dev proxy with
 ///    `changeOrigin: true`)
 /// 3. `Origin` header (present on POST / CORS requests)
@@ -104,7 +104,7 @@ fn session_cookie(token: &str, max_age: i64, secure: bool) -> String {
     cookie
 }
 
-/// `GET /api/auth/login` -- Redirect to Discord `OAuth2` authorization page.
+/// `GET /api/auth/login`: Redirect to Discord `OAuth2` authorization page.
 ///
 /// # Panics
 /// If the hardcoded Discord authorize URL fails to parse, which cannot
@@ -136,7 +136,7 @@ pub async fn auth_login(
     Redirect::temporary(url.as_str())
 }
 
-/// `GET /api/auth/callback` -- Handle Discord `OAuth2` callback.
+/// `GET /api/auth/callback`: Handle Discord `OAuth2` callback.
 ///
 /// # Errors
 /// 400 if the CSRF state is invalid; 502 if the Discord token exchange or
@@ -260,8 +260,10 @@ pub async fn auth_callback(
 
     // 6. Build response with session cookie
     let secure = redirect_uri.starts_with("https://");
-    // SESSION_DURATION_SECS is a 7-day constant, far under i64::MAX.
-    #[allow(clippy::cast_possible_wrap)]
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "SESSION_DURATION_SECS is a 7-day constant, far under i64::MAX"
+    )]
     let max_age = crate::data::sessions::SESSION_DURATION_SECS as i64;
     let cookie = session_cookie(&session.id, max_age, secure);
 
@@ -270,7 +272,7 @@ pub async fn auth_callback(
     Ok(([(header::SET_COOKIE, cookie)], Redirect::temporary(redirect_to)).into_response())
 }
 
-/// `POST /api/auth/logout` -- Destroy the current session.
+/// `POST /api/auth/logout`: Destroy the current session.
 #[instrument(skip_all)]
 pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(token) = extract_session_token(&headers) {
@@ -290,7 +292,7 @@ pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> R
         .into_response()
 }
 
-/// `GET /api/auth/me` -- Return the current authenticated user's info.
+/// `GET /api/auth/me`: Return the current authenticated user's info.
 ///
 /// # Errors
 /// 401 if the session cookie is missing or does not resolve to a user.

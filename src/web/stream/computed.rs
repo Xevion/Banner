@@ -236,8 +236,10 @@ async fn recompute_stale(
                 match scraper_stats::compute_stats(pool, period, term.as_deref()).await {
                     Ok(raw) => {
                         let success_rate = if raw.total_scrapes > 0 {
-                            // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
-                            #[allow(clippy::cast_precision_loss)]
+                            #[expect(
+                                clippy::cast_precision_loss,
+                                reason = "scrape counts stay well under 2^52, so the f64 conversion is exact in practice"
+                            )]
                             let rate = raw.successful_scrapes as f64 / raw.total_scrapes as f64;
                             Some(rate)
                         } else {

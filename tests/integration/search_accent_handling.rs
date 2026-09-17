@@ -164,7 +164,7 @@ async fn test_search_courses_instructor_filter_unaccented() {
     let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
-    // Filter by slug for Garcia Lopez, Jose -- slug assigned in insert_accented_test_data
+    // Filter by slug for Garcia Lopez, Jose: slug assigned in insert_accented_test_data
     let slugs = vec!["garcia-lopez-jose-t001".to_string()];
     let filter = SearchFilter {
         term_code: "202620",
@@ -190,7 +190,7 @@ async fn test_search_courses_instructor_filter_muller() {
     let pool = test_db!().await;
     insert_accented_test_data(&pool).await;
 
-    // Filter by slug for Muller, Francois -- slug assigned in insert_accented_test_data
+    // Filter by slug for Muller, Francois: slug assigned in insert_accented_test_data
     let slugs = vec!["muller-francois-t002".to_string()];
     let filter = SearchFilter {
         term_code: "202620",

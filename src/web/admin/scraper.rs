@@ -60,7 +60,7 @@ pub struct ScraperStatsResponse {
     pub locked_jobs: i64,
 }
 
-/// `GET /api/admin/scraper/stats` -- Aggregate scrape stats for a period.
+/// `GET /api/admin/scraper/stats`: Aggregate scrape stats for a period.
 ///
 /// # Errors
 /// `BadRequest` if `period` is not a recognized value; internal error if the
@@ -85,8 +85,10 @@ pub async fn scraper_stats(
         })?;
 
     let success_rate = if computed.total_scrapes > 0 {
-        // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "scrape counts stay well under 2^52, so the f64 conversion is exact in practice"
+        )]
         let rate = computed.successful_scrapes as f64 / computed.total_scrapes as f64;
         Some(rate)
     } else {
@@ -151,7 +153,7 @@ pub struct TimeseriesPoint {
     pub avg_duration_ms: f64,
 }
 
-/// `GET /api/admin/scraper/timeseries` -- Scrape counts bucketed over a period.
+/// `GET /api/admin/scraper/timeseries`: Scrape counts bucketed over a period.
 ///
 /// # Errors
 /// `BadRequest` if `period` or `bucket` is not a recognized value; internal
@@ -252,7 +254,7 @@ impl PartialEq for SubjectSummary {
     }
 }
 
-/// `GET /api/admin/scraper/subjects` -- Per-subject scheduling and scrape summaries.
+/// `GET /api/admin/scraper/subjects`: Per-subject scheduling and scrape summaries.
 ///
 /// # Errors
 /// Internal error if the subject stats query fails.
@@ -335,7 +337,7 @@ pub struct SubjectResultEntry {
     metrics_generated: Option<Count>,
 }
 
-/// `GET /api/admin/scraper/subjects/{subject}` -- Recent scrape results for a subject.
+/// `GET /api/admin/scraper/subjects/{subject}`: Recent scrape results for a subject.
 ///
 /// # Errors
 /// Internal error if the subject detail query fails.

@@ -1,4 +1,7 @@
-#![allow(dead_code)]
+#![expect(
+    dead_code,
+    reason = "every suite compiles into one binary and each uses a different subset of these helpers"
+)]
 
 pub mod db;
 

@@ -1,8 +1,9 @@
 //! Standard `process_*` metrics, read from procfs. Most Grafana dashboards assume these exist.
 
-// Prometheus gauges are f64; every procfs value converted here (bytes, ticks, fd counts) stays
-// far below 2^53 for the life of a real process.
-#![allow(clippy::cast_precision_loss)]
+#![expect(
+    clippy::cast_precision_loss,
+    reason = "Prometheus gauges are f64 and every procfs value converted here (bytes, ticks, fd counts) stays far below 2^53 for the life of a real process"
+)]
 
 use std::sync::OnceLock;
 

@@ -1,26 +1,9 @@
-use crate::app::App;
-use crate::cli::{Args, ServiceName};
-use crate::logging::setup_logging;
+use banner::app::App;
+use banner::cli::{Args, ServiceName};
+use banner::logging::setup_logging;
 use clap::Parser;
 use std::process::ExitCode;
 use tracing::info;
-
-mod app;
-mod banner;
-mod bluebook;
-mod bot;
-mod calendar;
-mod cli;
-mod config;
-mod data;
-mod logging;
-mod rmp;
-mod runtime;
-mod scraper;
-mod state;
-mod telemetry;
-mod utils;
-mod web;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -44,7 +27,7 @@ async fn main() -> ExitCode {
                     k.into()
                 }
             }))
-            .extract::<crate::config::Config>()
+            .extract::<banner::config::Config>()
             .expect("Failed to load config for logging setup")
     };
     setup_logging(&early_config, args.tracing);

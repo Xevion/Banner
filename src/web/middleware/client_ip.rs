@@ -15,7 +15,6 @@ use http::request::Parts;
 use std::net::{IpAddr, SocketAddr};
 
 /// The resolved client IP address.
-#[allow(dead_code)]
 pub struct ClientIp(pub IpAddr);
 
 impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
@@ -29,12 +28,12 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
 
 impl ClientIp {
     fn resolve(parts: &Parts) -> Result<Self, (StatusCode, &'static str)> {
-        // 1. CF-Connecting-IP -- set by Cloudflare, most trustworthy.
+        // 1. CF-Connecting-IP: set by Cloudflare, most trustworthy.
         if let Some(ip) = header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok()) {
             return Ok(ClientIp(ip));
         }
 
-        // 2. Rightmost X-Forwarded-For -- appended by Railway's edge proxy.
+        // 2. Rightmost X-Forwarded-For: appended by Railway's edge proxy.
         if let Some(xff) = header_str(&parts.headers, "x-forwarded-for")
             && let Some(ip) = xff
                 .rsplit(',')

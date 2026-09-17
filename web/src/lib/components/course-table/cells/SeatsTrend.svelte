@@ -8,7 +8,7 @@ let {
 }: { samples: TrendSample[]; width?: number; height?: number } = $props();
 
 // Same encoding as the History tab's chart: blue enrolled, orange waiting, one shared
-// scale. The point is movement -- a full section that churns reads differently from a
+// scale. The point is movement: a full section that churns reads differently from a
 // full section that has not moved since April.
 const PAD = 1.5;
 

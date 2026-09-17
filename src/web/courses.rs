@@ -239,8 +239,10 @@ pub fn build_course_response(
         .into_iter()
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
-                // RMP ratings sit in 0.0..=5.0, well within f32 precision.
-                #[allow(clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "RMP ratings sit in 0.0..=5.0, well within f32 precision"
+                )]
                 let avg_rating_f32 = i.avg_rating.map(|v| v as f32);
                 let (avg_rating, num_ratings) =
                     crate::data::course_types::sanitize_rmp_ratings(avg_rating_f32, i.num_ratings);
@@ -372,9 +374,10 @@ pub fn build_course_response(
 
     let credit_hours = match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {
         (Some(fixed), _, _) => Some(CreditHours::Fixed { hours: fixed }),
-        // Both bounds come straight from Banner with no arithmetic applied, so
-        // exact equality identifies a fixed value rather than a real range.
-        #[allow(clippy::float_cmp)]
+        #[expect(
+            clippy::float_cmp,
+            reason = "both bounds come straight from Banner with no arithmetic applied, so exact equality identifies a fixed value rather than a real range"
+        )]
         (None, Some(low), Some(high)) if low != high => Some(CreditHours::Range { low, high }),
         (None, Some(hours), None) | (None, None, Some(hours)) => Some(CreditHours::Fixed { hours }),
         _ => None,

@@ -169,7 +169,7 @@ async fn test_batch_upsert_unique_constraint_crn_term() {
 #[tokio::test]
 async fn test_batch_upsert_creates_audit_and_metric_entries() {
     let pool = test_db!().await;
-    // Insert initial data -- should create a baseline metric but no audits
+    // Insert initial data, which should create a baseline metric but no audits
     let initial = vec![crate::helpers::make_course(
         "50001",
         "202510",
@@ -251,7 +251,7 @@ async fn test_batch_upsert_creates_audit_and_metric_entries() {
 #[tokio::test]
 async fn test_batch_upsert_no_change_no_audit() {
     let pool = test_db!().await;
-    // Insert then re-insert identical data -- should produce baseline metric but no audits or extra metrics
+    // Insert then re-insert identical data, which should produce baseline metric but no audits or extra metrics
     let course = vec![crate::helpers::make_course(
         "60001",
         "202510",
@@ -607,7 +607,7 @@ async fn test_chained_merge_keeps_the_earlier_decision() {
     assert_eq!(landed.0, third, "the section lands on the final survivor");
 }
 
-/// Two records sharing a display name across distinct accounts -- the shape
+/// Two records sharing a display name across distinct accounts. The shape
 /// review keeps offering until someone records that they are two people.
 async fn seed_distinct_namesakes(pool: &PgPool) -> (i32, i32) {
     let mut a = crate::helpers::make_course("20020", "202510", "AST", "1013", "Stars", (5, 30, 0, 0));

@@ -356,9 +356,9 @@ export function formatCreditHours(course: CourseResponse): string {
 
 /** Which way round an instructor's name reads. */
 export const NameFormat = {
-  /** "Aamir Zulfiqar" -- natural reading order. */
+  /** "Aamir Zulfiqar": natural reading order. */
   FirstNameFirst: "firstNameFirst",
-  /** "Zulfiqar, Aamir" -- Banner's own order, and what a surname sort implies. */
+  /** "Zulfiqar, Aamir": Banner's own order, and what a surname sort implies. */
   LastNameFirst: "lastNameFirst",
 } as const;
 

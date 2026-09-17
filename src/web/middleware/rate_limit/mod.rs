@@ -2,10 +2,10 @@
 //!
 //! Four layers evaluated in order (first rejection wins):
 //!
-//! 1. **Global per-IP** -- burst (5s) + sustained (1min)
-//! 2. **Route-group** -- sustained (1min) + long-term (30min), different budgets for API/SSR/admin
-//! 3. **Endpoint-specific** -- all three windows on expensive endpoints
-//! 4. **Auth-aware multiplier** -- authenticated 2x, admin 10x
+//! 1. **Global per-IP**: burst (5s) + sustained (1min)
+//! 2. **Route-group**: sustained (1min) + long-term (30min), different budgets for API/SSR/admin
+//! 3. **Endpoint-specific**: all three windows on expensive endpoints
+//! 4. **Auth-aware multiplier**: authenticated 2x, admin 10x
 //!
 //! Requests carrying a valid `X-Internal-Token` header (set by the SSR proxy)
 //! bypass all rate limiting to avoid double-counting SSR -> API calls.
@@ -24,16 +24,14 @@ use std::time::Duration;
 use tower::{Layer, Service};
 use tracing::warn;
 
-// -- Route classification --
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum RouteGroup {
     Api,
     Ssr,
     Admin,
-    /// Health/metrics endpoints -- no route-group limiting.
+    /// Health/metrics endpoints: no route-group limiting.
     Internal,
-    /// Static assets (JS, CSS, fonts, images) -- exempt from all rate limiting.
+    /// Static assets (JS, CSS, fonts, images): exempt from all rate limiting.
     Static,
 }
 
@@ -109,29 +107,6 @@ fn classify_endpoint(path: &str) -> Option<TrackedEndpoint> {
         None
     }
 }
-
-// -- Auth tier --
-
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // Authenticated/Admin variants used once session-based tier detection is added.
-enum AuthTier {
-    Anonymous,
-    Authenticated,
-    Admin,
-}
-
-impl AuthTier {
-    #[allow(dead_code)] // Used once session-based tier detection is added.
-    fn multiplier(self) -> u32 {
-        match self {
-            AuthTier::Anonymous => 1,
-            AuthTier::Authenticated => 2,
-            AuthTier::Admin => 10,
-        }
-    }
-}
-
-// -- Shared rate limit state --
 
 /// Holds all keyed rate limiters for the multi-layer system.
 ///
@@ -226,7 +201,7 @@ impl RateLimitState {
 
     /// Check all applicable rate limits for the request. Returns `Ok(())` if
     /// allowed, or `Err(retry_after_secs)` with the longest wait time.
-    fn check(&self, ip: IpAddr, path: &str, _tier: AuthTier) -> Result<(), u64> {
+    fn check(&self, ip: IpAddr, path: &str) -> Result<(), u64> {
         let group = classify_route(path);
 
         // Static assets are exempt from all rate limiting.
@@ -343,8 +318,6 @@ impl RateLimitState {
 
 pub type SharedRateLimitState = Arc<RateLimitState>;
 
-// -- Tower Layer + Service --
-
 #[derive(Clone)]
 pub struct RateLimitLayer {
     state: SharedRateLimitState,
@@ -402,11 +375,8 @@ where
 
         let path = req.uri().path().to_string();
 
-        // TODO: auth tier detection from session cookie -- for now, anonymous.
-        let tier = AuthTier::Anonymous;
-
         if let Some(ip) = client_ip {
-            match self.state.check(ip, &path, tier) {
+            match self.state.check(ip, &path) {
                 Ok(()) => {
                     let future = self.inner.call(req);
                     Box::pin(future)
@@ -423,7 +393,7 @@ where
                 }
             }
         } else {
-            // Cannot determine IP -- allow but log.
+            // Cannot determine IP, so allow but log.
             let future = self.inner.call(req);
             Box::pin(future)
         }

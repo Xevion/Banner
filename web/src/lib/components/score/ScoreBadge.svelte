@@ -14,9 +14,8 @@ let {
   size?: "xs" | "sm" | "lg";
 } = $props();
 
-// >= 0.5: well-sampled (7+ RMP or 10+ BB responses) -- solid border, source icon
-// [0.3, 0.5): sparse data -- dashed border, source icon
-// < 0.3: very sparse (e.g. 1 BB response) -- dashed border, Triangle overrides source
+// >= 0.5 is well sampled (7+ RMP or 10+ BB responses) and carries no border;
+// [0.3, 0.5) is sparse and dashed; below that a Triangle replaces the source icon.
 const tier = $derived(confidence >= 0.5 ? "high" : confidence >= 0.3 ? "medium" : "low");
 
 const sizeClasses = {

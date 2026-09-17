@@ -10,7 +10,7 @@ let {
   rowHeight = "h-3.5",
   defaultWidth = "w-20",
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic component accepts any column type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic component accepts any column type
   columns: ColumnDef<AppTableFeatures, any, any>[];
   rowCount?: number;
   skeletonWidths?: Record<string, string>;

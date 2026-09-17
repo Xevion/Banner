@@ -228,7 +228,7 @@ async fn test_filter_day_excludes_tba() {
     let pool = test_db!().await;
     insert_test_courses(&pool).await;
 
-    // Try every individual day -- TBA course (10006) should never appear
+    // Try every individual day. The TBA course (10006) should never appear
     let all_days = [
         "monday",
         "tuesday",

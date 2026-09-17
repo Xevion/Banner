@@ -124,7 +124,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 
     let cleared = clear_previous_run(&mut tx).await?;
 
-    // 'confirmed' and 'rejected' are human decisions -- never touch them.
+    // 'confirmed' and 'rejected' are human decisions. Never touch them.
     let instructors = sqlx::query!(
         r#"
         SELECT i.id, i.display_name
@@ -320,8 +320,11 @@ async fn load_instructor_subjects(
 
     let mut subject_map: HashMap<i32, Vec<(String, u32)>> = HashMap::new();
     for row in rows {
-        // A per-instructor-subject course count stays far below u32::MAX.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a per-instructor-subject course count stays far below u32::MAX"
+        )]
         let count = row.count.max(0) as u32;
         subject_map
             .entry(row.instructor_id)
@@ -592,7 +595,7 @@ fn decide_auto_links(instructor_id: i32, scored: &[(i32, MatchScore)], matched: 
             decision.accepted.push((instructor_id, *legacy_id, ms.score));
         }
         // A confirmed profile establishes who this is, so RMP's other
-        // profiles for the same name are the same person -- unless another
+        // profiles for the same name are the same person, unless another
         // instructor is also claiming one.
         if let Some(name) = identified {
             for (legacy_id, ms) in scored {

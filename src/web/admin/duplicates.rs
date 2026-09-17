@@ -80,7 +80,7 @@ pub struct MergeResponse {
     pub ok: bool,
 }
 
-/// `GET /api/admin/instructors/duplicates` -- List duplicate instructor pairs.
+/// `GET /api/admin/instructors/duplicates`: List duplicate instructor pairs.
 ///
 /// # Errors
 /// Internal error if either query fails.
@@ -106,7 +106,7 @@ pub async fn list_duplicates(
     Ok(Json(DuplicatesResponse { pairs, dismissed }))
 }
 
-/// `POST /api/admin/instructors/merge` -- Fold one instructor record into another.
+/// `POST /api/admin/instructors/merge`: Fold one instructor record into another.
 ///
 /// # Errors
 /// `BadRequest` if the ids are equal, either instructor is missing, or the
@@ -163,7 +163,7 @@ pub struct MergeClaimantBody {
     rmp_legacy_id: i32,
 }
 
-/// `POST /api/admin/instructors/{id}/merge-claimant` -- Resolve a blocked
+/// `POST /api/admin/instructors/{id}/merge-claimant`: Resolve a blocked
 /// candidate by merging this record into the one already holding the profile.
 ///
 /// # Errors
@@ -211,7 +211,7 @@ pub async fn merge_claimant(
     Ok(Json(MergeResponse { ok: true }))
 }
 
-/// `POST /api/admin/instructors/merge-duplicates` -- Merge every unambiguous pair.
+/// `POST /api/admin/instructors/merge-duplicates`: Merge every unambiguous pair.
 ///
 /// # Errors
 /// Internal error if the auto-merge query fails.
@@ -247,7 +247,7 @@ pub async fn merge_all(
     Ok(Json(merge_stats))
 }
 
-/// `POST /api/admin/instructors/dismiss` -- Record that a pair is two people.
+/// `POST /api/admin/instructors/dismiss`: Record that a pair is two people.
 ///
 /// # Errors
 /// `BadRequest` if the ids are equal or either instructor is missing;
@@ -281,7 +281,7 @@ pub async fn dismiss(
     Ok(Json(MergeResponse { ok: true }))
 }
 
-/// `POST /api/admin/instructors/undismiss` -- Return a dismissed pair to review.
+/// `POST /api/admin/instructors/undismiss`: Return a dismissed pair to review.
 ///
 /// # Errors
 /// `BadRequest` if the ids are equal; internal error otherwise.

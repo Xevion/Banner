@@ -13,7 +13,10 @@ use serde::Deserialize;
 /// Browser CSP violation report payload.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "original_policy is deserialized for the report schema but never read; the other fields are logged in csp_report"
+)]
 struct CspReport {
     document_uri: Option<String>,
     violated_directive: Option<String>,
@@ -32,7 +35,7 @@ struct CspReportWrapper {
     csp_report: CspReport,
 }
 
-/// `POST /api/csp-report` -- receives CSP violation reports from browsers.
+/// `POST /api/csp-report`: receives CSP violation reports from browsers.
 ///
 /// Accepts both `application/csp-report` and `application/json` content types.
 pub(crate) async fn csp_report(body: Bytes) -> StatusCode {

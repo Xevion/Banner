@@ -110,7 +110,10 @@ mod tests {
     fn test_parse_json_with_context_null_value() {
         #[derive(Debug, Deserialize)]
         struct TestStruct {
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             name: String,
         }
 
@@ -129,25 +132,40 @@ mod tests {
     fn test_realistic_banner_error() {
         #[derive(Debug, Deserialize)]
         struct Course {
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             #[serde(rename = "courseTitle")]
             course_title: String,
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             faculty: Vec<Faculty>,
         }
 
         #[derive(Debug, Deserialize)]
         struct Faculty {
             #[serde(rename = "displayName")]
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             display_name: String,
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             email: String,
         }
 
         #[derive(Debug, Deserialize)]
         struct SearchResult {
-            #[allow(dead_code)]
+            #[expect(
+                dead_code,
+                reason = "field exists only to exercise deserialization, never read afterward"
+            )]
             data: Vec<Course>,
         }
 

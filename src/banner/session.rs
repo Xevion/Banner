@@ -263,7 +263,7 @@ impl SessionPool {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_err()
             {
-                continue; // Lost the race -- loop back and wait.
+                continue; // Lost the race, loop back and wait.
             }
 
             // Guard resets is_creating on drop (including cancellation).

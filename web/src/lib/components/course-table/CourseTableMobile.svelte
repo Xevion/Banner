@@ -23,7 +23,7 @@ let {
 
 <div class="flex flex-col gap-2 sm:hidden">
   {#if loading && courses.length === 0}
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -- Static skeleton markup, no user input -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- static skeleton markup, no user input -->
     {@html buildCardSkeletonHtml(skeletonRowCount)}
   {:else if courses.length === 0 && !loading}
     <EmptyState />

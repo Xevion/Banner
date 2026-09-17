@@ -47,7 +47,7 @@ async function expectHandleLabels(canvasElement, names) {
   name="Default Dual"
   args={{ min: 0, max: 100, label: 'Credit Hours', valueLow: 20, valueHigh: 80 }}
   play={async ({ canvasElement }) => {
-    await expectReadout(canvasElement, "20 – 80");
+    await expectReadout(canvasElement, "20 \u2013 80");
     await expectHandleLabels(canvasElement, ["Credit Hours minimum", "Credit Hours maximum"]);
   }}
 />
@@ -60,7 +60,7 @@ async function expectHandleLabels(canvasElement, names) {
   name="At Default Bounds"
   args={{ min: 0, max: 100, label: 'Credit Hours' }}
   play={async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryByText(/–/)).toBeNull();
+    await expect(within(canvasElement).queryByText(/\u2013/)).toBeNull();
     await expect(within(canvasElement).getByText("Credit Hours")).toBeVisible();
   }}
 />
@@ -70,7 +70,7 @@ async function expectHandleLabels(canvasElement, names) {
   name="Single Thumb"
   args={{ min: 0, max: 100, label: 'Maximum Credits', dual: false, value: 60 }}
   play={async ({ canvasElement }) => {
-    await expectReadout(canvasElement, "≤ 60");
+    await expectReadout(canvasElement, "\u2264 60");
     await expectHandleLabels(canvasElement, ["Maximum Credits maximum"]);
   }}
 />
@@ -78,7 +78,7 @@ async function expectHandleLabels(canvasElement, names) {
 <Story
   name="With Pips"
   args={{ min: 0, max: 100, label: 'Credit Hours', pips: true, pipstep: 25, valueLow: 25, valueHigh: 75 }}
-  play={async ({ canvasElement }) => await expectReadout(canvasElement, "25 – 75")}
+  play={async ({ canvasElement }) => await expectReadout(canvasElement, "25 \u2013 75")}
 />
 
 <!-- formatValue reaches the readout, the pips and the floating handle label. -->
@@ -92,7 +92,7 @@ async function expectHandleLabels(canvasElement, names) {
     valueHigh: 800,
     formatValue: (v) => `$${v}`,
   }}
-  play={async ({ canvasElement }) => await expectReadout(canvasElement, "$200 – $800")}
+  play={async ({ canvasElement }) => await expectReadout(canvasElement, "$200 \u2013 $800")}
 />
 
 <!-- A fractional step, where the raw numbers would read as 3 and 3.5000000001. -->
@@ -107,5 +107,5 @@ async function expectHandleLabels(canvasElement, names) {
     valueHigh: 3.5,
     formatValue: (v) => v.toFixed(1),
   }}
-  play={async ({ canvasElement }) => await expectReadout(canvasElement, "3.0 – 3.5")}
+  play={async ({ canvasElement }) => await expectReadout(canvasElement, "3.0 \u2013 3.5")}
 />

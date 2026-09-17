@@ -3,7 +3,7 @@
 //! Accepts multiple time ranges, merges overlaps, aligns to 15-minute
 //! slot boundaries, and returns per-subject enrollment totals for each slot.
 //! Only courses whose meeting times overlap a given slot contribute to that
-//! slot's totals -- so the chart reflects the actual class schedule rhythm.
+//! slot's totals, so the chart reflects the actual class schedule rhythm.
 //!
 //! Course data is served from an ISR-style in-memory cache (see
 //! [`ScheduleCache`]) that refreshes hourly in the background with
@@ -188,7 +188,7 @@ pub(crate) async fn timeline(
             let slot_start_minutes = time_to_minutes(local_time);
             let slot_end_minutes = slot_start_minutes + SLOT_MINUTES;
 
-            // Use Arc<str> keys internally -- Arc::clone is an atomic refcount
+            // Use Arc<str> keys internally: Arc::clone is an atomic refcount
             // bump vs String::clone which heap-allocates every time.
             let mut subject_totals: BTreeMap<Arc<str>, i64> = BTreeMap::new();
 
@@ -221,8 +221,10 @@ pub(crate) async fn timeline(
 
 /// Convert a `NaiveTime` to minutes since midnight.
 fn time_to_minutes(t: NaiveTime) -> u16 {
-    // hour() < 24 and minute() < 60, so the result is always <= 1439.
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "hour() < 24 and minute() < 60, so the result is always <= 1439"
+    )]
     let minutes = (t.hour() * 60 + t.minute()) as u16;
     minutes
 }

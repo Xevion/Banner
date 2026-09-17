@@ -1,4 +1,4 @@
-//! Business logic for scraper statistics -- period/bucket validation and
+//! Business logic for scraper statistics: period/bucket validation and
 //! query orchestration. The actual SQL lives in [`crate::data::admin_scraper`].
 
 use std::sync::Arc;

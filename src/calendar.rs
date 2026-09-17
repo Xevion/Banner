@@ -206,7 +206,6 @@ pub struct IcsResult {
     pub content: String,
     pub filename: String,
     /// Holiday dates excluded via EXDATE rules, for user-facing messages.
-    #[allow(dead_code)]
     pub excluded_holidays: Vec<String>,
 }
 

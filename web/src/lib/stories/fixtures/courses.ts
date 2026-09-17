@@ -264,7 +264,7 @@ export const overenrolledCourse: CourseResponse = {
 };
 
 /**
- * Overenrolled and waitlisted at once -- the two "no seats" signals in conflict,
+ * Overenrolled and waitlisted at once: the two "no seats" signals in conflict,
  * where the seat count has to resolve which one it reports.
  */
 export const overenrolledWaitlistedCourse: CourseResponse = {

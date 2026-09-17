@@ -172,7 +172,10 @@ impl Worker {
     }
 
     /// Handle the result of job processing
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the scrape_job_results row that insert_result writes"
+    )]
     async fn handle_job_result(
         &self,
         job_id: i32,
@@ -338,7 +341,10 @@ impl Worker {
     }
 
     /// Handle recoverable errors by logging appropriately and unlocking the job
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the scrape_job_results row that insert_result writes"
+    )]
     async fn handle_recoverable_error(
         &self,
         job_id: i32,
@@ -420,7 +426,7 @@ impl Worker {
                 }
             }
         } else {
-            // Max retries exceeded -- log final failure result
+            // Max retries exceeded, so log the final failure result
             let duration_ms = DurationMs::new(u32::try_from(duration.as_millis()).unwrap_or(u32::MAX));
             let err_msg = format!("{e:#}");
             if let Err(log_err) = self

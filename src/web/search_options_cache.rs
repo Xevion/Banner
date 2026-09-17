@@ -1,6 +1,6 @@
 //! TTL cache for search-options responses, one snapshot per term.
 //!
-//! Stores typed `Arc<SearchOptionsResponse>` -- no JSON round-trip on reads.
+//! Stores typed `Arc<SearchOptionsResponse>`: no JSON round-trip on reads.
 //! Singleflight per term key prevents thundering-herd on cache miss.
 
 use crate::web::search_options::SearchOptionsResponse;

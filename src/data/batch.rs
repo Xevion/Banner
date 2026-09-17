@@ -229,9 +229,9 @@ struct MetricEntry {
 /// Compare old vs new for a single field, pushing an `AuditEntry` when they differ.
 ///
 /// Three variants:
-/// - `diff_field!(audits, row, field_name, old_field, new_field)` -- `Option<T>` old vs `T` new
-/// - `diff_field!(opt audits, row, field_name, old_field, new_field)` -- `Option<T>` old vs `Option<T>` new
-/// - `diff_field!(json audits, row, field_name, old_field, new_field)` -- `Option<Value>` old vs `Value` new
+/// - `diff_field!(audits, row, field_name, old_field, new_field)`: `Option<T>` old vs `T` new
+/// - `diff_field!(opt audits, row, field_name, old_field, new_field)`: `Option<T>` old vs `Option<T>` new
+/// - `diff_field!(json audits, row, field_name, old_field, new_field)`: `Option<Value>` old vs `Value` new
 ///
 /// All variants skip when `old_id` is None (fresh insert).
 macro_rules! diff_field {
@@ -1180,11 +1180,15 @@ async fn sync_course_meetings(
                     let begin_tr = TimeRange::from_hhmm(b, e);
                     match begin_tr {
                         Some(tr) => {
-                            // hour() is 0-23 and minute() is 0-59, so the minute-of-day
-                            // total never exceeds 1439 and always fits i16.
-                            #[allow(clippy::cast_possible_truncation)]
+                            #[expect(
+                                clippy::cast_possible_truncation,
+                                reason = "hour() * 60 + minute() is at most 1439, which fits i16"
+                            )]
                             let b_min = (tr.start.hour() * 60 + tr.start.minute()) as i16;
-                            #[allow(clippy::cast_possible_truncation)]
+                            #[expect(
+                                clippy::cast_possible_truncation,
+                                reason = "hour() * 60 + minute() is at most 1439, which fits i16"
+                            )]
                             let e_min = (tr.end.hour() * 60 + tr.end.minute()) as i16;
                             if e_min <= b_min {
                                 continue;

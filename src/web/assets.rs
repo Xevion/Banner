@@ -36,7 +36,7 @@ pub fn assets_dir() -> &'static Path {
 /// safe to cache indefinitely. Other assets get shorter cache durations.
 fn set_cache_control(headers: &mut HeaderMap, path: &str) {
     let cache_control = if path.contains("immutable/") {
-        // SvelteKit fingerprinted assets -- cache forever
+        // SvelteKit fingerprinted assets: cache forever
         "public, max-age=31536000, immutable"
     } else if Path::new(path)
         .extension()

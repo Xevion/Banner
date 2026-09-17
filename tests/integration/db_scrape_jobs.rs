@@ -287,7 +287,7 @@ async fn find_existing_payloads_returns_matching() {
 
     assert!(existing.contains(&payload_json(&payload_a).to_string()));
     assert!(existing.contains(&payload_json(&payload_b).to_string()));
-    // payload_c is SingleCrn, not Subject -- should not match
+    // payload_c is SingleCrn, not Subject, so it should not match
     assert!(!existing.contains(&payload_json(&payload_c).to_string()));
 }
 

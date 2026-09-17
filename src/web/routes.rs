@@ -41,7 +41,7 @@ pub mod cache {
     pub const SEARCH: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
     /// Course/instructor detail (typically paired with `ETag`).
     pub const DETAIL: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
-    /// Admin endpoints -- never cache.
+    /// Admin endpoints: never cache.
     pub const ADMIN: &str = "private, no-store, must-revalidate";
 }
 

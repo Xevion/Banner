@@ -18,7 +18,6 @@ use crate::data::bluebook::{
     mark_subject_scraped,
 };
 
-#[allow(dead_code)]
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
 
 /// Re-scrape interval for subjects with evaluations in a recent term (within ~2 years).
@@ -65,7 +64,6 @@ impl BlueBookSeason {
 /// Convert a `BlueBook` term string (e.g. `"Spr 2026"`) to a Banner [`Term`].
 ///
 /// Summer I and Summer II are both collapsed to `Season::Summer`.
-#[allow(dead_code)]
 fn normalize_term(bluebook_term: &str) -> Option<Term> {
     let parts: Vec<&str> = bluebook_term.trim().rsplitn(2, ' ').collect();
     if parts.len() != 2 {
@@ -99,7 +97,6 @@ fn normalize_term(bluebook_term: &str) -> Option<Term> {
 /// All form field values extracted from an `ASP.NET` `WebForms` page.
 /// `WebForms` requires the complete set of fields to be round-tripped on every POST.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 struct FormFields(Vec<(String, String)>);
 
 const TERM_FILTER_RADIO: &str = "ctl00$MainContent$mainContent1$CourseTermSelectRBL";
@@ -113,7 +110,6 @@ impl FormFields {
 
 /// A subject entry from the `BlueBook` `ComboBox`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct SubjectEntry {
     /// Subject code, e.g. "CS"
     code: String,
@@ -165,20 +161,17 @@ fn is_recent_subject(max_term: Option<&str>, current_term_code: &str) -> bool {
 }
 
 /// Client for scraping `BlueBook` course evaluations.
-#[allow(dead_code)]
 pub(crate) struct BlueBookClient {
     http: reqwest::Client,
     delay: Duration,
 }
 
-#[allow(dead_code)]
 impl Default for BlueBookClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[allow(dead_code)]
 impl BlueBookClient {
     pub(crate) fn new() -> Self {
         Self {
@@ -205,7 +198,7 @@ impl BlueBookClient {
             };
             let input_type = input.attr("type").unwrap_or("text").to_lowercase();
 
-            // Skip buttons and image inputs -- they're only sent when clicked
+            // Skip buttons and image inputs because they are only sent when clicked
             if input_type == "submit" || input_type == "image" || input_type == "button" {
                 continue;
             }
@@ -403,7 +396,7 @@ impl BlueBookClient {
         let button_name = format!("ctl00$MainContent$mainContent1$PagerImgBtn_Next{suffix}");
 
         let mut params = fields.0.clone();
-        // Clear __EVENTTARGET -- image buttons don't use it
+        // Clear __EVENTTARGET because image buttons don't use it
         if let Some(et) = params.iter_mut().find(|(n, _)| n == "__EVENTTARGET") {
             et.1 = String::new();
         }
@@ -470,7 +463,7 @@ impl BlueBookClient {
                 continue;
             }
 
-            // Course.Section: "CS 1083.001" -- extract course_number and section
+            // Course.Section "CS 1083.001" is parsed into course_number and section
             let course_section = cells[2].trim();
             let Some((course_number, section)) = Self::parse_course_section(course_section, subject) else {
                 warn!(
@@ -657,7 +650,7 @@ impl BlueBookClient {
         for (i, subject) in eligible_subjects.iter().enumerate() {
             let progress = i + 1;
 
-            // Search for the subject (drop Html before next await -- Html is !Send)
+            // Search for the subject (drop Html before next await, since Html is !Send)
             let fields = match self.search_subject(subject, &initial_fields).await {
                 Ok((_html, fields)) => fields,
                 Err(e) => {
@@ -736,8 +729,10 @@ impl BlueBookClient {
                 }
             }
 
-            // subject_evals is one subject's scraped rows, far under u32::MAX
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "subject_evals is one subject's scraped rows, far under u32::MAX"
+            )]
             let subject_eval_count = subject_evals.len() as u32;
 
             // Upsert immediately so data is available without waiting for the full scrape
@@ -955,7 +950,7 @@ mod tests {
     fn test_parse_course_section_display_prefix_differs_from_subject() {
         // The display prefix in the accordion cell may differ from the ComboBox
         // subject code (e.g., code "IS" -> display "ISA", code "MTC" -> display "MAT").
-        // We no longer reject on mismatch -- the page is subject-scoped by BlueBook
+        // Mismatches are not rejected because the page is subject-scoped by BlueBook
         // and we trust its contents. Course number and section are still parsed.
         assert_eq!(
             BlueBookClient::parse_course_section("ISA 1234.001", "IS"),

@@ -11,7 +11,7 @@ export interface HistoryPoint {
 
 /**
  * Below this many snapshots a chart has no shape to show, and the timeline reads better.
- * Most sections never reach it -- the scraper only writes a row when something changes.
+ * Most sections never reach it, since the scraper only writes a row when something changes.
  */
 export const CHART_MIN_POINTS = 4;
 

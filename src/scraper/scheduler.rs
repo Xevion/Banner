@@ -80,8 +80,10 @@ fn sample_queue_depth(pool: PgPool) {
     tokio::spawn(async move {
         match crate::data::scrape_jobs::queue_depth(&pool).await {
             Ok(depth) => {
-                // Prometheus gauges are f64; queue depth never approaches 2^53.
-                #[allow(clippy::cast_precision_loss)]
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "Prometheus gauges are f64; queue depth never approaches 2^53"
+                )]
                 metrics::gauge!(SCRAPE_QUEUE_DEPTH).set(depth.count as f64);
                 metrics::gauge!(SCRAPE_QUEUE_OLDEST_SECONDS).set(depth.oldest_seconds.unwrap_or(0.0));
             }
@@ -248,8 +250,8 @@ impl Scheduler {
                                 async move {
                                     tokio::select! {
                                         () = async {
-                                            // Term sync, RMP sync, and reference data are independent --
-                                            // run them concurrently so they don't wait behind each other.
+                                            // Term sync, RMP sync, and reference data are independent,
+                                            // so run them concurrently instead of waiting behind each other.
                                             let term_fut = async {
                                                 if should_sync_terms {
                                                     match Self::sync_terms(db.pool(), &banner_api).await {
@@ -887,7 +889,7 @@ impl Scheduler {
             Err(e) => warn!(error = ?e, "Failed to fetch terms"),
         }
 
-        // Subjects -- also cache in term_subjects for scheduler use
+        // Subjects: also cache in term_subjects for scheduler use
         match banner_api.get_subjects("", &term, 1, 500).await {
             Ok(pairs) => {
                 debug!(count = pairs.len(), "Fetched subjects");

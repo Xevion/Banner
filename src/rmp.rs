@@ -33,8 +33,11 @@ fn parse_review_date(raw: &str) -> Option<DateTime<Utc>> {
         .map(|parsed| parsed.with_timezone(&Utc))
 }
 
-/// Narrow an RMP rating or percentage value (0..=100 scale) to `f32`; precision loss is intentional.
-#[allow(clippy::cast_possible_truncation)]
+/// Narrow an RMP rating or percentage value (0..=100 scale) to `f32`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "RMP ratings and percentages are bounded to 0..=100, so f32 rounding is negligible"
+)]
 fn narrow_rating(v: f64) -> f32 {
     v as f32
 }

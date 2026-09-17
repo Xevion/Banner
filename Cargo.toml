@@ -95,6 +95,11 @@ struct_field_names = "allow"
 needless_pass_by_value = "allow"
 unnecessary_wraps = "allow"
 
+# Force every suppression to justify itself and to expire on its own. A bare #[allow]
+# hides intent and keeps suppressing after the problem it covered is gone.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+
 [profile.dev-release]
 inherits = "dev"
 debug-assertions = false

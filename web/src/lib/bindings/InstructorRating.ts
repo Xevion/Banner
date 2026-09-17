@@ -6,11 +6,11 @@ import type { RatingSource } from "./RatingSource";
  */
 export type InstructorRating = { 
 /**
- * Posterior mean -- the headline number displayed to users.
+ * Posterior mean: the headline number displayed to users.
  */
 score: number, 
 /**
- * CI lower bound -- used for ranking (penalizes low confidence).
+ * CI lower bound: used for ranking (penalizes low confidence).
  */
 rankScore: number, ciLower: number, ciUpper: number, 
 /**

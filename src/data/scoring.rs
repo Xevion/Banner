@@ -41,7 +41,6 @@ pub const PRIOR_RANK_SENTINEL: f32 = 2.465;
 
 /// How to handle instructors with no computed score when sorting by rating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum UnratedPolicy {
     /// COALESCE with the prior rank sentinel so unrated instructors sort among rated ones.
     AsPrior,
@@ -106,8 +105,10 @@ struct ComputedScore {
 
 /// Calibrate a raw `BlueBook` rating onto the RMP scale, clamped to [1.0, 5.0].
 #[must_use]
-// The regression output is clamped to [1.0, 5.0], well within f32 precision.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the regression output is clamped to [1.0, 5.0], well within f32 precision"
+)]
 pub fn calibrate_bluebook(bb: f32) -> f32 {
     (REG_ALPHA + REG_BETA * f64::from(bb)).clamp(1.0, 5.0) as f32
 }
@@ -117,8 +118,10 @@ pub fn calibrate_bluebook(bb: f32) -> f32 {
 /// Each instructor has a "true quality" μ. We observe noisy measurements from
 /// RMP and regression-calibrated `BlueBook`. The posterior combines the prior with
 /// all available evidence, weighted by effective sample size.
-// Every result is clamped into [0.0, 5.0] or [0.0, 1.0], well within f32 precision.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "every result is clamped into [0.0, 5.0] or [0.0, 1.0], well within f32 precision"
+)]
 fn compute_score(data: &RawInstructorData) -> ComputedScore {
     let has_rmp = data.rmp_rating.is_some() && data.rmp_num_ratings > 0;
     let has_bb = data.bb_avg_instructor_rating.is_some() && data.bb_total_responses > 0;
@@ -307,8 +310,10 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     tx.commit().await.context("Failed to commit transaction")?;
 
     let elapsed = start.elapsed();
-    // A recompute pass never runs anywhere near u64::MAX milliseconds.
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a recompute pass never runs anywhere near u64::MAX milliseconds"
+    )]
     let elapsed_ms = elapsed.as_millis() as u64;
     info!(count, elapsed_ms, "Recomputed instructor scores");
 
@@ -437,8 +442,10 @@ mod tests {
 
     #[test]
     fn test_prior_rank_sentinel_matches_computation() {
-        // The prior-only posterior sits well within f32 precision.
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the prior-only posterior sits well within f32 precision"
+        )]
         let computed = (PRIOR_MEAN - CI_Z * PRIOR_VAR.sqrt()) as f32;
         assert!(
             (PRIOR_RANK_SENTINEL - computed).abs() < 0.01,

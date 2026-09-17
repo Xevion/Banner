@@ -73,7 +73,7 @@ export interface ParamSerializer<T> {
   isActive(value: T): boolean;
 }
 
-/** `string | null` -- present when non-null, omitted otherwise. */
+/** `string | null`: present when non-null, omitted otherwise. */
 export function stringParam(): ParamSerializer<string | null> {
   return {
     defaultValue: null,
@@ -89,7 +89,7 @@ export function stringParam(): ParamSerializer<string | null> {
   };
 }
 
-/** `boolean` -- serialized as `"true"` when active, omitted when `false`. */
+/** `boolean`: serialized as `"true"` when active, omitted when `false`. */
 export function boolParam(): ParamSerializer<boolean> {
   return {
     defaultValue: false,
@@ -105,7 +105,7 @@ export function boolParam(): ParamSerializer<boolean> {
   };
 }
 
-/** `number | null` -- serialized as string, omitted when null. */
+/** `number | null`: serialized as string, omitted when null. */
 export function intParam(): ParamSerializer<number | null> {
   return {
     defaultValue: null,
@@ -124,7 +124,7 @@ export function intParam(): ParamSerializer<number | null> {
   };
 }
 
-/** `string[]` -- repeated URL params (`?key=a&key=b`), omitted when empty. */
+/** `string[]`: repeated URL params (`?key=a&key=b`), omitted when empty. */
 export function arrayParam(): ParamSerializer<string[]> {
   return {
     defaultValue: [],
@@ -188,7 +188,7 @@ export function campusParam(): ParamSerializer<string[]> {
 export interface FilterDef<T = unknown> {
   urlKey: string;
   serializer: ParamSerializer<T>;
-  /** Legacy URL param aliases -- checked when primary key is absent. */
+  /** Legacy URL param aliases, checked when primary key is absent. */
   aliases?: string[];
   /**
    * Filters sharing a group name count as one active filter in `countActive`.
