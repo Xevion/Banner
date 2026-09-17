@@ -4,6 +4,75 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.4](https://github.com/Xevion/Banner/compare/v0.8.3...v0.8.4) (2026-09-17)
+
+
+### Features
+
+* **admin:** Add audit log for admin actions ([00d2f82](https://github.com/Xevion/Banner/commit/00d2f82b5b634e6b2b4f4a2a843160be86ffd9ec))
+* **admin:** Add retryable error panel, harden instructor query binds ([dd1418b](https://github.com/Xevion/Banner/commit/dd1418b49e471ff64778457e5aaf99203b0e35bf))
+* **instructors:** Detect and merge duplicate instructor records ([9b5bac7](https://github.com/Xevion/Banner/commit/9b5bac790169c2a3a1a148927c3426183f2c8c80))
+* **instructors:** Let duplicate review dismiss a pair as two people ([14482aa](https://github.com/Xevion/Banner/commit/14482aaeea39de07e654b60ccf7714e9dfce6af0))
+* **instructors:** Link between instructor, subject and admin views ([d3998e0](https://github.com/Xevion/Banner/commit/d3998e0b86c45e21b93187c48f7edd78e16e1f8e))
+
+
+### Bug Fixes
+
+* **admin-rmp:** Make candidate fields non-nullable, switch to query! macro ([db488d9](https://github.com/Xevion/Banner/commit/db488d9ce634b0c2dc3565b328c3c0a8ce7463e7))
+* **bindings:** Rename TimeRange to TimelineRange and guard name clashes ([424421f](https://github.com/Xevion/Banner/commit/424421ffcfa020dac8a5ca047170a112ae85caea))
+* **e2e:** Return the Page envelope from the search stub ([d962742](https://github.com/Xevion/Banner/commit/d9627425ffb8d7bb7629a288652b9b637ca660f7))
+* **instructors:** Make instructor merges survive the next scrape ([fec3353](https://github.com/Xevion/Banner/commit/fec3353cbdaec2785d316bbb837512fa7e6f9b52))
+* **instructors:** Show real source ratings and link names from cards ([93be7f8](https://github.com/Xevion/Banner/commit/93be7f8046b063370fecb2f8d390d6e91040596c))
+* **rmp-matching:** Close auto-link gaps around placeholder departments and re-links ([966c539](https://github.com/Xevion/Banner/commit/966c5397de63997e5e586a8e520c27ea7cf65258))
+* **rmp-matching:** Gate auto-linking on confirmed subject evidence ([6e5ca17](https://github.com/Xevion/Banner/commit/6e5ca17e1a44eb6bb02c9e4996a93743ebece424))
+* **rmp:** Stop review fetches from failing on RMP's own data ([2263c0d](https://github.com/Xevion/Banner/commit/2263c0d887556375da47b66deed4e87674036bdb))
+* **web:** Handle the navigations the router abandons ([6b95872](https://github.com/Xevion/Banner/commit/6b958726a2846efc729511e4ce6408b1eaa975ad))
+* **web:** Update the stale search fixtures ([e41fb64](https://github.com/Xevion/Banner/commit/e41fb64373399323cdf9c184da46984fcb2634a3))
+
+
+### Performance Improvements
+
+* **tests:** Replace sqlx::test with cloned-template pools ([ad760e0](https://github.com/Xevion/Banner/commit/ad760e0d03c910cd51bfabb1b4d9d91d170ddcb3))
+* **tooling:** Cut backend check and dev-reload turnaround ([1e2a5c8](https://github.com/Xevion/Banner/commit/1e2a5c826ded9ce2972c49de7191521ff6c2c953))
+
+
+### Code Refactoring
+
+* **admin-scraper:** Make schedule state a typed enum end to end ([0af262a](https://github.com/Xevion/Banner/commit/0af262a8fc87fdc15be4a3909132ba69a07cb26c))
+* **admin:** Return typed errors instead of matching on messages ([7e6c67f](https://github.com/Xevion/Banner/commit/7e6c67f4fae4a37f4f9bfc82c2d6f6d7309d6358))
+* **data:** Move the data layer onto compile-time checked queries ([fa918fb](https://github.com/Xevion/Banner/commit/fa918fb003efa866f2b20457c559b18f21e74b18))
+* **instructors:** Share one card and make name order explicit ([cd4b4f9](https://github.com/Xevion/Banner/commit/cd4b4f9f26d04712f73451bf3f63258152c8ade7))
+* **lints:** Adopt clippy pedantic with a burn-down allow-list ([92b6274](https://github.com/Xevion/Banner/commit/92b6274b00eb58d88dfb5649e5678fd7ec20b967))
+* **lints:** Burn down too_many_lines with targeted expects and splits ([b7c27e9](https://github.com/Xevion/Banner/commit/b7c27e94e2caf78b9773850b680b75adb3a56010))
+* **lints:** Enable clippy nursery and collapse table tests with rstest ([9eadfcb](https://github.com/Xevion/Banner/commit/9eadfcb1bb12df34363e30a393fc3241c747f8ec))
+* **rmp-matching:** Derive instructor match status from a view ([828509f](https://github.com/Xevion/Banner/commit/828509f3c68dd984cb00f6d1fbc7b3f82e1004ac))
+* **rmp-matching:** Split the matcher into a directory module ([574607e](https://github.com/Xevion/Banner/commit/574607e1ca9639b54d532c50a5457929ff71aa58))
+* **runtime:** Rename services module to runtime ([ef7bf3b](https://github.com/Xevion/Banner/commit/ef7bf3b96d6a4e5e7e750cd96b8665046d4e0811))
+* Split the longest functions into named helpers ([067986b](https://github.com/Xevion/Banner/commit/067986b3244768ed0b240a7eb93584feb7de90ff))
+* **types:** Carry Count and DurationMs through course enrollment and scrape results ([69cb3e2](https://github.com/Xevion/Banner/commit/69cb3e29ab8966975e831b17112178686e407dde))
+* **types:** Let the type system carry what convention was carrying ([977f45a](https://github.com/Xevion/Banner/commit/977f45aa85c5b039b3a306f8fe40bec2f8144936))
+* **web:** Fold bespoke shapes into the shared ones ([3575268](https://github.com/Xevion/Banner/commit/3575268e9d9211f517e31d3bef8d056669c2eef9))
+* **web:** Read the router from the router, not from the load payload ([2117ab5](https://github.com/Xevion/Banner/commit/2117ab52578e18f34367f94027bbbd10568eb1d0))
+
+
+### Continuous Integration
+
+* Catch stale sqlx metadata and TypeScript bindings ([62e6ff9](https://github.com/Xevion/Banner/commit/62e6ff966ee47ba3bebfef1b960426bbd00555c0))
+
+
+### Build System
+
+* **docker:** Pin CI image builds to a portable target-cpu ([8e945d3](https://github.com/Xevion/Banner/commit/8e945d3ea7543209ffa24450e9a09d171cb3f052))
+* Pin the Rust toolchain instead of tracking a floating stable ([4e77a98](https://github.com/Xevion/Banner/commit/4e77a9837d70c54bc3f25044cc9f23f108c85d18))
+* **tempo:** Prepare .sqlx against a migrations-only database ([9476b71](https://github.com/Xevion/Banner/commit/9476b7113a1c349dd43a96e270eaed42a2a1319c))
+
+
+### Miscellaneous
+
+* **lint:** Enable clippy pedantic across the workspace ([d77c9c6](https://github.com/Xevion/Banner/commit/d77c9c6ded2be760b3e8c308ffea221152217c48))
+* Tidy the repository's public surface ([c890397](https://github.com/Xevion/Banner/commit/c89039776a6ef148f53bbe092a66c39b13e26d04))
+* **web:** Drop unused @internationalized/date and overlayscrollbars-svelte ([56ee1c0](https://github.com/Xevion/Banner/commit/56ee1c03cc8830ee4d8d9ea3785098fee9858722))
+
 ## [0.8.3](https://github.com/Xevion/Banner/compare/v0.8.2...v0.8.3) (2026-09-15)
 
 
