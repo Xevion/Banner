@@ -3,13 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.ico" />
-    <meta name="theme-color" content="#000000" />
+    <!-- ICO first so browsers without SVG favicon support stop there. -->
+    <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <!-- The page --background tokens, so browser chrome matches the body it sits above. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafafa" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
     <meta
       name="description"
       content="Banner, a Discord bot and web interface for UTSA Course Monitoring"
     />
-    <link rel="apple-touch-icon" href="%sveltekit.assets%/logo192.png" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
     <link rel="manifest" href="%sveltekit.assets%/manifest.json" />
     <title>Banner</title>
     <script nonce="%sveltekit.nonce%">
