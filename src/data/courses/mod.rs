@@ -60,6 +60,10 @@ pub struct SearchFilter<'a> {
 /// Course number filtering extracts the numeric prefix to support alphanumeric
 /// course numbers (e.g., "015X", "399H"). The numeric part is compared against
 /// the range, so "399H" matches a search for courses 300-400.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one SQL fragment pushed per search filter, no control flow to decompose"
+)]
 fn push_search_conditions(builder: &mut QueryBuilder<Postgres>, filter: &SearchFilter<'_>) {
     builder.push(" WHERE term_code = ");
     builder.push_bind(filter.term_code);

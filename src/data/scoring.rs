@@ -197,6 +197,10 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
 /// Truncates the `instructor_scores` table and bulk-inserts fresh scores.
 /// Should be called on startup and after scrape completions.
 #[instrument(skip(pool))]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the length is the aggregate query's SQL text, not logic"
+)]
 pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     let start = std::time::Instant::now();
 

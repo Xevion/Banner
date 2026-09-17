@@ -152,7 +152,8 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         });
     }
 
-    let instructor_ids: Vec<i32> = instructors.iter().map(|r| r.id).collect();
+    let instructors: Vec<(i32, String)> = instructors.into_iter().map(|r| (r.id, r.display_name)).collect();
+    let instructor_ids: Vec<i32> = instructors.iter().map(|(id, _)| *id).collect();
     let total_processed = instructors.len();
 
     let subject_map = load_instructor_subjects(&mut tx, &instructor_ids).await?;
@@ -164,45 +165,13 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     // they are explicit human decisions to NOT link a pair.
     let rejected_pairs = load_rejected_pairs(&mut tx).await?;
 
-    let empty_subjects: Vec<(String, u32)> = Vec::new();
-    let mut collected = Collected::default();
-    let mut auto_accept: Vec<(i32, i32, f32)> = Vec::new();
-    let mut inherited: Vec<(i32, i32, f32)> = Vec::new();
-    let mut skipped_unparseable = 0usize;
-    let mut skipped_no_candidates = 0usize;
-
-    for instructor in &instructors {
-        let Some(instructor_parts) = parse_banner_name(&instructor.display_name) else {
-            skipped_unparseable += 1;
-            debug!(
-                instructor_id = instructor.id,
-                display_name = instructor.display_name,
-                "Unparseable display name, skipping"
-            );
-            continue;
-        };
-
-        let subjects = subject_map.get(&instructor.id).unwrap_or(&empty_subjects);
-        let matched = collect_matched_profs(&name_index, &instructor_parts);
-
-        if matched.profs.is_empty() {
-            skipped_no_candidates += 1;
-            continue;
-        }
-
-        let scored = score_instructor(
-            instructor.id,
-            subjects,
-            &matched,
-            &rejected_pairs,
-            &reviews,
-            &mut collected,
-        );
-
-        let decision = decide_auto_links(instructor.id, &scored, &matched);
-        auto_accept.extend(decision.accepted);
-        inherited.extend(decision.inherited);
-    }
+    let ScoredRun {
+        collected,
+        mut auto_accept,
+        inherited,
+        skipped_unparseable,
+        skipped_no_candidates,
+    } = score_all_instructors(&instructors, &subject_map, &name_index, &rejected_pairs, &reviews);
 
     let mut inherited_count = 0usize;
     for (instructor_id, legacy_id, score) in inherited {
@@ -271,6 +240,72 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     );
 
     Ok(stats)
+}
+
+/// What one pass over the eligible instructors produces.
+struct ScoredRun {
+    collected: Collected,
+    auto_accept: Vec<(i32, i32, f32)>,
+    inherited: Vec<(i32, i32, f32)>,
+    skipped_unparseable: usize,
+    skipped_no_candidates: usize,
+}
+
+/// Scores every eligible instructor against the RMP name index.
+fn score_all_instructors(
+    instructors: &[(i32, String)],
+    subject_map: &HashMap<i32, Vec<(String, u32)>>,
+    name_index: &NameIndex,
+    rejected_pairs: &HashSet<(i32, i32)>,
+    reviews: &ReviewData,
+) -> ScoredRun {
+    let empty_subjects: Vec<(String, u32)> = Vec::new();
+    let mut collected = Collected::default();
+    let mut auto_accept: Vec<(i32, i32, f32)> = Vec::new();
+    let mut inherited: Vec<(i32, i32, f32)> = Vec::new();
+    let mut skipped_unparseable = 0usize;
+    let mut skipped_no_candidates = 0usize;
+
+    for (instructor_id, display_name) in instructors {
+        let Some(instructor_parts) = parse_banner_name(display_name) else {
+            skipped_unparseable += 1;
+            debug!(
+                instructor_id = instructor_id,
+                display_name = display_name.as_str(),
+                "Unparseable display name, skipping"
+            );
+            continue;
+        };
+
+        let subjects = subject_map.get(instructor_id).unwrap_or(&empty_subjects);
+        let matched = collect_matched_profs(name_index, &instructor_parts);
+
+        if matched.profs.is_empty() {
+            skipped_no_candidates += 1;
+            continue;
+        }
+
+        let scored = score_instructor(
+            *instructor_id,
+            subjects,
+            &matched,
+            rejected_pairs,
+            reviews,
+            &mut collected,
+        );
+
+        let decision = decide_auto_links(*instructor_id, &scored, &matched);
+        auto_accept.extend(decision.accepted);
+        inherited.extend(decision.inherited);
+    }
+
+    ScoredRun {
+        collected,
+        auto_accept,
+        inherited,
+        skipped_unparseable,
+        skipped_no_candidates,
+    }
 }
 
 /// Drop every algorithm-generated candidate and link, and reset the statuses

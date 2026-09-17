@@ -136,35 +136,21 @@ pub async fn auth_login(
     Redirect::temporary(url.as_str())
 }
 
-/// `GET /api/auth/callback`: Handle Discord `OAuth2` callback.
-///
-/// # Errors
-/// 400 if the CSRF state is invalid; 502 if the Discord token exchange or
-/// profile fetch fails or returns unparseable data; 500 if the user upsert
-/// or session creation fails.
-#[instrument(skip_all)]
-pub async fn auth_callback(
-    State(state): State<AppState>,
-    Extension(auth_config): Extension<AuthConfig>,
-    Query(params): Query<CallbackParams>,
-) -> Result<Response, (StatusCode, Json<Value>)> {
-    // 1. Validate CSRF state and recover the origin used during login
-    let origin = state.oauth_state_store.validate(&params.state).ok_or_else(|| {
-        warn!("OAuth callback with invalid CSRF state");
-        (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid OAuth state" })))
-    })?;
-
-    // 2. Exchange authorization code for access token
-    let redirect_uri = format!("{origin}{CALLBACK_PATH}");
-    let client = reqwest::Client::new();
+/// Trades the OAuth authorization code for a Discord access token.
+async fn exchange_code_for_token(
+    client: &reqwest::Client,
+    auth_config: &AuthConfig,
+    code: &str,
+    redirect_uri: &str,
+) -> Result<TokenResponse, (StatusCode, Json<Value>)> {
     let token_response = client
         .post("https://discord.com/api/oauth2/token")
         .form(&[
             ("client_id", auth_config.client_id.as_str()),
             ("client_secret", auth_config.client_secret.as_str()),
             ("grant_type", "authorization_code"),
-            ("code", params.code.as_str()),
-            ("redirect_uri", redirect_uri.as_str()),
+            ("code", code),
+            ("redirect_uri", redirect_uri),
         ])
         .send()
         .await
@@ -186,18 +172,23 @@ pub async fn auth_callback(
         ));
     }
 
-    let token_data: TokenResponse = token_response.json().await.map_err(|e| {
+    token_response.json().await.map_err(|e| {
         error!(error = %e, "failed to parse Discord token response");
         (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "error": "Invalid token response from Discord" })),
         )
-    })?;
+    })
+}
 
-    // 3. Fetch Discord user profile
+/// Fetches the Discord profile behind an access token, with its ID parsed.
+async fn fetch_discord_user(
+    client: &reqwest::Client,
+    access_token: &str,
+) -> Result<(DiscordUser, i64), (StatusCode, Json<Value>)> {
     let discord_user: DiscordUser = client
         .get("https://discord.com/api/users/@me")
-        .bearer_auth(&token_data.access_token)
+        .bearer_auth(access_token)
         .send()
         .await
         .map_err(|e| {
@@ -224,6 +215,32 @@ pub async fn auth_callback(
             Json(json!({ "error": "Invalid Discord user ID" })),
         )
     })?;
+
+    Ok((discord_user, discord_id))
+}
+
+/// `GET /api/auth/callback`: Handle Discord `OAuth2` callback.
+///
+/// # Errors
+/// 400 if the CSRF state is invalid; 502 if the Discord token exchange or
+/// profile fetch fails or returns unparseable data; 500 if the user upsert
+/// or session creation fails.
+#[instrument(skip_all)]
+pub async fn auth_callback(
+    State(state): State<AppState>,
+    Extension(auth_config): Extension<AuthConfig>,
+    Query(params): Query<CallbackParams>,
+) -> Result<Response, (StatusCode, Json<Value>)> {
+    // 1. Validate CSRF state and recover the origin used during login
+    let origin = state.oauth_state_store.validate(&params.state).ok_or_else(|| {
+        warn!("OAuth callback with invalid CSRF state");
+        (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid OAuth state" })))
+    })?;
+
+    let redirect_uri = format!("{origin}{CALLBACK_PATH}");
+    let client = reqwest::Client::new();
+    let token_data = exchange_code_for_token(&client, &auth_config, &params.code, &redirect_uri).await?;
+    let (discord_user, discord_id) = fetch_discord_user(&client, &token_data.access_token).await?;
 
     // 4. Upsert user
     let user = crate::data::users::upsert_user(

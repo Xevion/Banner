@@ -319,6 +319,10 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
 }
 
 /// Fetch detail for a single `BlueBook` link, including associated evaluations.
+#[expect(
+    clippy::too_many_lines,
+    reason = "roughly half the body is SQL text across the detail queries, not branching"
+)]
 pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLinkDetail> {
     let r = sqlx::query!(
         r#"

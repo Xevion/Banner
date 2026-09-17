@@ -69,6 +69,10 @@ pub fn recorder() -> &'static PrometheusHandle {
 ///
 /// Must run after the recorder is installed: a description recorded before that is dropped, and the
 /// loss is silent because the metric itself still exports fine without one.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one describe_* declaration per metric, no control flow to decompose"
+)]
 fn describe() {
     use metrics::{Unit, describe_counter, describe_gauge, describe_histogram};
 

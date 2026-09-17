@@ -1,7 +1,7 @@
 //! Batch database operations for improved performance.
 
 use crate::banner::Course;
-use crate::banner::models::meetings::{FacultyItem, TimeRange};
+use crate::banner::models::meetings::{FacultyItem, MeetingTime, TimeRange};
 use crate::data::course_types::{DateRange, MeetingLocation};
 use crate::data::instructor_merge::canonical_email;
 use crate::data::models::{DayOfWeek, DbMeetingTime, UpsertCounts};
@@ -572,6 +572,10 @@ async fn fetch_audit_entries_by_ids(db_pool: &PgPool, audit_ids: &[i32]) -> Resu
 }
 
 /// Upsert all courses and return diff rows with old and new values for auditing.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the body is one CTE upsert, and a query_as! cannot be split across functions without losing compile-time verification"
+)]
 async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<Vec<UpsertDiffRow>> {
     let crns: Vec<&str> = courses.iter().map(|c| c.course_reference_number.as_str()).collect();
     let subjects: Vec<&str> = courses.iter().map(|c| c.subject.as_str()).collect();
@@ -1198,6 +1202,39 @@ async fn upsert_course_instructors(
 /// Deletes existing rows for the affected course IDs and re-inserts from the
 /// current meeting time data. This keeps the table in sync with the JSONB
 /// `meeting_times` column without parsing JSON at query time.
+/// Packs the seven weekday flags into a bitmask, Monday at bit 0.
+fn meeting_day_bits(mt: &MeetingTime) -> i16 {
+    [
+        mt.monday,
+        mt.tuesday,
+        mt.wednesday,
+        mt.thursday,
+        mt.friday,
+        mt.saturday,
+        mt.sunday,
+    ]
+    .iter()
+    .enumerate()
+    .fold(0, |bits, (day, meets)| if *meets { bits | (1i16 << day) } else { bits })
+}
+
+/// Minutes past midnight for a meeting, or None when the times are absent,
+/// unparseable, or do not describe a forward-running range.
+fn meeting_minutes(mt: &MeetingTime) -> Option<(i16, i16)> {
+    let range = TimeRange::from_hhmm(mt.begin_time.as_deref()?, mt.end_time.as_deref()?)?;
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "hour() * 60 + minute() is at most 1439, which fits i16"
+    )]
+    let begin = (range.start.hour() * 60 + range.start.minute()) as i16;
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "hour() * 60 + minute() is at most 1439, which fits i16"
+    )]
+    let end = (range.end.hour() * 60 + range.end.minute()) as i16;
+    (end > begin).then_some((begin, end))
+}
+
 async fn sync_course_meetings(
     courses: &[Course],
     crn_term_to_id: &HashMap<(&str, &str), i32>,
@@ -1219,61 +1256,15 @@ async fn sync_course_meetings(
         for mf in &course.meetings_faculty {
             let mt = &mf.meeting_time;
 
-            // Compute day bitmask
-            let mut bits: i16 = 0;
-            if mt.monday {
-                bits |= 1;
-            }
-            if mt.tuesday {
-                bits |= 2;
-            }
-            if mt.wednesday {
-                bits |= 4;
-            }
-            if mt.thursday {
-                bits |= 8;
-            }
-            if mt.friday {
-                bits |= 16;
-            }
-            if mt.saturday {
-                bits |= 32;
-            }
-            if mt.sunday {
-                bits |= 64;
-            }
+            let bits = meeting_day_bits(mt);
             if bits == 0 {
                 continue;
             }
 
-            // Parse time range
-            let (begin, end) = match (mt.begin_time.as_deref(), mt.end_time.as_deref()) {
-                (Some(b), Some(e)) => {
-                    let begin_tr = TimeRange::from_hhmm(b, e);
-                    match begin_tr {
-                        Some(tr) => {
-                            #[expect(
-                                clippy::cast_possible_truncation,
-                                reason = "hour() * 60 + minute() is at most 1439, which fits i16"
-                            )]
-                            let b_min = (tr.start.hour() * 60 + tr.start.minute()) as i16;
-                            #[expect(
-                                clippy::cast_possible_truncation,
-                                reason = "hour() * 60 + minute() is at most 1439, which fits i16"
-                            )]
-                            let e_min = (tr.end.hour() * 60 + tr.end.minute()) as i16;
-                            if e_min <= b_min {
-                                continue;
-                            }
-                            (b_min, e_min)
-                        }
-                        None => continue,
-                    }
-                }
-                _ => continue,
+            let Some((begin, end)) = meeting_minutes(mt) else {
+                continue;
             };
 
-            // Parse date range
             let Some(start_date) = parse_mm_dd_yyyy(&mt.start_date) else {
                 continue;
             };

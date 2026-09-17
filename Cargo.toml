@@ -89,10 +89,6 @@ suboptimal_flops = "allow"
 # because a handler's variants are its HTTP status codes and cannot be read off the type.
 missing_errors_doc = "allow"
 
-# Tracked as refactor work, not tuned away. The offenders form a smooth slope with no
-# natural cut point, so raising the threshold would just hide the shorter half.
-too_many_lines = "allow"
-
 # Shapes fixed by an external contract: sqlx column names, serde wire format, ts-rs
 # bindings, and Banner's own upstream JSON.
 struct_excessive_bools = "allow"
