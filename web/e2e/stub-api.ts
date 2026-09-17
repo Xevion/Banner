@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type {
   CourseResponse,
+  Page,
   TrendSample,
   TrendsRequest,
   TrendsResponse,
@@ -142,6 +143,21 @@ function resolveInstructors(url: URL): Record<string, string> {
   return resolved;
 }
 
+/**
+ * The search envelope, echoing back the page asked for the way the backend does.
+ *
+ * Every course fits on one page here, so the items are not sliced: a test that
+ * cares about paging would need more fixtures than the table is meant to show.
+ */
+function searchPage(url: URL): Page<CourseResponse> {
+  return {
+    items: mockCourses,
+    total: mockCourses.length,
+    page: Number(url.searchParams.get("page")) || 1,
+    perPage: Number(url.searchParams.get("perPage")) || mockCourses.length,
+  };
+}
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://localhost:${port}`);
   const path = url.pathname;
@@ -160,7 +176,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       json(res, searchOptions);
       break;
     case "/api/courses/search":
-      json(res, { courses: mockCourses, totalCount: mockCourses.length });
+      json(res, searchPage(url));
       break;
     case "/api/suggest":
       json(res, suggestions);
