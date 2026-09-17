@@ -53,6 +53,7 @@ impl JobType {
     }
 
     /// Convert to a Job trait object
+    #[must_use]
     pub fn boxed(self) -> Box<dyn Job> {
         match self {
             JobType::Subject(job) => Box::new(job),

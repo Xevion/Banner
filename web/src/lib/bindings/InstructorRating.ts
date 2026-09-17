@@ -2,7 +2,7 @@
 import type { RatingSource } from "./RatingSource";
 
 /**
- * Bayesian composite rating combining RMP and BlueBook via regression calibration.
+ * Bayesian composite rating combining RMP and `BlueBook` via regression calibration.
  */
 export type InstructorRating = { 
 /**

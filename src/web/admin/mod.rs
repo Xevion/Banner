@@ -58,6 +58,9 @@ pub struct AdminStatusResponse {
 }
 
 /// `GET /api/admin/status` -- Enhanced system status for admins.
+///
+/// # Errors
+/// Internal error if any of the count queries fail.
 #[instrument(skip_all)]
 pub async fn admin_status(
     AdminUser(_user): AdminUser,
@@ -105,6 +108,9 @@ pub async fn admin_status(
 }
 
 /// `GET /api/admin/users` -- List all users.
+///
+/// # Errors
+/// Internal error if the user list query fails.
 #[instrument(skip_all)]
 pub async fn list_users(
     AdminUser(_user): AdminUser,
@@ -125,6 +131,10 @@ pub struct SetAdminBody {
 }
 
 /// `PUT /api/admin/users/{discord_id}/admin` -- Set admin status for a user.
+///
+/// # Errors
+/// `NotFound` if no user has that Discord id; internal error if the update
+/// query fails.
 #[instrument(skip_all, fields(discord_id))]
 pub async fn set_user_admin(
     AdminUser(actor): AdminUser,
@@ -154,6 +164,9 @@ pub async fn set_user_admin(
 }
 
 /// `GET /api/admin/scrape-jobs` -- List scrape jobs.
+///
+/// # Errors
+/// Internal error if the scrape job query fails.
 #[instrument(skip_all)]
 pub async fn list_scrape_jobs(
     AdminUser(_user): AdminUser,
@@ -184,6 +197,9 @@ fn parse_if_modified_since(headers: &HeaderMap) -> Option<DateTime<Utc>> {
 /// `GET /api/admin/audit-log` -- List recent audit entries.
 ///
 /// Supports `If-Modified-Since`: returns 304 when the newest entry hasn't changed.
+///
+/// # Errors
+/// Internal error if the audit log query fails.
 #[instrument(skip_all)]
 pub async fn list_audit_log(
     AdminUser(_user): AdminUser,

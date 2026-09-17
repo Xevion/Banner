@@ -47,7 +47,7 @@ pub struct TriggeredWatch {
     pub wait_capacity: i32,
 }
 
-/// Upsert a minimal user record so the FK on course_watches is satisfied.
+/// Upsert a minimal user record so the FK on `course_watches` is satisfied.
 ///
 /// Discord bot users may not have logged in via the web, so we create a thin
 /// record from the information available in the bot context.
@@ -154,8 +154,8 @@ pub async fn list_active_watches(pool: &PgPool, discord_user_id: i64) -> Result<
 ///
 /// Applies a 15-minute cooldown via `notified_at`. Each parameter is the set of
 /// course IDs that changed in the relevant way:
-/// - `enrollment_changed_ids`: courses where enrollment or max_enrollment changed
-/// - `waitlist_changed_ids`: courses where wait_count or wait_capacity changed
+/// - `enrollment_changed_ids`: courses where enrollment or `max_enrollment` changed
+/// - `waitlist_changed_ids`: courses where `wait_count` or `wait_capacity` changed
 /// - `any_change_ids`: courses with any non-initial field change
 pub async fn find_triggered_watches(
     pool: &PgPool,
@@ -206,7 +206,7 @@ pub async fn find_triggered_watches(
     Ok(watches)
 }
 
-/// Update `notified_at` to NOW() for a watch after a notification is sent.
+/// Update `notified_at` to `NOW()` for a watch after a notification is sent.
 pub async fn mark_notified(pool: &PgPool, watch_id: i32) -> Result<()> {
     sqlx::query!("UPDATE course_watches SET notified_at = NOW() WHERE id = $1", watch_id)
         .execute(pool)

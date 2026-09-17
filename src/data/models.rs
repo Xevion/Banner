@@ -13,6 +13,8 @@ use crate::data::course_types::{DateRange, MeetingLocation, RatingSource};
 use crate::data::unsigned::Count;
 
 /// Serialize an `i64` as a string to avoid JavaScript precision loss for values exceeding 2^53.
+// `serde(serialize_with = ...)` requires the `&T` signature regardless of `T`'s size.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_i64_as_string<S: Serializer>(value: &i64, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_string())
 }
@@ -23,7 +25,7 @@ fn deserialize_i64_from_string<'de, D: Deserializer<'de>>(deserializer: D) -> Re
 
     struct I64OrStringVisitor;
 
-    impl<'de> de::Visitor<'de> for I64OrStringVisitor {
+    impl de::Visitor<'_> for I64OrStringVisitor {
         type Value = i64;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -79,6 +81,7 @@ pub struct DbMeetingTime {
 
 impl DbMeetingTime {
     /// Whether no time range is set (i.e. time is TBA).
+    #[must_use]
     pub fn is_time_tba(&self) -> bool {
         self.time_range.is_none()
     }
@@ -173,19 +176,18 @@ impl<'de> Deserialize<'de> for DbMeetingTime {
             let end_str = raw.end_date.as_deref().unwrap_or("");
             let start = parse_flexible_date(start_str);
             let end = parse_flexible_date(end_str);
-            match (start, end) {
-                (Some(s), Some(e)) => DateRange { start: s, end: e },
-                _ => {
-                    tracing::warn!(
-                        start_date = start_str,
-                        end_date = end_str,
-                        "failed to parse old-format date range, using epoch fallback"
-                    );
-                    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                    DateRange {
-                        start: epoch,
-                        end: epoch,
-                    }
+            if let (Some(s), Some(e)) = (start, end) {
+                DateRange { start: s, end: e }
+            } else {
+                tracing::warn!(
+                    start_date = start_str,
+                    end_date = end_str,
+                    "failed to parse old-format date range, using epoch fallback"
+                );
+                let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                DateRange {
+                    start: epoch,
+                    end: epoch,
                 }
             }
         };
@@ -293,7 +295,7 @@ pub struct Instructor {
 
 /// A stored string that names no variant of a closed set.
 ///
-/// Concrete rather than `anyhow` so a SQLx decode can carry it, and it names both
+/// Concrete rather than `anyhow` so a `SQLx` decode can carry it, and it names both
 /// the column's type and the offending value, which `strum::ParseError` does not.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("unknown {kind} value: {value:?}")]
@@ -303,6 +305,7 @@ pub struct UnknownVariant {
 }
 
 impl UnknownVariant {
+    #[must_use]
     pub fn new(kind: &'static str, value: &str) -> Self {
         Self {
             kind,
@@ -311,7 +314,7 @@ impl UnknownVariant {
     }
 }
 
-/// Give an enum the SQLx codec for a closed set stored in a text column.
+/// Give an enum the `SQLx` codec for a closed set stored in a text column.
 ///
 /// The column is `TEXT`/`VARCHAR` rather than a Postgres enum type, so the codec
 /// delegates to `&str`. The string mapping itself comes from strum's `AsRefStr`
@@ -425,7 +428,7 @@ pub struct CourseInstructor {
     pub is_primary: bool,
 }
 
-/// Joined instructor data for a course (from course_instructors + instructors + rmp_professors + instructor_scores).
+/// Joined instructor data for a course (from `course_instructors` + instructors + `rmp_professors` + `instructor_scores`).
 #[derive(Debug, Clone)]
 pub struct CourseInstructorDetail {
     pub instructor_id: i32,
@@ -577,6 +580,7 @@ pub enum TargetPayload {
 
 impl TargetPayload {
     /// Term code the job targets, when the payload carries one.
+    #[must_use]
     pub fn term(&self) -> Option<&str> {
         match self {
             Self::CourseRange(t) => t.term.as_deref(),
@@ -587,6 +591,7 @@ impl TargetPayload {
     }
 
     /// Subject code the job targets, when the payload carries one.
+    #[must_use]
     pub fn subject(&self) -> Option<&str> {
         match self {
             Self::CourseRange(t) => Some(&t.subject),
@@ -627,12 +632,13 @@ pub struct ScrapeJob {
     /// Maximum number of retry attempts allowed (non-negative, enforced by CHECK constraint)
     pub max_retries: Count,
     /// When the job last entered the "ready to pick up" state.
-    /// Set to NOW() on creation; updated to NOW() on retry.
+    /// Set to `NOW()` on creation; updated to `NOW()` on retry.
     pub queued_at: DateTime<Utc>,
 }
 
 impl ScrapeJob {
     /// Compute the current status of this job from its fields.
+    #[must_use]
     pub fn status(&self) -> ScrapeJobStatus {
         let now = Utc::now();
         match self.locked_at {

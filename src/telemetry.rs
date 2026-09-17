@@ -37,11 +37,15 @@ const LATENCY_BUCKETS: &[f64] = &[
 const SCRAPE_JOB_BUCKETS: &[f64] = &[0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0, 300.0, 600.0];
 
 /// Bounds series growth from label values we do not fully control.
-const IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+const IDLE_TIMEOUT: Duration = Duration::from_hours(1);
 
 static HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
 
 /// Installs the global recorder once per process; a second install would fail.
+///
+/// # Panics
+/// Panics if a bucket list is empty or unsorted, or if a global recorder was already
+/// installed by someone else.
 pub fn recorder() -> &'static PrometheusHandle {
     HANDLE.get_or_init(|| {
         let handle = PrometheusBuilder::new()
@@ -180,6 +184,7 @@ fn describe() {
 
 /// Standard verbs only. `http::Method` accepts arbitrary extension tokens and axum produces a 405
 /// inside this layer, so an unfiltered method label lets any caller mint unbounded series.
+#[must_use]
 pub fn method_label(method: &axum::http::Method) -> &'static str {
     use axum::http::Method;
     match *method {

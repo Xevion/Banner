@@ -27,6 +27,7 @@ pub enum Subscription {
 }
 
 impl Subscription {
+    #[must_use]
     pub fn kind(&self) -> StreamKind {
         match self {
             Subscription::ScrapeJobs { .. } => StreamKind::ScrapeJobs,
@@ -37,6 +38,7 @@ impl Subscription {
         }
     }
 
+    #[must_use]
     pub fn is_computed(&self) -> bool {
         matches!(
             self,
@@ -57,6 +59,7 @@ impl Default for SubscriptionRegistry {
 }
 
 impl SubscriptionRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             subscriptions: HashMap::new(),
@@ -85,6 +88,7 @@ impl SubscriptionRegistry {
         removed
     }
 
+    #[must_use]
     pub fn get(&self, id: &str) -> Option<&Subscription> {
         self.subscriptions.get(id)
     }
@@ -101,6 +105,7 @@ impl SubscriptionRegistry {
         self.subscriptions.iter_mut()
     }
 
+    #[must_use]
     pub fn ids_for_kind(&self, kind: StreamKind) -> Vec<String> {
         self.subscriptions
             .iter()
@@ -118,6 +123,9 @@ impl Drop for SubscriptionRegistry {
     }
 }
 
+/// # Errors
+/// `InvalidFilter` if the filter payload doesn't match `kind`, or fails the
+/// per-kind validation delegated to the `parse_*` filter functions.
 pub fn build_subscription(kind: StreamKind, filter: Option<StreamFilter>) -> Result<Subscription, StreamError> {
     match kind {
         StreamKind::ScrapeJobs => {

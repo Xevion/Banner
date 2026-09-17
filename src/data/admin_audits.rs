@@ -19,6 +19,8 @@ const DEFAULT_PER_PAGE: i32 = 50;
 const MAX_PER_PAGE: i32 = 200;
 
 /// Serialize an `i64` as a string to avoid JavaScript precision loss for values exceeding 2^53.
+// `serde(serialize_with = ...)` requires the `&T` signature regardless of `T`'s size.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_i64_as_string<S: Serializer>(value: &i64, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_string())
 }
@@ -60,6 +62,7 @@ pub enum AdminEntity {
 
 impl AdminAction {
     /// The entity kind this action always targets.
+    #[must_use]
     pub fn entity(self) -> AdminEntity {
         match self {
             Self::InstructorMerge
@@ -108,6 +111,7 @@ impl Target {
     }
 
     /// Every record of the kind, as a sweep that names none of them.
+    #[must_use]
     pub fn all() -> Self {
         Self::default()
     }

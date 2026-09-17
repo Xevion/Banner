@@ -25,7 +25,7 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|cookies| {
                 cookies
                     .split(';')
-                    .find_map(|c| c.trim().strip_prefix("session=").map(|v| v.to_owned()))
+                    .find_map(|c| c.trim().strip_prefix("session=").map(str::to_owned))
             })
             .ok_or_else(|| {
                 (

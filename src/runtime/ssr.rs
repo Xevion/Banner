@@ -1,4 +1,4 @@
-//! Supervises the SvelteKit SSR server as a child process.
+//! Supervises the `SvelteKit` SSR server as a child process.
 //!
 //! In production the Rust binary is PID 1 and owns the Node process that renders
 //! pages. Nothing is spawned when `ssr_command` is unset, which is the case in
@@ -22,6 +22,7 @@ pub struct SsrService {
 }
 
 impl SsrService {
+    #[must_use]
     pub fn new(command: String, port: u16, backend_url: String) -> Self {
         Self {
             command,
@@ -57,21 +58,26 @@ impl SsrService {
             return;
         };
 
-        // SAFETY: `pid` came from a live child we own, and SIGTERM carries no
+        let Ok(pid_t) = libc::pid_t::try_from(pid) else {
+            warn!(pid, "SSR process pid doesn't fit pid_t, killing it directly");
+            let _ = child.kill().await;
+            return;
+        };
+
+        // SAFETY: `pid_t` came from a live child we own, and SIGTERM carries no
         // pointer arguments.
-        let sent = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        let sent = unsafe { libc::kill(pid_t, libc::SIGTERM) };
         if sent != 0 {
             warn!(pid, "failed to signal SSR process, killing it");
             let _ = child.kill().await;
             return;
         }
 
-        match tokio::time::timeout(TERM_GRACE, child.wait()).await {
-            Ok(_) => trace!(pid, "SSR process exited after SIGTERM"),
-            Err(_) => {
-                warn!(pid, "SSR process ignored SIGTERM, killing it");
-                let _ = child.kill().await;
-            }
+        if tokio::time::timeout(TERM_GRACE, child.wait()).await.is_ok() {
+            trace!(pid, "SSR process exited after SIGTERM");
+        } else {
+            warn!(pid, "SSR process ignored SIGTERM, killing it");
+            let _ = child.kill().await;
         }
     }
 }

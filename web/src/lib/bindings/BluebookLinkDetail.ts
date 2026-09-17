@@ -3,7 +3,7 @@ import type { BluebookLinkCourse } from "./BluebookLinkCourse";
 import type { BluebookLinkStatus } from "./BluebookLinkStatus";
 
 /**
- * Detail view for a single BlueBook link.
+ * Detail view for a single `BlueBook` link.
  */
 export type BluebookLinkDetail = { id: number, instructorName: string, subject: string | null, status: BluebookLinkStatus, confidence: number | null, instructorId: number | null, instructorDisplayName: string | null, evalCount: number, courses: Array<BluebookLinkCourse>, 
 /**

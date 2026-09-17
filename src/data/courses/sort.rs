@@ -137,11 +137,13 @@ impl SortKey {
     }
 
     /// Wire name, e.g. `start_time`.
+    #[must_use]
     pub const fn name(self) -> &'static str {
         self.def().name
     }
 
     /// What this ordering means to a reader, for a header tooltip or a menu.
+    #[must_use]
     pub const fn label(self, direction: SortDirection) -> &'static str {
         let def = self.def();
         match direction {
@@ -150,6 +152,7 @@ impl SortKey {
         }
     }
 
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|key| key.name() == name)
     }
@@ -267,6 +270,7 @@ impl std::error::Error for SortParseError {}
 pub struct SortSpec(Vec<SortTerm>);
 
 impl SortSpec {
+    #[must_use]
     pub fn new(mut terms: Vec<SortTerm>) -> Self {
         terms.truncate(MAX_SORT_TERMS);
         Self(terms)
@@ -274,6 +278,7 @@ impl SortSpec {
 
     /// The ORDER BY body. Every fragment is a hardcoded literal from `KeyDef`,
     /// so nothing a caller sends can reach the SQL text.
+    #[must_use]
     pub fn to_sql(&self) -> String {
         let mut parts: Vec<String> = self.0.iter().map(|term| term.to_sql()).collect();
         parts.push(DEFAULT_ORDER.to_owned());

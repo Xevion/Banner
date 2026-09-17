@@ -16,7 +16,8 @@ pub struct EventBuffer {
 }
 
 impl EventBuffer {
-    /// Create a new EventBuffer with the given capacity.
+    /// Create a new `EventBuffer` with the given capacity.
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let (head, _) = watch::channel(0);
         Self {
@@ -28,6 +29,10 @@ impl EventBuffer {
     }
 
     /// Publish an event to the buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal lock is poisoned.
     pub fn publish(&self, event: DomainEvent) {
         let mut events = self.events.write().expect("lock poisoned");
         if events.len() >= self.capacity {
@@ -46,14 +51,20 @@ impl EventBuffer {
     }
 
     /// Read an event at the given cursor position.
-    /// Returns None if cursor is behind base_offset (consumer lagged) or ahead of head.
+    /// Returns `None` if cursor is behind `base_offset` (consumer lagged) or ahead of head.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal lock is poisoned.
     pub fn read(&self, cursor: u64) -> Option<DomainEvent> {
         let events = self.events.read().expect("lock poisoned");
         let base = self.base_offset.load(Ordering::Acquire);
         if cursor < base {
             return None; // Consumer fell behind
         }
-        let index = (cursor - base) as usize;
+        let Ok(index) = usize::try_from(cursor - base) else {
+            return None;
+        };
         events.get(index).cloned()
     }
 

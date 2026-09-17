@@ -75,6 +75,26 @@ assert2 = "0.4.1"
 dotenvy = "0.15.7"
 
 # A 'release mode' profile that compiles quickly, but still 'appears' like a release build, useful for debugging
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+# Enforced where an error set is an API contract instead: src/web/mod.rs re-warns this,
+# because a handler's variants are its HTTP status codes and cannot be read off the type.
+missing_errors_doc = "allow"
+
+# Tracked as refactor work, not tuned away. The offenders form a smooth slope with no
+# natural cut point, so raising the threshold would just hide the shorter half.
+too_many_lines = "allow"
+
+# Shapes fixed by an external contract: sqlx column names, serde wire format, ts-rs
+# bindings, and Banner's own upstream JSON.
+struct_excessive_bools = "allow"
+struct_field_names = "allow"
+
+# Public signatures held stable against their callers.
+needless_pass_by_value = "allow"
+unnecessary_wraps = "allow"
+
 [profile.dev-release]
 inherits = "dev"
 debug-assertions = false

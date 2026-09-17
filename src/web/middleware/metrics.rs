@@ -16,6 +16,7 @@ const UNMATCHED: &str = "unmatched";
 pub struct RouteLabel(pub &'static str);
 
 /// Tags a response with the bounded label the metrics layer should record for it.
+#[must_use]
 pub fn labelled(mut response: Response, label: &'static str) -> Response {
     response.extensions_mut().insert(RouteLabel(label));
     response

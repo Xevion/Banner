@@ -16,7 +16,7 @@ use crate::web::error::{ApiError, DbResultExt, db_error};
 
 /// Every merge failure names something the caller can correct, so all of them
 /// are 400s; anything else is a genuine fault and stays a generic 500.
-fn merge_error(context: &str, e: anyhow::Error) -> ApiError {
+fn merge_error(context: &str, e: &anyhow::Error) -> ApiError {
     match e.downcast_ref::<MergeError>() {
         Some(err) => ApiError::bad_request(err.to_string()),
         None => db_error(context, e),
@@ -81,6 +81,9 @@ pub struct MergeResponse {
 }
 
 /// `GET /api/admin/instructors/duplicates` -- List duplicate instructor pairs.
+///
+/// # Errors
+/// Internal error if either query fails.
 #[instrument(skip_all)]
 pub async fn list_duplicates(
     AdminUser(_user): AdminUser,
@@ -104,6 +107,10 @@ pub async fn list_duplicates(
 }
 
 /// `POST /api/admin/instructors/merge` -- Fold one instructor record into another.
+///
+/// # Errors
+/// `BadRequest` if the ids are equal, either instructor is missing, or the
+/// names differ without confirmation; internal error otherwise.
 #[instrument(skip_all, fields(survivor_id, loser_id))]
 pub async fn merge(
     AdminUser(user): AdminUser,
@@ -120,7 +127,7 @@ pub async fn merge(
         body.names_confirmed,
     )
     .await
-    .map_err(|e| merge_error("merge instructors", e))?;
+    .map_err(|e| merge_error("merge instructors", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -158,6 +165,10 @@ pub struct MergeClaimantBody {
 
 /// `POST /api/admin/instructors/{id}/merge-claimant` -- Resolve a blocked
 /// candidate by merging this record into the one already holding the profile.
+///
+/// # Errors
+/// `BadRequest` if no instructor holds that RMP profile or the records name
+/// different people; internal error otherwise.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn merge_claimant(
     AdminUser(user): AdminUser,
@@ -170,7 +181,7 @@ pub async fn merge_claimant(
     let (survivor, loser) =
         instructor_merge::merge_with_claimant(&state.db_pool, id, body.rmp_legacy_id, Some(user.discord_id))
             .await
-            .map_err(|e| merge_error("merge with claimant", e))?;
+            .map_err(|e| merge_error("merge with claimant", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -201,12 +212,15 @@ pub async fn merge_claimant(
 }
 
 /// `POST /api/admin/instructors/merge-duplicates` -- Merge every unambiguous pair.
+///
+/// # Errors
+/// Internal error if the auto-merge query fails.
 #[instrument(skip_all)]
 pub async fn merge_all(
     AdminUser(user): AdminUser,
     State(state): State<AppState>,
 ) -> Result<Json<MergeStats>, ApiError> {
-    let stats = instructor_merge::auto_merge_duplicates(&state.db_pool, Some(user.discord_id))
+    let merge_stats = instructor_merge::auto_merge_duplicates(&state.db_pool, Some(user.discord_id))
         .await
         .db_context("merge duplicate instructors")?;
 
@@ -215,7 +229,7 @@ pub async fn merge_all(
         &user,
         AdminAction::InstructorMergeAll,
         Target::all(),
-        serde_json::json!({ "merged": stats.merged, "skipped": stats.skipped }),
+        serde_json::json!({ "merged": merge_stats.merged, "skipped": merge_stats.skipped }),
     )
     .await;
 
@@ -224,16 +238,20 @@ pub async fn merge_all(
         .db_context("refresh rmp summary")?;
 
     info!(
-        merged = stats.merged,
-        skipped = stats.skipped,
+        merged = merge_stats.merged,
+        skipped = merge_stats.skipped,
         actor = user.discord_id,
         "Merged duplicate instructor records"
     );
 
-    Ok(Json(stats))
+    Ok(Json(merge_stats))
 }
 
 /// `POST /api/admin/instructors/dismiss` -- Record that a pair is two people.
+///
+/// # Errors
+/// `BadRequest` if the ids are equal or either instructor is missing;
+/// internal error otherwise.
 #[instrument(skip_all, fields(first_id, second_id))]
 pub async fn dismiss(
     AdminUser(user): AdminUser,
@@ -242,7 +260,7 @@ pub async fn dismiss(
 ) -> Result<Json<MergeResponse>, ApiError> {
     instructor_merge::dismiss_pair(&state.db_pool, body.first_id, body.second_id, Some(user.discord_id))
         .await
-        .map_err(|e| merge_error("dismiss instructor pair", e))?;
+        .map_err(|e| merge_error("dismiss instructor pair", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -264,6 +282,9 @@ pub async fn dismiss(
 }
 
 /// `POST /api/admin/instructors/undismiss` -- Return a dismissed pair to review.
+///
+/// # Errors
+/// `BadRequest` if the ids are equal; internal error otherwise.
 #[instrument(skip_all, fields(first_id, second_id))]
 pub async fn undismiss(
     AdminUser(user): AdminUser,
@@ -272,7 +293,7 @@ pub async fn undismiss(
 ) -> Result<Json<MergeResponse>, ApiError> {
     let removed = instructor_merge::undismiss_pair(&state.db_pool, body.first_id, body.second_id)
         .await
-        .map_err(|e| merge_error("undismiss instructor pair", e))?;
+        .map_err(|e| merge_error("undismiss instructor pair", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -339,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_self_merge_maps_to_bad_request() {
-        let api = merge_error("merge instructors", MergeError::SelfMerge.into());
+        let api = merge_error("merge instructors", &MergeError::SelfMerge.into());
 
         check!(api.code == ApiErrorCode::BadRequest);
         check!(api.message == "cannot merge an instructor into itself");
@@ -349,7 +370,7 @@ mod tests {
     #[test]
     fn test_missing_instructor_maps_to_bad_request() {
         let err = anyhow::Error::from(MergeError::MissingInstructor).context("merging");
-        let api = merge_error("merge instructors", err);
+        let api = merge_error("merge instructors", &err);
 
         check!(api.code == ApiErrorCode::BadRequest);
         check!(api.message == "both instructors must exist to merge");
@@ -357,11 +378,11 @@ mod tests {
 
     #[test]
     fn test_claimant_errors_map_to_bad_request() {
-        let api = merge_error("merge with claimant", MergeError::NoClaimant.into());
+        let api = merge_error("merge with claimant", &MergeError::NoClaimant.into());
         check!(api.code == ApiErrorCode::BadRequest);
         check!(api.message == "no other instructor holds this RMP profile");
 
-        let api = merge_error("merge with claimant", MergeError::DifferentPeople.into());
+        let api = merge_error("merge with claimant", &MergeError::DifferentPeople.into());
         check!(api.code == ApiErrorCode::BadRequest);
         check!(api.message == "records name different people; merge them manually if they are the same");
     }
@@ -369,8 +390,8 @@ mod tests {
     /// One failure reads the same whichever endpoint surfaced it.
     #[test]
     fn test_missing_instructor_reads_the_same_from_either_endpoint() {
-        let direct = merge_error("merge instructors", MergeError::MissingInstructor.into());
-        let claimant = merge_error("merge with claimant", MergeError::MissingInstructor.into());
+        let direct = merge_error("merge instructors", &MergeError::MissingInstructor.into());
+        let claimant = merge_error("merge with claimant", &MergeError::MissingInstructor.into());
 
         check!(direct.code == claimant.code);
         check!(direct.message == claimant.message);
@@ -379,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_untyped_failure_stays_internal() {
-        let api = merge_error("merge with claimant", anyhow::anyhow!("connection reset"));
+        let api = merge_error("merge with claimant", &anyhow::anyhow!("connection reset"));
 
         check!(api.code == ApiErrorCode::InternalError);
         check!(api.message == "merge with claimant failed");

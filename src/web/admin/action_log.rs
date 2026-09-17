@@ -92,6 +92,10 @@ impl ActionLogParams {
 }
 
 /// `GET /api/admin/action-log` -- List recorded admin actions, newest first.
+///
+/// # Errors
+/// `BadRequest` if `actor` isn't a Discord id; internal error if the log
+/// query fails.
 #[instrument(skip_all)]
 pub async fn list_action_log(
     AdminUser(_user): AdminUser,

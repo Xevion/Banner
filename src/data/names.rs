@@ -91,13 +91,13 @@ const NICKNAME_GROUPS: &[&[&str]] = &[
 pub struct NameParts {
     /// Cleaned display-quality first name(s): "H. Paul", "María"
     pub first: String,
-    /// Cleaned display-quality last name: "O'Brien", "LeBlanc"
+    /// Cleaned display-quality last name: "O'Brien", "`LeBlanc`"
     pub last: String,
     /// Middle name/initial if detected: "Manuel", "L."
     pub middle: Option<String>,
     /// Suffix if detected: "III", "Jr"
     pub suffix: Option<String>,
-    /// Nicknames extracted from parentheses: ["Ken"], ["Qian"]
+    /// Nicknames extracted from parentheses: `["Ken"]`, `["Qian"]`
     pub nicknames: Vec<String>,
 }
 
@@ -214,6 +214,7 @@ fn collapse_whitespace(s: &str) -> String {
 /// assert_eq!(parts.first, "Erin");
 /// assert_eq!(parts.last, "O'Brien");
 /// ```
+#[must_use]
 pub fn parse_banner_name(display_name: &str) -> Option<NameParts> {
     // 1. Decode HTML entities
     let decoded = decode_html_entities(display_name);
@@ -257,6 +258,7 @@ pub fn parse_banner_name(display_name: &str) -> Option<NameParts> {
 /// assert_eq!(parts.first, "William");
 /// assert_eq!(parts.nicknames, vec!["Ken"]);
 /// ```
+#[must_use]
 pub fn parse_rmp_name(first_name: &str, last_name: &str) -> Option<NameParts> {
     let first_cleaned = strip_junk(first_name);
     let last_cleaned = strip_junk(last_name);
@@ -317,6 +319,7 @@ pub fn parse_rmp_name(first_name: &str, last_name: &str) -> Option<NameParts> {
 /// assert_eq!(normalize_for_matching("Aguirre-Mesa"), "aguirremesa");
 /// assert_eq!(normalize_for_matching("Aguirre Mesa"), "aguirremesa");
 /// ```
+#[must_use]
 pub fn normalize_for_matching(s: &str) -> String {
     s.to_lowercase()
         .nfd()
@@ -363,7 +366,7 @@ fn nickname_expansions(normalized_first: &str) -> Vec<String> {
 
 /// Generate all matching index keys for a parsed name.
 ///
-/// For a name like "H. Paul" / "LeBlanc" with no nicknames, generates:
+/// For a name like "H. Paul" / "`LeBlanc`" with no nicknames, generates:
 /// - `("leblanc", "h paul")` -- full normalized first (Primary)
 /// - `("leblanc", "paul")` -- individual token (Primary)
 /// - `("leblanc", "h")` -- individual token (Primary)
@@ -374,6 +377,7 @@ fn nickname_expansions(normalized_first: &str) -> Vec<String> {
 /// - `("burchenal", "will")` -- common nickname expansion (Nickname)
 /// - `("burchenal", "bill")` -- common nickname expansion (Nickname)
 /// - `("burchenal", "billy")` -- common nickname expansion (Nickname)
+#[must_use]
 pub fn matching_keys(parts: &NameParts) -> Vec<MatchingKey> {
     let norm_last = normalize_for_matching(&parts.last);
     if norm_last.is_empty() {
@@ -459,7 +463,7 @@ pub enum NameMatchQuality {
     /// No matching keys at all.
     None,
     /// Last name matches and at least one first-name token (but not the full
-    /// first name) matches. Typical when BlueBook has a middle name that
+    /// first name) matches. Typical when `BlueBook` has a middle name that
     /// Banner omits: "Smith, John David" vs "Smith, John".
     Partial,
     /// Full normalized first+last match (all keys overlap).
@@ -481,11 +485,12 @@ pub struct NameCompareResult {
 /// reflecting how closely the names align.
 ///
 /// Only considers [`KeyOrigin::Primary`] keys -- nickname expansions are not
-/// used for BlueBook instructor-to-instructor comparison (they're for
+/// used for `BlueBook` instructor-to-instructor comparison (they're for
 /// cross-source RMP matching where name formats differ significantly).
 ///
 /// This is a pure function with no database dependency, suitable for unit
 /// testing with arbitrary name pairs.
+#[must_use]
 pub fn compare_instructor_names(name_a: &str, name_b: &str) -> NameCompareResult {
     let no_match = NameCompareResult {
         quality: NameMatchQuality::None,
@@ -561,6 +566,7 @@ pub struct BestMatch {
 ///
 /// When multiple candidates match at the same quality level, returns `None`
 /// (ambiguous -- needs manual review).
+#[must_use]
 pub fn find_best_candidate(bluebook_name: &str, candidates: &[MatchCandidate]) -> Option<BestMatch> {
     let mut best: Option<BestMatch> = None;
     let mut ambiguous = false;
@@ -622,20 +628,17 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
     let mut unparseable = 0usize;
 
     for row in &rows {
-        match parse_banner_name(&row.display_name) {
-            Some(parts) => {
-                ids.push(row.id);
-                firsts.push(parts.first);
-                lasts.push(parts.last);
-            }
-            None => {
-                warn!(
-                    id = row.id,
-                    display_name = row.display_name,
-                    "Failed to parse instructor display_name during backfill"
-                );
-                unparseable += 1;
-            }
+        if let Some(parts) = parse_banner_name(&row.display_name) {
+            ids.push(row.id);
+            firsts.push(parts.first);
+            lasts.push(parts.last);
+        } else {
+            warn!(
+                id = row.id,
+                display_name = row.display_name,
+                "Failed to parse instructor display_name during backfill"
+            );
+            unparseable += 1;
         }
     }
 
@@ -668,6 +671,9 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
+// Confidence scores are clamped to exact 0.0/1.0 endpoints; the tests assert those
+// exact values on purpose.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -1284,21 +1290,8 @@ mod tests {
 
     #[test]
     fn best_candidate_ambiguous_same_quality_returns_none() {
-        // Two partial matches at the same quality level -- ambiguous
-        let candidates = vec![
-            MatchCandidate {
-                instructor_id: 1,
-                display_name: "Smith, John".into(),
-            },
-            MatchCandidate {
-                instructor_id: 2,
-                display_name: "Smith, Jonathan".into(),
-            },
-        ];
-        // BB name "Smith, John David" partially matches "Smith, John" (overlap on "john")
-        // but NOT "Smith, Jonathan" ("john" != "jonathan") -- only one matches, not ambiguous.
-        // Use a case where the first token genuinely matches multiple candidates:
-        let _candidates = candidates;
+        // Two partial matches at the same quality level, so the first token
+        // must genuinely match multiple candidates to be ambiguous.
         let candidates2 = vec![
             MatchCandidate {
                 instructor_id: 1,

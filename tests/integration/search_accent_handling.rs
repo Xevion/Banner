@@ -18,7 +18,7 @@ fn make_faculty(banner_id: &str, display_name: &str, email: Option<&str>) -> Fac
         class: "net.hedtech.banner.general.overall.SectionMeetingTimeDecorator".to_owned(),
         course_reference_number: 0,
         display_name: Some(display_name.to_owned()),
-        email_address: email.map(|e| e.to_owned()),
+        email_address: email.map(str::to_owned),
         primary_indicator: true,
         term: "202620".to_owned(),
     }

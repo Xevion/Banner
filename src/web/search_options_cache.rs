@@ -10,13 +10,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tracing::debug;
 
-const TTL: Duration = Duration::from_secs(10 * 60);
+const TTL: Duration = Duration::from_mins(10);
 
 #[derive(Clone, Default)]
 pub struct SearchOptionsCache {
-    /// term_code -> (cached_at, value)
+    /// `term_code` -> (`cached_at`, value)
     entries: Arc<DashMap<String, (Instant, Arc<SearchOptionsResponse>)>>,
-    /// term_code -> in-flight flag (singleflight guard)
+    /// `term_code` -> in-flight flag (singleflight guard)
     inflight: Arc<DashMap<String, Arc<AtomicBool>>>,
 }
 

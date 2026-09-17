@@ -1,17 +1,17 @@
 //! Unsigned integer newtypes for non-negative database fields.
 //!
-//! PostgreSQL has no unsigned integer types, so we store values as `INTEGER`/`BIGINT`
+//! `PostgreSQL` has no unsigned integer types, so we store values as `INTEGER`/`BIGINT`
 //! and convert at the Rust boundary. The `unsigned_newtype!` macro generates all
-//! necessary trait impls (SQLx, ts-rs, serde, conversions) from a single invocation.
+//! necessary trait impls (`SQLx`, ts-rs, serde, conversions) from a single invocation.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
 /// Generate a newtype wrapper around an unsigned integer that maps to a signed
-/// PostgreSQL column type. Produces:
+/// `PostgreSQL` column type. Produces:
 ///
-/// - SQLx `Type`/`Encode`/`Decode` (maps `u32`<->`i32` or `u64`<->`i64`)
+/// - `SQLx` `Type`/`Encode`/`Decode` (maps `u32`<->`i32` or `u64`<->`i64`)
 /// - ts-rs `TS` (inlines as `"number"`)
 /// - `serde` transparent serialization
 /// - `Display`, `From<unsigned>`, `Into<unsigned>`

@@ -38,8 +38,8 @@ pub enum MergeError {
 
 /// How much evidence there is that two records are the same person.
 ///
-/// The two casings differ on purpose: `instructor_merges.tier` stores snake_case,
-/// while the API and TypeScript union use camelCase.
+/// The two casings differ on purpose: `instructor_merges.tier` stores `snake_case`,
+/// while the API and TypeScript union use `camelCase`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, AsRefStr, IntoStaticStr, VariantArray)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
@@ -55,6 +55,7 @@ pub enum DuplicateTier {
 
 impl DuplicateTier {
     /// Whether this tier may merge without a human confirming it.
+    #[must_use]
     pub fn is_auto_mergeable(self) -> bool {
         matches!(self, Self::SameAccount)
     }
@@ -99,6 +100,7 @@ pub struct MergeStats {
 ///
 /// `lilian.cano@my.utsa.edu` and `lilian.cano@utsa.edu` are one account, so the
 /// `my.` prefix is dropped before comparison.
+#[must_use]
 pub fn canonical_email(email: &str) -> String {
     let lowered = email.trim().to_lowercase();
     let Some((local, domain)) = lowered.split_once('@') else {

@@ -1,3 +1,4 @@
+#![warn(clippy::missing_errors_doc)]
 //! Web API module for the banner application.
 
 pub mod admin;

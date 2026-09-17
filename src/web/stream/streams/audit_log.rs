@@ -8,6 +8,8 @@ use crate::web::stream::filters::AuditLogFilter;
 const DEFAULT_AUDIT_LIMIT: i32 = 200;
 const MAX_AUDIT_LIMIT: i32 = 500;
 
+/// # Errors
+/// If the underlying audit log query fails.
 pub async fn build_snapshot(db_pool: &PgPool, filter: &AuditLogFilter) -> Result<Vec<AuditLogEntry>, sqlx::Error> {
     let limit = filter.limit.unwrap_or(DEFAULT_AUDIT_LIMIT).clamp(1, MAX_AUDIT_LIMIT);
 
@@ -22,6 +24,7 @@ pub async fn build_snapshot(db_pool: &PgPool, filter: &AuditLogFilter) -> Result
     Ok(rows.into_iter().map(AuditLogEntry::from).collect())
 }
 
+#[must_use]
 pub fn filter_entries(filter: &AuditLogFilter, entries: &[AuditLogEntry]) -> Vec<AuditLogEntry> {
     entries
         .iter()
@@ -30,6 +33,7 @@ pub fn filter_entries(filter: &AuditLogFilter, entries: &[AuditLogEntry]) -> Vec
         .collect()
 }
 
+#[must_use]
 pub fn entry_matches(filter: &AuditLogFilter, entry: &AuditLogEntry) -> bool {
     if let Some(ref since) = filter.since_dt
         && let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(&entry.timestamp)

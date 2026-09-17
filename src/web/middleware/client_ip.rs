@@ -21,7 +21,14 @@ pub struct ClientIp(pub IpAddr);
 impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
     type Rejection = (StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    // Resolution reads headers already in memory, so there is nothing to await.
+    fn from_request_parts(parts: &mut Parts, _state: &S) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        std::future::ready(Self::resolve(parts))
+    }
+}
+
+impl ClientIp {
+    fn resolve(parts: &Parts) -> Result<Self, (StatusCode, &'static str)> {
         // 1. CF-Connecting-IP -- set by Cloudflare, most trustworthy.
         if let Some(ip) = header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok()) {
             return Ok(ClientIp(ip));
@@ -47,6 +54,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
     }
 }
 
+#[must_use]
 pub fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
 }

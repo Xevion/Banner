@@ -48,6 +48,7 @@ impl ApiError {
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self
@@ -73,6 +74,7 @@ impl ApiError {
         Self::new(ApiErrorCode::Conflict, message)
     }
 
+    #[must_use]
     pub fn rate_limited(retry_after_secs: u64) -> Self {
         Self {
             code: ApiErrorCode::RateLimited,
@@ -104,7 +106,7 @@ impl IntoResponse for ApiError {
     }
 }
 
-/// Convert `(StatusCode, String)` tuple errors to ApiError
+/// Convert `(StatusCode, String)` tuple errors to `ApiError`
 impl From<(StatusCode, String)> for ApiError {
     fn from((status, message): (StatusCode, String)) -> Self {
         let code = match status {
@@ -119,10 +121,10 @@ impl From<(StatusCode, String)> for ApiError {
     }
 }
 
-/// Helper for converting database errors to ApiError
-pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
+/// Helper for converting database errors to `ApiError`
+pub fn db_error(context: &str, error: &anyhow::Error) -> ApiError {
     tracing::error!(error = %error, context = context, "Database error");
-    crate::telemetry::record_db_failure(&error);
+    crate::telemetry::record_db_failure(error);
     ApiError::internal_error(format!("{context} failed"))
 }
 
@@ -131,7 +133,7 @@ pub fn db_error(context: &str, error: anyhow::Error) -> ApiError {
 impl<T> Result<T, anyhow::Error> {
     /// Convert a data-layer failure into a 500 that names the operation.
     fn db_context(self, context: &str) -> Result<T, ApiError> {
-        self.map_err(|e| db_error(context, e))
+        self.map_err(|e| db_error(context, &e))
     }
 }
 
@@ -147,7 +149,7 @@ impl<T> Option<T> {
 #[allow(dead_code)]
 #[extension(pub trait SqlxResultExt)]
 impl<T> Result<T, sqlx::Error> {
-    /// Convert a PostgreSQL unique-constraint violation (`23505`) into
+    /// Convert a `PostgreSQL` unique-constraint violation (`23505`) into
     /// [`ApiError::conflict`] with the given message. All other errors
     /// become an internal error via [`db_error`]; `Ok` values pass through.
     fn conflict_on_unique(self, message: impl Into<String>) -> Result<T, ApiError> {
@@ -156,7 +158,7 @@ impl<T> Result<T, sqlx::Error> {
             Err(sqlx::Error::Database(ref db_err)) if db_err.code().as_deref() == Some("23505") => {
                 Err(ApiError::conflict(message))
             }
-            Err(e) => Err(db_error("Database operation", e.into())),
+            Err(e) => Err(db_error("Database operation", &e.into())),
         }
     }
 }

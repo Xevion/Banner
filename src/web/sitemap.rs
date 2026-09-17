@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use std::fmt::Write;
 use std::sync::Arc;
 
 use crate::banner::models::terms::Term;
@@ -15,8 +16,8 @@ use crate::data;
 use crate::state::AppState;
 
 /// XML content type and cache control headers shared by all sitemap responses.
-fn xml_response(body: Arc<String>) -> Response {
-    let mut response = (*body).clone().into_response();
+fn xml_response(body: &Arc<String>) -> Response {
+    let mut response = (**body).clone().into_response();
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/xml; charset=utf-8"),
@@ -32,13 +33,13 @@ fn xml_response(body: Arc<String>) -> Response {
 /// Returns `Ok(response)` on cache hit or contention fallback, `Err(())` if caller should build.
 fn try_cache_or_claim(state: &AppState, key: &str) -> Result<Response, ()> {
     if let Some(cached) = state.sitemap_cache.get(key) {
-        return Ok(xml_response(cached));
+        return Ok(xml_response(&cached));
     }
 
     if !state.sitemap_cache.try_claim(key) {
         // Another request is building -- serve stale if available, else 503
         if let Some(stale) = state.sitemap_cache.get_stale(key) {
-            return Ok(xml_response(stale));
+            return Ok(xml_response(&stale));
         }
         let mut resp = StatusCode::SERVICE_UNAVAILABLE.into_response();
         resp.headers_mut()
@@ -55,7 +56,7 @@ fn finish(state: &AppState, key: &str, xml: String) -> Response {
     state.sitemap_cache.insert(key_owned, xml);
     let cached = state.sitemap_cache.get(key).unwrap();
     state.sitemap_cache.release(key);
-    xml_response(cached)
+    xml_response(&cached)
 }
 
 /// `GET /sitemap.xml` -- sitemap index pointing to sub-sitemaps.
@@ -69,12 +70,9 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let terms = match data::courses::get_available_terms(&state.db_pool).await {
-        Ok(t) => t,
-        Err(_) => {
-            state.sitemap_cache.release(key);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+    let Ok(terms) = data::courses::get_available_terms(&state.db_pool).await else {
+        state.sitemap_cache.release(key);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
     let mut xml = String::from(
@@ -82,20 +80,15 @@ pub async fn sitemap_index(State(state): State<AppState>) -> Response {
          <sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
     );
 
-    xml.push_str(&format!(
-        "  <sitemap><loc>{origin}/sitemap-static.xml</loc></sitemap>\n"
-    ));
-    xml.push_str(&format!(
-        "  <sitemap><loc>{origin}/sitemap-instructors.xml</loc></sitemap>\n"
-    ));
-    xml.push_str(&format!(
-        "  <sitemap><loc>{origin}/sitemap-subjects.xml</loc></sitemap>\n"
-    ));
+    let _ = writeln!(xml, "  <sitemap><loc>{origin}/sitemap-static.xml</loc></sitemap>");
+    let _ = writeln!(xml, "  <sitemap><loc>{origin}/sitemap-instructors.xml</loc></sitemap>");
+    let _ = writeln!(xml, "  <sitemap><loc>{origin}/sitemap-subjects.xml</loc></sitemap>");
     for code in &terms {
-        let slug = code.parse::<Term>().map(|t| t.slug()).unwrap_or(code.clone());
-        xml.push_str(&format!(
-            "  <sitemap><loc>{origin}/sitemap-courses-{slug}.xml</loc></sitemap>\n"
-        ));
+        let slug = code.parse::<Term>().map_or_else(|_| code.clone(), Term::slug);
+        let _ = writeln!(
+            xml,
+            "  <sitemap><loc>{origin}/sitemap-courses-{slug}.xml</loc></sitemap>"
+        );
     }
 
     xml.push_str("</sitemapindex>\n");
@@ -122,7 +115,7 @@ pub async fn sitemap_static(State(state): State<AppState>) -> Response {
     );
 
     for page in &pages {
-        xml.push_str(&format!("  <url><loc>{origin}{page}</loc></url>\n"));
+        let _ = writeln!(xml, "  <url><loc>{origin}{page}</loc></url>");
     }
 
     xml.push_str("</urlset>\n");
@@ -141,12 +134,9 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let entries = match data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await {
-        Ok(e) => e,
-        Err(_) => {
-            state.sitemap_cache.release(key);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+    let Ok(entries) = data::instructors::list_all_instructor_sitemap_entries(&state.db_pool).await else {
+        state.sitemap_cache.release(key);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
     let mut xml = String::from(
@@ -156,9 +146,9 @@ pub async fn sitemap_instructors(State(state): State<AppState>) -> Response {
 
     for entry in &entries {
         xml.push_str("  <url>\n");
-        xml.push_str(&format!("    <loc>{origin}/instructors/{}</loc>\n", entry.slug));
+        let _ = writeln!(xml, "    <loc>{origin}/instructors/{}</loc>", entry.slug);
         if let Some(dt) = entry.last_modified {
-            xml.push_str(&format!("    <lastmod>{}</lastmod>\n", dt.format("%Y-%m-%d")));
+            let _ = writeln!(xml, "    <lastmod>{}</lastmod>", dt.format("%Y-%m-%d"));
         }
         xml.push_str("  </url>\n");
     }
@@ -184,7 +174,7 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
     let Some(term_code) = Term::resolve_to_code(term_input) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let term_slug = term_code.parse::<Term>().map(|t| t.slug()).unwrap_or(term_code.clone());
+    let term_slug = term_code.parse::<Term>().map_or_else(|_| term_code.clone(), Term::slug);
 
     let key_owned = format!("courses-{term_code}");
     let key = key_owned.as_str();
@@ -192,12 +182,9 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
         return resp;
     }
 
-    let crns = match data::courses::list_crns_for_term(&state.db_pool, &term_code).await {
-        Ok(c) => c,
-        Err(_) => {
-            state.sitemap_cache.release(key);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+    let Ok(crns) = data::courses::list_crns_for_term(&state.db_pool, &term_code).await else {
+        state.sitemap_cache.release(key);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
     // Look up last_scraped_at for <lastmod>
@@ -217,9 +204,9 @@ pub async fn sitemap_courses(State(state): State<AppState>, Path(rest): Path<Str
 
     for crn in &crns {
         xml.push_str("  <url>\n");
-        xml.push_str(&format!("    <loc>{origin}/courses/{term_slug}/{crn}</loc>\n"));
+        let _ = writeln!(xml, "    <loc>{origin}/courses/{term_slug}/{crn}</loc>");
         if let Some(ref lm) = lastmod {
-            xml.push_str(&format!("    <lastmod>{lm}</lastmod>\n"));
+            let _ = writeln!(xml, "    <lastmod>{lm}</lastmod>");
         }
         xml.push_str("  </url>\n");
     }
@@ -240,12 +227,9 @@ pub async fn sitemap_subjects(State(state): State<AppState>) -> Response {
         return resp;
     }
 
-    let subjects = match data::courses::list_all_subjects(&state.db_pool).await {
-        Ok(s) => s,
-        Err(_) => {
-            state.sitemap_cache.release(key);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+    let Ok(subjects) = data::courses::list_all_subjects(&state.db_pool).await else {
+        state.sitemap_cache.release(key);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
     let mut xml = String::from(
@@ -254,7 +238,7 @@ pub async fn sitemap_subjects(State(state): State<AppState>) -> Response {
     );
 
     for code in &subjects {
-        xml.push_str(&format!("  <url><loc>{origin}/subjects/{code}</loc></url>\n"));
+        let _ = writeln!(xml, "  <url><loc>{origin}/subjects/{code}</loc></url>");
     }
 
     xml.push_str("</urlset>\n");

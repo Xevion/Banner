@@ -5,7 +5,7 @@
  */
 export type LinkedRmpProfile = { linkId: number, legacyId: number, firstName: string, lastName: string, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number, wouldTakeAgainPct: number | null, 
 /**
- * Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
+ * Subject prefixes extracted from RMP reviews (queried live from `rmp_reviews`).
  */
 reviewSubjects: Array<string>, 
 /**

@@ -8,7 +8,7 @@ use crate::banner::{
     errors::BannerApiError,
     json::parse_json_with_context,
     middleware::{BannerRateLimiter, LoggingMiddleware, RateLimitMiddleware},
-    models::*,
+    models::{BannerTerm, Course, MeetingScheduleInfo, MeetingTimesApiResponse, Pair, SearchResult},
     nonce,
     query::SearchQuery,
     util::user_agent,
@@ -36,7 +36,7 @@ impl BannerApi {
             Client::builder()
                 .cookie_store(false)
                 .user_agent(user_agent())
-                .tcp_keepalive(Some(std::time::Duration::from_secs(60 * 5)))
+                .tcp_keepalive(Some(std::time::Duration::from_mins(5)))
                 .read_timeout(std::time::Duration::from_secs(20))
                 .connect_timeout(std::time::Duration::from_secs(15))
                 .timeout(std::time::Duration::from_secs(40))
@@ -64,13 +64,12 @@ impl BannerApi {
 
     /// Builds common search parameters for list endpoints.
     fn build_list_params(
-        &self,
         search: &str,
         term: &str,
         offset: i32,
         max_results: i32,
         session_id: &str,
-    ) -> Vec<(&str, String)> {
+    ) -> Vec<(&'static str, String)> {
         vec![
             ("searchTerm", search.to_string()),
             ("term", term.to_string()),
@@ -97,7 +96,7 @@ impl BannerApi {
 
         let session = self.sessions.acquire(term.parse()?).await?;
         let url = format!("{}/classSearch/{}", self.base_url, endpoint);
-        let params = self.build_list_params(search, term, offset, max_results, session.id());
+        let params = Self::build_list_params(search, term, offset, max_results, session.id());
 
         let response = self
             .http
@@ -118,7 +117,6 @@ impl BannerApi {
 
     /// Builds search parameters for course search methods.
     fn build_search_params(
-        &self,
         query: &SearchQuery,
         term: &str,
         session_id: &str,
@@ -160,7 +158,7 @@ impl BannerApi {
 
         session.touch();
 
-        let params = self.build_search_params(query, term, session.id(), sort, sort_descending);
+        let params = Self::build_search_params(query, term, session.id(), sort, sort_descending);
 
         debug!(
             term = term,
@@ -367,8 +365,8 @@ const SEARCH_MAX_PAGES: i32 = 40;
 /// reported total has not been reached; a short page or reaching the total stops
 /// the loop.
 fn should_fetch_next_page(collected: usize, last_page_len: usize, total_count: i32, page_size: i32) -> bool {
-    let page_size = page_size.max(1) as usize;
-    let total = total_count.max(0) as usize;
+    let page_size = usize::try_from(page_size.max(1)).unwrap_or(usize::MAX);
+    let total = usize::try_from(total_count.max(0)).unwrap_or(usize::MAX);
     last_page_len >= page_size && collected < total
 }
 

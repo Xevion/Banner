@@ -195,7 +195,7 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
     Ok(())
 }
 
-/// Parse a 6-digit term code into (display_year, season).
+/// Parse a 6-digit term code into (`display_year`, season).
 ///
 /// Returns the **display year** -- the year shown in the term description -- not the raw
 /// code prefix. Banner encodes Fall as `(display_year + 1)10`, so "202610" (Fall 2025)
@@ -205,9 +205,9 @@ pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> 
 /// season codes like "11"). This allows the sync to skip invalid terms gracefully.
 ///
 /// # Examples
-/// - "202510" -> Some((2024, Season::Fall))   // Fall 2024, code prefix is 2025
-/// - "202520" -> Some((2025, Season::Spring))
-/// - "202530" -> Some((2025, Season::Summer))
+/// - "202510" -> Some((2024, `Season::Fall`))   // Fall 2024, code prefix is 2025
+/// - "202520" -> Some((2025, `Season::Spring`))
+/// - "202530" -> Some((2025, `Season::Summer`))
 /// - "201411" -> None (invalid season code)
 fn parse_term_code(code: &str) -> Option<(i16, Season)> {
     if code.len() != 6 {

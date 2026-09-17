@@ -57,7 +57,7 @@ pub async fn search(
     }
 
     if let Some(keywords) = keywords {
-        let keyword_list: Vec<String> = keywords.split_whitespace().map(|s| s.to_string()).collect();
+        let keyword_list: Vec<String> = keywords.split_whitespace().map(str::to_string).collect();
         query = query.keywords(keyword_list);
     }
 
@@ -78,7 +78,8 @@ pub async fn search(
     }
 
     // total_count is the server-side match count, which can exceed what was fetched.
-    let total_results = search_result.total_count.max(courses.len() as i32) as usize;
+    let courses_len = i32::try_from(courses.len()).unwrap_or(i32::MAX);
+    let total_results = usize::try_from(search_result.total_count.max(courses_len)).unwrap_or(courses.len());
 
     pagination::paginate(ctx, &courses, RESULTS_PER_PAGE, total_results, build_page_embed).await?;
 
@@ -180,10 +181,11 @@ fn parse_course_code(input: &str) -> Result<(i32, i32), Error> {
 
         if let Some(captures) = WILDCARD_RE.captures(input) {
             let prefix: i32 = captures[1].parse()?;
-            let x_count = captures[2].len();
+            // Bounded by the `input.len() != 4` check above.
+            let x_count = u32::try_from(captures[2].len()).unwrap_or(4);
 
-            let low = prefix * 10_i32.pow(x_count as u32);
-            let high = low + 10_i32.pow(x_count as u32) - 1;
+            let low = prefix * 10_i32.pow(x_count);
+            let high = low + 10_i32.pow(x_count) - 1;
 
             if low < 1000 || high > 9999 {
                 return Err(anyhow!("Course codes must be between 1000 and 9999"));

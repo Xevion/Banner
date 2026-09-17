@@ -10,6 +10,9 @@ use crate::web::courses::{CourseResponse, build_course_response};
 use crate::web::error::{ApiError, DbResultExt, OptionNotFoundExt};
 
 /// `GET /api/instructors`
+///
+/// # Errors
+/// Internal error if the instructor list query fails.
 pub async fn list_instructors(
     State(state): State<AppState>,
     Query(params): Query<PublicInstructorListParams>,
@@ -22,6 +25,13 @@ pub async fn list_instructors(
 }
 
 /// `GET /api/instructors/{slug}`
+///
+/// # Errors
+/// `NotFound` if no instructor matches the identifier or the resolved slug;
+/// internal error if either lookup query fails.
+///
+/// # Panics
+/// If the computed `ETag` contains bytes that are not a valid header value.
 pub async fn get_instructor(
     State(state): State<AppState>,
     Path(raw): Path<String>,
@@ -82,6 +92,10 @@ pub struct InstructorSectionsParams {
 }
 
 /// `GET /api/instructors/{slug}/sections?term={code}`
+///
+/// # Errors
+/// `BadRequest` if `term` is not a known term code; `NotFound` if no
+/// instructor matches the identifier; internal error if a lookup query fails.
 pub async fn get_instructor_sections(
     State(state): State<AppState>,
     Path(raw): Path<String>,
@@ -113,7 +127,7 @@ pub async fn get_instructor_sections(
         .await
         .unwrap_or_else(|e| {
             tracing::error!(error = %e, "Failed to fetch instructors for instructor sections");
-            Default::default()
+            std::collections::HashMap::default()
         });
 
     let responses: Vec<CourseResponse> = courses

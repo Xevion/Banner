@@ -9,12 +9,13 @@ use ts_rs::TS;
 use crate::data::models::UnknownVariant;
 
 /// The current year at the time of compilation
+#[allow(clippy::cast_sign_loss)] // compile-time calendar year is always positive
 const CURRENT_YEAR: u32 = compile_time::date!().year() as u32;
 
 /// The valid years for terms, in **display-year** terms (not Banner code prefix).
 ///
 /// Banner encodes Fall terms as `(display_year + 1)10`: Fall 2001 -> code `200210`.
-/// This range validates the human-readable year, so Fall 2001 (display_year 2001) is accepted.
+/// This range validates the human-readable year, so Fall 2001 (`display_year` 2001) is accepted.
 ///
 /// Lower bound is 2001 -- the earliest term UTSA's Banner system serves is Fall 2001 (200210).
 /// Upper bound is compile-time year + 10 to stay tight without manual updates.
@@ -47,12 +48,20 @@ pub enum Season {
 
 impl Term {
     /// Returns the current term status - either currently in a term or between terms
+    #[must_use]
     pub fn get_current() -> TermPoint {
         let now = Local::now().naive_local();
         Self::get_status_for_date(now.date())
     }
 
     /// Returns the current term status for a specific date
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: the season branches below are exhaustive for any
+    /// day of the year, so the final `panic!` is unreachable.
+    #[must_use]
+    #[allow(clippy::cast_sign_loss)] // NaiveDate::year() is always positive for real calendar dates
     pub fn get_status_for_date(date: NaiveDate) -> TermPoint {
         let literal_year = date.year() as u32;
         let day_of_year = date.ordinal();
@@ -122,6 +131,7 @@ impl Term {
 
     /// Returns the start and end day of each term for the given year.
     /// The ranges are inclusive of the start day and exclusive of the end day.
+    #[allow(clippy::cast_possible_wrap)] // year is a calendar year, far under i32::MAX
     fn get_season_ranges(year: u32) -> SeasonRanges {
         let spring_start = NaiveDate::from_ymd_opt(year as i32, 1, 14).unwrap().ordinal();
         let spring_end = NaiveDate::from_ymd_opt(year as i32, 5, 1).unwrap().ordinal();
@@ -147,11 +157,13 @@ impl Term {
     }
 
     /// URL-friendly slug, e.g. "spring-2026"
-    pub fn slug(&self) -> String {
+    #[must_use]
+    pub fn slug(self) -> String {
         format!("{}-{}", self.season.slug(), self.year)
     }
 
     /// Parse a slug like "spring-2026" into a Term
+    #[must_use]
     pub fn from_slug(s: &str) -> Option<Self> {
         let (season_str, year_str) = s.rsplit_once('-')?;
         let season = Season::from_slug(season_str)?;
@@ -163,11 +175,13 @@ impl Term {
     }
 
     /// Human-readable description, e.g. "Spring 2026"
-    pub fn description(&self) -> String {
+    #[must_use]
+    pub fn description(self) -> String {
         format!("{} {}", self.season, self.year)
     }
 
     /// Resolve a string that is either a term code ("202620") or a slug ("spring-2026") to a term code.
+    #[must_use]
     pub fn resolve_to_code(s: &str) -> Option<String> {
         // Try parsing as a 6-digit code first
         if let Ok(term) = s.parse::<Term>() {
@@ -180,6 +194,7 @@ impl Term {
 
 impl TermPoint {
     /// Returns the inner Term regardless of the status
+    #[must_use]
     pub fn inner(&self) -> &Term {
         match self {
             TermPoint::InTerm { current } => current,
@@ -229,6 +244,7 @@ impl Season {
     }
 
     /// Returns the lowercase slug for URL-friendly representation
+    #[must_use]
     pub fn slug(self) -> &'static str {
         match self {
             Season::Fall => "fall",
@@ -238,6 +254,7 @@ impl Season {
     }
 
     /// Parse a slug like "spring", "summer", "fall" into a Season
+    #[must_use]
     pub fn from_slug(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "fall" => Some(Season::Fall),
@@ -268,7 +285,7 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Season {
     }
 }
 
-impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Season {
+impl sqlx::Encode<'_, sqlx::Postgres> for Season {
     fn encode_by_ref(
         &self,
         buf: &mut sqlx::postgres::PgArgumentBuffer,

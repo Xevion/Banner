@@ -19,7 +19,7 @@ use tokio::sync::{Mutex, Notify};
 use tracing::trace;
 use url::Url;
 
-const SESSION_EXPIRY: Duration = Duration::from_secs(25 * 60); // 25 minutes
+const SESSION_EXPIRY: Duration = Duration::from_mins(25);
 
 /// Represents an active anonymous session within the Banner API.
 /// Identified by multiple persistent cookies, as well as a client-generated "unique session ID".
@@ -47,6 +47,11 @@ fn generate_session_id() -> String {
 }
 
 /// Generates a timestamp-based nonce
+///
+/// # Panics
+///
+/// Panics if the system clock is set before the UNIX epoch.
+#[must_use]
 pub fn nonce() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -57,6 +62,7 @@ pub fn nonce() -> String {
 
 impl BannerSession {
     /// Creates a new session
+    #[must_use]
     pub fn new(unique_session_id: &str, jsessionid: &str, ssb_cookie: &str) -> Self {
         let now = Instant::now();
 
@@ -70,6 +76,7 @@ impl BannerSession {
     }
 
     /// Returns the unique session ID
+    #[must_use]
     pub fn id(&self) -> &str {
         &self.unique_session_id
     }
@@ -80,15 +87,18 @@ impl BannerSession {
     }
 
     /// Returns true if the session is expired
+    #[must_use]
     pub fn is_expired(&self) -> bool {
         self.last_activity.unwrap_or(self.created_at).elapsed() > SESSION_EXPIRY
     }
 
     /// Returns a string used to for the "Cookie" header
+    #[must_use]
     pub fn cookie(&self) -> String {
         format!("JSESSIONID={}; SSB_COOKIE={}", self.jsessionid, self.ssb_cookie)
     }
 
+    #[must_use]
     pub fn been_used(&self) -> bool {
         self.last_activity.is_some()
     }
@@ -193,6 +203,7 @@ pub struct SessionPool {
 }
 
 impl SessionPool {
+    #[must_use]
     pub fn new(http: ClientWithMiddleware, base_url: String) -> Self {
         Self {
             sessions: DashMap::new(),
@@ -219,7 +230,9 @@ impl SessionPool {
             {
                 let mut queue = term_pool.sessions.lock().await;
                 if let Some(session) = queue.pop_front() {
-                    if !session.is_expired() {
+                    if session.is_expired() {
+                        trace!(id = session.unique_session_id, "Discarded expired session");
+                    } else {
                         let age = session.last_activity.unwrap_or(session.created_at).elapsed();
                         trace!(
                             id = session.unique_session_id,
@@ -230,8 +243,6 @@ impl SessionPool {
                             session: ManuallyDrop::new(session),
                             pool: Arc::clone(&term_pool),
                         });
-                    } else {
-                        trace!(id = session.unique_session_id, "Discarded expired session");
                     }
                 }
             } // MutexGuard is dropped, lock is released.
@@ -390,6 +401,12 @@ impl SessionPool {
 
     /// Selects a term for the current session.
     async fn select_term(&self, term: &str, unique_session_id: &str, cookie_header: &str) -> Result<()> {
+        #[derive(serde::Deserialize)]
+        struct RedirectResponse {
+            #[serde(rename = "fwdURL")]
+            fwd_url: String,
+        }
+
         let form_data = [
             ("term", term),
             ("studyPath", ""),
@@ -411,12 +428,6 @@ impl SessionPool {
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!("Failed to select term {}: {}", term, response.status()));
-        }
-
-        #[derive(serde::Deserialize)]
-        struct RedirectResponse {
-            #[serde(rename = "fwdURL")]
-            fwd_url: String,
         }
 
         let redirect: RedirectResponse = response
@@ -492,7 +503,7 @@ mod tests {
         let base_url = format!("http://{addr}/StudentRegistrationSsb");
         let client = reqwest_middleware::ClientBuilder::new(
             reqwest::Client::builder()
-                .timeout(Duration::from_secs(300))
+                .timeout(Duration::from_mins(5))
                 .build()
                 .unwrap(),
         )
@@ -569,7 +580,7 @@ mod tests {
             "sess-old",
             "JSID123",
             "SSB456",
-            Instant::now() - Duration::from_secs(26 * 60),
+            Instant::now().checked_sub(Duration::from_mins(26)).unwrap(),
         );
         assert!(session.is_expired());
     }
@@ -580,7 +591,7 @@ mod tests {
             "sess-recent",
             "JSID123",
             "SSB456",
-            Instant::now() - Duration::from_secs(24 * 60),
+            Instant::now().checked_sub(Duration::from_mins(24)).unwrap(),
         );
         assert!(!session.is_expired());
     }
@@ -591,7 +602,7 @@ mod tests {
             "sess-boundary",
             "JSID123",
             "SSB456",
-            Instant::now() - Duration::from_secs(25 * 60 + 1),
+            Instant::now().checked_sub(Duration::from_secs(25 * 60 + 1)).unwrap(),
         );
         assert!(session.is_expired());
     }

@@ -17,7 +17,7 @@ autoMatched: number,
  */
 pendingReview: number, 
 /**
- * No match found at all (status = 'pending', no instructor_id).
+ * No match found at all (status = 'pending', no `instructor_id`).
  */
 noMatch: number, 
 /**

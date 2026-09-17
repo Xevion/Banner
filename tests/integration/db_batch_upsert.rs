@@ -3,7 +3,7 @@ use banner::data::batch::batch_upsert_courses;
 use sqlx::PgPool;
 
 /// Columns selected by the course verification query:
-/// (crn, subject, course_number, title, enrollment, max_enrollment, wait_count, wait_capacity)
+/// (crn, subject, `course_number`, title, enrollment, `max_enrollment`, `wait_count`, `wait_capacity`)
 type CourseRow = (String, String, String, String, i32, i32, i32, i32);
 
 #[tokio::test]
@@ -638,9 +638,9 @@ async fn seed_distinct_namesakes(pool: &PgPool) -> (i32, i32) {
 
 #[tokio::test]
 async fn test_dismissed_pair_leaves_the_duplicate_list() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, find_dismissed_pairs, find_duplicate_pairs};
 
+    let pool = test_db!().await;
     let (a, b) = seed_distinct_namesakes(&pool).await;
     let before = find_duplicate_pairs(&pool).await.unwrap();
     assert_eq!(before.len(), 1, "the namesakes start out awaiting review");
@@ -657,9 +657,9 @@ async fn test_dismissed_pair_leaves_the_duplicate_list() {
 /// The decision is about identity, so a later scrape must not resurrect it.
 #[tokio::test]
 async fn test_dismissal_survives_a_later_scrape() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs};
 
+    let pool = test_db!().await;
     let (a, b) = seed_distinct_namesakes(&pool).await;
     dismiss_pair(&pool, a, b, None).await.unwrap();
 
@@ -678,9 +678,9 @@ async fn test_dismissal_survives_a_later_scrape() {
 
 #[tokio::test]
 async fn test_undismissing_returns_the_pair_to_review() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, find_duplicate_pairs, undismiss_pair};
 
+    let pool = test_db!().await;
     let (a, b) = seed_distinct_namesakes(&pool).await;
     dismiss_pair(&pool, a, b, None).await.unwrap();
 
@@ -694,9 +694,9 @@ async fn test_undismissing_returns_the_pair_to_review() {
 
 #[tokio::test]
 async fn test_dismissing_a_pair_twice_keeps_one_decision() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::dismiss_pair;
 
+    let pool = test_db!().await;
     let (a, b) = seed_distinct_namesakes(&pool).await;
     dismiss_pair(&pool, a, b, None).await.unwrap();
     dismiss_pair(&pool, b, a, None).await.unwrap();
@@ -711,9 +711,9 @@ async fn test_dismissing_a_pair_twice_keeps_one_decision() {
 /// A dismissal speaks about two live records, so merging one away must take it.
 #[tokio::test]
 async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::{dismiss_pair, merge_instructors};
 
+    let pool = test_db!().await;
     let (a, b) = seed_distinct_namesakes(&pool).await;
     dismiss_pair(&pool, a, b, None).await.unwrap();
 
@@ -730,9 +730,9 @@ async fn test_merging_one_side_of_a_dismissed_pair_drops_the_decision() {
 /// fold together on an id alone.
 #[tokio::test]
 async fn test_merging_unrelated_records_needs_confirmation() {
-    let pool = test_db!().await;
     use banner::data::instructor_merge::merge_instructors;
 
+    let pool = test_db!().await;
     let mut a = crate::helpers::make_course("20020", "202510", "MMI", "1013", "Media", (5, 30, 0, 0));
     a.faculty = vec![crate::helpers::make_faculty(
         "Fictional, Esme",

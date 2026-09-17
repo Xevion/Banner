@@ -83,6 +83,7 @@ pub struct Enrollment {
 
 /// Treat 0 ratings / 0.0 average as "no data", returning `None` for both fields.
 /// Preserves meaningful values unchanged.
+#[must_use]
 pub fn sanitize_rmp_ratings(avg_rating: Option<f32>, num_ratings: Option<i32>) -> (Option<f32>, Option<i32>) {
     match (avg_rating, num_ratings) {
         (Some(r), Some(n)) if r != 0.0 && n > 0 => (Some(r), Some(n)),
@@ -90,7 +91,7 @@ pub fn sanitize_rmp_ratings(avg_rating: Option<f32>, num_ratings: Option<i32>) -
     }
 }
 
-/// Brief RateMyProfessors data for an instructor.
+/// Brief `RateMyProfessors` data for an instructor.
 ///
 /// Present whenever an RMP profile link exists. Rating fields are `None` when the
 /// profile has no reviews (0 ratings / 0.0 average).
@@ -103,7 +104,7 @@ pub struct RmpBrief {
     pub legacy_id: i32,
 }
 
-/// Brief BlueBook evaluation data for an instructor.
+/// Brief `BlueBook` evaluation data for an instructor.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -112,7 +113,7 @@ pub struct BlueBookBrief {
     pub total_responses: Count,
 }
 
-/// Full BlueBook summary for instructor detail pages.
+/// Full `BlueBook` summary for instructor detail pages.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -124,7 +125,7 @@ pub struct BlueBookFull {
     pub eval_count: Count,
 }
 
-/// Full RateMyProfessors summary for instructor detail pages.
+/// Full `RateMyProfessors` summary for instructor detail pages.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -154,7 +155,7 @@ pub enum RatingSource {
 
 text_column_enum!(RatingSource);
 
-/// Bayesian composite rating combining RMP and BlueBook via regression calibration.
+/// Bayesian composite rating combining RMP and `BlueBook` via regression calibration.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -171,6 +172,7 @@ pub struct InstructorRating {
     pub total_responses: i32,
 }
 
+#[must_use]
 pub fn build_bluebook_brief(avg_rating: Option<f32>, total_responses: Option<i64>) -> Option<BlueBookBrief> {
     match (avg_rating, total_responses) {
         (Some(r), Some(n)) if r > 0.0 && n > 0 => Some(BlueBookBrief {

@@ -83,6 +83,7 @@ impl ComputedStreamManager {
     }
 
     /// Subscribe to updates (WS handlers call this).
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<ComputedUpdate> {
         self.update_tx.subscribe()
     }
@@ -173,7 +174,7 @@ async fn run_manager_loop(
                 }
             }
 
-            _ = sleep_future, if debounce_deadline.is_some() => {
+            () = sleep_future, if debounce_deadline.is_some() => {
                 debounce_deadline = None;
                 // Recompute all stale keys with subscribers
                 recompute_stale(&mut cache, &pool, &events, &reference_cache, &update_tx).await;
@@ -235,7 +236,10 @@ async fn recompute_stale(
                 match scraper_stats::compute_stats(pool, period, term.as_deref()).await {
                     Ok(raw) => {
                         let success_rate = if raw.total_scrapes > 0 {
-                            Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                            // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
+                            #[allow(clippy::cast_precision_loss)]
+                            let rate = raw.successful_scrapes as f64 / raw.total_scrapes as f64;
+                            Some(rate)
                         } else {
                             None
                         };
@@ -253,12 +257,12 @@ async fn recompute_stale(
                             pending_jobs: raw.pending_jobs,
                             locked_jobs: raw.locked_jobs,
                         };
-                        let delta = if entry.stats.as_ref() != Some(&new_stats) {
+                        let delta = if entry.stats.as_ref() == Some(&new_stats) {
+                            None
+                        } else {
                             Some(StreamDelta::ScraperStats {
                                 stats: new_stats.clone(),
                             })
-                        } else {
-                            None
                         };
                         entry.stats = Some(new_stats);
                         if delta.is_some() {
@@ -285,7 +289,7 @@ async fn recompute_stale(
                                 avg_duration_ms: p.avg_duration_ms,
                             })
                             .collect();
-                        let delta = compute_timeseries_delta(&entry.timeseries, &new_points);
+                        let delta = compute_timeseries_delta(entry.timeseries.as_ref(), &new_points);
                         let is_first = entry.timeseries.is_none();
                         entry.timeseries = Some(new_points);
                         if delta.is_some() || is_first {
@@ -320,7 +324,7 @@ async fn recompute_stale(
                                 recent_failures: d.recent_failures,
                             })
                             .collect();
-                        let delta = compute_subjects_delta(&entry.subjects, &new_subjects);
+                        let delta = compute_subjects_delta(entry.subjects.as_ref(), &new_subjects);
                         let is_first = entry.subjects.is_none();
                         entry.subjects = Some(new_subjects);
                         if delta.is_some() || is_first {
@@ -337,7 +341,7 @@ async fn recompute_stale(
     }
 }
 
-fn compute_timeseries_delta(old: &Option<Vec<TimeseriesPoint>>, new: &[TimeseriesPoint]) -> Option<StreamDelta> {
+fn compute_timeseries_delta(old: Option<&Vec<TimeseriesPoint>>, new: &[TimeseriesPoint]) -> Option<StreamDelta> {
     let Some(old_points) = old else {
         return None; // First computation, send snapshot not delta
     };
@@ -345,7 +349,7 @@ fn compute_timeseries_delta(old: &Option<Vec<TimeseriesPoint>>, new: &[Timeserie
     let old_map: HashMap<_, _> = old_points.iter().map(|p| (&p.timestamp, p)).collect();
     let changed: Vec<_> = new
         .iter()
-        .filter(|p| old_map.get(&p.timestamp).map(|&old| old != *p).unwrap_or(true))
+        .filter(|p| old_map.get(&p.timestamp).is_none_or(|&old| old != *p))
         .cloned()
         .collect();
 
@@ -356,17 +360,15 @@ fn compute_timeseries_delta(old: &Option<Vec<TimeseriesPoint>>, new: &[Timeserie
     }
 }
 
-fn compute_subjects_delta(old: &Option<Vec<SubjectSummary>>, new: &[SubjectSummary]) -> Option<StreamDelta> {
-    let Some(old_subjects) = old else {
-        return None;
-    };
+fn compute_subjects_delta(old: Option<&Vec<SubjectSummary>>, new: &[SubjectSummary]) -> Option<StreamDelta> {
+    let old_subjects = old?;
 
     let old_map: HashMap<_, _> = old_subjects.iter().map(|s| (&s.subject, s)).collect();
     let new_map: HashMap<_, _> = new.iter().map(|s| (&s.subject, s)).collect();
 
     let changed: Vec<_> = new
         .iter()
-        .filter(|s| old_map.get(&s.subject).map(|&old| old != *s).unwrap_or(true))
+        .filter(|s| old_map.get(&s.subject).is_none_or(|&old| old != *s))
         .cloned()
         .collect();
 

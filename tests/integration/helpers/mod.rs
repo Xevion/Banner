@@ -147,8 +147,8 @@ impl MeetingTimeBuilder {
 
     /// Set start/end dates in MM/DD/YYYY format.
     pub fn dates(mut self, start_mmddyyyy: &str, end_mmddyyyy: &str) -> Self {
-        self.start_date = start_mmddyyyy.to_owned();
-        self.end_date = end_mmddyyyy.to_owned();
+        start_mmddyyyy.clone_into(&mut self.start_date);
+        end_mmddyyyy.clone_into(&mut self.end_date);
         self
     }
 

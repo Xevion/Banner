@@ -1,7 +1,7 @@
-//! Discord OAuth2 authentication handlers.
+//! Discord `OAuth2` authentication handlers.
 //!
 //! Provides login, callback, logout, and session introspection endpoints
-//! for Discord OAuth2 authentication flow.
+//! for Discord `OAuth2` authentication flow.
 
 pub mod extractors;
 pub mod session;
@@ -22,7 +22,7 @@ use crate::state::AppState;
 pub struct AuthConfig {
     pub client_id: String,
     pub client_secret: String,
-    /// Optional base URL override (e.g. "https://banner.xevion.dev").
+    /// Optional base URL override (e.g. <https://banner.xevion.dev>).
     /// When `None`, the redirect URI is derived from the request's Origin/Host header.
     pub redirect_base: Option<String>,
 }
@@ -91,7 +91,7 @@ fn extract_session_token(headers: &HeaderMap) -> Option<String> {
         .split(';')
         .find_map(|cookie| {
             let cookie = cookie.trim();
-            cookie.strip_prefix("session=").map(|v| v.to_owned())
+            cookie.strip_prefix("session=").map(str::to_owned)
         })
 }
 
@@ -104,7 +104,11 @@ fn session_cookie(token: &str, max_age: i64, secure: bool) -> String {
     cookie
 }
 
-/// `GET /api/auth/login` -- Redirect to Discord OAuth2 authorization page.
+/// `GET /api/auth/login` -- Redirect to Discord `OAuth2` authorization page.
+///
+/// # Panics
+/// If the hardcoded Discord authorize URL fails to parse, which cannot
+/// happen for a valid literal.
 #[instrument(skip_all)]
 pub async fn auth_login(
     State(state): State<AppState>,
@@ -132,7 +136,12 @@ pub async fn auth_login(
     Redirect::temporary(url.as_str())
 }
 
-/// `GET /api/auth/callback` -- Handle Discord OAuth2 callback.
+/// `GET /api/auth/callback` -- Handle Discord `OAuth2` callback.
+///
+/// # Errors
+/// 400 if the CSRF state is invalid; 502 if the Discord token exchange or
+/// profile fetch fails or returns unparseable data; 500 if the user upsert
+/// or session creation fails.
 #[instrument(skip_all)]
 pub async fn auth_callback(
     State(state): State<AppState>,
@@ -251,7 +260,10 @@ pub async fn auth_callback(
 
     // 6. Build response with session cookie
     let secure = redirect_uri.starts_with("https://");
-    let cookie = session_cookie(&session.id, crate::data::sessions::SESSION_DURATION_SECS as i64, secure);
+    // SESSION_DURATION_SECS is a 7-day constant, far under i64::MAX.
+    #[allow(clippy::cast_possible_wrap)]
+    let max_age = crate::data::sessions::SESSION_DURATION_SECS as i64;
+    let cookie = session_cookie(&session.id, max_age, secure);
 
     let redirect_to = if user.is_admin { "/admin" } else { "/" };
 
@@ -279,6 +291,9 @@ pub async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> R
 }
 
 /// `GET /api/auth/me` -- Return the current authenticated user's info.
+///
+/// # Errors
+/// 401 if the session cookie is missing or does not resolve to a user.
 #[instrument(skip_all)]
 pub async fn auth_me(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, StatusCode> {
     let token = extract_session_token(&headers).ok_or(StatusCode::UNAUTHORIZED)?;

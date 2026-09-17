@@ -24,7 +24,7 @@ fn payloads_as_json(payloads: &[TargetPayload]) -> Result<Vec<serde_json::Value>
         .collect()
 }
 
-/// A single row from scrape_job_results for a given subject.
+/// A single row from `scrape_job_results` for a given subject.
 #[derive(Debug)]
 pub struct SubjectResultRow {
     pub id: i64,
@@ -39,7 +39,7 @@ pub struct SubjectResultRow {
     pub metrics_generated: Option<Count>,
 }
 
-/// List scrape jobs ordered by priority descending, then execute_at ascending.
+/// List scrape jobs ordered by priority descending, then `execute_at` ascending.
 pub async fn list_ordered(pool: &PgPool, limit: i64) -> Result<Vec<ScrapeJob>> {
     sqlx::query_as!(
         ScrapeJob,

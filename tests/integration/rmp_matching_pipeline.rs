@@ -95,10 +95,10 @@ async fn sole_uncontradicted_candidate_auto_links() {
     let instructor = insert_instructor(&pool, "Saldana, Liliana", Some("saldana@utsa.edu")).await;
     insert_rmp_professor(&pool, 1001, "Liliana", "Saldana", Some("Spanish"), 56).await;
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.auto_matched == 1);
-    check!(stats.candidates_created == 1);
+    check!(sync_stats.auto_matched == 1);
+    check!(sync_stats.candidates_created == 1);
     check!(links(&pool).await == vec![(instructor, 1001, "auto".to_owned())]);
     check!(match_status(&pool, instructor).await == "auto");
 
@@ -119,10 +119,10 @@ async fn contradicting_review_subjects_block_auto_link() {
         insert_rmp_review(&pool, 1002, "HIS1043", 2021).await;
     }
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.auto_matched == 0);
-    check!(stats.pending_review == 1);
+    check!(sync_stats.auto_matched == 0);
+    check!(sync_stats.pending_review == 1);
     check!(links(&pool).await.is_empty());
     check!(match_status(&pool, instructor).await == "pending");
 
@@ -256,11 +256,11 @@ async fn rejected_candidate_survives_regeneration_unscored() {
     .await
     .expect("seed rejected candidate");
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.deleted_pending_candidates == 0);
-    check!(stats.candidates_created == 0);
-    check!(stats.auto_matched == 0);
+    check!(sync_stats.deleted_pending_candidates == 0);
+    check!(sync_stats.candidates_created == 0);
+    check!(sync_stats.auto_matched == 0);
     check!(links(&pool).await.is_empty());
 
     let (status, score) = candidate(&pool, instructor, 1006).await.expect("candidate row");
@@ -281,11 +281,11 @@ async fn duplicate_profiles_for_one_person_all_link() {
     insert_rmp_professor(&pool, 1007, "Minh", "Nguyen", Some("Computer Science"), 0).await;
     insert_rmp_professor(&pool, 1008, "Minh", "Nguyen", Some("Computer Science"), 0).await;
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
     // One person, so one auto match, whatever the number of profiles.
-    check!(stats.auto_matched == 1);
-    check!(stats.pending_review == 0);
+    check!(sync_stats.auto_matched == 1);
+    check!(sync_stats.pending_review == 0);
     check!(
         links(&pool).await
             == vec![
@@ -346,9 +346,9 @@ async fn contested_sibling_profile_is_not_inherited() {
         insert_rmp_review(&pool, 1016, "HIS1043", 2021).await;
     }
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.auto_matched == 1);
+    check!(sync_stats.auto_matched == 1);
     check!(links(&pool).await == vec![(winner, 1015, "auto".to_owned())]);
     check!(match_status(&pool, winner).await == "auto");
     check!(match_status(&pool, loser).await == "pending");
@@ -369,10 +369,10 @@ async fn nickname_only_name_match_stays_below_the_threshold() {
     insert_taught_course(&pool, instructor, "CS", "10001").await;
     insert_rmp_professor(&pool, 1017, "Chris", "Packham", Some("Computer Science"), 50).await;
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.auto_matched == 0);
-    check!(stats.pending_review == 1);
+    check!(sync_stats.auto_matched == 0);
+    check!(sync_stats.pending_review == 1);
     check!(links(&pool).await.is_empty());
     check!(match_status(&pool, instructor).await == "pending");
 
@@ -408,11 +408,11 @@ async fn distinct_people_sharing_a_name_defer_to_review() {
     insert_rmp_professor(&pool, 1009, "Jane", "Smith", Some("Computer Science"), 0).await;
     insert_rmp_professor(&pool, 1010, "Jane Marie", "Smith", Some("Computer Science"), 0).await;
 
-    let stats = generate_candidates(&pool).await.expect("generate candidates");
+    let sync_stats = generate_candidates(&pool).await.expect("generate candidates");
 
-    check!(stats.auto_matched == 0);
-    check!(stats.candidates_created == 2);
-    check!(stats.pending_review == 1);
+    check!(sync_stats.auto_matched == 0);
+    check!(sync_stats.candidates_created == 2);
+    check!(sync_stats.pending_review == 1);
     check!(links(&pool).await.is_empty());
     check!(match_status(&pool, instructor).await == "pending");
 

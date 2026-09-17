@@ -7,7 +7,7 @@ import type { ScoreBreakdown } from "./ScoreBreakdown";
  */
 export type CandidateResponse = { id: number, rmpLegacyId: number, firstName: string, lastName: string, department: string | null, avgRating: number | null, avgDifficulty: number | null, numRatings: number, wouldTakeAgainPct: number | null, score: number, scoreBreakdown: ScoreBreakdown, status: RmpCandidateStatus, 
 /**
- * Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
+ * Subject prefixes extracted from RMP reviews (e.g. `["CS", "WRC"]`).
  */
 reviewSubjects: Array<string>, 
 /**

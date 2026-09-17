@@ -54,7 +54,8 @@ pub struct SubjectData {
     pub recent_failures: i64,
 }
 
-/// Validate a period string and return the corresponding PostgreSQL interval literal.
+/// Validate a period string and return the corresponding `PostgreSQL` interval literal.
+#[must_use]
 pub fn validate_period(period: &str) -> Option<&'static str> {
     match period {
         "1h" => Some("1 hour"),
@@ -66,7 +67,8 @@ pub fn validate_period(period: &str) -> Option<&'static str> {
     }
 }
 
-/// Validate a bucket string and return the corresponding PostgreSQL interval literal.
+/// Validate a bucket string and return the corresponding `PostgreSQL` interval literal.
+#[must_use]
 pub fn validate_bucket(bucket: &str) -> Option<&'static str> {
     match bucket {
         "1m" => Some("1 minute"),
@@ -79,11 +81,11 @@ pub fn validate_bucket(bucket: &str) -> Option<&'static str> {
 }
 
 /// Return the default bucket code for a given period code.
+#[must_use]
 pub fn default_bucket_for_period(period: &str) -> &'static str {
     match period {
         "1h" => "1m",
         "6h" => "5m",
-        "24h" => "15m",
         "7d" => "1h",
         "30d" => "6h",
         _ => "15m",
@@ -148,21 +150,21 @@ pub async fn compute_subjects(
                 SubjectSchedule::Paused => ScheduleState::Paused,
             };
 
-            let current_interval_secs = base_interval.as_secs() * multiplier as u64;
+            let current_interval_secs = base_interval.as_secs() * u64::from(multiplier);
 
             let (next_eligible_at, cooldown_remaining_secs) = match &schedule {
                 SubjectSchedule::Eligible(_) => (Some(now), Some(0)),
                 SubjectSchedule::Cooldown(remaining) => {
                     let remaining_secs = remaining.as_secs();
                     (
-                        Some(now + chrono::Duration::seconds(remaining_secs as i64)),
+                        Some(now + chrono::Duration::seconds(remaining_secs.cast_signed())),
                         Some(remaining_secs),
                     )
                 }
                 SubjectSchedule::Paused => (None, None),
             };
 
-            let subject_description = ref_cache.lookup("subject", &stats.subject).map(|s| s.to_string());
+            let subject_description = ref_cache.lookup("subject", &stats.subject).map(ToString::to_string);
 
             let tracked_course_count = course_counts.get(&stats.subject).copied().unwrap_or(0);
 

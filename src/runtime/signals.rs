@@ -7,6 +7,10 @@ use tokio::signal;
 use tracing::{error, info, warn};
 
 /// Handle application shutdown signals and graceful shutdown
+///
+/// # Panics
+/// Panics if the SIGINT or SIGTERM handler cannot be installed, which leaves the process
+/// with no way to shut down gracefully.
 pub async fn handle_shutdown_signals(mut service_manager: ServiceManager, shutdown_timeout: Duration) -> ExitCode {
     // Set up signal handling for both SIGINT (Ctrl+C) and SIGTERM
     let ctrl_c = async {
@@ -52,12 +56,12 @@ pub async fn handle_shutdown_signals(mut service_manager: ServiceManager, shutdo
             // Shutdown remaining services
             exit_code = handle_graceful_shutdown(service_manager, shutdown_timeout, exit_code).await;
         }
-        _ = ctrl_c => {
+        () = ctrl_c => {
             // User requested shutdown via Ctrl+C
             info!("user requested shutdown via ctrl+c");
             exit_code = handle_graceful_shutdown(service_manager, shutdown_timeout, ExitCode::SUCCESS).await;
         }
-        _ = sigterm => {
+        () = sigterm => {
             // System requested shutdown via SIGTERM
             info!("system requested shutdown via SIGTERM");
             exit_code = handle_graceful_shutdown(service_manager, shutdown_timeout, ExitCode::SUCCESS).await;
@@ -77,7 +81,9 @@ async fn handle_graceful_shutdown(
     match service_manager.shutdown(shutdown_timeout).await {
         Ok(elapsed) => {
             info!(
-                remaining = fmt_duration(shutdown_timeout - elapsed),
+                // elapsed is measured after the timeout resolves, so scheduling jitter can
+                // push it slightly past shutdown_timeout even on the successful path.
+                remaining = fmt_duration(shutdown_timeout.saturating_sub(elapsed)),
                 "graceful shutdown complete"
             );
             current_exit_code

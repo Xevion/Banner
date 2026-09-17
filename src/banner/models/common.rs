@@ -12,6 +12,7 @@ pub type BannerTerm = Pair;
 
 impl BannerTerm {
     /// Returns true if the term is in an archival (view-only) state
+    #[must_use]
     pub fn is_archived(&self) -> bool {
         self.description.contains("View Only")
     }

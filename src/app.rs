@@ -32,15 +32,15 @@ const DB_MAX_CONNECTIONS: u32 = 12;
 /// Backstop against pool exhaustion, not a latency budget: brief waiting beats a 500.
 const DB_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
 
-const DB_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 2);
-const DB_MAX_LIFETIME: Duration = Duration::from_secs(60 * 30);
+const DB_IDLE_TIMEOUT: Duration = Duration::from_mins(2);
+const DB_MAX_LIFETIME: Duration = Duration::from_mins(30);
 
 /// Main application struct containing all necessary components
 pub struct App {
     config: Config,
     db_pool: sqlx::PgPool,
     banner_api: Arc<BannerApi>,
-    app_state: AppState,
+    state: AppState,
     service_manager: ServiceManager,
 }
 
@@ -186,7 +186,8 @@ impl App {
 
         // Seed the initial admin user if configured
         if let Some(admin_id) = config.admin_discord_id {
-            let user = crate::data::users::ensure_seed_admin(&db_pool, admin_id as i64)
+            let admin_id_i64 = i64::try_from(admin_id).context("admin discord id exceeds i64 range")?;
+            let user = crate::data::users::ensure_seed_admin(&db_pool, admin_id_i64)
                 .await
                 .context("Failed to seed admin user")?;
             info!(discord_id = %admin_id, username = %user.discord_username, "Seed admin ensured");
@@ -202,7 +203,7 @@ impl App {
             config,
             db_pool,
             banner_api: banner_api_arc,
-            app_state,
+            state: app_state,
             service_manager: ServiceManager::new(),
         })
     }
@@ -216,7 +217,7 @@ impl App {
                 client_secret: self.config.discord_client_secret.clone(),
                 redirect_base: self.config.discord_redirect_uri.clone(),
             };
-            let web_service = Box::new(WebService::new(self.config.port, self.app_state.clone(), auth_config));
+            let web_service = Box::new(WebService::new(self.config.port, self.state.clone(), auth_config));
             self.service_manager
                 .register_service(ServiceName::Web.as_str(), web_service);
         }
@@ -240,11 +241,11 @@ impl App {
             let scraper_service = Box::new(ScraperService::new(
                 self.db_pool.clone(),
                 self.banner_api.clone(),
-                self.app_state.reference_cache.clone(),
-                self.app_state.service_statuses.clone(),
-                self.app_state.events.clone(),
-                self.app_state.bluebook_sync_notify.clone(),
-                self.app_state.bluebook_force_flag.clone(),
+                self.state.reference_cache.clone(),
+                self.state.service_statuses.clone(),
+                self.state.events.clone(),
+                self.state.bluebook_sync_notify.clone(),
+                self.state.bluebook_force_flag.clone(),
             ));
             self.service_manager
                 .register_service(ServiceName::Scraper.as_str(), scraper_service);
@@ -281,7 +282,7 @@ impl App {
 
         let notification_service = Box::new(NotificationService::new(
             self.db_pool.clone(),
-            self.app_state.events.clone(),
+            self.state.events.clone(),
             discord_http,
             self.config.public_origin.clone(),
         ));
@@ -292,11 +293,11 @@ impl App {
         let bot_service = Box::new(BotService::new(
             self.config.bot_token.clone(),
             self.config.bot_target_guild,
-            self.app_state.clone(),
+            self.state.clone(),
             status_task_handle,
             status_shutdown_tx,
             status_shutdown_rx,
-            self.app_state.service_statuses.clone(),
+            self.state.service_statuses.clone(),
         ));
 
         self.service_manager

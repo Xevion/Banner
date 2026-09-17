@@ -21,6 +21,7 @@ pub enum StreamKind {
 }
 
 impl StreamKind {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::ScrapeJobs => "scrape_jobs",
@@ -72,6 +73,7 @@ pub enum StreamClientMessage {
 }
 
 impl StreamClientMessage {
+    #[must_use]
     pub fn kind_label(&self) -> &'static str {
         match self {
             Self::Subscribe { .. } => "subscribe",
@@ -180,6 +182,7 @@ pub enum StreamServerMessage {
 }
 
 impl StreamServerMessage {
+    #[must_use]
     pub fn kind_label(&self) -> &'static str {
         match self {
             Self::Ready { .. } => "ready",

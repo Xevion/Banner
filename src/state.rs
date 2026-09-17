@@ -44,6 +44,7 @@ pub struct ServiceStatusRegistry {
 
 impl ServiceStatusRegistry {
     /// Creates a new empty registry.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -54,6 +55,7 @@ impl ServiceStatusRegistry {
     }
 
     /// Returns a snapshot of all service statuses.
+    #[must_use]
     pub fn all(&self) -> Vec<(String, ServiceStatus)> {
         self.inner
             .iter()
@@ -65,7 +67,7 @@ impl ServiceStatusRegistry {
 /// In-memory cache for reference data (code->description lookups).
 ///
 /// Loaded from the `reference_data` table on startup and refreshed periodically.
-/// Uses a two-level HashMap so lookups take `&str` without allocating.
+/// Uses a two-level `HashMap` so lookups take `&str` without allocating.
 pub struct ReferenceCache {
     /// category -> (code -> description)
     data: HashMap<String, HashMap<String, String>>,
@@ -79,11 +81,13 @@ impl Default for ReferenceCache {
 
 impl ReferenceCache {
     /// Create an empty cache.
+    #[must_use]
     pub fn new() -> Self {
         Self { data: HashMap::new() }
     }
 
     /// Build cache from a list of reference data entries.
+    #[must_use]
     pub fn from_entries(entries: Vec<ReferenceData>) -> Self {
         let mut data: HashMap<String, HashMap<String, String>> = HashMap::new();
         for e in entries {
@@ -93,14 +97,16 @@ impl ReferenceCache {
     }
 
     /// Look up a description by category and code. Zero allocations.
+    #[must_use]
     pub fn lookup(&self, category: &str, code: &str) -> Option<&str> {
         self.data
             .get(category)
             .and_then(|codes| codes.get(code))
-            .map(|s| s.as_str())
+            .map(String::as_str)
     }
 
     /// Get all `(code, description)` pairs for a category, sorted by description.
+    #[must_use]
     pub fn entries_for_category(&self, category: &str) -> Vec<(&str, &str)> {
         let Some(codes) = self.data.get(category) else {
             return Vec::new();
@@ -126,15 +132,15 @@ pub struct AppState {
     pub events: Arc<EventBuffer>,
     pub search_options_cache: SearchOptionsCache,
     pub computed_streams: ComputedStreamManager,
-    /// HTTP client for proxying requests to the SvelteKit SSR server.
+    /// HTTP client for proxying requests to the `SvelteKit` SSR server.
     pub ssr_client: reqwest::Client,
-    /// Base URL of the downstream SSR server (e.g. "http://localhost:3001").
+    /// Base URL of the downstream SSR server (e.g. <http://localhost:3001>).
     pub ssr_downstream: String,
-    /// Notify handle to manually trigger a BlueBook sync from admin endpoints.
+    /// Notify handle to manually trigger a `BlueBook` sync from admin endpoints.
     pub bluebook_sync_notify: Arc<Notify>,
-    /// When set to true before notifying, the next BlueBook sync will skip interval checks.
+    /// When set to true before notifying, the next `BlueBook` sync will skip interval checks.
     pub bluebook_force_flag: Arc<AtomicBool>,
-    /// Public origin for absolute URLs in sitemaps (e.g. "https://banner.xevion.dev").
+    /// Public origin for absolute URLs in sitemaps (e.g. <https://banner.xevion.dev>).
     pub public_origin: Option<String>,
     /// In-memory cache for pre-rendered sitemap XML.
     pub sitemap_cache: SitemapCache,
@@ -144,10 +150,16 @@ pub struct AppState {
 
 impl AppState {
     /// The internal token that the SSR proxy injects to bypass rate limiting.
+    #[must_use]
     pub fn internal_token(&self) -> &str {
         self.rate_limit.internal_token()
     }
 
+    /// Build the shared application state.
+    ///
+    /// # Panics
+    /// Panics if the SSR proxy HTTP client cannot be built, which means the process
+    /// cannot serve pages at all.
     pub fn new(
         banner_api: Arc<BannerApi>,
         db_pool: PgPool,

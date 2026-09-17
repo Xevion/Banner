@@ -1,5 +1,7 @@
 //! Database query functions for user sessions.
 
+use std::fmt::Write as _;
+
 use anyhow::Context;
 use rand::RngExt;
 use sqlx::PgPool;
@@ -9,17 +11,26 @@ use anyhow::Result;
 
 /// Session lifetime: 7 days (in seconds).
 pub const SESSION_DURATION_SECS: u64 = 7 * 24 * 3600;
+/// `SESSION_DURATION_SECS` as `f64` for interval binding; well under f64's precision limit.
+#[allow(clippy::cast_precision_loss)]
+const SESSION_DURATION_SECS_F64: f64 = SESSION_DURATION_SECS as f64;
 
 /// Generate a cryptographically random 32-byte hex token.
 fn generate_token() -> String {
     let bytes: [u8; 32] = rand::rng().random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut hex, b| {
+        let _ = write!(hex, "{b:02x}");
+        hex
+    })
 }
 
 /// Create a new session for a user with the given duration.
 pub async fn create_session(pool: &PgPool, user_id: i64, duration: std::time::Duration) -> Result<UserSession> {
     let token = generate_token();
-    let duration_secs = duration.as_secs() as i64;
+    let duration_secs = duration.as_secs().cast_signed();
+    // A session duration in seconds stays far below f64's 52-bit mantissa limit.
+    #[allow(clippy::cast_precision_loss)]
+    let duration_secs_f64 = duration_secs as f64;
 
     sqlx::query_as!(
         UserSession,
@@ -30,7 +41,7 @@ pub async fn create_session(pool: &PgPool, user_id: i64, duration: std::time::Du
         "#,
         token,
         user_id,
-        duration_secs as f64,
+        duration_secs_f64,
     )
     .fetch_one(pool)
     .await
@@ -63,7 +74,7 @@ pub async fn touch_session(pool: &PgPool, token: &str) -> Result<()> {
         WHERE id = $1
         "#,
         token,
-        SESSION_DURATION_SECS as f64,
+        SESSION_DURATION_SECS_F64,
     )
     .execute(pool)
     .await

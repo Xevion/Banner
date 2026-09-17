@@ -6,6 +6,8 @@ use std::collections::HashSet;
 use crate::web::stream::filters::ScrapeJobsFilter;
 use crate::web::ws::{ScrapeJobDto, ScrapeJobEvent};
 
+/// # Errors
+/// If the underlying scrape job query fails.
 pub async fn build_snapshot(db_pool: &PgPool, filter: &ScrapeJobsFilter) -> Result<Vec<ScrapeJobDto>, sqlx::Error> {
     let rows = crate::data::scrape_jobs::list_ordered(db_pool, 200)
         .await
@@ -20,6 +22,7 @@ pub async fn build_snapshot(db_pool: &PgPool, filter: &ScrapeJobsFilter) -> Resu
     Ok(jobs)
 }
 
+#[must_use]
 pub fn matches_filter(filter: &ScrapeJobsFilter, job: &ScrapeJobDto) -> bool {
     if let Some(ref statuses) = filter.status
         && !statuses.is_empty()
@@ -64,10 +67,10 @@ pub fn matches_filter(filter: &ScrapeJobsFilter, job: &ScrapeJobDto) -> bool {
     true
 }
 
-pub async fn event_matches(
+pub async fn event_matches<S: std::hash::BuildHasher>(
     db_pool: &PgPool,
     filter: &ScrapeJobsFilter,
-    known_ids: &mut HashSet<i32>,
+    known_ids: &mut HashSet<i32, S>,
     event: &ScrapeJobEvent,
     job_details: &mut Option<ScrapeJobDto>,
 ) -> bool {

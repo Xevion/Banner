@@ -4,6 +4,7 @@ use crate::banner::Term;
 use crate::bot::{Context, Error};
 use crate::data::courses::get_id_by_crn;
 use crate::data::watches::{self, WatchType};
+use anyhow::Context as _;
 
 /// Watch type choices for Discord slash command parameters.
 #[derive(Debug, Clone, Copy, poise::ChoiceParameter)]
@@ -48,17 +49,14 @@ pub async fn watch(
     let term_code = term.unwrap_or_else(|| Term::get_current().inner().to_string());
     let watch_type = WatchType::from(watch_type.unwrap_or(WatchTypeChoice::SeatsAvailable));
 
-    let course_id = match get_id_by_crn(pool, &term_code, &crn).await? {
-        Some(id) => id,
-        None => {
-            ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
-                .await?;
-            return Ok(());
-        }
+    let Some(course_id) = get_id_by_crn(pool, &term_code, &crn).await? else {
+        ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
+            .await?;
+        return Ok(());
     };
 
     let author = ctx.author();
-    let discord_user_id = author.id.get() as i64;
+    let discord_user_id = i64::try_from(author.id.get()).context("discord user id exceeds i64 range")?;
     let discord_username = author.tag();
 
     watches::ensure_user(pool, discord_user_id, &discord_username).await?;
@@ -93,21 +91,18 @@ pub async fn unwatch(
 
     let pool = &ctx.data().app_state.db_pool;
     let term_code = term.unwrap_or_else(|| Term::get_current().inner().to_string());
-    let discord_user_id = ctx.author().id.get() as i64;
+    let discord_user_id = i64::try_from(ctx.author().id.get()).context("discord user id exceeds i64 range")?;
 
-    let course_id = match get_id_by_crn(pool, &term_code, &crn).await? {
-        Some(id) => id,
-        None => {
-            ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
-                .await?;
-            return Ok(());
-        }
+    let Some(course_id) = get_id_by_crn(pool, &term_code, &crn).await? else {
+        ctx.say(format!("No course found with CRN **{crn}** in term **{term_code}**."))
+            .await?;
+        return Ok(());
     };
 
     let removed = if let Some(choice) = watch_type {
         let wt = WatchType::from(choice);
         let deleted = watches::delete_watch(pool, discord_user_id, course_id, wt).await?;
-        if deleted { 1u64 } else { 0 }
+        u64::from(deleted)
     } else {
         watches::delete_all_watches_for_course(pool, discord_user_id, course_id).await?
     };
@@ -131,7 +126,7 @@ pub async fn watches(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
     let pool = &ctx.data().app_state.db_pool;
-    let discord_user_id = ctx.author().id.get() as i64;
+    let discord_user_id = i64::try_from(ctx.author().id.get()).context("discord user id exceeds i64 range")?;
 
     let items = watches::list_active_watches(pool, discord_user_id).await?;
 

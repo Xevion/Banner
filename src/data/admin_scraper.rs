@@ -31,7 +31,7 @@ pub struct TimeseriesPoint {
 
 /// Fetch aggregate scraper stats for a period, with optional term filter.
 ///
-/// `interval_str` is a validated PostgreSQL interval literal (e.g. `"24 hours"`).
+/// `interval_str` is a validated `PostgreSQL` interval literal (e.g. `"24 hours"`).
 pub async fn compute_stats(pool: &PgPool, interval_str: &str, term: Option<&str>) -> Result<ScraperStats> {
     let row = sqlx::query!(
         r#"
@@ -79,7 +79,7 @@ pub async fn compute_stats(pool: &PgPool, interval_str: &str, term: Option<&str>
 
 /// Fetch timeseries scraper data for a period, bucketed by interval.
 ///
-/// Both `bucket_interval` and `period_interval` are validated PostgreSQL interval
+/// Both `bucket_interval` and `period_interval` are validated `PostgreSQL` interval
 /// literals. Returns one point per bucket, with zero-filled gaps.
 pub async fn compute_timeseries(
     pool: &PgPool,

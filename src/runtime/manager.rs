@@ -22,6 +22,7 @@ impl Default for ServiceManager {
 }
 
 impl ServiceManager {
+    #[must_use]
     pub fn new() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (completion_tx, completion_rx) = mpsc::unbounded_channel();
@@ -41,6 +42,7 @@ impl ServiceManager {
     }
 
     /// Check if there are any registered services
+    #[must_use]
     pub fn has_services(&self) -> bool {
         !self.registered_services.is_empty()
     }
@@ -76,6 +78,10 @@ impl ServiceManager {
 
     /// Run all services until one completes or fails
     /// Returns the first service that completes and its result
+    ///
+    /// # Panics
+    /// Panics if the completion receiver is missing. The constructor always installs it
+    /// and nothing clears it, so this is unreachable in practice.
     pub async fn run(&mut self) -> (String, ServiceResult) {
         if self.service_handles.is_empty() {
             return (
@@ -89,19 +95,18 @@ impl ServiceManager {
         // Wait for any service to complete via the channel
         let completion_rx = self.completion_rx.as_mut().expect("completion_rx should be available");
 
-        completion_rx
-            .recv()
-            .await
-            .map(|(name, result)| {
-                self.service_handles.remove(&name);
-                (name, result)
-            })
-            .unwrap_or_else(|| {
+        completion_rx.recv().await.map_or_else(
+            || {
                 (
                     "channel_closed".to_string(),
                     ServiceResult::Error(anyhow::anyhow!("Completion channel closed")),
                 )
-            })
+            },
+            |(name, result)| {
+                self.service_handles.remove(&name);
+                (name, result)
+            },
+        )
     }
 
     /// Shutdown all services gracefully with a timeout.
@@ -111,6 +116,9 @@ impl ServiceManager {
     /// If any service fails to shutdown within the timeout, it will be aborted.
     ///
     /// Returns the elapsed time if all succeed, or a list of failed service names.
+    ///
+    /// # Panics
+    /// Panics if the completion receiver is missing, which construction prevents.
     pub async fn shutdown(&mut self, timeout: Duration) -> Result<Duration, Vec<String>> {
         let service_count = self.service_handles.len();
         let service_names: Vec<_> = self.service_handles.keys().cloned().collect();
@@ -149,23 +157,20 @@ impl ServiceManager {
             collected
         };
 
-        let results = match tokio::time::timeout(timeout, collect_future).await {
-            Ok(results) => results,
-            Err(_) => {
-                // Timeout exceeded - abort all remaining services
-                warn!(
-                    timeout = fmt_duration(timeout),
-                    "shutdown timeout exceeded - aborting all remaining services"
-                );
+        let Ok(results) = tokio::time::timeout(timeout, collect_future).await else {
+            // Timeout exceeded - abort all remaining services
+            warn!(
+                timeout = fmt_duration(timeout),
+                "shutdown timeout exceeded - aborting all remaining services"
+            );
 
-                let failed: Vec<String> = self.service_handles.keys().cloned().collect();
-                for handle in self.service_handles.values() {
-                    handle.abort();
-                }
-                self.service_handles.clear();
-
-                return Err(failed);
+            let failed: Vec<String> = self.service_handles.keys().cloned().collect();
+            for handle in self.service_handles.values() {
+                handle.abort();
             }
+            self.service_handles.clear();
+
+            return Err(failed);
         };
 
         // Process results and identify failures

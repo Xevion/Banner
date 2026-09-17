@@ -1,5 +1,9 @@
 //! Standard `process_*` metrics, read from procfs. Most Grafana dashboards assume these exist.
 
+// Prometheus gauges are f64; every procfs value converted here (bytes, ticks, fd counts) stays
+// far below 2^53 for the life of a real process.
+#![allow(clippy::cast_precision_loss)]
+
 use std::sync::OnceLock;
 
 pub const CPU_SECONDS: &str = "process_cpu_seconds_total";
@@ -62,7 +66,8 @@ fn clock_ticks() -> f64 {
 fn page_size() -> u64 {
     // SAFETY: sysconf with a valid name is always sound and returns -1 on failure.
     let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if size > 0 { size as u64 } else { 4096 }
+    // size is checked positive above, so the sign is never lost.
+    if size > 0 { size.unsigned_abs() } else { 4096 }
 }
 
 fn open_fds() -> Option<u64> {

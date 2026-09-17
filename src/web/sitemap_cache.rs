@@ -1,6 +1,6 @@
 //! TTL cache for pre-rendered sitemap XML strings.
 //!
-//! Mirrors the `SearchOptionsCache` pattern: DashMap entries with a 15-minute TTL
+//! Mirrors the `SearchOptionsCache` pattern: `DashMap` entries with a 15-minute TTL
 //! and singleflight dedup per cache key to prevent thundering-herd on cache miss.
 
 use dashmap::DashMap;
@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tracing::debug;
 
-const TTL: Duration = Duration::from_secs(15 * 60);
+const TTL: Duration = Duration::from_mins(15);
 
 #[derive(Clone, Default)]
 pub struct SitemapCache {

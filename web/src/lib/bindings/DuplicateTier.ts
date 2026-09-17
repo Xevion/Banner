@@ -3,7 +3,7 @@
 /**
  * How much evidence there is that two records are the same person.
  *
- * The two casings differ on purpose: `instructor_merges.tier` stores snake_case,
- * while the API and TypeScript union use camelCase.
+ * The two casings differ on purpose: `instructor_merges.tier` stores `snake_case`,
+ * while the API and TypeScript union use `camelCase`.
  */
 export type DuplicateTier = "sameAccount" | "missingEmail" | "differentAccount";

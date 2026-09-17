@@ -60,7 +60,7 @@ async fn main() -> ExitCode {
         "starting banner"
     );
 
-    let service_strs: Vec<&str> = enabled_services.iter().map(|s| s.as_str()).collect();
+    let service_strs: Vec<&str> = enabled_services.iter().map(ServiceName::as_str).collect();
     info!(
         enabled_services = ?service_strs,
         "services configuration loaded"

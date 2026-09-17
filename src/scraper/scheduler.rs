@@ -23,28 +23,28 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
 
 /// How often reference data is re-scraped (6 hours).
-const REFERENCE_DATA_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+const REFERENCE_DATA_INTERVAL: Duration = Duration::from_hours(6);
 
 /// How often RMP data is synced (24 hours).
-const RMP_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+const RMP_SYNC_INTERVAL: Duration = Duration::from_hours(24);
 
 /// How often terms are synced from Banner API (8 hours).
-const TERM_SYNC_INTERVAL: Duration = Duration::from_secs(8 * 60 * 60);
+const TERM_SYNC_INTERVAL: Duration = Duration::from_hours(8);
 
-/// How often to check which BlueBook subjects need re-scraping (1 day).
+/// How often to check which `BlueBook` subjects need re-scraping (1 day).
 ///
 /// Per-subject re-scrape frequency is governed by `RECENT_SUBJECT_INTERVAL` (14 days)
 /// and `HISTORICAL_SUBJECT_INTERVAL` (90 days) in `src/bluebook.rs`.
-const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 3600);
+const BLUEBOOK_SYNC_INTERVAL: Duration = Duration::from_hours(24);
 
 /// How often to check for professors eligible for review scraping (15 minutes).
-const RMP_REVIEW_SCRAPE_INTERVAL: Duration = Duration::from_secs(15 * 60);
+const RMP_REVIEW_SCRAPE_INTERVAL: Duration = Duration::from_mins(15);
 
 /// Max professors to scrape reviews for per cycle.
 const RMP_REVIEW_SCRAPE_BATCH_SIZE: i64 = 50;
 
-/// How often the courses table is re-clustered on term_code (30 days).
-const CLUSTER_COURSES_INTERVAL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// How often the courses table is re-clustered on `term_code` (30 days).
+const CLUSTER_COURSES_INTERVAL: Duration = Duration::from_hours(30 * 24);
 
 const SLOW_QUERY_THRESHOLD: Duration = Duration::from_millis(500);
 
@@ -80,6 +80,8 @@ fn sample_queue_depth(pool: PgPool) {
     tokio::spawn(async move {
         match crate::data::scrape_jobs::queue_depth(&pool).await {
             Ok(depth) => {
+                // Prometheus gauges are f64; queue depth never approaches 2^53.
+                #[allow(clippy::cast_precision_loss)]
                 metrics::gauge!(SCRAPE_QUEUE_DEPTH).set(depth.count as f64);
                 metrics::gauge!(SCRAPE_QUEUE_OLDEST_SECONDS).set(depth.oldest_seconds.unwrap_or(0.0));
             }
@@ -97,14 +99,18 @@ fn sample_queue_depth(pool: PgPool) {
 /// triggers immediate execution. If it's recent, the returned `Instant` reflects
 /// how much time has actually elapsed so the scheduler respects the remaining cooldown.
 fn persisted_to_instant(persisted: Option<DateTime<Utc>>, interval: Duration) -> Instant {
+    // Linux represents an Instant before boot fine, so this cannot fail here; the checked
+    // form keeps that a platform detail rather than an assumption baked into the scheduler.
+    let far_enough_back = |d: Duration| Instant::now().checked_sub(d).unwrap_or_else(Instant::now);
+
     match persisted {
-        None => Instant::now() - interval,
+        None => far_enough_back(interval),
         Some(ts) => {
             let elapsed = (Utc::now() - ts).to_std().unwrap_or(interval);
             if elapsed >= interval {
-                Instant::now() - interval
+                far_enough_back(interval)
             } else {
-                Instant::now() - elapsed
+                far_enough_back(elapsed)
             }
         }
     }
@@ -120,7 +126,7 @@ pub struct Scheduler {
     /// be eligible yet (archived interval is 48 hours).
     archived_eval_times: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
     bluebook_notify: Arc<Notify>,
-    /// When true, the next BlueBook sync ignores per-subject interval checks.
+    /// When true, the next `BlueBook` sync ignores per-subject interval checks.
     bluebook_force_flag: Arc<AtomicBool>,
 }
 
@@ -146,7 +152,7 @@ impl Scheduler {
     ///
     /// The scheduler wakes up every 60 seconds to analyze data and enqueue jobs.
     /// When a shutdown signal is received:
-    /// 1. Any in-progress scheduling work is gracefully cancelled via CancellationToken
+    /// 1. Any in-progress scheduling work is gracefully cancelled via `CancellationToken`
     /// 2. The scheduler waits up to 5 seconds for work to complete
     /// 3. If timeout occurs, the task is abandoned (it will be aborted when dropped)
     ///
@@ -154,7 +160,7 @@ impl Scheduler {
     pub async fn run(&self, mut shutdown_rx: broadcast::Receiver<()>) {
         info!("Scheduler service started");
 
-        let work_interval = Duration::from_secs(60);
+        let work_interval = Duration::from_mins(1);
         let mut next_run = time::Instant::now();
         let mut current_work: Option<(tokio::task::JoinHandle<()>, CancellationToken)> = None;
 
@@ -193,14 +199,13 @@ impl Scheduler {
 
         loop {
             tokio::select! {
-                _ = self.bluebook_notify.notified() => {
+                () = self.bluebook_notify.notified() => {
                     info!("BlueBook sync triggered manually via notify");
                     bluebook_notified = true;
                     // Fall through to let the next sleep_until cycle pick it up immediately.
                     next_run = time::Instant::now();
-                    continue;
                 }
-                _ = time::sleep_until(next_run) => {
+                () = time::sleep_until(next_run) => {
                     sample_queue_depth(self.db.pool().clone());
 
                     // Skip this cycle if the previous one is still running.
@@ -242,7 +247,7 @@ impl Scheduler {
 
                                 async move {
                                     tokio::select! {
-                                        _ = async {
+                                        () = async {
                                             // Term sync, RMP sync, and reference data are independent --
                                             // run them concurrently so they don't wait behind each other.
                                             let term_fut = async {
@@ -357,7 +362,7 @@ impl Scheduler {
                                                 }
                                             }
                                         } => {}
-                                        _ = cancel_token.cancelled() => {
+                                        () = cancel_token.cancelled() => {
                                             trace!("Scheduling work cancelled gracefully");
                                         }
                                     }
@@ -547,14 +552,14 @@ impl Scheduler {
         let subjects = match category {
             TermCategory::Past | TermCategory::Archived => {
                 let cached = term_subjects::get_cached(term_code, db.pool()).await?;
-                if !cached.is_empty() {
-                    trace!(count = cached.len(), "Using cached subjects");
-                    cached
-                } else {
+                if cached.is_empty() {
                     let fetched = banner_api.get_subjects("", term_code, 1, 500).await?;
                     trace!(count = fetched.len(), "Fetched subjects from API (cold cache)");
                     term_subjects::cache(term_code, &fetched, db.pool()).await?;
                     fetched
+                } else {
+                    trace!(count = cached.len(), "Using cached subjects");
+                    cached
                 }
             }
             _ => {
@@ -843,7 +848,7 @@ impl Scheduler {
         Ok(())
     }
 
-    /// Scrape all BlueBook course evaluations and upsert to DB.
+    /// Scrape all `BlueBook` course evaluations and upsert to DB.
     ///
     /// When `force` is true, all subjects are scraped regardless of their per-subject timestamps.
     #[tracing::instrument(skip_all)]

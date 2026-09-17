@@ -7,6 +7,11 @@ use std::collections::HashMap;
 use tracing::info;
 use url::Url;
 
+struct LinkDetail {
+    link: String,
+    detail: String,
+}
+
 /// Generate a link to create a Google Calendar event for a course
 #[poise::command(slash_command)]
 pub async fn gcal(ctx: Context<'_>, #[description = "Course Reference Number (CRN)"] crn: i32) -> Result<(), Error> {
@@ -26,34 +31,28 @@ pub async fn gcal(ctx: Context<'_>, #[description = "Course Reference Number (CR
         .get_course_meeting_time(&term, &crn.to_string())
         .await?;
 
-    struct LinkDetail {
-        link: String,
-        detail: String,
-    }
+    let response: Vec<LinkDetail> = if meeting_times.is_empty() {
+        Err(anyhow::anyhow!("No meeting times found for this course."))
+    } else {
+        // Sort meeting times by start time of their TimeRange
+        let mut sorted_meeting_times = meeting_times.clone();
+        MeetingScheduleInfo::sort_by_start_time(&mut sorted_meeting_times);
 
-    let response: Vec<LinkDetail> = match meeting_times.len() {
-        0 => Err(anyhow::anyhow!("No meeting times found for this course.")),
-        1.. => {
-            // Sort meeting times by start time of their TimeRange
-            let mut sorted_meeting_times = meeting_times.to_vec();
-            MeetingScheduleInfo::sort_by_start_time(&mut sorted_meeting_times);
-
-            let links = sorted_meeting_times
-                .iter()
-                .map(|m| {
-                    let link = generate_gcal_url(&course, m)?;
-                    let days = m.days_string().unwrap_or_else(|| "TBA".to_string());
-                    let detail = match &m.time_range {
-                        Some(range) => {
-                            format!("{days} {}", range.format_12hr())
-                        }
-                        None => days,
-                    };
-                    Ok(LinkDetail { link, detail })
-                })
-                .collect::<Result<Vec<LinkDetail>, anyhow::Error>>()?;
-            Ok(links)
-        }
+        let links = sorted_meeting_times
+            .iter()
+            .map(|m| {
+                let link = generate_gcal_url(&course, m)?;
+                let days = m.days_string().unwrap_or_else(|| "TBA".to_string());
+                let detail = match &m.time_range {
+                    Some(range) => {
+                        format!("{days} {}", range.format_12hr())
+                    }
+                    None => days,
+                };
+                Ok(LinkDetail { link, detail })
+            })
+            .collect::<Result<Vec<LinkDetail>, anyhow::Error>>()?;
+        Ok(links)
     }?;
 
     ctx.say(

@@ -9,7 +9,7 @@ use banner::data::batch::batch_upsert_courses;
 use banner::data::courses::{SearchFilter, SortSpec, search_courses};
 use sqlx::PgPool;
 
-/// Run `search_courses` using a `SearchFilter`, returning (CRNs, total_count).
+/// Run `search_courses` using a `SearchFilter`, returning (CRNs, `total_count`).
 async fn search(pool: &PgPool, filter: &SearchFilter<'_>) -> (Vec<String>, i64) {
     let (results, total) = search_courses(pool, filter, 100, 0, &SortSpec::default())
         .await

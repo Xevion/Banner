@@ -67,6 +67,8 @@ fn default_period() -> String {
     "24h".to_string()
 }
 
+/// # Errors
+/// `InvalidFilter` if a filter of a different subscription kind was sent.
 pub fn parse_scrape_jobs_filter(filter: Option<StreamFilter>) -> Result<ScrapeJobsFilter, StreamError> {
     match filter {
         Some(StreamFilter::ScrapeJobs(filter)) => Ok(filter),
@@ -75,6 +77,9 @@ pub fn parse_scrape_jobs_filter(filter: Option<StreamFilter>) -> Result<ScrapeJo
     }
 }
 
+/// # Errors
+/// `InvalidFilter` if a filter of a different subscription kind was sent, or
+/// if `since` is not a valid RFC 3339 timestamp.
 pub fn parse_audit_log_filter(filter: Option<StreamFilter>) -> Result<AuditLogFilter, StreamError> {
     let mut filter = match filter {
         Some(StreamFilter::AuditLog(filter)) => filter,
@@ -96,6 +101,9 @@ pub fn parse_audit_log_filter(filter: Option<StreamFilter>) -> Result<AuditLogFi
     Ok(filter)
 }
 
+/// # Errors
+/// `InvalidFilter` if a filter of a different subscription kind was sent, or
+/// if `period` is not a recognized value.
 pub fn parse_scraper_stats_filter(filter: Option<StreamFilter>) -> Result<ScraperStatsFilter, StreamError> {
     let f = match filter {
         Some(StreamFilter::ScraperStats(f)) => f,
@@ -114,6 +122,9 @@ pub fn parse_scraper_stats_filter(filter: Option<StreamFilter>) -> Result<Scrape
     Ok(f)
 }
 
+/// # Errors
+/// `InvalidFilter` if a filter of a different subscription kind was sent, or
+/// if `period` or `bucket` is not a recognized value.
 pub fn parse_scraper_timeseries_filter(filter: Option<StreamFilter>) -> Result<ScraperTimeseriesFilter, StreamError> {
     let f = match filter {
         Some(StreamFilter::ScraperTimeseries(f)) => f,

@@ -143,7 +143,7 @@ async fn accept_candidate_reports_the_holder_when_the_profile_is_taken() {
     .await
     .expect("failed to create candidate");
 
-    let err = accept_candidate(&pool, instructor_id, 9999998, 1)
+    let err = accept_candidate(&pool, instructor_id, 9_999_998, 1)
         .await
         .expect_err("accepting a taken profile should fail");
 

@@ -17,27 +17,32 @@ pub struct DbContext {
 }
 
 impl DbContext {
-    /// Create a new DbContext.
+    /// Create a new `DbContext`.
+    #[must_use]
     pub fn new(pool: PgPool, events: Arc<EventBuffer>) -> Self {
         Self { pool, events }
     }
 
     /// Get the underlying database pool.
+    #[must_use]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
 
     /// Get the event buffer.
+    #[must_use]
     pub fn events(&self) -> &EventBuffer {
         &self.events
     }
 
     /// Get scrape job operations.
+    #[must_use]
     pub fn scrape_jobs(&self) -> ScrapeJobOps<'_> {
         ScrapeJobOps::new(self)
     }
 
     /// Get course operations.
+    #[must_use]
     pub fn courses(&self) -> CourseOps<'_> {
         CourseOps::new(self)
     }

@@ -29,7 +29,8 @@ pub struct SearchQuery {
 
 #[allow(dead_code)]
 impl SearchQuery {
-    /// Creates a new SearchQuery with default values
+    /// Creates a new `SearchQuery` with default values
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_results: 8,
@@ -39,30 +40,35 @@ impl SearchQuery {
     }
 
     /// Sets the subject for the query
+    #[must_use]
     pub fn subject<S: Into<String>>(mut self, subject: S) -> Self {
         self.subject = Some(subject.into());
         self
     }
 
     /// Sets the title for the query
+    #[must_use]
     pub fn title<S: Into<String>>(mut self, title: S) -> Self {
         self.title = Some(title.into());
         self
     }
 
     /// Sets the course reference number (CRN) for the query
+    #[must_use]
     pub fn course_reference_number<S: Into<String>>(mut self, crn: S) -> Self {
         self.course_reference_number = Some(crn.into());
         self
     }
 
     /// Sets the keywords for the query
+    #[must_use]
     pub fn keywords(mut self, keywords: Vec<String>) -> Self {
         self.keywords = Some(keywords);
         self
     }
 
     /// Adds a keyword to the query
+    #[must_use]
     pub fn keyword<S: Into<String>>(mut self, keyword: S) -> Self {
         match &mut self.keywords {
             Some(keywords) => keywords.push(keyword.into()),
@@ -72,54 +78,63 @@ impl SearchQuery {
     }
 
     /// Sets whether to search for open courses only
+    #[must_use]
     pub fn open_only(mut self, open_only: bool) -> Self {
         self.open_only = Some(open_only);
         self
     }
 
     /// Sets the term part for the query
+    #[must_use]
     pub fn term_part(mut self, term_part: Vec<String>) -> Self {
         self.term_part = Some(term_part);
         self
     }
 
     /// Sets the campuses for the query
+    #[must_use]
     pub fn campus(mut self, campus: Vec<String>) -> Self {
         self.campus = Some(campus);
         self
     }
 
     /// Sets the instructional methods for the query
+    #[must_use]
     pub fn instructional_method(mut self, instructional_method: Vec<String>) -> Self {
         self.instructional_method = Some(instructional_method);
         self
     }
 
     /// Sets the attributes for the query
+    #[must_use]
     pub fn attributes(mut self, attributes: Vec<String>) -> Self {
         self.attributes = Some(attributes);
         self
     }
 
     /// Sets the instructors for the query
+    #[must_use]
     pub fn instructor(mut self, instructor: Vec<u64>) -> Self {
         self.instructor = Some(instructor);
         self
     }
 
     /// Sets the start time for the query
+    #[must_use]
     pub fn start_time(mut self, start_time: NaiveTime) -> Self {
         self.start_time = Some(start_time);
         self
     }
 
     /// Sets the end time for the query
+    #[must_use]
     pub fn end_time(mut self, end_time: NaiveTime) -> Self {
         self.end_time = Some(end_time);
         self
     }
 
     /// Sets the credit range for the query
+    #[must_use]
     pub fn credits(mut self, low: i32, high: i32) -> Self {
         self.min_credits = Some(low);
         self.max_credits = Some(high);
@@ -127,18 +142,21 @@ impl SearchQuery {
     }
 
     /// Sets the minimum credits for the query
+    #[must_use]
     pub fn min_credits(mut self, value: i32) -> Self {
         self.min_credits = Some(value);
         self
     }
 
     /// Sets the maximum credits for the query
+    #[must_use]
     pub fn max_credits(mut self, value: i32) -> Self {
         self.max_credits = Some(value);
         self
     }
 
     /// Sets the course number range for the query
+    #[must_use]
     pub fn course_numbers(mut self, low: i32, high: i32) -> Self {
         self.course_number_low = Some(low);
         self.course_number_high = Some(high);
@@ -146,6 +164,7 @@ impl SearchQuery {
     }
 
     /// Sets the offset for pagination
+    #[must_use]
     pub fn offset(mut self, offset: i32) -> Self {
         self.offset = offset;
         self
@@ -153,22 +172,26 @@ impl SearchQuery {
 
     /// Sets the maximum number of results to return
     /// Clamped to a maximum of 500 to prevent excessive API load
+    #[must_use]
     pub fn max_results(mut self, max_results: i32) -> Self {
         self.max_results = max_results.clamp(1, 500);
         self
     }
 
     /// Gets the subject field
+    #[must_use]
     pub fn get_subject(&self) -> Option<&str> {
         self.subject.as_deref()
     }
 
-    /// Gets the max_results field
+    /// Gets the `max_results` field
+    #[must_use]
     pub fn get_max_results(&self) -> i32 {
         self.max_results
     }
 
     /// Converts the query into URL parameters for the Banner API
+    #[must_use]
     pub fn to_params(&self) -> HashMap<String, String> {
         let mut params = HashMap::new();
 
@@ -228,7 +251,7 @@ impl SearchQuery {
             fields.push(QueryField::single("txt_attribute", "attributes", attributes.join(",")));
         }
         if let Some(ref instructor) = self.instructor {
-            let value = instructor.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+            let value = instructor.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
             fields.push(QueryField::single("txt_instructor", "instructor", value));
         }
         if let Some(start_time) = self.start_time {
@@ -310,7 +333,7 @@ impl QueryField {
     }
 }
 
-/// Formats a NaiveTime into hour, minute, and meridiem strings for Banner API.
+/// Formats a `NaiveTime` into hour, minute, and meridiem strings for Banner API.
 ///
 /// Uses 12-hour format: midnight = 12:00 AM, noon = 12:00 PM.
 fn format_time_parameter(time: NaiveTime) -> (String, String, String) {

@@ -1,4 +1,4 @@
-//! Bayesian instructor scoring combining RMP and BlueBook data.
+//! Bayesian instructor scoring combining RMP and `BlueBook` data.
 //!
 //! Pipeline: Raw BB -> Regression calibration -> Bayesian posterior -> CI lower bound as sort key.
 //!
@@ -54,6 +54,7 @@ pub enum UnratedPolicy {
 /// Build SQL fragments for rating-based sorting.
 ///
 /// Returns `(ORDER BY clause, optional WHERE filter)`.
+#[must_use]
 pub fn rating_sort_sql(ascending: bool, policy: UnratedPolicy) -> (String, Option<String>) {
     let dir = if ascending { "ASC" } else { "DESC" };
 
@@ -103,16 +104,21 @@ struct ComputedScore {
     bb_count: i32,
 }
 
-/// Calibrate a raw BlueBook rating onto the RMP scale, clamped to [1.0, 5.0].
+/// Calibrate a raw `BlueBook` rating onto the RMP scale, clamped to [1.0, 5.0].
+#[must_use]
+// The regression output is clamped to [1.0, 5.0], well within f32 precision.
+#[allow(clippy::cast_possible_truncation)]
 pub fn calibrate_bluebook(bb: f32) -> f32 {
-    (REG_ALPHA + REG_BETA * bb as f64).clamp(1.0, 5.0) as f32
+    (REG_ALPHA + REG_BETA * f64::from(bb)).clamp(1.0, 5.0) as f32
 }
 
 /// Compute the Bayesian posterior score for a single instructor.
 ///
 /// Each instructor has a "true quality" μ. We observe noisy measurements from
-/// RMP and regression-calibrated BlueBook. The posterior combines the prior with
+/// RMP and regression-calibrated `BlueBook`. The posterior combines the prior with
 /// all available evidence, weighted by effective sample size.
+// Every result is clamped into [0.0, 5.0] or [0.0, 1.0], well within f32 precision.
+#[allow(clippy::cast_possible_truncation)]
 fn compute_score(data: &RawInstructorData) -> ComputedScore {
     let has_rmp = data.rmp_rating.is_some() && data.rmp_num_ratings > 0;
     let has_bb = data.bb_avg_instructor_rating.is_some() && data.bb_total_responses > 0;
@@ -121,12 +127,12 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
 
     // Effective sample sizes with diminishing returns
     let rmp_n_eff = if data.rmp_num_ratings > 0 {
-        (data.rmp_num_ratings as f64).sqrt() * RMP_N_FACTOR
+        f64::from(data.rmp_num_ratings).sqrt() * RMP_N_FACTOR
     } else {
         0.0
     };
     let bb_n_eff = if data.bb_total_responses > 0 {
-        (data.bb_total_responses as f64).sqrt() * BB_N_FACTOR
+        f64::from(data.bb_total_responses).sqrt() * BB_N_FACTOR
     } else {
         0.0
     };
@@ -140,7 +146,7 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     {
         let rmp_precision = rmp_n_eff / RMP_NOISE_VAR;
         precision += rmp_precision;
-        weighted_sum += rmp as f64 * rmp_precision;
+        weighted_sum += f64::from(rmp) * rmp_precision;
     }
 
     if let Some(cal_bb) = calibrated_bb
@@ -148,7 +154,7 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     {
         let bb_precision = bb_n_eff / BB_NOISE_VAR;
         precision += bb_precision;
-        weighted_sum += cal_bb as f64 * bb_precision;
+        weighted_sum += f64::from(cal_bb) * bb_precision;
     }
 
     let posterior_mean_raw = weighted_sum / precision;
@@ -162,8 +168,9 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     let source = match (has_rmp, has_bb) {
         (true, true) => RatingSource::Both,
         (true, false) => RatingSource::Rmp,
-        (false, true) => RatingSource::BlueBook,
-        (false, false) => RatingSource::BlueBook, // unreachable in practice
+        // (false, false) is unreachable in practice: recompute_all_scores only
+        // loads instructors with at least one source.
+        (false, true | false) => RatingSource::BlueBook,
     };
 
     ComputedScore {
@@ -182,7 +189,7 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
     }
 }
 
-/// Recompute all instructor scores from raw RMP and BlueBook data.
+/// Recompute all instructor scores from raw RMP and `BlueBook` data.
 ///
 /// Truncates the `instructor_scores` table and bulk-inserts fresh scores.
 /// Should be called on startup and after scrape completions.
@@ -300,11 +307,10 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     tx.commit().await.context("Failed to commit transaction")?;
 
     let elapsed = start.elapsed();
-    info!(
-        count,
-        elapsed_ms = elapsed.as_millis() as u64,
-        "Recomputed instructor scores"
-    );
+    // A recompute pass never runs anywhere near u64::MAX milliseconds.
+    #[allow(clippy::cast_possible_truncation)]
+    let elapsed_ms = elapsed.as_millis() as u64;
+    info!(count, elapsed_ms, "Recomputed instructor scores");
 
     Ok(count)
 }
@@ -321,7 +327,8 @@ pub struct ScoreRow {
     pub bb_count: i32,
 }
 
-/// Load an instructor rating from a pre-joined instructor_scores row.
+/// Load an instructor rating from a pre-joined `instructor_scores` row.
+#[must_use]
 pub fn build_rating_from_score_row(row: &ScoreRow) -> InstructorRating {
     InstructorRating {
         score: row.display_score,
@@ -430,6 +437,8 @@ mod tests {
 
     #[test]
     fn test_prior_rank_sentinel_matches_computation() {
+        // The prior-only posterior sits well within f32 precision.
+        #[allow(clippy::cast_possible_truncation)]
         let computed = (PRIOR_MEAN - CI_Z * PRIOR_VAR.sqrt()) as f32;
         assert!(
             (PRIOR_RANK_SENTINEL - computed).abs() < 0.01,

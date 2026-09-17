@@ -4,6 +4,7 @@
 use crate::data::events::{AuditLogEvent, DomainEvent, EventBuffer};
 use crate::data::watches::{self, TriggeredWatch, WatchType};
 use crate::telemetry;
+use anyhow::Context;
 use serenity::all::{Color, CreateEmbed, CreateMessage, UserId};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -100,7 +101,7 @@ impl NotificationService {
     }
 
     async fn send_notification(&self, watch: &TriggeredWatch) -> anyhow::Result<()> {
-        let user_id = UserId::new(watch.discord_user_id as u64);
+        let user_id = UserId::new(u64::try_from(watch.discord_user_id).context("stored discord_user_id is negative")?);
         let dm = user_id.create_dm_channel(&self.http).await?;
 
         let course_link = self

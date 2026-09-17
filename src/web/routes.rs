@@ -17,9 +17,11 @@ use axum::response::Json;
 use crate::state::AppState;
 use crate::web::auth::{self, AuthConfig};
 use crate::web::middleware::client_ip::ClientIp;
+use crate::web::middleware::metrics::labelled;
 use crate::web::middleware::rate_limit::RateLimitLayer;
 use crate::web::middleware::request_id::RequestIdLayer;
 use crate::web::middleware::security_headers::SecurityHeadersLayer;
+use crate::web::sitemap;
 use crate::web::{
     admin, calendar, courses, csp_report, instructors, search_options, status, stream, suggest, timeline,
 };
@@ -37,7 +39,7 @@ pub mod cache {
     pub const REFERENCE: &str = "public, max-age=300, s-maxage=3600, stale-while-revalidate=300";
     /// Course search results.
     pub const SEARCH: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
-    /// Course/instructor detail (typically paired with ETag).
+    /// Course/instructor detail (typically paired with `ETag`).
     pub const DETAIL: &str = "public, max-age=60, s-maxage=300, stale-while-revalidate=120";
     /// Admin endpoints -- never cache.
     pub const ADMIN: &str = "private, no-store, must-revalidate";
@@ -160,8 +162,6 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         }))
         .with_state(app_state.clone());
 
-    use crate::web::sitemap;
-
     let rate_limit_state = app_state.rate_limit.clone();
 
     let router = Router::new()
@@ -195,7 +195,7 @@ pub fn create_router(app_state: AppState, auth_config: AuthConfig) -> Router {
         // Per-IP rate limiting (burst + sustained + long-term, multi-layer).
         // Inside compression so 429 responses get compressed too.
         RateLimitLayer::new(rate_limit_state),
-        TimeoutLayer::with_status_code(axum::http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)),
+        TimeoutLayer::with_status_code(axum::http::StatusCode::REQUEST_TIMEOUT, Duration::from_mins(1)),
     ))
 }
 
@@ -209,8 +209,6 @@ async fn ssr_fallback(
     let uri = request.uri().clone();
     let path = uri.path();
     let query = uri.query();
-
-    use crate::web::middleware::metrics::labelled;
 
     // Unmatched /api/* is never an SSR page; 404 directly instead of proxying
     // (the SSR has no /api routes and would hang until timeout).
@@ -267,7 +265,8 @@ async fn robots_txt(State(state): State<AppState>) -> Response {
          Disallow: /admin/\n",
     );
     if let Some(ref origin) = state.public_origin {
-        body.push_str(&format!("\nSitemap: {origin}/sitemap.xml\n"));
+        use std::fmt::Write;
+        let _ = write!(body, "\nSitemap: {origin}/sitemap.xml\n");
     }
     let mut resp = body.into_response();
     resp.headers_mut().insert(

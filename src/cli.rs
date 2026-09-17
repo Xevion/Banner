@@ -34,11 +34,13 @@ pub enum ServiceName {
 
 impl ServiceName {
     /// Get all available services
+    #[must_use]
     pub fn all() -> Vec<ServiceName> {
         vec![ServiceName::Bot, ServiceName::Web, ServiceName::Scraper]
     }
 
     /// Convert to string for service registration
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             ServiceName::Bot => "bot",

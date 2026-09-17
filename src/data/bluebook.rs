@@ -1,4 +1,4 @@
-//! Database operations for BlueBook evaluation data.
+//! Database operations for `BlueBook` evaluation data.
 
 use std::collections::HashMap;
 
@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
-/// A parsed BlueBook course evaluation record.
+/// A parsed `BlueBook` course evaluation record.
 #[derive(Debug, Clone)]
 pub struct BlueBookEvaluation {
     pub subject: String,
@@ -51,9 +51,9 @@ fn deduplicate(evaluations: &[BlueBookEvaluation]) -> Vec<&BlueBookEvaluation> {
     best.into_values().collect()
 }
 
-/// Bulk upsert BlueBook evaluations using the UNNEST pattern.
+/// Bulk upsert `BlueBook` evaluations using the UNNEST pattern.
 ///
-/// Deduplicates by the unique constraint key before inserting -- PostgreSQL's
+/// Deduplicates by the unique constraint key before inserting -- `PostgreSQL`'s
 /// `ON CONFLICT DO UPDATE` cannot handle the same row appearing twice in one
 /// statement. On conflict, updates all evaluation fields and resets `scraped_at`.
 #[allow(dead_code)]

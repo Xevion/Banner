@@ -1,4 +1,4 @@
-//! Database operations for RateMyProfessors data.
+//! Database operations for `RateMyProfessors` data.
 
 use crate::data::unsigned::Count;
 use crate::rmp::{RmpProfessor, RmpProfessorDetail, RmpReview};

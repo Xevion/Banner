@@ -12,7 +12,7 @@ use serenity::all::{
 use std::time::Duration;
 
 /// How long the navigation buttons stay live without a press.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_mins(2);
 
 /// Which navigation button was pressed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,11 +38,13 @@ impl PageAction {
     ///
     /// The invocation ID prefix is what keeps a different invocation's buttons from
     /// colliding with these; presses are additionally matched against the invoking user.
+    #[must_use]
     pub fn encode(self, invocation_id: u64) -> String {
         format!("{invocation_id}:page:{}", self.token())
     }
 
     /// Parse a custom ID back into an action, rejecting IDs from other invocations.
+    #[must_use]
     pub fn decode(custom_id: &str, invocation_id: u64) -> Option<Self> {
         let rest = custom_id.strip_prefix(&custom_id_prefix(invocation_id))?;
         match rest {
@@ -55,6 +57,7 @@ impl PageAction {
     }
 
     /// Apply this action to the current page index, clamped to the page range.
+    #[must_use]
     pub fn apply(self, page: usize, page_count: usize) -> usize {
         let last = page_count.saturating_sub(1);
         match self {
@@ -82,6 +85,7 @@ pub struct ButtonStates {
 
 impl ButtonStates {
     /// Backwards controls are live off page one, forwards controls off the final page.
+    #[must_use]
     pub fn for_page(page: usize, page_count: usize) -> Self {
         let has_prev = page > 0;
         let has_next = page + 1 < page_count;
@@ -115,6 +119,7 @@ pub struct PageInfo {
 
 impl PageInfo {
     /// Footer line shown under every page.
+    #[must_use]
     pub fn footer_text(self) -> String {
         let noun = if self.total_results == 1 { "result" } else { "results" };
         format!(
@@ -127,6 +132,7 @@ impl PageInfo {
 }
 
 /// Number of pages needed to show `item_count` items, never less than one.
+#[must_use]
 pub fn page_count(item_count: usize, per_page: usize) -> usize {
     if per_page == 0 {
         return 1;

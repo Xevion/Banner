@@ -1,4 +1,4 @@
-//! Data-layer operations for BlueBook instructor linking admin features.
+//! Data-layer operations for `BlueBook` instructor linking admin features.
 //!
 //! Pure data functions returning `anyhow::Result`. The web layer handles HTTP
 //! concerns only; all SQL lives here.
@@ -15,7 +15,7 @@ use crate::data::escape_like;
 use crate::data::models::{BluebookLinkStatus, Page};
 use crate::data::names::{MatchCandidate, NameMatchQuality, find_best_candidate};
 
-/// Domain errors for BlueBook link operations.
+/// Domain errors for `BlueBook` link operations.
 ///
 /// The web layer downcasts `anyhow::Error` to this type to decide HTTP status codes
 /// instead of fragile string matching.
@@ -31,7 +31,7 @@ pub enum BluebookError {
     NoSuchInstructor,
 }
 
-/// A BlueBook link row in the paginated list view.
+/// A `BlueBook` link row in the paginated list view.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -67,7 +67,7 @@ pub struct ListBluebookLinksResponse {
     pub stats: BluebookLinkStats,
 }
 
-/// Detail view for a single BlueBook link.
+/// Detail view for a single `BlueBook` link.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -91,7 +91,7 @@ pub struct BluebookLinkDetail {
     pub instructor_course_count: Option<Count>,
 }
 
-/// A course associated with a BlueBook link (via evaluations).
+/// A course associated with a `BlueBook` link (via evaluations).
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -114,7 +114,7 @@ pub struct BluebookMatchResponse {
     pub auto_matched: usize,
     /// Lower-confidence matches needing review (status = 'pending').
     pub pending_review: usize,
-    /// No match found at all (status = 'pending', no instructor_id).
+    /// No match found at all (status = 'pending', no `instructor_id`).
     pub no_match: usize,
     /// Names with approved/rejected links that were left untouched.
     pub skipped_manual: usize,
@@ -148,7 +148,7 @@ pub struct ListBluebookLinksFilter {
     pub per_page: i32,
 }
 
-/// List BlueBook links with filtering and pagination.
+/// List `BlueBook` links with filtering and pagination.
 pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Result<ListBluebookLinksResponse> {
     let page = filter.page.max(1);
     let per_page = filter.per_page.clamp(1, 100);
@@ -178,7 +178,7 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
     let offset_idx = bind_idx + 2;
 
     let query_str = format!(
-        r#"
+        r"
         SELECT
             bl.id,
             bl.instructor_name,
@@ -198,7 +198,7 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
             CASE bl.status WHEN 'pending' THEN 0 WHEN 'auto' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END,
             bl.instructor_name ASC
         LIMIT ${limit_idx} OFFSET ${offset_idx}
-        "#
+        "
     );
 
     // The WHERE clause and its bind positions are assembled per filter, so this query
@@ -289,7 +289,7 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
     })
 }
 
-/// Fetch detail for a single BlueBook link, including associated evaluations.
+/// Fetch detail for a single `BlueBook` link, including associated evaluations.
 pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLinkDetail> {
     let r = sqlx::query!(
         r#"
@@ -401,7 +401,7 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
     })
 }
 
-/// Approve an auto or pending BlueBook link.
+/// Approve an auto or pending `BlueBook` link.
 pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
     let result = sqlx::query!(
         "UPDATE instructor_bluebook_links SET status = 'approved', updated_at = NOW() WHERE id = $1 AND status IN ('auto', 'pending')",
@@ -418,7 +418,7 @@ pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
     Ok(())
 }
 
-/// Reject an auto or pending BlueBook link.
+/// Reject an auto or pending `BlueBook` link.
 pub async fn reject_link(pool: &PgPool, link_id: i32) -> Result<()> {
     let result = sqlx::query!(
         "UPDATE instructor_bluebook_links SET status = 'rejected', updated_at = NOW() WHERE id = $1 AND status IN ('auto', 'pending')",
@@ -435,7 +435,7 @@ pub async fn reject_link(pool: &PgPool, link_id: i32) -> Result<()> {
     Ok(())
 }
 
-/// Manually assign an instructor to a BlueBook link and approve it.
+/// Manually assign an instructor to a `BlueBook` link and approve it.
 pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Result<()> {
     // Verify instructor exists
     let exists = sqlx::query_scalar!("SELECT id FROM instructors WHERE id = $1", instructor_id)
@@ -470,7 +470,7 @@ pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Res
     Ok(())
 }
 
-/// Idempotently refresh BlueBook instructor name matches.
+/// Idempotently refresh `BlueBook` instructor name matches.
 ///
 /// Runs inside a transaction to prevent data loss if the process crashes mid-way.
 /// Deletes all `auto` and `pending` links (algorithm-generated), then re-runs
@@ -496,7 +496,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
         .execute(&mut *tx)
         .await
         .context("failed to delete stale auto/pending links")?;
-    let deleted_stale = deleted.rows_affected() as usize;
+    let deleted_stale = usize::try_from(deleted.rows_affected()).context("deleted row count exceeds usize")?;
 
     // Count names with manual decisions that we'll skip.
     let skipped_manual_count = sqlx::query_scalar!(
@@ -539,7 +539,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     .context("failed to fetch instructors for name matching")?;
 
     let total_names = unlinked.len();
-    let skipped_manual = skipped_manual_count as usize;
+    let skipped_manual = usize::try_from(skipped_manual_count).context("skipped-manual count exceeds usize")?;
     let mut auto_matched = 0usize;
     let mut pending_review = 0usize;
     let mut no_match = 0usize;
@@ -564,37 +564,8 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
         .await
         .context("failed to find CRN candidates")?;
 
-        if !crn_candidates.is_empty() {
-            let has_single_crn = crn_candidates.len() == 1;
-
-            // Step 2: Confirm name match among CRN candidates
-            match find_best_candidate(name, &crn_candidates) {
-                Some(best) => {
-                    // CRN evidence + name confirmation -> auto
-                    let confidence = match best.result.quality {
-                        NameMatchQuality::Full => best.result.confidence,
-                        NameMatchQuality::Partial if has_single_crn => 0.9 * best.result.confidence,
-                        NameMatchQuality::Partial => 0.8 * best.result.confidence,
-                        NameMatchQuality::None => unreachable!("find_best_candidate filters None"),
-                    };
-                    insert_link(
-                        &mut *tx,
-                        name,
-                        Some(best.instructor_id),
-                        BluebookLinkStatus::Auto,
-                        Some(confidence),
-                    )
-                    .await?;
-                    auto_matched += 1;
-                }
-                None => {
-                    // CRN candidates exist but no name match -- pending review
-                    insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1)).await?;
-                    pending_review += 1;
-                }
-            }
-        } else {
-            // No CRN join -- try name-only matching against pre-fetched instructors
+        if crn_candidates.is_empty() {
+            // No CRN join, try name-only matching against pre-fetched instructors
             match find_best_candidate(name, &all_match_candidates) {
                 Some(best) if best.result.quality == NameMatchQuality::Full => {
                     // Exact name match but no CRN confirmation -- pending
@@ -625,6 +596,32 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
                     no_match += 1;
                 }
             }
+        } else {
+            let has_single_crn = crn_candidates.len() == 1;
+
+            // Step 2: Confirm name match among CRN candidates
+            if let Some(best) = find_best_candidate(name, &crn_candidates) {
+                // CRN evidence + name confirmation -> auto
+                let confidence = match best.result.quality {
+                    NameMatchQuality::Full => best.result.confidence,
+                    NameMatchQuality::Partial if has_single_crn => 0.9 * best.result.confidence,
+                    NameMatchQuality::Partial => 0.8 * best.result.confidence,
+                    NameMatchQuality::None => unreachable!("find_best_candidate filters None"),
+                };
+                insert_link(
+                    &mut *tx,
+                    name,
+                    Some(best.instructor_id),
+                    BluebookLinkStatus::Auto,
+                    Some(confidence),
+                )
+                .await?;
+                auto_matched += 1;
+            } else {
+                // CRN candidates exist but no name match, pending review
+                insert_link(&mut *tx, name, None, BluebookLinkStatus::Pending, Some(0.1)).await?;
+                pending_review += 1;
+            }
         }
     }
 
@@ -648,7 +645,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
 /// Insert a new link into `instructor_bluebook_links`.
 ///
 /// Uses `ON CONFLICT DO NOTHING` to handle race conditions with concurrent matching.
-/// Accepts any SQLx executor (pool or transaction).
+/// Accepts any `SQLx` executor (pool or transaction).
 async fn insert_link(
     executor: impl sqlx::PgExecutor<'_>,
     instructor_name: &str,

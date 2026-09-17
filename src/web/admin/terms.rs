@@ -56,6 +56,9 @@ impl From<SyncResult> for TermSyncResponse {
 }
 
 /// `GET /api/admin/terms` -- List all terms with their scraping status.
+///
+/// # Errors
+/// Internal error if the terms query fails.
 #[instrument(skip_all)]
 pub async fn list_terms(_admin: AdminUser, State(state): State<AppState>) -> Result<Json<TermsListResponse>, ApiError> {
     let start = Instant::now();
@@ -71,6 +74,10 @@ pub async fn list_terms(_admin: AdminUser, State(state): State<AppState>) -> Res
 }
 
 /// `POST /api/admin/terms/:code/enable` -- Enable scraping for a term.
+///
+/// # Errors
+/// `NotFound` if no term has that code; internal error if the update or
+/// refetch query fails.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn enable_term(
     AdminUser(user): AdminUser,
@@ -108,6 +115,10 @@ pub async fn enable_term(
 }
 
 /// `POST /api/admin/terms/:code/disable` -- Disable scraping for a term.
+///
+/// # Errors
+/// `NotFound` if no term has that code; internal error if the update or
+/// refetch query fails.
 #[instrument(skip_all, fields(term_code = %code))]
 pub async fn disable_term(
     AdminUser(user): AdminUser,
@@ -145,6 +156,9 @@ pub async fn disable_term(
 }
 
 /// `POST /api/admin/terms/sync` -- Manually sync terms from the Banner API.
+///
+/// # Errors
+/// Internal error if the Banner API fetch or the database sync fails.
 #[instrument(skip_all)]
 pub async fn sync_terms(_admin: AdminUser, State(state): State<AppState>) -> Result<Json<TermSyncResponse>, ApiError> {
     let start = Instant::now();

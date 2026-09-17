@@ -25,7 +25,7 @@ const SCHEMA_DIGEST: &str = "SELECT md5(coalesce(string_agg(sig, ',' ORDER BY si
               AND table_name NOT IN ('_sqlx_migrations', '_test_schema')) c";
 
 /// Empty every table, leaving the schema and the bookkeeping tables alone.
-const TRUNCATE_ALL: &str = r#"
+const TRUNCATE_ALL: &str = r"
 DO $$
 DECLARE tables text;
 BEGIN
@@ -38,7 +38,7 @@ BEGIN
         EXECUTE 'TRUNCATE TABLE ' || tables || ' RESTART IDENTITY CASCADE';
     END IF;
 END $$;
-"#;
+";
 
 /// FNV-1a, so the template name depends only on the migrations themselves.
 fn digest(parts: impl IntoIterator<Item = Vec<u8>>) -> u64 {
@@ -254,23 +254,20 @@ pub async fn connect(key: &str) -> PgPool {
         }
     }
 
-    let pool = match reused {
-        Some(pool) => {
-            sqlx::query(TRUNCATE_ALL)
-                .execute(&pool)
-                .await
-                .expect("failed to empty the test database");
-            pool
-        }
-        None => {
-            run_statement(
-                &mut conn,
-                format!("CREATE DATABASE \"{name}\" TEMPLATE \"{template}\""),
-                "failed to clone the template database",
-            )
-            .await;
-            pool_for(&name).await
-        }
+    let pool = if let Some(pool) = reused {
+        sqlx::query(TRUNCATE_ALL)
+            .execute(&pool)
+            .await
+            .expect("failed to empty the test database");
+        pool
+    } else {
+        run_statement(
+            &mut conn,
+            format!("CREATE DATABASE \"{name}\" TEMPLATE \"{template}\""),
+            "failed to clone the template database",
+        )
+        .await;
+        pool_for(&name).await
     };
 
     conn.close().await.expect("failed to close the maintenance connection");

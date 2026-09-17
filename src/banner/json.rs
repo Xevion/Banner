@@ -1,6 +1,7 @@
 //! JSON parsing utilities for the Banner API client.
 
 use anyhow::Result;
+use std::fmt::Write as _;
 
 /// Attempt to parse JSON and, on failure, include a contextual snippet of the
 /// line where the error occurred along with the serde path and type mismatch.
@@ -22,9 +23,9 @@ pub fn parse_json_with_context<T: serde::de::DeserializeOwned>(body: &str) -> Re
 
             let mut final_err = String::new();
             if !path.is_empty() && path != "." {
-                final_err.push_str(&format!("at path '{path}': "));
+                let _ = write!(final_err, "at path '{path}': ");
             }
-            final_err.push_str(&format!("{type_info} (line {line} col {column})\n{snippet}"));
+            let _ = write!(final_err, "{type_info} (line {line} col {column})\n{snippet}");
 
             Err(anyhow::anyhow!(final_err))
         }

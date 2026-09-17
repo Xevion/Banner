@@ -158,20 +158,25 @@ pub struct BannerRateLimiter {
 
 impl BannerRateLimiter {
     /// Creates a new rate limiter with the given configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any configured RPM or the burst allowance is zero.
+    #[must_use]
     pub fn new(config: RateLimitingConfig) -> Self {
-        let session_quota = Quota::with_period(Duration::from_secs(60) / config.session_rpm)
+        let session_quota = Quota::with_period(Duration::from_mins(1) / config.session_rpm)
             .unwrap()
             .allow_burst(NonZeroU32::new(config.burst_allowance).unwrap());
 
-        let search_quota = Quota::with_period(Duration::from_secs(60) / config.search_rpm)
+        let search_quota = Quota::with_period(Duration::from_mins(1) / config.search_rpm)
             .unwrap()
             .allow_burst(NonZeroU32::new(config.burst_allowance).unwrap());
 
-        let metadata_quota = Quota::with_period(Duration::from_secs(60) / config.metadata_rpm)
+        let metadata_quota = Quota::with_period(Duration::from_mins(1) / config.metadata_rpm)
             .unwrap()
             .allow_burst(NonZeroU32::new(config.burst_allowance).unwrap());
 
-        let reset_quota = Quota::with_period(Duration::from_secs(60) / config.reset_rpm)
+        let reset_quota = Quota::with_period(Duration::from_mins(1) / config.reset_rpm)
             .unwrap()
             .allow_burst(NonZeroU32::new(config.burst_allowance).unwrap());
 
@@ -323,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "divide by zero error when dividing duration by scalar"]
     fn test_new_panics_on_zero_session_rpm() {
         let config = RateLimitingConfig {
             session_rpm: 0,
@@ -333,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "divide by zero error when dividing duration by scalar"]
     fn test_new_panics_on_zero_search_rpm() {
         let config = RateLimitingConfig {
             search_rpm: 0,
@@ -343,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "divide by zero error when dividing duration by scalar"]
     fn test_new_panics_on_zero_metadata_rpm() {
         let config = RateLimitingConfig {
             metadata_rpm: 0,
@@ -353,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "divide by zero error when dividing duration by scalar"]
     fn test_new_panics_on_zero_reset_rpm() {
         let config = RateLimitingConfig {
             reset_rpm: 0,
@@ -363,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "called `Option::unwrap()` on a `None` value"]
     fn test_new_panics_on_zero_burst_allowance() {
         let config = RateLimitingConfig {
             burst_allowance: 0,

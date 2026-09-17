@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::watch;
 use tracing::{debug, error, info};
 
-const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_hours(1);
 
 /// A single meeting time block, pre-parsed for fast filtering.
 #[derive(Debug, Clone)]
@@ -135,7 +135,7 @@ impl ScheduleCache {
 
 /// Reads pre-extracted meeting scalars from the `course_meetings` table.
 /// Ordered by `c.id` so the streaming consumer can group rows by course.
-const SCHEDULE_QUERY: &str = r#"
+const SCHEDULE_QUERY: &str = r"
 SELECT
     c.id,
     c.subject,
@@ -148,9 +148,9 @@ SELECT
 FROM courses c
 JOIN course_meetings cm ON cm.course_id = c.id
 ORDER BY c.id
-"#;
+";
 
-/// One row from the course_meetings join. Each course produces one row per
+/// One row from the `course_meetings` join. Each course produces one row per
 /// meeting time entry.
 #[derive(sqlx::FromRow)]
 struct MeetingRow {
@@ -199,13 +199,17 @@ async fn load_snapshot(pool: &PgPool) -> anyhow::Result<ScheduleSnapshot> {
             current_enrollment = row.enrollment;
         }
 
-        current_schedules.push(ParsedSchedule {
+        // day_bits is a 7-bit weekday mask and the minute columns are 0..1440;
+        // all three SMALLINT columns are always non-negative and in range.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let schedule = ParsedSchedule {
             days: row.day_bits as u8,
             begin_minutes: row.begin_minutes as u16,
             end_minutes: row.end_minutes as u16,
             start_date: row.start_date,
             end_date: row.end_date,
-        });
+        };
+        current_schedules.push(schedule);
     }
 
     // Emit the last course.
@@ -293,7 +297,7 @@ mod tests {
     #[test]
     fn active_during_matching_slot() {
         let sched = ParsedSchedule {
-            days: 0b0000001, // Monday
+            days: 0b000_0001, // Monday
             begin_minutes: 600,
             end_minutes: 650,
             start_date: NaiveDate::from_ymd_opt(2025, 8, 26).unwrap(),
@@ -308,7 +312,7 @@ mod tests {
     #[test]
     fn active_during_wrong_day() {
         let sched = ParsedSchedule {
-            days: 0b0000001, // Monday only
+            days: 0b000_0001, // Monday only
             begin_minutes: 600,
             end_minutes: 650,
             start_date: NaiveDate::from_ymd_opt(2025, 8, 26).unwrap(),
@@ -323,7 +327,7 @@ mod tests {
     #[test]
     fn active_during_no_time_overlap() {
         let sched = ParsedSchedule {
-            days: 0b0000001,
+            days: 0b000_0001,
             begin_minutes: 600, // 10:00
             end_minutes: 650,   // 10:50
             start_date: NaiveDate::from_ymd_opt(2025, 8, 26).unwrap(),
@@ -340,7 +344,7 @@ mod tests {
     #[test]
     fn active_during_outside_date_range() {
         let sched = ParsedSchedule {
-            days: 0b0000001,
+            days: 0b000_0001,
             begin_minutes: 600,
             end_minutes: 650,
             start_date: NaiveDate::from_ymd_opt(2025, 8, 26).unwrap(),
@@ -355,7 +359,7 @@ mod tests {
     #[test]
     fn active_during_edge_overlap() {
         let sched = ParsedSchedule {
-            days: 0b0000001,
+            days: 0b000_0001,
             begin_minutes: 600,
             end_minutes: 650,
             start_date: NaiveDate::from_ymd_opt(2025, 8, 26).unwrap(),

@@ -15,7 +15,10 @@ use tokio::time;
 use tracing::{Instrument, debug, error, info, trace, warn};
 
 /// Maximum time a single job is allowed to run before being considered stuck.
-const JOB_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const JOB_TIMEOUT: Duration = Duration::from_mins(5);
+
+/// Job durations above this are logged as a warning (likely rate limiting or network delays).
+const SLOW_JOB_THRESHOLD: Duration = Duration::from_secs(30);
 
 /// A single worker instance.
 ///
@@ -28,6 +31,7 @@ pub struct Worker {
 }
 
 impl Worker {
+    #[must_use]
     pub fn new(id: usize, db: DbContext, banner_api: Arc<BannerApi>) -> Self {
         Self { id, db, banner_api }
     }
@@ -115,7 +119,7 @@ impl Worker {
     ///
     /// This uses a `FOR UPDATE SKIP LOCKED` query to ensure that multiple
     /// workers can poll the queue concurrently without conflicts.
-    /// Emits a `ScrapeJobEvent::Locked` event automatically via DbContext.
+    /// Emits a `ScrapeJobEvent::Locked` event automatically via `DbContext`.
     async fn fetch_and_lock_job(&self) -> Result<Option<ScrapeJob>> {
         self.db.scrape_jobs().lock_next().await
     }
@@ -193,8 +197,7 @@ impl Worker {
             duration,
         );
 
-        const SLOW_THRESHOLD: Duration = Duration::from_secs(30);
-        if duration > SLOW_THRESHOLD {
+        if duration > SLOW_JOB_THRESHOLD {
             warn!(
                 worker_id = self.id,
                 job_id,
@@ -473,7 +476,7 @@ fn retry_backoff(attempt: u32) -> chrono::Duration {
     let capped = BASE_SECS.saturating_mul(1u64 << shift).min(MAX_SECS);
     let half = capped / 2;
     let delay = half + rand::random_range(0..=half);
-    chrono::Duration::seconds(delay as i64)
+    chrono::Duration::seconds(i64::try_from(delay).expect("delay is bounded by MAX_SECS"))
 }
 
 #[cfg(test)]

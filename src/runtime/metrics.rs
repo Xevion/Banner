@@ -19,6 +19,7 @@ pub struct MetricsService {
 }
 
 impl MetricsService {
+    #[must_use]
     pub fn new(port: u16, db_pool: PgPool) -> Self {
         Self {
             port,

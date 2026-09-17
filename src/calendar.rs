@@ -4,6 +4,7 @@
 
 use crate::data::models::{DayOfWeek, DbMeetingTime};
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
+use std::fmt::Write;
 
 /// Course metadata needed for calendar generation (shared interface between bot and web).
 pub struct CalendarCourse {
@@ -17,11 +18,13 @@ pub struct CalendarCourse {
 
 impl CalendarCourse {
     /// Display title like "CS 1083 - Introduction to Computer Science"
+    #[must_use]
     pub fn display_title(&self) -> String {
         format!("{} {} - {}", self.subject, self.course_number, self.title)
     }
 
-    /// Filename-safe identifier: "CS_1083_001"
+    /// Filename-safe identifier: `CS_1083_001`
+    #[must_use]
     pub fn filename_stem(&self) -> String {
         format!(
             "{}_{}{}",
@@ -36,7 +39,7 @@ impl CalendarCourse {
 }
 
 /// Convert a `DayOfWeek` to a chrono `Weekday`.
-fn to_weekday(day: &DayOfWeek) -> Weekday {
+fn to_weekday(day: DayOfWeek) -> Weekday {
     match day {
         DayOfWeek::Monday => Weekday::Mon,
         DayOfWeek::Tuesday => Weekday::Tue,
@@ -50,7 +53,7 @@ fn to_weekday(day: &DayOfWeek) -> Weekday {
 
 /// Active weekdays for a meeting time.
 fn active_weekdays(mt: &DbMeetingTime) -> Vec<Weekday> {
-    mt.days.iter().map(to_weekday).collect()
+    mt.days.iter().copied().map(to_weekday).collect()
 }
 
 /// ICS two-letter day code for RRULE BYDAY.
@@ -83,7 +86,7 @@ fn location_string(mt: &DbMeetingTime) -> String {
     }
 }
 
-/// Days display string (e.g. "MWF", "TTh").
+/// Days display string (e.g. `MWF`, `TTh`).
 fn days_display(mt: &DbMeetingTime) -> String {
     let weekdays = active_weekdays(mt);
     if weekdays.is_empty() {
@@ -105,7 +108,8 @@ fn escape_ics(text: &str) -> String {
 fn nth_weekday_of_month(year: i32, month: u32, weekday: Weekday, n: u32) -> Option<NaiveDate> {
     let first = NaiveDate::from_ymd_opt(year, month, 1)?;
     let days_ahead =
-        (weekday.num_days_from_monday() as i64 - first.weekday().num_days_from_monday() as i64).rem_euclid(7) as u32;
+        (i64::from(weekday.num_days_from_monday()) - i64::from(first.weekday().num_days_from_monday())).rem_euclid(7);
+    let days_ahead = u32::try_from(days_ahead).expect("rem_euclid(7) result is in 0..7");
     let day = 1 + days_ahead + 7 * (n - 1);
     NaiveDate::from_ymd_opt(year, month, day)
 }
@@ -217,10 +221,10 @@ pub fn generate_ics(course: &CalendarCourse, meeting_times: &[DbMeetingTime]) ->
     ics.push_str("PRODID:-//Banner Bot//Course Calendar//EN\r\n");
     ics.push_str("CALSCALE:GREGORIAN\r\n");
     ics.push_str("METHOD:PUBLISH\r\n");
-    ics.push_str(&format!("X-WR-CALNAME:{}\r\n", escape_ics(&course.display_title())));
+    write!(ics, "X-WR-CALNAME:{}\r\n", escape_ics(&course.display_title())).unwrap();
 
     for (index, mt) in meeting_times.iter().enumerate() {
-        let (event, holidays) = generate_ics_event(course, mt, index)?;
+        let (event, holidays) = generate_ics_event(course, mt, index);
         ics.push_str(&event);
         all_excluded.extend(holidays);
     }
@@ -235,11 +239,7 @@ pub fn generate_ics(course: &CalendarCourse, meeting_times: &[DbMeetingTime]) ->
 }
 
 /// Generate a single VEVENT for one meeting time.
-fn generate_ics_event(
-    course: &CalendarCourse,
-    mt: &DbMeetingTime,
-    index: usize,
-) -> Result<(String, Vec<String>), anyhow::Error> {
+fn generate_ics_event(course: &CalendarCourse, mt: &DbMeetingTime, index: usize) -> (String, Vec<String>) {
     let start_date = mt.date_range.start;
     let end_date = mt.date_range.end;
 
@@ -247,23 +247,20 @@ fn generate_ics_event(
     let end_time = mt.time_range.as_ref().map(|tr| tr.end);
 
     // DTSTART/DTEND: first occurrence with time, or all-day on start_date
-    let (dtstart, dtend) = match (start_time, end_time) {
-        (Some(st), Some(et)) => {
-            let s = start_date.and_time(st).and_utc();
-            let e = start_date.and_time(et).and_utc();
-            (
-                s.format("%Y%m%dT%H%M%SZ").to_string(),
-                e.format("%Y%m%dT%H%M%SZ").to_string(),
-            )
-        }
-        _ => {
-            let s = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            let e = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            (
-                s.format("%Y%m%dT%H%M%SZ").to_string(),
-                e.format("%Y%m%dT%H%M%SZ").to_string(),
-            )
-        }
+    let (dtstart, dtend) = if let (Some(st), Some(et)) = (start_time, end_time) {
+        let s = start_date.and_time(st).and_utc();
+        let e = start_date.and_time(et).and_utc();
+        (
+            s.format("%Y%m%dT%H%M%SZ").to_string(),
+            e.format("%Y%m%dT%H%M%SZ").to_string(),
+        )
+    } else {
+        let s = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
+        let e = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
+        (
+            s.format("%Y%m%dT%H%M%SZ").to_string(),
+            e.format("%Y%m%dT%H%M%SZ").to_string(),
+        )
     };
 
     let event_title = if index > 0 {
@@ -293,12 +290,12 @@ fn generate_ics_event(
 
     let mut event = String::new();
     event.push_str("BEGIN:VEVENT\r\n");
-    event.push_str(&format!("UID:{uid}\r\n"));
-    event.push_str(&format!("DTSTART:{dtstart}\r\n"));
-    event.push_str(&format!("DTEND:{dtend}\r\n"));
-    event.push_str(&format!("SUMMARY:{}\r\n", escape_ics(&event_title)));
-    event.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics(&description)));
-    event.push_str(&format!("LOCATION:{}\r\n", escape_ics(&location)));
+    write!(event, "UID:{uid}\r\n").unwrap();
+    write!(event, "DTSTART:{dtstart}\r\n").unwrap();
+    write!(event, "DTEND:{dtend}\r\n").unwrap();
+    write!(event, "SUMMARY:{}\r\n", escape_ics(&event_title)).unwrap();
+    write!(event, "DESCRIPTION:{}\r\n", escape_ics(&description)).unwrap();
+    write!(event, "LOCATION:{}\r\n", escape_ics(&location)).unwrap();
 
     let weekdays = active_weekdays(mt);
     let mut holiday_names = Vec::new();
@@ -307,11 +304,13 @@ fn generate_ics_event(
         let by_day: Vec<&str> = weekdays.iter().map(|d| ics_day_code(*d)).collect();
         let until = end_date.format("%Y%m%dT000000Z").to_string();
 
-        event.push_str(&format!(
+        write!(
+            event,
             "RRULE:FREQ=WEEKLY;BYDAY={};UNTIL={}\r\n",
             by_day.join(","),
             until,
-        ));
+        )
+        .unwrap();
 
         // Holiday exceptions
         let exceptions = holiday_exceptions(start_date, end_date, &weekdays);
@@ -326,14 +325,14 @@ fn generate_ics_event(
                         .to_string()
                 })
                 .collect();
-            event.push_str(&format!("EXDATE:{}\r\n", exdates.join(",")));
+            write!(event, "EXDATE:{}\r\n", exdates.join(",")).unwrap();
         }
 
         holiday_names = excluded_holiday_names(start_date, end_date, &exceptions);
     }
 
     event.push_str("END:VEVENT\r\n");
-    Ok((event, holiday_names))
+    (event, holiday_names)
 }
 
 /// Generate a Google Calendar "add event" URL for a single meeting time.
@@ -344,16 +343,13 @@ pub fn generate_gcal_url(course: &CalendarCourse, mt: &DbMeetingTime) -> Result<
     let start_time = mt.time_range.as_ref().map(|tr| tr.start);
     let end_time = mt.time_range.as_ref().map(|tr| tr.end);
 
-    let dates_text = match (start_time, end_time) {
-        (Some(st), Some(et)) => {
-            let s = start_date.and_time(st);
-            let e = start_date.and_time(et);
-            format!("{}/{}", s.format("%Y%m%dT%H%M%S"), e.format("%Y%m%dT%H%M%S"))
-        }
-        _ => {
-            let s = start_date.format("%Y%m%d").to_string();
-            format!("{s}/{s}")
-        }
+    let dates_text = if let (Some(st), Some(et)) = (start_time, end_time) {
+        let s = start_date.and_time(st);
+        let e = start_date.and_time(et);
+        format!("{}/{}", s.format("%Y%m%dT%H%M%S"), e.format("%Y%m%dT%H%M%S"))
+    } else {
+        let s = start_date.format("%Y%m%d").to_string();
+        format!("{s}/{s}")
     };
 
     let instructor = course.primary_instructor.as_deref().unwrap_or("Staff");

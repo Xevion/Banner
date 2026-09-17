@@ -4,13 +4,15 @@ use crate::banner::{Course, MeetingDays, MeetingScheduleInfo, WeekdayExt};
 use crate::bot::{Context, Error, utils};
 use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
 use serenity::all::CreateAttachment;
+use std::fmt::Write as _;
 use tracing::info;
 
 /// Find the nth occurrence of a weekday in a given month/year (1-based).
 fn nth_weekday_of_month(year: i32, month: u32, weekday: Weekday, n: u32) -> Option<NaiveDate> {
     let first = NaiveDate::from_ymd_opt(year, month, 1)?;
     let days_ahead =
-        (weekday.num_days_from_monday() as i64 - first.weekday().num_days_from_monday() as i64).rem_euclid(7) as u32;
+        (i64::from(weekday.num_days_from_monday()) - i64::from(first.weekday().num_days_from_monday())).rem_euclid(7);
+    let days_ahead = u32::try_from(days_ahead).expect("rem_euclid(7) result is in 0..7");
     let day = 1 + days_ahead + 7 * (n - 1);
     NaiveDate::from_ymd_opt(year, month, day)
 }
@@ -98,16 +100,16 @@ pub async fn ics(ctx: Context<'_>, #[description = "Course Reference Number (CRN
     }
 
     // Sort meeting times by start time
-    let mut sorted_meeting_times = meeting_times.to_vec();
+    let mut sorted_meeting_times = meeting_times.clone();
     MeetingScheduleInfo::sort_by_start_time(&mut sorted_meeting_times);
 
     // Generate ICS content
-    let (ics_content, excluded_holidays) = generate_ics_content(&course, &term, &sorted_meeting_times)?;
+    let (ics_content, excluded_holidays) = generate_ics_content(&course, &term, &sorted_meeting_times);
 
     // Create file attachment
     let filename = format!(
         "{subject}_{number}_{section}.ics",
-        subject = course.subject.replace(" ", "_"),
+        subject = course.subject.replace(' ', "_"),
         number = course.course_number,
         section = course.sequence_number,
     );
@@ -144,7 +146,7 @@ pub async fn ics(ctx: Context<'_>, #[description = "Course Reference Number (CRN
         } else {
             format!("{count} dates were")
         };
-        response_content.push_str(&format!("\n\n{count_text} excluded from the ICS file:\n"));
+        write!(response_content, "\n\n{count_text} excluded from the ICS file:\n").unwrap();
         response_content.push_str(
             &excluded_holidays
                 .iter()
@@ -162,11 +164,7 @@ pub async fn ics(ctx: Context<'_>, #[description = "Course Reference Number (CRN
 }
 
 /// Generate ICS content for a course and its meeting times
-fn generate_ics_content(
-    course: &Course,
-    term: &str,
-    meeting_times: &[MeetingScheduleInfo],
-) -> Result<(String, Vec<String>), anyhow::Error> {
+fn generate_ics_content(course: &Course, term: &str, meeting_times: &[MeetingScheduleInfo]) -> (String, Vec<String>) {
     let mut ics_content = String::new();
     let mut excluded_holidays = Vec::new();
 
@@ -178,11 +176,11 @@ fn generate_ics_content(
     ics_content.push_str("METHOD:PUBLISH\r\n");
 
     // Calendar name
-    ics_content.push_str(&format!("X-WR-CALNAME:{} - {}\r\n", course.display_title(), term));
+    write!(ics_content, "X-WR-CALNAME:{} - {}\r\n", course.display_title(), term).unwrap();
 
     // Generate events for each meeting time
     for (index, meeting_time) in meeting_times.iter().enumerate() {
-        let (event_content, holidays) = generate_event_content(course, meeting_time, index)?;
+        let (event_content, holidays) = generate_event_content(course, meeting_time, index);
         ics_content.push_str(&event_content);
         excluded_holidays.extend(holidays);
     }
@@ -190,15 +188,11 @@ fn generate_ics_content(
     // ICS footer
     ics_content.push_str("END:VCALENDAR\r\n");
 
-    Ok((ics_content, excluded_holidays))
+    (ics_content, excluded_holidays)
 }
 
 /// Generate ICS event content for a single meeting time
-fn generate_event_content(
-    course: &Course,
-    meeting_time: &MeetingScheduleInfo,
-    index: usize,
-) -> Result<(String, Vec<String>), anyhow::Error> {
+fn generate_event_content(course: &Course, meeting_time: &MeetingScheduleInfo, index: usize) -> (String, Vec<String>) {
     let course_title = course.display_title();
     let instructor_name = course.primary_instructor_name();
     let location = meeting_time.place_string();
@@ -241,12 +235,12 @@ fn generate_event_content(
 
     // Event header
     event_content.push_str("BEGIN:VEVENT\r\n");
-    event_content.push_str(&format!("UID:{uid}\r\n"));
-    event_content.push_str(&format!("DTSTART:{start_str}\r\n"));
-    event_content.push_str(&format!("DTEND:{end_str}\r\n"));
-    event_content.push_str(&format!("SUMMARY:{}\r\n", escape_ics_text(&event_title)));
-    event_content.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics_text(&description)));
-    event_content.push_str(&format!("LOCATION:{}\r\n", escape_ics_text(&location)));
+    write!(event_content, "UID:{uid}\r\n").unwrap();
+    write!(event_content, "DTSTART:{start_str}\r\n").unwrap();
+    write!(event_content, "DTEND:{end_str}\r\n").unwrap();
+    write!(event_content, "SUMMARY:{}\r\n", escape_ics_text(&event_title)).unwrap();
+    write!(event_content, "DESCRIPTION:{}\r\n", escape_ics_text(&description)).unwrap();
+    write!(event_content, "LOCATION:{}\r\n", escape_ics_text(&location)).unwrap();
 
     // Add recurrence rule if there are specific days and times
     if !meeting_time.days.is_empty() && meeting_time.time_range.is_some() {
@@ -259,16 +253,18 @@ fn generate_event_content(
         if !by_day.is_empty() {
             let until_date = meeting_time.date_range.end.format("%Y%m%dT000000Z").to_string();
 
-            event_content.push_str(&format!(
+            write!(
+                event_content,
                 "RRULE:FREQ=WEEKLY;BYDAY={};UNTIL={}\r\n",
                 by_day.join(","),
                 until_date
-            ));
+            )
+            .unwrap();
 
             // Add holiday exceptions (EXDATE) if the class would meet on holiday dates
             let holiday_exceptions = get_holiday_exceptions(meeting_time);
             if let Some(exdate_property) = generate_exdate_property(&holiday_exceptions, start_utc) {
-                event_content.push_str(&format!("{exdate_property}\r\n"));
+                write!(event_content, "{exdate_property}\r\n").unwrap();
             }
 
             // Collect holiday names for reporting
@@ -288,14 +284,14 @@ fn generate_event_content(
             holiday_names.dedup();
 
             event_content.push_str("END:VEVENT\r\n");
-            return Ok((event_content, holiday_names));
+            return (event_content, holiday_names);
         }
     }
 
     // Event footer
     event_content.push_str("END:VEVENT\r\n");
 
-    Ok((event_content, Vec::new()))
+    (event_content, Vec::new())
 }
 
 /// Check if a class meets on a specific date based on its meeting days
@@ -341,9 +337,9 @@ fn generate_exdate_property(exceptions: &[NaiveDate], start_time: chrono::DateTi
 
 /// Escape text for ICS format
 fn escape_ics_text(text: &str) -> String {
-    text.replace("\\", "\\\\")
-        .replace(";", "\\;")
-        .replace(",", "\\,")
-        .replace("\n", "\\n")
-        .replace("\r", "")
+    text.replace('\\', "\\\\")
+        .replace(';', "\\;")
+        .replace(',', "\\,")
+        .replace('\n', "\\n")
+        .replace('\r', "")
 }

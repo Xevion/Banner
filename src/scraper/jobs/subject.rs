@@ -13,6 +13,7 @@ pub use crate::data::models::SubjectTarget as SubjectJob;
 
 impl SubjectJob {
     /// Create a new subject job for a specific term.
+    #[must_use]
     pub fn new(subject: String, term: String) -> Self {
         Self {
             subject,
@@ -21,6 +22,7 @@ impl SubjectJob {
     }
 
     /// Get the effective term, falling back to current term for legacy jobs.
+    #[must_use]
     pub fn effective_term(&self) -> String {
         self.term
             .clone()

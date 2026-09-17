@@ -1,6 +1,6 @@
-//! BlueBook (bluebook.utsa.edu) course evaluation scraper.
+//! `BlueBook` (bluebook.utsa.edu) course evaluation scraper.
 //!
-//! BlueBook is an ASP.NET WebForms application that requires stateful
+//! `BlueBook` is an `ASP.NET` `WebForms` application that requires stateful
 //! ViewState/EventValidation round-tripping and cookie-based sessions.
 
 use anyhow::{Context, Result};
@@ -22,14 +22,14 @@ use crate::data::bluebook::{
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
 
 /// Re-scrape interval for subjects with evaluations in a recent term (within ~2 years).
-const RECENT_SUBJECT_INTERVAL: Duration = Duration::from_secs(14 * 24 * 3600);
+const RECENT_SUBJECT_INTERVAL: Duration = Duration::from_hours(14 * 24);
 
 /// Re-scrape interval for subjects with only old evaluations or zero evaluations.
-const HISTORICAL_SUBJECT_INTERVAL: Duration = Duration::from_secs(90 * 24 * 3600);
+const HISTORICAL_SUBJECT_INTERVAL: Duration = Duration::from_hours(90 * 24);
 
-/// BlueBook-specific season representation.
+/// `BlueBook`-specific season representation.
 ///
-/// BlueBook distinguishes Summer I and Summer II, which Banner collapses
+/// `BlueBook` distinguishes Summer I and Summer II, which Banner collapses
 /// into a single "Summer" (code "30"). We parse the distinction internally
 /// for fidelity, then collapse when converting to a [`Term`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +41,7 @@ enum BlueBookSeason {
 }
 
 impl BlueBookSeason {
-    /// Parse a BlueBook season prefix string.
+    /// Parse a `BlueBook` season prefix string.
     fn from_bluebook_str(s: &str) -> Option<Self> {
         match s {
             "Spr" | "Spring" => Some(Self::Spring),
@@ -62,7 +62,7 @@ impl BlueBookSeason {
     }
 }
 
-/// Convert a BlueBook term string (e.g. `"Spr 2026"`) to a Banner [`Term`].
+/// Convert a `BlueBook` term string (e.g. `"Spr 2026"`) to a Banner [`Term`].
 ///
 /// Summer I and Summer II are both collapsed to `Season::Summer`.
 #[allow(dead_code)]
@@ -73,25 +73,21 @@ fn normalize_term(bluebook_term: &str) -> Option<Term> {
         return None;
     }
 
-    let year: u32 = match parts[0].parse() {
-        Ok(y) => y,
-        Err(_) => {
-            warn!(term = bluebook_term, "Failed to parse year");
-            return None;
-        }
+    let year: u32 = if let Ok(y) = parts[0].parse() {
+        y
+    } else {
+        warn!(term = bluebook_term, "Failed to parse year");
+        return None;
     };
     let season_str = parts[1];
 
-    let bb_season = match BlueBookSeason::from_bluebook_str(season_str) {
-        Some(s) => s,
-        None => {
-            warn!(
-                term = bluebook_term,
-                season = season_str,
-                "Unrecognized BlueBook season prefix"
-            );
-            return None;
-        }
+    let Some(bb_season) = BlueBookSeason::from_bluebook_str(season_str) else {
+        warn!(
+            term = bluebook_term,
+            season = season_str,
+            "Unrecognized BlueBook season prefix"
+        );
+        return None;
     };
 
     Some(Term {
@@ -100,8 +96,8 @@ fn normalize_term(bluebook_term: &str) -> Option<Term> {
     })
 }
 
-/// All form field values extracted from an ASP.NET WebForms page.
-/// WebForms requires the complete set of fields to be round-tripped on every POST.
+/// All form field values extracted from an `ASP.NET` `WebForms` page.
+/// `WebForms` requires the complete set of fields to be round-tripped on every POST.
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 struct FormFields(Vec<(String, String)>);
@@ -115,7 +111,7 @@ impl FormFields {
     }
 }
 
-/// A subject entry from the BlueBook ComboBox.
+/// A subject entry from the `BlueBook` `ComboBox`.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct SubjectEntry {
@@ -123,7 +119,7 @@ struct SubjectEntry {
     code: String,
     /// Full display text, e.g. "Computer Science (CS)"
     display_text: String,
-    /// 0-based index in the ComboBox <li> list (needed for the HiddenField value)
+    /// 0-based index in the `ComboBox` <li> list (needed for the `HiddenField` value)
     combo_index: usize,
 }
 
@@ -155,7 +151,7 @@ fn needs_scrape(
 /// Returns true if the subject has evaluations within ~2 years of the current term.
 ///
 /// Term codes are formatted as YYYYSS (e.g. 202620 = Spring 2026).
-/// "Recent" is defined as max_term year >= current year - 2.
+/// "Recent" is defined as `max_term` year >= current year - 2.
 fn is_recent_subject(max_term: Option<&str>, current_term_code: &str) -> bool {
     let Some(mt) = max_term else {
         return false;
@@ -168,7 +164,7 @@ fn is_recent_subject(max_term: Option<&str>, current_term_code: &str) -> bool {
     max_year + 2 >= curr_year
 }
 
-/// Client for scraping BlueBook course evaluations.
+/// Client for scraping `BlueBook` course evaluations.
 #[allow(dead_code)]
 pub(crate) struct BlueBookClient {
     http: reqwest::Client,
@@ -196,7 +192,7 @@ impl BlueBookClient {
     }
 
     /// Extract all form input values from an HTML response.
-    /// WebForms requires all fields to be round-tripped on every POST.
+    /// `WebForms` requires all fields to be round-tripped on every POST.
     fn extract_form_fields(html: &Html) -> Result<FormFields> {
         let input_sel = Selector::parse("input").unwrap();
         let mut fields = Vec::new();
@@ -293,17 +289,17 @@ impl BlueBookClient {
         Ok((subjects, fields))
     }
 
-    /// Extract subject entries from the ComboBox `<li>` list on the landing page.
+    /// Extract subject entries from the `ComboBox` `<li>` list on the landing page.
     ///
-    /// BlueBook uses an AJAX ComboBox where subjects are `<li>` items like
+    /// `BlueBook` uses an AJAX `ComboBox` where subjects are `<li>` items like
     /// `"Computer Science (CS)"`. The parenthesized code is extracted as the subject code,
-    /// and the 0-based `<li>` index is preserved (needed for the HiddenField POST value).
+    /// and the 0-based `<li>` index is preserved (needed for the `HiddenField` POST value).
     fn parse_subjects(html: &Html) -> Vec<SubjectEntry> {
+        static CODE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\(([^)]+)\)\s*$").unwrap());
+
         let li_sel =
             Selector::parse("#ctl00_MainContentSearchQuery_searchCriteriaEntry_CourseSubjectCombo_OptionList > li")
                 .unwrap();
-
-        static CODE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\(([^)]+)\)\s*$").unwrap());
 
         let mut subjects = Vec::new();
 
@@ -434,9 +430,9 @@ impl BlueBookClient {
     ///
     /// Each accordion has a master pane (header) with `table.infoTable`:
     ///   [Sem/Yr, CRN, Course.Section, Title, Instructor,
-    ///    InstructorEval ("3.9 / 5.0\n17 students responded" or "n/a"),
+    ///    `InstructorEval` ("3.9 / 5.0\n17 students responded" or "n/a"),
     ///    Textbooks, Syllabus,
-    ///    CourseEval (same format)]
+    ///    `CourseEval` (same format)]
     ///
     /// Each master pane is immediately followed by a detail pane (expanded content)
     /// containing department, college, campus, schedule, and description.
@@ -452,9 +448,8 @@ impl BlueBookClient {
         let details: Vec<_> = html.select(&detail_sel).collect();
 
         for (i, pane) in masters.iter().enumerate() {
-            let table = match pane.select(&table_sel).next() {
-                Some(t) => t,
-                None => continue,
+            let Some(table) = pane.select(&table_sel).next() else {
+                continue;
             };
 
             let cells: Vec<String> = table.select(&td_sel).map(|td| td.text().collect::<String>()).collect();
@@ -465,9 +460,8 @@ impl BlueBookClient {
             }
 
             let raw_term = cells[0].trim();
-            let term = match normalize_term(raw_term) {
-                Some(t) => t,
-                None => continue,
+            let Some(term) = normalize_term(raw_term) else {
+                continue;
             };
 
             let crn = cells[1].trim().to_string();
@@ -478,15 +472,12 @@ impl BlueBookClient {
 
             // Course.Section: "CS 1083.001" -- extract course_number and section
             let course_section = cells[2].trim();
-            let (course_number, section) = match Self::parse_course_section(course_section, subject) {
-                Some(pair) => pair,
-                None => {
-                    warn!(
-                        raw = course_section,
-                        subject, "Failed to parse course.section from header"
-                    );
-                    continue;
-                }
+            let Some((course_number, section)) = Self::parse_course_section(course_section, subject) else {
+                warn!(
+                    raw = course_section,
+                    subject, "Failed to parse course.section from header"
+                );
+                continue;
             };
 
             let instructor_name = cells[4].trim().to_string();
@@ -547,8 +538,8 @@ impl BlueBookClient {
     /// doesn't start with a digit.
     ///
     /// The `subject` parameter is accepted for call-site clarity but is NOT used
-    /// to validate the display prefix. BlueBook's ComboBox subject codes don't
-    /// always match the prefix shown in the accordion cell (e.g., ComboBox "MTC"
+    /// to validate the display prefix. `BlueBook`'s `ComboBox` subject codes don't
+    /// always match the prefix shown in the accordion cell (e.g., `ComboBox` "MTC"
     /// -> display prefix "MAT"), so prefix matching would silently drop valid rows.
     fn parse_course_section(raw: &str, subject: &str) -> Option<(String, String)> {
         // Normalize all Unicode whitespace (including non-breaking spaces \u{00A0})
@@ -597,7 +588,7 @@ impl BlueBookClient {
         Some((course_number.to_string(), section.to_string()))
     }
 
-    /// Parse a rating cell like "3.9 / 5.0\n17 students responded" into (rating, response_count).
+    /// Parse a rating cell like "3.9 / 5.0\n17 students responded" into (rating, `response_count`).
     /// Returns (None, None) for "n/a" or unrecognized formats.
     fn parse_rating_cell(text: &str) -> (Option<f32>, Option<i32>) {
         static RESPONSE_RE: LazyLock<regex::Regex> =
@@ -644,7 +635,7 @@ impl BlueBookClient {
             .iter()
             .filter(|s| {
                 let last = scrape_times.get(&s.code).copied();
-                let max_term = max_terms.get(&s.code).map(|t| t.as_str());
+                let max_term = max_terms.get(&s.code).map(String::as_str);
                 needs_scrape(last, max_term, &current_term_code, force)
             })
             .collect();
@@ -708,7 +699,7 @@ impl BlueBookClient {
                 Ok((html, fields)) => {
                     let page_evals = Self::parse_evaluations(&html, &subject.code);
                     subject_evals.extend(page_evals);
-                    let total_pages = Self::parse_page_info(&html).map(|(_, total)| total).unwrap_or(1);
+                    let total_pages = Self::parse_page_info(&html).map_or(1, |(_, total)| total);
                     (total_pages, fields)
                 }
                 Err(e) => {
@@ -745,6 +736,8 @@ impl BlueBookClient {
                 }
             }
 
+            // subject_evals is one subject's scraped rows, far under u32::MAX
+            #[allow(clippy::cast_possible_truncation)]
             let subject_eval_count = subject_evals.len() as u32;
 
             // Upsert immediately so data is available without waiting for the full scrape
@@ -796,6 +789,7 @@ impl BlueBookClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
     use tracing_subscriber::EnvFilter;
 
     /// Initialize tracing for tests that need log output.
@@ -808,7 +802,7 @@ mod tests {
             .try_init();
     }
 
-    /// (term, crn, course_section, title, instructor, inst_eval, course_eval, department)
+    /// (term, crn, `course_section`, title, instructor, `inst_eval`, `course_eval`, department)
     type AccordionEntry<'a> = (
         &'a str,
         &'a str,
@@ -977,7 +971,7 @@ mod tests {
         );
     }
 
-    /// BlueBook lists some subjects twice in the ComboBox under different internal
+    /// `BlueBook` lists some subjects twice in the `ComboBox` under different internal
     /// codes. E.g., "Mathematics (MAT)" and "Mathematics (MTC)" both exist, but
     /// accordion cells always display the prefix "MAT". Scraping with code "MTC"
     /// must still parse "MAT 1043.06B" successfully.
@@ -989,8 +983,8 @@ mod tests {
         );
     }
 
-    /// BlueBook HTML sometimes uses non-breaking spaces (\u{00A0}) between the
-    /// subject code and course number. strip_prefix with a regular space fails.
+    /// `BlueBook` HTML sometimes uses non-breaking spaces (\u{00A0}) between the
+    /// subject code and course number. `strip_prefix` with a regular space fails.
     #[test]
     fn test_parse_course_section_non_breaking_space() {
         assert_eq!(
@@ -999,7 +993,7 @@ mod tests {
         );
     }
 
-    /// Non-breaking space also appears in parse_evaluations via the HTML cell text.
+    /// Non-breaking space also appears in `parse_evaluations` via the HTML cell text.
     #[test]
     fn test_parse_evaluations_non_breaking_space_in_course_section() {
         // Simulate the BlueBook HTML where course section uses \u{00A0} instead of a space
@@ -1097,7 +1091,7 @@ mod tests {
     fn test_build_postback_sets_event_target() {
         let fields = FormFields(vec![
             ("__VIEWSTATE".to_string(), "vs".to_string()),
-            ("__EVENTTARGET".to_string(), "".to_string()),
+            ("__EVENTTARGET".to_string(), String::new()),
             ("field1".to_string(), "val1".to_string()),
         ]);
         let params = BlueBookClient::build_postback(&fields, "my_target", &[]);
@@ -1109,7 +1103,7 @@ mod tests {
     fn test_build_postback_applies_overrides() {
         let fields = FormFields(vec![
             ("__VIEWSTATE".to_string(), "vs".to_string()),
-            ("__EVENTTARGET".to_string(), "".to_string()),
+            ("__EVENTTARGET".to_string(), String::new()),
             ("field1".to_string(), "old".to_string()),
         ]);
         let params = BlueBookClient::build_postback(&fields, "target", &[("field1", "new"), ("field2", "added")]);
@@ -1209,13 +1203,14 @@ mod tests {
         assert!(subjects.is_empty());
     }
 
-    /// Build a minimal BlueBook accordion HTML page for testing.
-    /// Each entry is (term, crn, course_section, title, instructor, inst_eval, course_eval, department).
+    /// Build a minimal `BlueBook` accordion HTML page for testing.
+    /// Each entry is (term, crn, `course_section`, title, instructor, `inst_eval`, `course_eval`, department).
     fn build_accordion_html(entries: &[AccordionEntry<'_>]) -> String {
         let mut html = String::from("<html><body>");
         for (term, crn, course_section, title, instructor, inst_eval, course_eval, dept) in entries {
             // Master pane (header)
-            html.push_str(&format!(
+            let _ = write!(
+                html,
                 r#"<div class="accordionMasterPane">
                     <table class="infoTable"><tr>
                         <td>{term}</td>
@@ -1229,17 +1224,18 @@ mod tests {
                         <td>{course_eval}</td>
                     </tr></table>
                 </div>"#
-            ));
+            );
             // Detail pane (expanded content, hidden via CSS)
             let dept_html = dept.unwrap_or("Unknown Department");
-            html.push_str(&format!(
+            let _ = write!(
+                html,
                 r#"<div class="accordionDetailPane" style="display:none;">
                     <div>
                         <span class="contentHeaderSpan">Dept:</span> {dept_html}<br>
                         <span class="contentHeaderSpan">College:</span> College of Sciences<br>
                     </div>
                 </div>"#
-            ));
+            );
         }
         html.push_str("</body></html>");
         html
@@ -1488,7 +1484,7 @@ mod tests {
         for page in 2..=pages_to_check {
             let (page_html, new_fields) = client.next_page(&fields, true).await.unwrap();
             fields = new_fields;
-            let page_evals = BlueBookClient::parse_evaluations(&page_html, "CS");
+            let next_page_evals = BlueBookClient::parse_evaluations(&page_html, "CS");
             // Log the semester of the first accordion to track pagination progress
             let semester_sel = Selector::parse("span[id*='SemYrLbl']").unwrap();
             let first_semester: String = page_html
@@ -1498,9 +1494,9 @@ mod tests {
                 .unwrap_or_default();
             eprintln!(
                 "Page {page}/{total_pages}: {} evals (semester: {first_semester})",
-                page_evals.len()
+                next_page_evals.len()
             );
-            all_evals.extend(page_evals);
+            all_evals.extend(next_page_evals);
         }
 
         eprintln!("Total evaluations from {pages_to_check} pages: {}", all_evals.len());
@@ -1545,8 +1541,8 @@ mod tests {
         eprintln!("BAN correctly detected as having no term filter");
     }
 
-    /// Test the full scrape_all flow to see how many evaluations are collected.
-    /// Requires a running PostgreSQL database.
+    /// Test the full `scrape_all` flow to see how many evaluations are collected.
+    /// Requires a running `PostgreSQL` database.
     #[tokio::test]
     #[ignore = "requires network access to bluebook.utsa.edu and database; runs full scrape"]
     async fn test_live_scrape_all() {
@@ -1557,7 +1553,7 @@ mod tests {
 
         let client = BlueBookClient::new();
         let total = client.scrape_all(&db_pool, false).await.unwrap();
-        eprintln!("Total evaluations upserted: {total} (0 means all subjects failed)",);
+        eprintln!("Total evaluations upserted: {total} (0 means all subjects failed)");
         assert!(total > 0, "Should collect at least some evaluations from the live site");
     }
 }

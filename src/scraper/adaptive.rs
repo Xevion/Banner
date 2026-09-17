@@ -9,16 +9,16 @@ use std::time::Duration;
 
 use crate::data::models::SubjectResultStats;
 
-const FLOOR_INTERVAL: Duration = Duration::from_secs(3 * 60);
-const MODERATE_HIGH_INTERVAL: Duration = Duration::from_secs(5 * 60);
-const MODERATE_LOW_INTERVAL: Duration = Duration::from_secs(15 * 60);
-const LOW_CHANGE_INTERVAL: Duration = Duration::from_secs(30 * 60);
-const ZERO_5_INTERVAL: Duration = Duration::from_secs(60 * 60);
-const ZERO_10_INTERVAL: Duration = Duration::from_secs(2 * 60 * 60);
-const CEILING_INTERVAL: Duration = Duration::from_secs(4 * 60 * 60);
+const FLOOR_INTERVAL: Duration = Duration::from_mins(3);
+const MODERATE_HIGH_INTERVAL: Duration = Duration::from_mins(5);
+const MODERATE_LOW_INTERVAL: Duration = Duration::from_mins(15);
+const LOW_CHANGE_INTERVAL: Duration = Duration::from_mins(30);
+const ZERO_5_INTERVAL: Duration = Duration::from_hours(1);
+const ZERO_10_INTERVAL: Duration = Duration::from_hours(2);
+const CEILING_INTERVAL: Duration = Duration::from_hours(4);
 const COLD_START_INTERVAL: Duration = FLOOR_INTERVAL;
-pub(crate) const ARCHIVED_INTERVAL: Duration = Duration::from_secs(21 * 24 * 60 * 60);
-const PAUSE_PROBE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+pub(crate) const ARCHIVED_INTERVAL: Duration = Duration::from_hours(21 * 24);
+const PAUSE_PROBE_INTERVAL: Duration = Duration::from_hours(6);
 const EMPTY_FETCH_PAUSE_THRESHOLD: i64 = 3;
 const FAILURE_PAUSE_THRESHOLD: i64 = 5;
 
@@ -78,6 +78,7 @@ impl From<SubjectResultStats> for SubjectStats {
 }
 
 /// Compute the base interval tier from change-rate statistics.
+#[must_use]
 pub fn compute_base_interval(stats: &SubjectStats) -> Duration {
     if stats.recent_runs == 0 {
         return COLD_START_INTERVAL;
@@ -105,6 +106,7 @@ pub fn compute_base_interval(stats: &SubjectStats) -> Duration {
 ///
 /// Peak hours (weekdays 8am-6pm CT) return 1; off-peak (weekdays 6pm-midnight CT)
 /// return 2; night (midnight-8am CT) and weekends return 4.
+#[must_use]
 pub fn time_of_day_multiplier(now: DateTime<Utc>) -> u32 {
     let ct = now.with_timezone(&Central);
     let weekday = ct.weekday();
@@ -126,6 +128,7 @@ pub fn time_of_day_multiplier(now: DateTime<Utc>) -> u32 {
 ///
 /// Combines base interval, time-of-day multiplier, pause detection (empty
 /// fetches / consecutive failures), and term category scheduling tiers.
+#[must_use]
 pub fn evaluate_subject(stats: &SubjectStats, now: DateTime<Utc>, category: TermCategory) -> SubjectSchedule {
     let elapsed = (now - stats.last_completed).to_std().unwrap_or(Duration::ZERO);
 
@@ -134,7 +137,7 @@ pub fn evaluate_subject(stats: &SubjectStats, now: DateTime<Utc>, category: Term
         return if elapsed >= ARCHIVED_INTERVAL {
             SubjectSchedule::Eligible(ARCHIVED_INTERVAL)
         } else {
-            SubjectSchedule::Cooldown(ARCHIVED_INTERVAL - elapsed)
+            SubjectSchedule::Cooldown(ARCHIVED_INTERVAL.saturating_sub(elapsed))
         };
     }
 
@@ -165,7 +168,7 @@ pub fn evaluate_subject(stats: &SubjectStats, now: DateTime<Utc>, category: Term
     if elapsed >= effective {
         SubjectSchedule::Eligible(effective)
     } else {
-        let remaining = effective - elapsed;
+        let remaining = effective.saturating_sub(elapsed);
         SubjectSchedule::Cooldown(remaining)
     }
 }

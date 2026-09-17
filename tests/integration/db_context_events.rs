@@ -1,4 +1,4 @@
-//! Integration tests for DbContext event emission.
+//! Integration tests for `DbContext` event emission.
 
 use crate::helpers::db::test_db;
 use banner::data::DbContext;
@@ -146,17 +146,17 @@ async fn db_context_emits_events_on_job_exhaust() {
     ctx.scrape_jobs().exhaust(job_id).await.unwrap();
 
     // Verify Exhausted event was emitted (at position after Locked)
-    let event1 = events.read(cursor + 1);
+    let exhausted_event = events.read(cursor + 1);
     assert!(
-        matches!(event1, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Exhausted { id })) if id == job_id),
-        "Expected Exhausted event for job {job_id}, got {event1:?}"
+        matches!(exhausted_event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Exhausted { id })) if id == job_id),
+        "Expected Exhausted event for job {job_id}, got {exhausted_event:?}"
     );
 
     // Verify Deleted event was also emitted (at position after Exhausted)
-    let event2 = events.read(cursor + 2);
+    let deleted_event = events.read(cursor + 2);
     assert!(
-        matches!(event2, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id })) if id == job_id),
-        "Expected Deleted event for job {job_id}, got {event2:?}"
+        matches!(deleted_event, Some(DomainEvent::ScrapeJob(ScrapeJobEvent::Deleted { id })) if id == job_id),
+        "Expected Deleted event for job {job_id}, got {deleted_event:?}"
     );
 }
 

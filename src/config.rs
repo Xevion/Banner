@@ -41,19 +41,19 @@ pub struct Config {
 
     /// Base URL for banner generation service
     ///
-    /// Defaults to "https://ssbprod.utsa.edu/StudentRegistrationSsb/ssb" if not specified
+    /// Defaults to <https://ssbprod.utsa.edu/StudentRegistrationSsb/ssb> if not specified
     #[serde(default = "default_banner_base_url")]
     pub banner_base_url: String,
     /// Rate limiting configuration for Banner API requests
     #[serde(default = "default_rate_limiting")]
     pub rate_limiting: RateLimitingConfig,
 
-    /// Discord OAuth2 client ID for web authentication
+    /// Discord `OAuth2` client ID for web authentication
     #[serde(deserialize_with = "deserialize_string_or_uint")]
     pub discord_client_id: String,
-    /// Discord OAuth2 client secret for web authentication
+    /// Discord `OAuth2` client secret for web authentication
     pub discord_client_secret: String,
-    /// Optional base URL override for OAuth2 redirect (e.g. "https://banner.xevion.dev").
+    /// Optional base URL override for `OAuth2` redirect (e.g. <https://banner.xevion.dev>).
     /// When unset, the redirect URI is derived from the incoming request's Origin/Host.
     #[serde(default)]
     pub discord_redirect_uri: Option<String>,
@@ -61,8 +61,8 @@ pub struct Config {
     #[serde(default)]
     pub admin_discord_id: Option<u64>,
 
-    /// URL of the SvelteKit SSR server (Vite in dev, Node in production).
-    /// Default: http://localhost:3001
+    /// URL of the `SvelteKit` SSR server (Vite in dev, Node in production).
+    /// Default: <http://localhost:3001>
     #[serde(default = "default_ssr_downstream")]
     pub ssr_downstream: String,
 
@@ -72,7 +72,7 @@ pub struct Config {
     #[serde(default)]
     pub ssr_command: Option<String>,
 
-    /// Public origin for absolute URLs in sitemaps (e.g. "https://banner.xevion.dev").
+    /// Public origin for absolute URLs in sitemaps (e.g. <https://banner.xevion.dev>).
     /// When unset, sitemap endpoints return 404.
     #[serde(default)]
     pub public_origin: Option<String>,
@@ -210,7 +210,7 @@ where
 
     struct DurationVisitor;
 
-    impl<'de> Visitor<'de> for DurationVisitor {
+    impl Visitor<'_> for DurationVisitor {
         type Value = Duration;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -245,7 +245,8 @@ where
             if value < 0 {
                 return Err(serde::de::Error::custom("Duration cannot be negative"));
             }
-            Ok(Duration::from_secs(value as u64))
+            // value is checked non-negative above.
+            Ok(Duration::from_secs(value.unsigned_abs()))
         }
     }
 
@@ -264,7 +265,7 @@ where
 
     struct StringOrUintVisitor;
 
-    impl<'de> Visitor<'de> for StringOrUintVisitor {
+    impl Visitor<'_> for StringOrUintVisitor {
         type Value = String;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -321,7 +322,7 @@ mod tests {
     #[test]
     fn test_duration_from_string_minutes() {
         let d = parse(r#"{"value": "2m"}"#).unwrap();
-        assert_eq!(d, Duration::from_secs(120));
+        assert_eq!(d, Duration::from_mins(2));
     }
 
     #[test]
@@ -333,7 +334,7 @@ mod tests {
     #[test]
     fn test_duration_from_string_with_space() {
         let d = parse(r#"{"value": "2 m"}"#).unwrap();
-        assert_eq!(d, Duration::from_secs(120));
+        assert_eq!(d, Duration::from_mins(2));
     }
 
     #[test]

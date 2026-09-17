@@ -1,4 +1,4 @@
-//! SSR proxy: forwards non-API, non-static requests to the SvelteKit SSR server.
+//! SSR proxy: forwards non-API, non-static requests to the `SvelteKit` SSR server.
 
 use axum::http::{HeaderMap, HeaderName, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -30,7 +30,7 @@ pub async fn proxy_to_ssr(
     debug!(url = %url, "proxying to SSR");
 
     let mut req = state.ssr_client.get(&url);
-    for (name, value) in forward_headers.iter() {
+    for (name, value) in &forward_headers {
         // Don't forward hop-by-hop headers
         if *name == header::HOST || *name == header::CONNECTION {
             continue;
@@ -58,7 +58,7 @@ pub async fn proxy_to_ssr(
     };
 
     let mut headers = HeaderMap::new();
-    for (name, value) in resp_headers.iter() {
+    for (name, value) in &resp_headers {
         if STRIPPED_HEADERS.contains(name) {
             continue;
         }

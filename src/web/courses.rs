@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 use ts_rs::TS;
 
+use crate::banner::models::terms::Term;
 use crate::data::course_types::{CreditHours, CrossList, Enrollment, RmpBrief, SectionLink};
 use crate::data::courses::SortSpec;
 use crate::data::reference_types::{Attribute, Campus, FilterValue, InstructionalMethod, PartOfTerm};
@@ -29,11 +30,11 @@ fn default_per_page() -> i32 {
 }
 
 /// Convert a raw Banner code to its typed filter string for a given reference category.
+#[must_use]
 pub fn code_to_filter_value(category: &str, code: &str, description: Option<&str>) -> String {
     match category {
         "instructional_method" => InstructionalMethod::from_code(code)
-            .map(|m| m.to_filter_str().to_owned())
-            .unwrap_or_else(|_| format!("raw:{code}")),
+            .map_or_else(|_| format!("raw:{code}"), |m| m.to_filter_str().to_owned()),
         "campus" => Campus::from_code(code, description).to_filter_str().into_owned(),
         "attribute" => Attribute::from_code(code, description).to_filter_str().into_owned(),
         "part_of_term" => PartOfTerm::from_code(code, description).to_filter_str().into_owned(),
@@ -134,12 +135,11 @@ pub(super) async fn course_trends(
         ));
     }
 
-    let mut trends: std::collections::BTreeMap<String, Vec<TrendSample>> = Default::default();
+    let mut trends: std::collections::BTreeMap<String, Vec<TrendSample>> = std::collections::BTreeMap::new();
     if body.crns.is_empty() {
         return Ok(Json(TrendsResponse { trends }));
     }
 
-    use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&body.term).unwrap_or_else(|| body.term.clone());
 
     let rows = data::metrics::list_trends_for_courses(&state.db_pool, &term_code, &body.crns, TREND_BUCKETS)
@@ -239,8 +239,11 @@ pub fn build_course_response(
         .into_iter()
         .map(|i| {
             let rmp = i.rmp_legacy_id.map(|legacy_id| {
+                // RMP ratings sit in 0.0..=5.0, well within f32 precision.
+                #[allow(clippy::cast_possible_truncation)]
+                let avg_rating_f32 = i.avg_rating.map(|v| v as f32);
                 let (avg_rating, num_ratings) =
-                    crate::data::course_types::sanitize_rmp_ratings(i.avg_rating.map(|v| v as f32), i.num_ratings);
+                    crate::data::course_types::sanitize_rmp_ratings(avg_rating_f32, i.num_ratings);
                 RmpBrief {
                     avg_rating,
                     num_ratings,
@@ -302,9 +305,10 @@ pub fn build_course_response(
         .collect();
 
     let (instructional_method, instructional_method_code) = match &course.instructional_method {
-        Some(code) => match InstructionalMethod::from_code(code) {
-            Ok(method) => (Some(method), None),
-            Err(_) => {
+        Some(code) => {
+            if let Ok(method) = InstructionalMethod::from_code(code) {
+                (Some(method), None)
+            } else {
                 warn!(
                     crn = %course.crn,
                     term = %course.term_code,
@@ -313,7 +317,7 @@ pub fn build_course_response(
                 );
                 (None, Some(code.clone()))
             }
-        },
+        }
         None => (None, None),
     };
 
@@ -368,6 +372,9 @@ pub fn build_course_response(
 
     let credit_hours = match (course.credit_hours, course.credit_hour_low, course.credit_hour_high) {
         (Some(fixed), _, _) => Some(CreditHours::Fixed { hours: fixed }),
+        // Both bounds come straight from Banner with no arithmetic applied, so
+        // exact equality identifies a fixed value rather than a real range.
+        #[allow(clippy::float_cmp)]
         (None, Some(low), Some(high)) if low != high => Some(CreditHours::Range { low, high }),
         (None, Some(hours), None) | (None, None, Some(hours)) => Some(CreditHours::Fixed { hours }),
         _ => None,
@@ -388,12 +395,10 @@ pub fn build_course_response(
         .clone()
         .map(|identifier| SectionLink { identifier });
 
-    use crate::banner::models::terms::Term;
     let term_slug = course
         .term_code
         .parse::<Term>()
-        .map(|t| t.slug())
-        .unwrap_or_else(|_| course.term_code.clone());
+        .map_or_else(|_| course.term_code.clone(), Term::slug);
 
     CourseResponse {
         crn: course.crn.clone(),
@@ -425,8 +430,6 @@ pub(super) async fn search_courses(
     State(state): State<AppState>,
     axum_extra::extract::Query(params): axum_extra::extract::Query<SearchParams>,
 ) -> Result<Response, ApiError> {
-    use crate::banner::models::terms::Term;
-
     let term_code = Term::resolve_to_code(&params.term).ok_or_else(|| ApiError::invalid_term(&params.term))?;
     let page = params.page.max(1);
     let per_page = params.per_page.clamp(1, 100);
@@ -498,7 +501,7 @@ pub(super) async fn search_courses(
         .await
         .unwrap_or_else(|e| {
             error!(error = %e, "Failed to fetch instructors for course search");
-            Default::default()
+            std::collections::HashMap::default()
         });
 
     let course_responses: Vec<CourseResponse> = courses
@@ -528,7 +531,6 @@ pub(super) async fn get_course(
     Path((term, crn)): Path<(String, String)>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, ApiError> {
-    use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let course = data::courses::get_course_by_crn(&state.db_pool, &crn, &term_code)
         .await
@@ -576,7 +578,6 @@ pub(super) async fn get_related_sections(
     State(state): State<AppState>,
     Path((term, subject, course_number)): Path<(String, String, String)>,
 ) -> Result<Response, ApiError> {
-    use crate::banner::models::terms::Term;
     let term_code = Term::resolve_to_code(&term).ok_or_else(|| ApiError::invalid_term(&term))?;
     let courses = data::courses::get_related_sections(&state.db_pool, &term_code, &subject, &course_number)
         .await
@@ -587,7 +588,7 @@ pub(super) async fn get_related_sections(
         .await
         .unwrap_or_else(|e| {
             error!(error = %e, "Failed to fetch instructors for related sections");
-            Default::default()
+            std::collections::HashMap::default()
         });
 
     let responses: Vec<CourseResponse> = courses

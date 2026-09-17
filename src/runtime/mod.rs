@@ -29,7 +29,7 @@ pub trait Service: Send + Sync {
     /// Run the service's main work loop.
     ///
     /// This method is expected to block indefinitely. A normal (non-error) return is
-    /// treated as an unexpected completion by the ServiceManager (`ServiceResult::NormalCompletion`)
+    /// treated as an unexpected completion by the `ServiceManager` (`ServiceResult::NormalCompletion`)
     /// and will be logged as a warning.
     ///
     /// Services that spawn tasks internally and then park should use
@@ -40,7 +40,7 @@ pub trait Service: Send + Sync {
     ///
     /// Implementations should initiate shutdown and MAY wait for completion.
     /// Services are expected to respond to this call and begin cleanup promptly.
-    /// When managed by ServiceManager, the configured timeout (default 8s) applies to
+    /// When managed by `ServiceManager`, the configured timeout (default 8s) applies to
     /// ALL services combined, not per-service. Services should complete shutdown as
     /// quickly as possible to avoid timeout.
     async fn shutdown(&mut self) -> Result<(), anyhow::Error>;

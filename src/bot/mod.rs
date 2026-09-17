@@ -13,6 +13,7 @@ pub struct Data {
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 /// Get all available commands
+#[must_use]
 pub fn get_commands() -> Vec<poise::Command<Data, Error>> {
     vec![
         commands::search(),

@@ -29,7 +29,7 @@ fn rmp_error(context: &str, e: anyhow::Error) -> ApiError {
                 ApiError::conflict(err.to_string())
             }
         },
-        Err(e) => db_error(context, e),
+        Err(e) => db_error(context, &e),
     }
 }
 
@@ -105,6 +105,9 @@ pub struct UnmatchBody {
 }
 
 /// `GET /api/admin/instructors` -- List instructors with filtering and pagination.
+///
+/// # Errors
+/// Internal error if the instructor query fails.
 #[instrument(skip_all)]
 pub async fn list_instructors(
     AdminUser(_user): AdminUser,
@@ -127,6 +130,10 @@ pub async fn list_instructors(
 }
 
 /// `GET /api/admin/instructors/{id}` -- Full instructor detail with candidates.
+///
+/// # Errors
+/// `NotFound` if no instructor has that id; internal error if the detail
+/// query fails.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn get_instructor(
     AdminUser(_user): AdminUser,
@@ -141,6 +148,10 @@ pub async fn get_instructor(
 }
 
 /// `POST /api/admin/instructors/{id}/match` -- Accept a candidate match.
+///
+/// # Errors
+/// `NotFound` if the candidate isn't pending; `Conflict` if the RMP profile
+/// is already linked to a different instructor; internal error otherwise.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn match_instructor(
     AdminUser(user): AdminUser,
@@ -175,6 +186,10 @@ pub async fn match_instructor(
 }
 
 /// `POST /api/admin/instructors/{id}/reject-candidate` -- Reject a single candidate.
+///
+/// # Errors
+/// `NotFound` if no pending candidate matches the given RMP id; internal
+/// error if the update query fails.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn reject_candidate(
     AdminUser(user): AdminUser,
@@ -209,6 +224,10 @@ pub async fn reject_candidate(
 }
 
 /// `POST /api/admin/instructors/{id}/reject-all` -- Mark instructor as having no valid RMP match.
+///
+/// # Errors
+/// `NotFound` if no instructor has that id; `Conflict` if the instructor
+/// already has confirmed matches; internal error otherwise.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn reject_all(
     AdminUser(user): AdminUser,
@@ -237,6 +256,10 @@ pub async fn reject_all(
 ///
 /// Send `{ "rmpLegacyId": N }` to remove a specific link, or an empty body / `{}`
 /// to remove all links for the instructor.
+///
+/// # Errors
+/// `NotFound` if no instructor has that id; internal error if the check or
+/// unmatch query fails.
 #[instrument(skip_all, fields(instructor_id = id))]
 pub async fn unmatch_instructor(
     AdminUser(user): AdminUser,
@@ -272,24 +295,27 @@ pub async fn unmatch_instructor(
 }
 
 /// `POST /api/admin/rmp/rescore` -- Re-run RMP candidate generation.
+///
+/// # Errors
+/// Internal error if the rescore query fails.
 #[instrument(skip_all)]
 pub async fn rescore(
     AdminUser(_user): AdminUser,
     State(state): State<AppState>,
 ) -> Result<Json<RescoreResponse>, ApiError> {
-    let stats = admin_rmp::rescore(&state.db_pool).await.db_context("rescore")?;
+    let rescore_stats = admin_rmp::rescore(&state.db_pool).await.db_context("rescore")?;
 
     info!(
-        total_processed = stats.total_processed,
-        deleted_pending_candidates = stats.deleted_pending_candidates,
-        deleted_auto_links = stats.deleted_auto_links,
-        candidates_created = stats.candidates_created,
-        auto_matched = stats.auto_matched,
-        pending_review = stats.pending_review,
+        total_processed = rescore_stats.total_processed,
+        deleted_pending_candidates = rescore_stats.deleted_pending_candidates,
+        deleted_auto_links = rescore_stats.deleted_auto_links,
+        candidates_created = rescore_stats.candidates_created,
+        auto_matched = rescore_stats.auto_matched,
+        pending_review = rescore_stats.pending_review,
         "RMP candidates rescored"
     );
 
-    Ok(Json(stats))
+    Ok(Json(rescore_stats))
 }
 
 #[cfg(test)]

@@ -56,7 +56,7 @@ pub struct SearchFilter<'a> {
     pub instructors: Option<&'a [String]>,
 }
 
-/// Append search filter WHERE conditions to a QueryBuilder.
+/// Append search filter WHERE conditions to a `QueryBuilder`.
 ///
 /// Course number filtering extracts the numeric prefix to support alphanumeric
 /// course numbers (e.g., "015X", "399H"). The numeric part is compared against
@@ -352,7 +352,7 @@ pub async fn get_instructors_for_courses(
 /// Get subjects for a term, sorted by total enrollment (descending).
 ///
 /// Returns only subjects that have courses in the given term, with their
-/// descriptions from reference_data and enrollment totals for ranking.
+/// descriptions from `reference_data` and enrollment totals for ranking.
 pub async fn get_subjects_by_enrollment(db_pool: &PgPool, term_code: &str) -> Result<Vec<(String, String, i64)>> {
     let rows = sqlx::query!(
         r#"
@@ -433,6 +433,8 @@ pub async fn list_all_subjects(db_pool: &PgPool) -> Result<Vec<String>> {
 }
 
 /// Get aggregate filter ranges for a term (course number, credit hours, waitlist).
+// cn_/ch_/wc_ deliberately mirror the course_number_/credit_hour_/wait_count_ column groups.
+#[allow(clippy::similar_names)]
 pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<FilterRanges> {
     // An unknown term produces no row here, and every column is nullable in its own
     // right, so both absences funnel into the same defaults below.
@@ -559,8 +561,8 @@ pub async fn suggest_instructors(
 }
 
 /// Suggest instructors with an optional term filter.
-/// When a term is provided, section_count is scoped to that term.
-/// When no term is provided, section_count is across all terms.
+/// When a term is provided, `section_count` is scoped to that term.
+/// When no term is provided, `section_count` is across all terms.
 pub async fn suggest_instructors_global(
     db_pool: &PgPool,
     term_code: Option<&str>,

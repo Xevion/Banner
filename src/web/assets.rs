@@ -1,6 +1,6 @@
 //! Static assets for the web frontend.
 //!
-//! Serves the SvelteKit client build from disk, negotiating the pre-compressed
+//! Serves the `SvelteKit` client build from disk, negotiating the pre-compressed
 //! siblings (.br, .gz, .zst) that `web/scripts/compress-assets.ts` writes.
 
 use axum::body::Body;
@@ -25,19 +25,23 @@ fn serve_dir(dir: &Path) -> ServeDir {
         .precompressed_zstd()
 }
 
+#[must_use]
 pub fn assets_dir() -> &'static Path {
     Path::new(ASSETS_DIR)
 }
 
 /// Set appropriate `Cache-Control` header based on the asset path.
 ///
-/// SvelteKit outputs fingerprinted assets under `_app/immutable/` which are
+/// `SvelteKit` outputs fingerprinted assets under `_app/immutable/` which are
 /// safe to cache indefinitely. Other assets get shorter cache durations.
 fn set_cache_control(headers: &mut HeaderMap, path: &str) {
     let cache_control = if path.contains("immutable/") {
         // SvelteKit fingerprinted assets -- cache forever
         "public, max-age=31536000, immutable"
-    } else if path.ends_with(".html") {
+    } else if Path::new(path)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("html"))
+    {
         "public, max-age=300"
     } else {
         match path.rsplit_once('.').map(|(_, ext)| ext) {
@@ -54,7 +58,7 @@ fn set_cache_control(headers: &mut HeaderMap, path: &str) {
 
 /// Serve a static asset, or `None` when the path is not one.
 ///
-/// `ServeDir` supplies content negotiation, ETag, `Last-Modified`, range requests and
+/// `ServeDir` supplies content negotiation, `ETag`, `Last-Modified`, range requests and
 /// traversal rejection; `Cache-Control` it leaves alone, so the caching policy that keeps
 /// these off the origin is applied here.
 pub async fn try_serve_asset(method: &Method, uri: &Uri, headers: &HeaderMap) -> Option<Response> {

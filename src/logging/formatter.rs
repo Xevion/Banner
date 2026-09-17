@@ -4,6 +4,7 @@ use extension_traits::extension;
 use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::fmt::Write as _;
 use std::{borrow::Cow, fmt};
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::FormatItem};
@@ -116,7 +117,7 @@ fn escape_string(s: &str) -> String {
             // Other control characters (except the ones we handle above)
             c if c.is_control() => {
                 // Represent as \xNN
-                result.push_str(&format!("\\x{:02x}", c as u32));
+                write!(result, "\\x{:02x}", c as u32).unwrap();
             }
             c => result.push(c),
         }
@@ -503,9 +504,8 @@ impl<'w> Writer<'w> {
             }
 
             // Find the key
-            let eq_pos = match remaining.find('=') {
-                Some(p) => p,
-                None => break,
+            let Some(eq_pos) = remaining.find('=') else {
+                break;
             };
             let key = remaining[..eq_pos].trim();
             remaining = &remaining[eq_pos + 1..];
@@ -659,6 +659,68 @@ where
     }
 }
 
+/// Flattened JSON shape emitted by `CustomJsonFormatter`.
+#[derive(Serialize)]
+struct EventFields {
+    message: String,
+    level: String,
+    target: String,
+    #[serde(flatten)]
+    spans: Map<String, Value>,
+    #[serde(flatten)]
+    fields: Map<String, Value>,
+}
+
+/// Collects event fields into the flattened JSON maps for `CustomJsonFormatter`.
+struct FieldVisitor<'a> {
+    message: &'a mut Option<String>,
+    fields: &'a mut Map<String, Value>,
+}
+
+impl Visit for FieldVisitor<'_> {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        let key = field.name();
+        if key == "message" {
+            *self.message = Some(format!("{value:?}"));
+        } else {
+            // Use typed methods for better performance
+            self.fields.insert(key.to_string(), Value::String(format!("{value:?}")));
+        }
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        let key = field.name();
+        if key == "message" {
+            *self.message = Some(value.to_string());
+        } else {
+            self.fields.insert(key.to_string(), Value::String(value.to_string()));
+        }
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        let key = field.name();
+        if key != "message" {
+            self.fields
+                .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
+        }
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        let key = field.name();
+        if key != "message" {
+            self.fields
+                .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
+        }
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        let key = field.name();
+        if key != "message" {
+            self.fields.insert(key.to_string(), Value::Bool(value));
+        }
+    }
+}
+
 /// A custom JSON formatter that flattens fields to root level
 ///
 /// Outputs logs in the format: { "message": "...", "level": "...", "customAttribute": "..." }
@@ -672,70 +734,10 @@ where
     fn format_event(&self, ctx: &FmtContext<'_, S, N>, mut writer: Writer<'_>, event: &Event<'_>) -> fmt::Result {
         let meta = event.metadata();
 
-        #[derive(Serialize)]
-        struct EventFields {
-            message: String,
-            level: String,
-            target: String,
-            #[serde(flatten)]
-            spans: Map<String, Value>,
-            #[serde(flatten)]
-            fields: Map<String, Value>,
-        }
-
         let (message, fields, spans) = {
             let mut message: Option<String> = None;
             let mut fields: Map<String, Value> = Map::new();
             let mut spans: Map<String, Value> = Map::new();
-
-            struct FieldVisitor<'a> {
-                message: &'a mut Option<String>,
-                fields: &'a mut Map<String, Value>,
-            }
-
-            impl<'a> Visit for FieldVisitor<'a> {
-                fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-                    let key = field.name();
-                    if key == "message" {
-                        *self.message = Some(format!("{value:?}"));
-                    } else {
-                        // Use typed methods for better performance
-                        self.fields.insert(key.to_string(), Value::String(format!("{value:?}")));
-                    }
-                }
-
-                fn record_str(&mut self, field: &Field, value: &str) {
-                    let key = field.name();
-                    if key == "message" {
-                        *self.message = Some(value.to_string());
-                    } else {
-                        self.fields.insert(key.to_string(), Value::String(value.to_string()));
-                    }
-                }
-
-                fn record_i64(&mut self, field: &Field, value: i64) {
-                    let key = field.name();
-                    if key != "message" {
-                        self.fields
-                            .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
-                    }
-                }
-
-                fn record_u64(&mut self, field: &Field, value: u64) {
-                    let key = field.name();
-                    if key != "message" {
-                        self.fields
-                            .insert(key.to_string(), Value::Number(serde_json::Number::from(value)));
-                    }
-                }
-
-                fn record_bool(&mut self, field: &Field, value: bool) {
-                    let key = field.name();
-                    if key != "message" {
-                        self.fields.insert(key.to_string(), Value::Bool(value));
-                    }
-                }
-            }
 
             let mut visitor = FieldVisitor {
                 message: &mut message,
@@ -801,7 +803,7 @@ enum FieldRule {
 
 /// Field-level display customization for the pretty formatter.
 ///
-/// Wraps DefaultFields -- fields without matching rules are formatted
+/// Wraps `DefaultFields` -- fields without matching rules are formatted
 /// identically to the default. Only affects pretty (span) output; the JSON
 /// formatter uses `JsonFields` directly and is unaffected.
 pub struct CompactFields {
@@ -832,9 +834,9 @@ impl Visit for CompactVisitor<'_, '_> {
             return;
         }
         if field.name() == "message" {
-            self.record_debug(field, &format_args!("{value}"))
+            self.record_debug(field, &format_args!("{value}"));
         } else {
-            self.record_debug(field, &value)
+            self.record_debug(field, &value);
         }
     }
 
@@ -893,6 +895,7 @@ impl<'writer> FormatFields<'writer> for CompactFields {
 ///
 /// Truncates `req_id` ULID values to `first4..last6` so they remain
 /// scannable on compact log lines without dominating the output.
+#[must_use]
 pub fn compact_fields() -> CompactFields {
     CompactFields::new().transform("req_id", |v| {
         if v.len() > 12 {

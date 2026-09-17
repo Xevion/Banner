@@ -59,6 +59,10 @@ async fn load_calendar_course(
 /// `GET /api/courses/{term}/{crn}/calendar.ics`
 ///
 /// Returns an ICS file download for the course.
+///
+/// # Errors
+/// 400 if `term` is not a known term code; 404 if the course or its meeting
+/// times aren't found; 500 if the lookup or ICS generation fails.
 #[instrument(skip_all, fields(crn))]
 pub async fn course_ics(
     State(state): State<AppState>,
@@ -101,6 +105,10 @@ pub async fn course_ics(
 ///
 /// Redirects to Google Calendar with a pre-filled event for the first meeting time.
 /// If multiple meeting times exist, uses the first one with scheduled days/times.
+///
+/// # Errors
+/// 400 if `term` is not a known term code; 404 if the course or its meeting
+/// times aren't found; 500 if the lookup or URL generation fails.
 #[instrument(skip_all, fields(crn))]
 pub async fn course_gcal(
     State(state): State<AppState>,

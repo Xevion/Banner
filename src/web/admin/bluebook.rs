@@ -1,4 +1,4 @@
-//! Admin API handlers for BlueBook instructor linking.
+//! Admin API handlers for `BlueBook` instructor linking.
 
 use std::sync::atomic::Ordering;
 
@@ -23,7 +23,7 @@ pub use crate::data::admin_bluebook::{BluebookLinkDetail, BluebookMatchResponse,
 /// Check if an `anyhow::Error` chain contains a [`BluebookError`] variant that
 /// indicates a "not found" condition, and return the appropriate 404 response.
 /// Falls back to a generic 500 via [`db_error`].
-fn bluebook_not_found_or_db(context: &str, e: anyhow::Error) -> ApiError {
+fn bluebook_not_found_or_db(context: &str, e: &anyhow::Error) -> ApiError {
     if let Some(bb) = e.downcast_ref::<BluebookError>() {
         ApiError::not_found(bb.to_string())
     } else {
@@ -70,7 +70,7 @@ pub struct BluebookOkResponse {
     pub ok: bool,
 }
 
-/// `POST /api/admin/bluebook/sync` -- Trigger a BlueBook evaluation sync.
+/// `POST /api/admin/bluebook/sync` -- Trigger a `BlueBook` evaluation sync.
 #[instrument(skip_all)]
 pub async fn sync_bluebook(
     AdminUser(_user): AdminUser,
@@ -87,7 +87,10 @@ pub async fn sync_bluebook(
     )
 }
 
-/// `GET /api/admin/bluebook/links` -- List BlueBook links with filtering and pagination.
+/// `GET /api/admin/bluebook/links` -- List `BlueBook` links with filtering and pagination.
+///
+/// # Errors
+/// Internal error if the link query fails.
 #[instrument(skip_all)]
 pub async fn list_links(
     AdminUser(_user): AdminUser,
@@ -108,7 +111,11 @@ pub async fn list_links(
     Ok(Json(response))
 }
 
-/// `GET /api/admin/bluebook/links/{id}` -- Detail for a specific BlueBook link.
+/// `GET /api/admin/bluebook/links/{id}` -- Detail for a specific `BlueBook` link.
+///
+/// # Errors
+/// `NotFound` if no link has that id; internal error if the detail query
+/// fails.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn get_link(
     AdminUser(_user): AdminUser,
@@ -117,12 +124,16 @@ pub async fn get_link(
 ) -> Result<Json<BluebookLinkDetail>, ApiError> {
     let response = admin_bluebook::get_link_detail(&state.db_pool, id)
         .await
-        .map_err(|e| bluebook_not_found_or_db("get bluebook link", e))?;
+        .map_err(|e| bluebook_not_found_or_db("get bluebook link", &e))?;
 
     Ok(Json(response))
 }
 
 /// `POST /api/admin/bluebook/links/{id}/approve` -- Approve a pending link.
+///
+/// # Errors
+/// `NotFound` if no link has that id or it isn't auto/pending; internal
+/// error if the update query fails.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn approve_link(
     AdminUser(user): AdminUser,
@@ -131,7 +142,7 @@ pub async fn approve_link(
 ) -> Result<Json<BluebookOkResponse>, ApiError> {
     admin_bluebook::approve_link(&state.db_pool, id)
         .await
-        .map_err(|e| bluebook_not_found_or_db("approve bluebook link", e))?;
+        .map_err(|e| bluebook_not_found_or_db("approve bluebook link", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -148,6 +159,10 @@ pub async fn approve_link(
 }
 
 /// `POST /api/admin/bluebook/links/{id}/reject` -- Reject a pending link.
+///
+/// # Errors
+/// `NotFound` if no link has that id or it isn't auto/pending; internal
+/// error if the update query fails.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn reject_link(
     AdminUser(user): AdminUser,
@@ -156,7 +171,7 @@ pub async fn reject_link(
 ) -> Result<Json<BluebookOkResponse>, ApiError> {
     admin_bluebook::reject_link(&state.db_pool, id)
         .await
-        .map_err(|e| bluebook_not_found_or_db("reject bluebook link", e))?;
+        .map_err(|e| bluebook_not_found_or_db("reject bluebook link", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -173,6 +188,10 @@ pub async fn reject_link(
 }
 
 /// `POST /api/admin/bluebook/links/{id}/assign` -- Manually assign an instructor to a link.
+///
+/// # Errors
+/// `NotFound` if no link or no instructor has the given id; internal error
+/// if the update query fails.
 #[instrument(skip_all, fields(link_id = id))]
 pub async fn assign_link(
     AdminUser(user): AdminUser,
@@ -182,7 +201,7 @@ pub async fn assign_link(
 ) -> Result<Json<BluebookOkResponse>, ApiError> {
     admin_bluebook::assign_link(&state.db_pool, id, body.instructor_id)
         .await
-        .map_err(|e| bluebook_not_found_or_db("assign bluebook link", e))?;
+        .map_err(|e| bluebook_not_found_or_db("assign bluebook link", &e))?;
 
     action_log::record(
         &state.db_pool,
@@ -203,6 +222,9 @@ pub async fn assign_link(
 }
 
 /// `POST /api/admin/bluebook/match` -- Trigger auto-matching pipeline.
+///
+/// # Errors
+/// Internal error if the auto-matching query fails.
 #[instrument(skip_all)]
 pub async fn run_matching(
     AdminUser(_user): AdminUser,

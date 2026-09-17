@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use serde::Serialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use ts_rs::TS;
 
 use sqlx::types::Json;
@@ -16,6 +16,15 @@ const NANOID_ALPHABET: &[char] = &[
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 const NANOID_LEN: usize = 3;
+
+/// Narrow a `f64` rating average to `f32` for display.
+///
+/// Ratings are bounded to a handful of decimal digits, far under `f32`'s
+/// precision, so this cannot lose meaningful data.
+#[allow(clippy::cast_possible_truncation)]
+fn narrow_rating(v: f64) -> f32 {
+    v as f32
+}
 
 /// Convert a display name to a URL-safe slug with a nanoid suffix.
 ///
@@ -162,13 +171,68 @@ fn default_per_page() -> i32 {
     24
 }
 
+/// Append instructor list WHERE conditions to a `QueryBuilder`.
+fn push_instructor_conditions(
+    builder: &mut QueryBuilder<Postgres>,
+    params: &PublicInstructorListParams,
+    extra_condition: Option<&str>,
+) {
+    builder.push(
+        " WHERE EXISTS (SELECT 1 FROM course_instructors ci WHERE ci.instructor_id = i.id) \
+         AND i.slug IS NOT NULL",
+    );
+
+    if let Some(cond) = extra_condition {
+        builder.push(" AND ");
+        builder.push(cond);
+    }
+
+    if let Some(ref search) = params.search {
+        builder.push(" AND (immutable_unaccent(i.display_name) % immutable_unaccent(");
+        builder.push_bind(search);
+        builder.push(") OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(");
+        builder.push_bind(search);
+        builder.push(") || '%')");
+    }
+
+    if let Some(ref subject) = params.subject {
+        builder.push(
+            " AND EXISTS (SELECT 1 FROM course_instructors ci2 \
+             JOIN courses c2 ON c2.id = ci2.course_id \
+             WHERE ci2.instructor_id = i.id AND c2.subject = ",
+        );
+        builder.push_bind(subject);
+        builder.push(")");
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct PublicInstructorRow {
+    id: i32,
+    slug: Option<String>,
+    display_name: String,
+    email: Option<String>,
+    subjects: Vec<String>,
+    avg_rating: Option<f64>,
+    num_ratings: Option<i32>,
+    rmp_legacy_id: Option<i32>,
+    bb_avg_instructor_rating: Option<f32>,
+    bb_total_responses: Option<i64>,
+    display_score: Option<f32>,
+    sort_score: Option<f32>,
+    ci_lower: Option<f32>,
+    ci_upper: Option<f32>,
+    confidence: Option<f32>,
+    score_source: Option<RatingSource>,
+    sc_rmp_count: Option<i32>,
+    sc_bb_count: Option<i32>,
+}
+
 /// List instructors for the public directory: paginated, searchable, filterable.
 pub async fn list_public_instructors(
     pool: &PgPool,
     params: &PublicInstructorListParams,
 ) -> Result<Page<PublicInstructorListItem>> {
-    use sqlx::{Postgres, QueryBuilder};
-
     use super::scoring::{self, UnratedPolicy};
 
     let page = params.page.max(1);
@@ -187,63 +251,6 @@ pub async fn list_public_instructors(
         }
         _ => "i.display_name ASC".to_string(),
     };
-
-    /// Append instructor list WHERE conditions to a QueryBuilder.
-    fn push_instructor_conditions(
-        builder: &mut QueryBuilder<Postgres>,
-        params: &PublicInstructorListParams,
-        extra_condition: &Option<String>,
-    ) {
-        builder.push(
-            " WHERE EXISTS (SELECT 1 FROM course_instructors ci WHERE ci.instructor_id = i.id) \
-             AND i.slug IS NOT NULL",
-        );
-
-        if let Some(cond) = extra_condition {
-            builder.push(" AND ");
-            builder.push(cond.as_str());
-        }
-
-        if let Some(ref search) = params.search {
-            builder.push(" AND (immutable_unaccent(i.display_name) % immutable_unaccent(");
-            builder.push_bind(search);
-            builder.push(") OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent(");
-            builder.push_bind(search);
-            builder.push(") || '%')");
-        }
-
-        if let Some(ref subject) = params.subject {
-            builder.push(
-                " AND EXISTS (SELECT 1 FROM course_instructors ci2 \
-                 JOIN courses c2 ON c2.id = ci2.course_id \
-                 WHERE ci2.instructor_id = i.id AND c2.subject = ",
-            );
-            builder.push_bind(subject);
-            builder.push(")");
-        }
-    }
-
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        id: i32,
-        slug: Option<String>,
-        display_name: String,
-        email: Option<String>,
-        subjects: Vec<String>,
-        avg_rating: Option<f64>,
-        num_ratings: Option<i32>,
-        rmp_legacy_id: Option<i32>,
-        bb_avg_instructor_rating: Option<f32>,
-        bb_total_responses: Option<i64>,
-        display_score: Option<f32>,
-        sort_score: Option<f32>,
-        ci_lower: Option<f32>,
-        ci_upper: Option<f32>,
-        confidence: Option<f32>,
-        score_source: Option<RatingSource>,
-        sc_rmp_count: Option<i32>,
-        sc_bb_count: Option<i32>,
-    }
 
     // Data query
     let mut data_builder: QueryBuilder<Postgres> = QueryBuilder::new(
@@ -276,7 +283,7 @@ pub async fn list_public_instructors(
          ) bb ON bb.instructor_id = i.id \
          LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id",
     );
-    push_instructor_conditions(&mut data_builder, params, &extra_condition);
+    push_instructor_conditions(&mut data_builder, params, extra_condition.as_deref());
     data_builder.push(" ORDER BY ");
     data_builder.push(sort_clause.as_str());
     data_builder.push(" LIMIT ");
@@ -287,13 +294,13 @@ pub async fn list_public_instructors(
     // The sort clause and each optional filter are assembled at runtime, so neither this
     // query nor its count below is a string literal the macro could check.
     let rows = data_builder
-        .build_query_as::<Row>()
+        .build_query_as::<PublicInstructorRow>()
         .fetch_all(pool)
         .await
         .context("failed to list public instructors")?;
 
     let mut count_builder: QueryBuilder<Postgres> = QueryBuilder::new("SELECT COUNT(*) FROM instructors i");
-    push_instructor_conditions(&mut count_builder, params, &extra_condition);
+    push_instructor_conditions(&mut count_builder, params, extra_condition.as_deref());
 
     let (total,): (i64,) = count_builder
         .build_query_as()
@@ -306,7 +313,7 @@ pub async fn list_public_instructors(
         .map(|r| {
             let rmp = r.rmp_legacy_id.map(|legacy_id| {
                 let (avg_rating, num_ratings) =
-                    super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
+                    super::course_types::sanitize_rmp_ratings(r.avg_rating.map(narrow_rating), r.num_ratings);
                 super::course_types::RmpBrief {
                     avg_rating,
                     num_ratings,
@@ -381,6 +388,36 @@ pub async fn get_public_instructor_by_slug(
         last_name: Option<String>,
     }
 
+    // Best RMP profile (from materialized view)
+    struct RmpRow {
+        avg_rating: Option<f64>,
+        avg_difficulty: Option<f64>,
+        would_take_again_pct: Option<f64>,
+        num_ratings: Option<i32>,
+        legacy_id: Option<i32>,
+    }
+
+    // BlueBook evaluations
+    struct BlueBookRow {
+        avg_instructor_rating: Option<f32>,
+        avg_course_rating: Option<f32>,
+        total_responses: Option<i64>,
+        eval_count: i64,
+    }
+
+    // Precomputed composite score (fetched before BB summary so calibrated_bb is available)
+    struct DbScoreRow {
+        display_score: f32,
+        sort_score: f32,
+        ci_lower: f32,
+        ci_upper: f32,
+        confidence: f32,
+        source: RatingSource,
+        rmp_count: i32,
+        bb_count: i32,
+        calibrated_bb: Option<f32>,
+    }
+
     let instructor = sqlx::query_as!(
         InstructorRow,
         "SELECT id, slug, display_name, email, first_name, last_name FROM instructors WHERE slug = $1",
@@ -390,9 +427,8 @@ pub async fn get_public_instructor_by_slug(
     .await
     .context("failed to fetch instructor by slug")?;
 
-    let inst = match instructor {
-        Some(row) => row,
-        None => return Ok(None),
+    let Some(inst) = instructor else {
+        return Ok(None);
     };
 
     // Subjects
@@ -403,15 +439,6 @@ pub async fn get_public_instructor_by_slug(
     .fetch_all(pool)
     .await
     .context("failed to fetch instructor subjects")?;
-
-    // Best RMP profile (from materialized view)
-    struct RmpRow {
-        avg_rating: Option<f64>,
-        avg_difficulty: Option<f64>,
-        would_take_again_pct: Option<f64>,
-        num_ratings: Option<i32>,
-        legacy_id: Option<i32>,
-    }
 
     let rmp = sqlx::query_as!(
         RmpRow,
@@ -430,23 +457,15 @@ pub async fn get_public_instructor_by_slug(
     let rmp_summary = rmp.and_then(|r| {
         let legacy_id = r.legacy_id?;
         let (avg_rating, num_ratings) =
-            super::course_types::sanitize_rmp_ratings(r.avg_rating.map(|v| v as f32), r.num_ratings);
+            super::course_types::sanitize_rmp_ratings(r.avg_rating.map(narrow_rating), r.num_ratings);
         Some(super::course_types::RmpFull {
             avg_rating,
-            avg_difficulty: r.avg_difficulty.map(|v| v as f32),
-            would_take_again_pct: r.would_take_again_pct.map(|v| v as f32),
+            avg_difficulty: r.avg_difficulty.map(narrow_rating),
+            would_take_again_pct: r.would_take_again_pct.map(narrow_rating),
             num_ratings,
             legacy_id,
         })
     });
-
-    // BlueBook evaluations
-    struct BlueBookRow {
-        avg_instructor_rating: Option<f32>,
-        avg_course_rating: Option<f32>,
-        total_responses: Option<i64>,
-        eval_count: i64,
-    }
 
     let bb = sqlx::query_as!(
         BlueBookRow,
@@ -469,19 +488,6 @@ pub async fn get_public_instructor_by_slug(
     .fetch_optional(pool)
     .await
     .context("failed to fetch instructor bluebook")?;
-
-    // Precomputed composite score (fetched before BB summary so calibrated_bb is available)
-    struct DbScoreRow {
-        display_score: f32,
-        sort_score: f32,
-        ci_lower: f32,
-        ci_upper: f32,
-        confidence: f32,
-        source: RatingSource,
-        rmp_count: i32,
-        bb_count: i32,
-        calibrated_bb: Option<f32>,
-    }
 
     let score_row = sqlx::query_as!(
         DbScoreRow,
@@ -559,6 +565,8 @@ pub async fn get_public_instructor_by_slug(
 
 /// Get teaching history grouped by term for an instructor.
 async fn get_teaching_history(pool: &PgPool, instructor_id: i32) -> Result<Vec<TeachingHistoryTerm>> {
+    use crate::banner::models::terms::Term;
+
     struct Row {
         term_code: String,
         subject: String,
@@ -584,19 +592,11 @@ async fn get_teaching_history(pool: &PgPool, instructor_id: i32) -> Result<Vec<T
     .await
     .context("failed to fetch teaching history")?;
 
-    use crate::banner::models::terms::Term;
-
     let mut terms: Vec<TeachingHistoryTerm> = Vec::new();
     for row in rows {
         let parsed_term = row.term_code.parse::<Term>().ok();
-        let term_slug = parsed_term
-            .as_ref()
-            .map(|t| t.slug())
-            .unwrap_or_else(|| row.term_code.clone());
-        let term_description = parsed_term
-            .as_ref()
-            .map(|t| t.description())
-            .unwrap_or_else(|| row.term_code.clone());
+        let term_slug = parsed_term.map_or_else(|| row.term_code.clone(), Term::slug);
+        let term_description = parsed_term.map_or_else(|| row.term_code.clone(), Term::description);
 
         if let Some(last) = terms.last_mut()
             && last.term_slug == term_slug
@@ -684,7 +684,7 @@ pub struct InstructorSitemapEntry {
 
 /// List all instructor slugs with per-instructor lastmod timestamps.
 ///
-/// The lastmod is the most recent of: score computation, BlueBook link update,
+/// The lastmod is the most recent of: score computation, `BlueBook` link update,
 /// RMP profile sync, and course scrape time.
 pub async fn list_all_instructor_sitemap_entries(pool: &PgPool) -> Result<Vec<InstructorSitemapEntry>> {
     let rows = sqlx::query_as!(
@@ -734,6 +734,7 @@ pub enum IdentifierKind {
     EmailPrefix,
 }
 
+#[must_use]
 pub fn classify_identifier(s: &str) -> IdentifierKind {
     if let Ok(id) = s.parse::<i32>() {
         IdentifierKind::NumericId(id)
@@ -744,7 +745,7 @@ pub fn classify_identifier(s: &str) -> IdentifierKind {
     }
 }
 
-/// Resolve any identifier form to (instructor_id, canonical_slug).
+/// Resolve any identifier form to (`instructor_id`, `canonical_slug`).
 /// Returns None if not found or if the instructor has no slug yet.
 pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<Option<(i32, String)>> {
     struct Row {
@@ -797,7 +798,7 @@ pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<O
 /// When this instructor's composite score was last computed.
 ///
 /// The score is the most frequently changing part of a profile, so it stands in
-/// for profile freshness when building an ETag.
+/// for profile freshness when building an `ETag`.
 pub async fn get_score_computed_at(pool: &PgPool, instructor_id: i32) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     sqlx::query_scalar!(
         "SELECT computed_at FROM instructor_scores WHERE instructor_id = $1",

@@ -72,8 +72,10 @@ impl Course {
                 };
 
                 // Parse date range from MM/DD/YYYY strings
-                let date_range = match (parse_mm_dd_yyyy(&mt.start_date), parse_mm_dd_yyyy(&mt.end_date)) {
-                    (Some(start), Some(end)) => DateRange::new(start, end).unwrap_or_else(|err| {
+                let date_range = if let (Some(start), Some(end)) =
+                    (parse_mm_dd_yyyy(&mt.start_date), parse_mm_dd_yyyy(&mt.end_date))
+                {
+                    DateRange::new(start, end).unwrap_or_else(|err| {
                         warn!(
                             crn = %mt.course_reference_number,
                             start_date = %mt.start_date,
@@ -83,19 +85,18 @@ impl Course {
                         );
                         // Swap so the invariant holds
                         DateRange { start: end, end: start }
-                    }),
-                    _ => {
-                        warn!(
-                            crn = %mt.course_reference_number,
-                            start_date = %mt.start_date,
-                            end_date = %mt.end_date,
-                            "Failed to parse meeting date range, using epoch fallback"
-                        );
-                        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                        DateRange {
-                            start: epoch,
-                            end: epoch,
-                        }
+                    })
+                } else {
+                    warn!(
+                        crn = %mt.course_reference_number,
+                        start_date = %mt.start_date,
+                        end_date = %mt.end_date,
+                        "Failed to parse meeting date range, using epoch fallback"
+                    );
+                    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                    DateRange {
+                        start: epoch,
+                        end: epoch,
                     }
                 };
 
@@ -494,12 +495,12 @@ pub async fn batch_upsert_courses(courses: &[Course], db_pool: &PgPool) -> Resul
         }
     }
 
-    let audit_entries = if !audit_ids.is_empty() {
+    let audit_entries = if audit_ids.is_empty() {
+        Vec::new()
+    } else {
         fetch_audit_entries_by_ids(db_pool, &audit_ids)
             .await
             .unwrap_or_default()
-    } else {
-        Vec::new()
     };
 
     let duration = start.elapsed();
@@ -736,9 +737,9 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
 
 /// Lookup maps returned by [`upsert_instructors`] for resolving faculty to instructor IDs.
 struct InstructorLookup {
-    /// Lowercased email -> instructor_id (for faculty with email).
+    /// Lowercased email -> `instructor_id` (for faculty with email).
     by_email: HashMap<String, i32>,
-    /// Display name -> instructor_id (for faculty without email).
+    /// Display name -> `instructor_id` (for faculty without email).
     by_display_name: HashMap<String, i32>,
 }
 
@@ -793,7 +794,7 @@ async fn existing_emails_by_canonical(emails: &[String], conn: &mut PgConnection
 ///
 /// Two-phase upsert:
 ///   1. Instructors with email -> dedup by email (ON CONFLICT (email) WHERE email IS NOT NULL)
-///   2. Instructors without email -> dedup by display_name (ON CONFLICT (display_name) WHERE email IS NULL)
+///   2. Instructors without email -> dedup by `display_name` (ON CONFLICT (`display_name`) WHERE email IS NULL)
 async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Result<InstructorLookup> {
     // Phase 1: Collect instructors WITH email, deduped by lowercased email
     let mut seen_emails = HashSet::new();
@@ -902,7 +903,7 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
         let e_first_names = u_first_names;
         let e_last_names = u_last_names;
 
-        let email_refs: Vec<&str> = u_emails.iter().map(|s| s.as_str()).collect();
+        let email_refs: Vec<&str> = u_emails.iter().map(String::as_str).collect();
         let first_name_refs: Vec<Option<&str>> = e_first_names.iter().map(|s| s.as_deref()).collect();
         let last_name_refs: Vec<Option<&str>> = e_last_names.iter().map(|s| s.as_deref()).collect();
         let slugs: Vec<String> = e_display_names
@@ -1179,7 +1180,11 @@ async fn sync_course_meetings(
                     let begin_tr = TimeRange::from_hhmm(b, e);
                     match begin_tr {
                         Some(tr) => {
+                            // hour() is 0-23 and minute() is 0-59, so the minute-of-day
+                            // total never exceeds 1439 and always fits i16.
+                            #[allow(clippy::cast_possible_truncation)]
                             let b_min = (tr.start.hour() * 60 + tr.start.minute()) as i16;
+                            #[allow(clippy::cast_possible_truncation)]
                             let e_min = (tr.end.hour() * 60 + tr.end.minute()) as i16;
                             if e_min <= b_min {
                                 continue;
@@ -1193,13 +1198,11 @@ async fn sync_course_meetings(
             };
 
             // Parse date range
-            let start_date = match parse_mm_dd_yyyy(&mt.start_date) {
-                Some(d) => d,
-                None => continue,
+            let Some(start_date) = parse_mm_dd_yyyy(&mt.start_date) else {
+                continue;
             };
-            let end_date = match parse_mm_dd_yyyy(&mt.end_date) {
-                Some(d) => d,
-                None => continue,
+            let Some(end_date) = parse_mm_dd_yyyy(&mt.end_date) else {
+                continue;
             };
 
             course_ids.push(course_id);

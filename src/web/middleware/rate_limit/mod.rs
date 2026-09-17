@@ -174,32 +174,34 @@ fn quota(count: u32, period: Duration) -> Quota {
 
 impl RateLimitState {
     /// The internal bypass token value.
+    #[must_use]
     pub fn internal_token(&self) -> &str {
         &self.internal_token
     }
 
+    #[must_use]
     pub fn new(internal_token: String) -> Self {
         // Layer 1: global per-IP
         let global_burst = RateLimiter::keyed(quota(15, Duration::from_secs(5)));
-        let global_sustained = RateLimiter::keyed(quota(120, Duration::from_secs(60)));
+        let global_sustained = RateLimiter::keyed(quota(120, Duration::from_mins(1)));
 
         // Layer 2: route-group
-        let api_sustained = RateLimiter::keyed(quota(60, Duration::from_secs(60)));
-        let api_long = RateLimiter::keyed(quota(600, Duration::from_secs(30 * 60)));
-        let ssr_sustained = RateLimiter::keyed(quota(20, Duration::from_secs(60)));
-        let ssr_long = RateLimiter::keyed(quota(200, Duration::from_secs(30 * 60)));
-        let admin_sustained = RateLimiter::keyed(quota(30, Duration::from_secs(60)));
-        let admin_long = RateLimiter::keyed(quota(300, Duration::from_secs(30 * 60)));
+        let api_sustained = RateLimiter::keyed(quota(60, Duration::from_mins(1)));
+        let api_long = RateLimiter::keyed(quota(600, Duration::from_mins(30)));
+        let ssr_sustained = RateLimiter::keyed(quota(20, Duration::from_mins(1)));
+        let ssr_long = RateLimiter::keyed(quota(200, Duration::from_mins(30)));
+        let admin_sustained = RateLimiter::keyed(quota(30, Duration::from_mins(1)));
+        let admin_long = RateLimiter::keyed(quota(300, Duration::from_mins(30)));
 
         // Layer 3: endpoint-specific
         let search_burst = RateLimiter::keyed(quota(3, Duration::from_secs(5)));
-        let search_sustained = RateLimiter::keyed(quota(20, Duration::from_secs(60)));
-        let search_long = RateLimiter::keyed(quota(150, Duration::from_secs(30 * 60)));
+        let search_sustained = RateLimiter::keyed(quota(20, Duration::from_mins(1)));
+        let search_long = RateLimiter::keyed(quota(150, Duration::from_mins(30)));
         let suggest_burst = RateLimiter::keyed(quota(5, Duration::from_secs(5)));
-        let suggest_sustained = RateLimiter::keyed(quota(30, Duration::from_secs(60)));
+        let suggest_sustained = RateLimiter::keyed(quota(30, Duration::from_mins(1)));
         let timeline_burst = RateLimiter::keyed(quota(2, Duration::from_secs(5)));
-        let timeline_sustained = RateLimiter::keyed(quota(10, Duration::from_secs(60)));
-        let timeline_long = RateLimiter::keyed(quota(60, Duration::from_secs(30 * 60)));
+        let timeline_sustained = RateLimiter::keyed(quota(10, Duration::from_mins(1)));
+        let timeline_long = RateLimiter::keyed(quota(60, Duration::from_mins(30)));
 
         Self {
             global_burst,
@@ -326,7 +328,7 @@ impl RateLimitState {
         }
 
         if rejected {
-            let secs = max_wait.map(|d| d.as_secs().max(1)).unwrap_or(1);
+            let secs = max_wait.map_or(1, |d| d.as_secs().max(1));
             Err(secs)
         } else {
             Ok(())
@@ -349,6 +351,7 @@ pub struct RateLimitLayer {
 }
 
 impl RateLimitLayer {
+    #[must_use]
     pub fn new(state: SharedRateLimitState) -> Self {
         Self { state }
     }
@@ -402,8 +405,8 @@ where
         // TODO: auth tier detection from session cookie -- for now, anonymous.
         let tier = AuthTier::Anonymous;
 
-        match client_ip {
-            Some(ip) => match self.state.check(ip, &path, tier) {
+        if let Some(ip) = client_ip {
+            match self.state.check(ip, &path, tier) {
                 Ok(()) => {
                     let future = self.inner.call(req);
                     Box::pin(future)
@@ -418,12 +421,11 @@ where
                     let resp = rate_limit_response(retry_after).map(Into::into);
                     Box::pin(async move { Ok(resp) })
                 }
-            },
-            None => {
-                // Cannot determine IP -- allow but log.
-                let future = self.inner.call(req);
-                Box::pin(future)
             }
+        } else {
+            // Cannot determine IP -- allow but log.
+            let future = self.inner.call(req);
+            Box::pin(future)
         }
     }
 }

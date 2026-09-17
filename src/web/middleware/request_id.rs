@@ -54,8 +54,7 @@ where
             .headers()
             .get(RAILWAY_REQUEST_ID)
             .and_then(|v| v.to_str().ok())
-            .map(String::from)
-            .unwrap_or_else(|| ulid::Ulid::new().to_string());
+            .map_or_else(|| ulid::Ulid::new().to_string(), String::from);
 
         // Inject the resolved ID into the request so downstream handlers
         // (including the SSR proxy) can read and propagate it.
@@ -95,6 +94,8 @@ where
             async move {
                 let mut result = future.await;
 
+                // A single request cannot run long enough to overflow a u64 of milliseconds.
+                #[allow(clippy::cast_possible_truncation)]
                 let duration_ms = start.elapsed().as_millis() as u64;
 
                 match &result {

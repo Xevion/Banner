@@ -181,16 +181,12 @@ async fn handle_client_message(
     registry: &mut SubscriptionRegistry,
     text: &str,
 ) -> ClientMessageResult {
-    let parsed = match serde_json::from_str::<StreamClientMessage>(text) {
-        Ok(msg) => msg,
-        Err(_) => {
-            metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => "invalid", "outcome" => "received")
-                .increment(1);
-            let sent = sink
-                .send_error(None, StreamErrorCode::InvalidMessage, "Invalid message")
-                .await;
-            return ClientMessageResult::from_error_send(sent);
-        }
+    let Ok(parsed) = serde_json::from_str::<StreamClientMessage>(text) else {
+        metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => "invalid", "outcome" => "received").increment(1);
+        let sent = sink
+            .send_error(None, StreamErrorCode::InvalidMessage, "Invalid message")
+            .await;
+        return ClientMessageResult::from_error_send(sent);
     };
     metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => parsed.kind_label(), "outcome" => "received")
         .increment(1);
@@ -385,11 +381,14 @@ async fn send_snapshot(
             {
                 Ok(raw) => {
                     let success_rate = if raw.total_scrapes > 0 {
-                        Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                        // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
+                        #[allow(clippy::cast_precision_loss)]
+                        let rate = raw.successful_scrapes as f64 / raw.total_scrapes as f64;
+                        Some(rate)
                     } else {
                         None
                     };
-                    let stats = ScraperStatsResponse {
+                    let response_stats = ScraperStatsResponse {
                         period: filter.period.clone(),
                         term: filter.term.clone(),
                         total_scrapes: raw.total_scrapes,
@@ -405,7 +404,7 @@ async fn send_snapshot(
                     };
                     sink.send(&StreamServerMessage::Snapshot {
                         subscription_id: subscription_id.to_string(),
-                        snapshot: StreamSnapshot::ScraperStats { stats },
+                        snapshot: StreamSnapshot::ScraperStats { stats: response_stats },
                     })
                     .await
                 }
@@ -428,8 +427,8 @@ async fn send_snapshot(
             )
             .await
             {
-                Ok((raw_points, period, bucket)) => {
-                    let points: Vec<TimeseriesPoint> = raw_points
+                Ok((timeseries_rows, period, bucket)) => {
+                    let points: Vec<TimeseriesPoint> = timeseries_rows
                         .into_iter()
                         .map(|p| TimeseriesPoint {
                             timestamp: p.timestamp,
@@ -629,11 +628,14 @@ async fn send_computed_snapshot(
             {
                 Ok(raw) => {
                     let success_rate = if raw.total_scrapes > 0 {
-                        Some(raw.successful_scrapes as f64 / raw.total_scrapes as f64)
+                        // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
+                        #[allow(clippy::cast_precision_loss)]
+                        let rate = raw.successful_scrapes as f64 / raw.total_scrapes as f64;
+                        Some(rate)
                     } else {
                         None
                     };
-                    let stats = ScraperStatsResponse {
+                    let response_stats = ScraperStatsResponse {
                         period: filter.period.clone(),
                         term: filter.term.clone(),
                         total_scrapes: raw.total_scrapes,
@@ -649,7 +651,7 @@ async fn send_computed_snapshot(
                     };
                     sink.send(&StreamServerMessage::Snapshot {
                         subscription_id: subscription_id.to_string(),
-                        snapshot: StreamSnapshot::ScraperStats { stats },
+                        snapshot: StreamSnapshot::ScraperStats { stats: response_stats },
                     })
                     .await
                 }
@@ -672,8 +674,8 @@ async fn send_computed_snapshot(
             )
             .await
             {
-                Ok((raw_points, period, bucket)) => {
-                    let points: Vec<TimeseriesPoint> = raw_points
+                Ok((timeseries_rows, period, bucket)) => {
+                    let points: Vec<TimeseriesPoint> = timeseries_rows
                         .into_iter()
                         .map(|p| TimeseriesPoint {
                             timestamp: p.timestamp,
@@ -777,6 +779,15 @@ mod tests {
     fn test_connection_guard_drop_decrements_connection_gauge() {
         use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 
+        fn gauge_value(snapshot: metrics_util::debugging::Snapshot) -> Option<f64> {
+            snapshot.into_vec().into_iter().find_map(|(ck, _, _, value)| {
+                match (ck.key().name() == WS_CONNECTIONS, value) {
+                    (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
+                    _ => None,
+                }
+            })
+        }
+
         let recorder = DebuggingRecorder::new();
         let snapshotter = recorder.snapshotter();
         metrics::with_local_recorder(&recorder, || {
@@ -787,14 +798,5 @@ mod tests {
         // Snapshotting resets gauges to 0 on read, so take a single reading after the
         // increment and decrement have both landed.
         assert_eq!(gauge_value(snapshotter.snapshot()), Some(0.0));
-
-        fn gauge_value(snapshot: metrics_util::debugging::Snapshot) -> Option<f64> {
-            snapshot.into_vec().into_iter().find_map(|(ck, _, _, value)| {
-                match (ck.key().name() == WS_CONNECTIONS, value) {
-                    (true, DebugValue::Gauge(g)) => Some(g.into_inner()),
-                    _ => None,
-                }
-            })
-        }
     }
 }

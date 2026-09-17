@@ -22,17 +22,17 @@ pub struct MatchingStats {
     pub deleted_auto_links: usize,
     /// Candidates inserted in this run.
     pub candidates_created: usize,
-    /// Instructors that were auto-linked (score >= AUTO_ACCEPT_THRESHOLD).
+    /// Instructors that were auto-linked (score >= `AUTO_ACCEPT_THRESHOLD`).
     pub auto_matched: usize,
     /// Instructors with candidates below auto-accept threshold (status set to 'pending').
     pub pending_review: usize,
-    /// Instructors skipped because their display_name couldn't be parsed.
+    /// Instructors skipped because their `display_name` couldn't be parsed.
     pub skipped_unparseable: usize,
     /// Instructors skipped because no RMP name keys matched.
     pub skipped_no_candidates: usize,
 }
 
-/// Candidate row tuple: (instructor_id, rmp_legacy_id, score, breakdown, review_subjects, review_years).
+/// Candidate row tuple: (`instructor_id`, `rmp_legacy_id`, score, breakdown, `review_subjects`, `review_years`).
 type CandidateRow = (i32, i32, f32, sqlx::types::Json<ScoreBreakdown>, Vec<String>, Vec<i16>);
 
 /// Raw row fetched from `rmp_professors` for the matching pipeline.
@@ -278,17 +278,23 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 /// Drop every algorithm-generated candidate and link, and reset the statuses
 /// they set. Only explicit human decisions survive.
 async fn clear_previous_run(conn: &mut PgConnection) -> Result<ClearedState> {
-    let candidates = sqlx::query!("DELETE FROM rmp_match_candidates WHERE status != 'rejected'")
-        .execute(&mut *conn)
-        .await
-        .context("failed to delete non-rejected match candidates")?
-        .rows_affected() as usize;
+    let candidates = usize::try_from(
+        sqlx::query!("DELETE FROM rmp_match_candidates WHERE status != 'rejected'")
+            .execute(&mut *conn)
+            .await
+            .context("failed to delete non-rejected match candidates")?
+            .rows_affected(),
+    )
+    .context("deleted candidate count exceeds usize")?;
 
-    let links = sqlx::query!("DELETE FROM instructor_rmp_links WHERE source != 'manual'")
-        .execute(&mut *conn)
-        .await
-        .context("failed to delete non-manual rmp links")?
-        .rows_affected() as usize;
+    let links = usize::try_from(
+        sqlx::query!("DELETE FROM instructor_rmp_links WHERE source != 'manual'")
+            .execute(&mut *conn)
+            .await
+            .context("failed to delete non-manual rmp links")?
+            .rows_affected(),
+    )
+    .context("deleted link count exceeds usize")?;
 
     Ok(ClearedState { candidates, links })
 }
@@ -314,10 +320,13 @@ async fn load_instructor_subjects(
 
     let mut subject_map: HashMap<i32, Vec<(String, u32)>> = HashMap::new();
     for row in rows {
+        // A per-instructor-subject course count stays far below u32::MAX.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let count = row.count.max(0) as u32;
         subject_map
             .entry(row.instructor_id)
             .or_default()
-            .push((row.subject, row.count.max(0) as u32));
+            .push((row.subject, count));
     }
 
     Ok(subject_map)
@@ -394,42 +403,39 @@ async fn build_name_index(conn: &mut PgConnection, reviews: &ReviewData) -> Resu
     let mut name_index: NameIndex = HashMap::new();
     let mut rmp_parse_failures = 0usize;
     for row in &prof_rows {
-        match parse_rmp_name(&row.first_name, &row.last_name) {
-            Some(parts) => {
-                // Prefer subjects from actual reviews; fall back to course_codes from RMP detail.
-                let review_subjects = if let Some(subjs) = reviews.subjects.get(&row.legacy_id) {
-                    subjs.iter().map(|(k, v)| (k.clone(), *v)).collect()
-                } else {
-                    extract_review_subjects(row.course_codes.as_deref().map(|c| c.as_slice()))
-                };
-                let keys = matching_keys(&parts);
-                let norm_name = (
-                    crate::data::names::normalize_for_matching(&parts.last),
-                    crate::data::names::normalize_for_matching(&parts.first),
-                );
-                for key in keys {
-                    name_index
-                        .entry((key.last, key.first))
-                        .or_default()
-                        .push(RmpProfForMatching {
-                            legacy_id: row.legacy_id,
-                            department: row.department.clone(),
-                            num_ratings: row.num_ratings,
-                            review_subjects: review_subjects.clone(),
-                            key_origin: key.origin,
-                            norm_name: norm_name.clone(),
-                        });
-                }
+        if let Some(parts) = parse_rmp_name(&row.first_name, &row.last_name) {
+            // Prefer subjects from actual reviews; fall back to course_codes from RMP detail.
+            let review_subjects = if let Some(subjs) = reviews.subjects.get(&row.legacy_id) {
+                subjs.iter().map(|(k, v)| (k.clone(), *v)).collect()
+            } else {
+                extract_review_subjects(row.course_codes.as_deref().map(Vec::as_slice))
+            };
+            let keys = matching_keys(&parts);
+            let norm_name = (
+                crate::data::names::normalize_for_matching(&parts.last),
+                crate::data::names::normalize_for_matching(&parts.first),
+            );
+            for key in keys {
+                name_index
+                    .entry((key.last, key.first))
+                    .or_default()
+                    .push(RmpProfForMatching {
+                        legacy_id: row.legacy_id,
+                        department: row.department.clone(),
+                        num_ratings: row.num_ratings,
+                        review_subjects: review_subjects.clone(),
+                        key_origin: key.origin,
+                        norm_name: norm_name.clone(),
+                    });
             }
-            None => {
-                rmp_parse_failures += 1;
-                debug!(
-                    legacy_id = row.legacy_id,
-                    first_name = row.first_name,
-                    last_name = row.last_name,
-                    "Unparseable RMP professor name, skipping"
-                );
-            }
+        } else {
+            rmp_parse_failures += 1;
+            debug!(
+                legacy_id = row.legacy_id,
+                first_name = row.first_name,
+                last_name = row.last_name,
+                "Unparseable RMP professor name, skipping"
+            );
         }
     }
 
@@ -532,7 +538,7 @@ fn score_instructor(
             .get(&prof.legacy_id)
             .map(|s| {
                 let mut v: Vec<i16> = s.iter().copied().collect();
-                v.sort();
+                v.sort_unstable();
                 v
             })
             .unwrap_or_default();

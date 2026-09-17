@@ -37,6 +37,7 @@ pub struct MatchScore {
 impl MatchScore {
     /// Whether this pair may be linked without human review. Requires confirmed
     /// subject evidence, so a name-only score cannot auto-link unverified.
+    #[must_use]
     pub fn auto_eligible(&self, candidate_count: usize) -> bool {
         // Never link when both subject signals disagree. Either one alone is
         // noisy: RMP departments do not always map onto a Banner subject.
@@ -85,7 +86,7 @@ const NAME_NICKNAME: f32 = 0.7;
 const NAME_NICKNAME_CORROBORATED: f32 = 0.95;
 
 const WEIGHT_NAME: f32 = 0.50;
-/// Weight for merged subject evidence (max of department and review_courses).
+/// Weight for merged subject evidence (max of department and `review_courses`).
 const WEIGHT_SUBJECT: f32 = 0.30;
 const WEIGHT_UNIQUENESS: f32 = 0.15;
 const WEIGHT_VOLUME: f32 = 0.05;
@@ -169,6 +170,9 @@ fn matches_known_abbreviation(subject: &str, department: &str) -> bool {
 /// different lenses. They are merged via `max()` into a single subject evidence
 /// score so that whichever signal is stronger dominates - review data overrides
 /// a noisy department string, and department helps when reviews are absent.
+#[must_use]
+// Course, review, and rating counts stay far below 2^24, so the f32 casts below are exact.
+#[allow(clippy::cast_precision_loss)]
 pub fn compute_match_score(
     instructor_subjects: &[(String, u32)],
     rmp_department: Option<&str>,
@@ -286,6 +290,8 @@ pub(super) fn extract_review_subjects(course_codes: Option<&[RmpCourseCode]>) ->
 }
 
 #[cfg(test)]
+// Scores are built from quantized constants, so exact comparisons are intentional.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

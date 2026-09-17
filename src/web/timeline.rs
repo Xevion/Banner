@@ -221,5 +221,8 @@ pub(crate) async fn timeline(
 
 /// Convert a `NaiveTime` to minutes since midnight.
 fn time_to_minutes(t: NaiveTime) -> u16 {
-    (t.hour() * 60 + t.minute()) as u16
+    // hour() < 24 and minute() < 60, so the result is always <= 1439.
+    #[allow(clippy::cast_possible_truncation)]
+    let minutes = (t.hour() * 60 + t.minute()) as u16;
+    minutes
 }

@@ -17,7 +17,7 @@ struct CachedSession {
     cached_at: Instant,
 }
 
-/// In-memory session cache backed by PostgreSQL.
+/// In-memory session cache backed by `PostgreSQL`.
 ///
 /// Provides fast session resolution without a DB round-trip on every request.
 /// Cache entries expire after a configurable TTL (default 5 minutes).
@@ -30,11 +30,12 @@ pub struct SessionCache {
 
 impl SessionCache {
     /// Create a new session cache with a 5-minute default TTL.
+    #[must_use]
     pub fn new(db_pool: PgPool) -> Self {
         Self {
             cache: Arc::new(DashMap::new()),
             db_pool,
-            cache_ttl: Duration::from_secs(5 * 60),
+            cache_ttl: Duration::from_mins(5),
         }
     }
 
@@ -129,6 +130,9 @@ impl SessionCache {
     /// Delete expired sessions from the database and sweep the in-memory cache.
     ///
     /// Returns the number of sessions deleted from the database.
+    ///
+    /// # Errors
+    /// Internal error if the database cleanup query fails.
     pub async fn cleanup_expired(&self) -> anyhow::Result<u64> {
         let deleted = crate::data::sessions::cleanup_expired(&self.db_pool).await?;
 
@@ -143,7 +147,7 @@ impl SessionCache {
 struct OAuthStateEntry {
     created_at: Instant,
     /// The browser origin that initiated the login flow, so the callback
-    /// can reconstruct the exact redirect_uri Discord expects.
+    /// can reconstruct the exact `redirect_uri` Discord expects.
     origin: String,
 }
 
@@ -165,18 +169,25 @@ impl Default for OAuthStateStore {
 
 impl OAuthStateStore {
     /// Create a new store with a 10-minute TTL.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             states: Arc::new(DashMap::new()),
-            ttl: Duration::from_secs(10 * 60),
+            ttl: Duration::from_mins(10),
         }
     }
 
     /// Generate a random 16-byte hex CSRF token, store it with the given
     /// origin, and return the token.
+    #[must_use]
     pub fn generate(&self, origin: String) -> String {
+        use std::fmt::Write;
+
         let bytes: [u8; 16] = rand::rng().random();
-        let token: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        let token = bytes.iter().fold(String::with_capacity(32), |mut acc, b| {
+            let _ = write!(acc, "{b:02x}");
+            acc
+        });
         self.states.insert(
             token.clone(),
             OAuthStateEntry {
@@ -189,6 +200,7 @@ impl OAuthStateStore {
 
     /// Validate and consume a CSRF token. Returns the stored origin if the
     /// token was present and not expired.
+    #[must_use]
     pub fn validate(&self, state: &str) -> Option<String> {
         let (_, entry) = self.states.remove(state)?;
         if entry.created_at.elapsed() < self.ttl {

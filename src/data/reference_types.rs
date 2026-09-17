@@ -190,6 +190,7 @@ impl InstructionalMethod {
     }
 
     /// Convert to raw Banner code.
+    #[must_use]
     pub fn to_code(self) -> &'static str {
         match self {
             Self::InPerson => "FF",
@@ -203,7 +204,7 @@ impl InstructionalMethod {
         }
     }
 
-    /// Parse from dot-notation filter string: "InPerson", "Online.Async", etc.
+    /// Parse from dot-notation filter string: "`InPerson`", "Online.Async", etc.
     pub fn from_filter_str(s: &str) -> Result<Self, ParseError> {
         match s {
             "InPerson" => Ok(Self::InPerson),
@@ -222,6 +223,7 @@ impl InstructionalMethod {
     }
 
     /// Serialize to dot-notation filter string.
+    #[must_use]
     pub fn to_filter_str(self) -> &'static str {
         match self {
             Self::InPerson => "InPerson",

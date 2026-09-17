@@ -2,6 +2,6 @@
 import type { BluebookLinkStatus } from "./BluebookLinkStatus";
 
 /**
- * A BlueBook link row in the paginated list view.
+ * A `BlueBook` link row in the paginated list view.
  */
 export type BluebookLinkListItem = { id: number, instructorName: string, subject: string | null, status: BluebookLinkStatus, confidence: number | null, instructorId: number | null, instructorDisplayName: string | null, evalCount: number, };

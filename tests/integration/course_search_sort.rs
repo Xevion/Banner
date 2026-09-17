@@ -17,7 +17,7 @@ const TERM: &str = "202620";
 
 /// Return a copy of `course` with its section sequence number replaced.
 fn with_sequence(mut course: Course, sequence: &str) -> Course {
-    course.sequence_number = sequence.to_owned();
+    sequence.clone_into(&mut course.sequence_number);
     course
 }
 
@@ -26,7 +26,7 @@ fn with_sequence(mut course: Course, sequence: &str) -> Course {
 /// | CRN   | Code           | Meetings                        | begin | end  | dur | weekly | mask | seats |
 /// |-------|----------------|---------------------------------|-------|------|-----|--------|------|-------|
 /// | 30001 | CS 1100 001    | MWF 09:00-09:50                 | 540   | 590  | 50  | 50     | 21   | 5     |
-/// | 30002 | CS 2200 001    | TTh 08:00-09:15                 | 480   | 555  | 75  | 75     | 10   | 20    |
+/// | 30002 | CS 2200 001    | `TTh` 08:00-09:15                 | 480   | 555  | 75  | 75     | 10   | 20    |
 /// | 30003 | MATH 1300 001  | M 13:00-14:00, W 10:00-11:30    | 600   | 690  | 90  | 150    | 5    | 28    |
 /// | 30004 | ART 2100 001   | F 16:00-18:00                   | 960   | 1080 | 120 | 120    | 16   | 15    |
 /// | 30005 | ENG 1010 001   | none                            | NULL  | NULL | -   | -      | NULL | 25    |

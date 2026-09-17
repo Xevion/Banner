@@ -64,7 +64,7 @@ impl BotService {
                     Box::pin(async move {
                         let content = match ctx {
                             poise::Context::Application(_) => ctx.invocation_string(),
-                            poise::Context::Prefix(prefix) => prefix.msg.content.to_string(),
+                            poise::Context::Prefix(prefix) => prefix.msg.content.clone(),
                         };
                         let channel_name = ctx.channel_id().name(ctx.http()).await.unwrap_or("unknown".to_string());
 
@@ -110,7 +110,7 @@ impl BotService {
                         username = %ready.user.name,
                         user_id = %ready.user.id,
                         guilds = ready.guilds.len(),
-                        shard_count = ready.shard.map(|s| s.total).unwrap_or(1),
+                        shard_count = ready.shard.map_or(1, |s| s.total),
                         commands = command_count,
                         "Discord bot connected and ready"
                     );
@@ -166,7 +166,7 @@ impl BotService {
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let max_interval = Duration::from_secs(300); // 5 minutes
+            let max_interval = Duration::from_mins(5);
             let base_interval = Duration::from_secs(30);
             let mut interval = tokio::time::interval(base_interval);
             let mut previous_course_count: Option<i64> = None;
@@ -193,7 +193,18 @@ impl BotService {
                         // Increase or reset the interval
                         interval = tokio::time::interval(
                             // Avoid logging the first 'change'
-                            if course_count != previous_course_count.unwrap_or(0) {
+                            if course_count == previous_course_count.unwrap_or(0) {
+                                // Increase interval by 10% (up to maximum)
+                                let new_interval = interval.period().mul_f32(1.1).min(max_interval);
+                                trace!(
+                                    current_course_count = course_count,
+                                    last_interval = interval.period().as_secs(),
+                                    new_interval = new_interval.as_secs(),
+                                    "Course count unchanged, increasing interval"
+                                );
+
+                                new_interval
+                            } else {
                                 if previous_course_count.is_some() {
                                     debug!(
                                         new_course_count = course_count,
@@ -207,17 +218,6 @@ impl BotService {
 
                                 // Reset to base interval
                                 base_interval
-                            } else {
-                                // Increase interval by 10% (up to maximum)
-                                let new_interval = interval.period().mul_f32(1.1).min(max_interval);
-                                trace!(
-                                    current_course_count = course_count,
-                                    last_interval = interval.period().as_secs(),
-                                    new_interval = new_interval.as_secs(),
-                                    "Course count unchanged, increasing interval"
-                                );
-
-                                new_interval
                             },
                         );
 

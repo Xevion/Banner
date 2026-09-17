@@ -1,4 +1,4 @@
-//! RateMyProfessors GraphQL client for bulk professor data sync
+//! `RateMyProfessors` GraphQL client for bulk professor data sync
 //! and per-instructor review scraping.
 
 use anyhow::Result;
@@ -8,7 +8,7 @@ use tracing::{info, trace};
 
 use crate::data::unsigned::Count;
 
-/// UTSA's school ID on RateMyProfessors (base64 of "School-1516").
+/// UTSA's school ID on `RateMyProfessors` (base64 of "School-1516").
 const UTSA_SCHOOL_ID: &str = "U2Nob29sLTE1MTY=";
 
 /// Basic auth header value (base64 of "test:test").
@@ -33,15 +33,21 @@ fn parse_review_date(raw: &str) -> Option<DateTime<Utc>> {
         .map(|parsed| parsed.with_timezone(&Utc))
 }
 
+/// Narrow an RMP rating or percentage value (0..=100 scale) to `f32`; precision loss is intentional.
+#[allow(clippy::cast_possible_truncation)]
+fn narrow_rating(v: f64) -> f32 {
+    v as f32
+}
+
 /// Read a tally, clamping into range rather than failing the whole fetch.
 ///
 /// Negative means a retracted vote that was never counted, so none were cast.
 fn clamped_count(value: &serde_json::Value) -> Count {
-    let raw = value.as_i64().unwrap_or(0);
-    Count::new(raw.clamp(0, i64::from(u32::MAX)) as u32)
+    let raw = value.as_i64().unwrap_or(0).clamp(0, i64::from(u32::MAX));
+    Count::new(u32::try_from(raw).unwrap_or(u32::MAX))
 }
 
-/// A professor record from RateMyProfessors.
+/// A professor record from `RateMyProfessors`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RmpProfessor {
     pub legacy_id: i32,
@@ -75,7 +81,7 @@ pub struct RmpCourseCode {
     pub course_count: Count,
 }
 
-/// A single review from RateMyProfessors.
+/// A single review from `RateMyProfessors`.
 #[derive(Debug, Clone)]
 pub struct RmpReview {
     pub comment: Option<String>,
@@ -99,7 +105,7 @@ pub struct RmpReview {
 /// Page size for review pagination.
 const REVIEW_PAGE_SIZE: u32 = 20;
 
-/// Client for fetching professor data from RateMyProfessors.
+/// Client for fetching professor data from `RateMyProfessors`.
 pub struct RmpClient {
     http: reqwest::Client,
 }
@@ -111,6 +117,7 @@ impl Default for RmpClient {
 }
 
 impl RmpClient {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             http: reqwest::Client::new(),
@@ -182,22 +189,25 @@ impl RmpClient {
                 let node = &edge["node"];
                 let wta = node["wouldTakeAgainPercent"]
                     .as_f64()
-                    .map(|v| v as f32)
+                    .map(narrow_rating)
                     .filter(|&v| v >= 0.0);
 
                 all.push(RmpProfessor {
-                    legacy_id: node["legacyId"]
-                        .as_i64()
-                        .ok_or_else(|| anyhow::anyhow!("Missing legacyId"))? as i32,
+                    legacy_id: i32::try_from(
+                        node["legacyId"]
+                            .as_i64()
+                            .ok_or_else(|| anyhow::anyhow!("Missing legacyId"))?,
+                    )
+                    .map_err(|_| anyhow::anyhow!("legacyId out of range for i32"))?,
                     graphql_id: node["id"]
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("Missing id"))?
                         .to_string(),
                     first_name: node["firstName"].as_str().unwrap_or_default().to_string(),
                     last_name: node["lastName"].as_str().unwrap_or_default().to_string(),
-                    department: node["department"].as_str().map(|s| s.to_string()),
-                    avg_rating: node["avgRating"].as_f64().map(|v| v as f32),
-                    avg_difficulty: node["avgDifficulty"].as_f64().map(|v| v as f32),
+                    department: node["department"].as_str().map(ToString::to_string),
+                    avg_rating: node["avgRating"].as_f64().map(narrow_rating),
+                    avg_difficulty: node["avgDifficulty"].as_f64().map(narrow_rating),
                     num_ratings: clamped_count(&node["numRatings"]),
                     would_take_again_pct: wta,
                 });
@@ -210,7 +220,7 @@ impl RmpClient {
                 break;
             }
 
-            cursor = page_info["endCursor"].as_str().map(|s| s.to_string());
+            cursor = page_info["endCursor"].as_str().map(ToString::to_string);
 
             tracing::trace!(fetched = all.len(), "RMP pagination: fetching next page");
         }
@@ -245,7 +255,7 @@ impl RmpClient {
 
     /// Fetch extended profile data for a single professor.
     pub async fn fetch_professor_detail(&self, graphql_id: &str) -> Result<RmpProfessorDetail> {
-        let query = r#"
+        let query = r"
             query TeacherRatingsPageQuery($id: ID!) {
               node(id: $id) {
                 ... on Teacher {
@@ -255,7 +265,7 @@ impl RmpClient {
                 }
               }
             }
-        "#;
+        ";
 
         let json = self
             .graphql_request(query, serde_json::json!({ "id": graphql_id }))
@@ -276,9 +286,12 @@ impl RmpClient {
             .collect();
 
         Ok(RmpProfessorDetail {
-            legacy_id: node["legacyId"]
-                .as_i64()
-                .ok_or_else(|| anyhow::anyhow!("Missing legacyId in professor detail"))? as i32,
+            legacy_id: i32::try_from(
+                node["legacyId"]
+                    .as_i64()
+                    .ok_or_else(|| anyhow::anyhow!("Missing legacyId in professor detail"))?,
+            )
+            .map_err(|_| anyhow::anyhow!("legacyId out of range for i32"))?,
             ratings_r1: dist["r1"].as_i64().and_then(|v| Count::try_from(v).ok()),
             ratings_r2: dist["r2"].as_i64().and_then(|v| Count::try_from(v).ok()),
             ratings_r3: dist["r3"].as_i64().and_then(|v| Count::try_from(v).ok()),
@@ -290,7 +303,7 @@ impl RmpClient {
 
     /// Fetch all reviews for a professor, paginating through all pages.
     pub async fn fetch_professor_reviews(&self, graphql_id: &str) -> Result<Vec<RmpReview>> {
-        let query = r#"
+        let query = r"
             query RatingsListQuery($id: ID!, $count: Int!, $cursor: String) {
               node(id: $id) {
                 ... on Teacher {
@@ -309,7 +322,7 @@ impl RmpClient {
                 }
               }
             }
-        "#;
+        ";
 
         let mut all = Vec::new();
         let mut cursor: Option<String> = None;
@@ -332,25 +345,30 @@ impl RmpClient {
                 let node = &edge["node"];
                 let tags: Vec<String> = node["ratingTags"]
                     .as_str()
-                    .map(|s| s.split("--").filter(|t| !t.is_empty()).map(|t| t.to_string()).collect())
+                    .map(|s| {
+                        s.split("--")
+                            .filter(|t| !t.is_empty())
+                            .map(ToString::to_string)
+                            .collect()
+                    })
                     .unwrap_or_default();
 
                 let posted_at = node["date"].as_str().and_then(parse_review_date);
 
-                let wta = node["wouldTakeAgain"].as_i64().map(|v| v as i16);
+                let wta = node["wouldTakeAgain"].as_i64().and_then(|v| i16::try_from(v).ok());
 
                 all.push(RmpReview {
-                    comment: node["comment"].as_str().map(|s| s.to_string()),
-                    class: node["class"].as_str().map(|s| s.to_string()),
-                    grade: node["grade"].as_str().map(|s| s.to_string()),
+                    comment: node["comment"].as_str().map(ToString::to_string),
+                    class: node["class"].as_str().map(ToString::to_string),
+                    grade: node["grade"].as_str().map(ToString::to_string),
                     rating_tags: tags,
-                    helpful_rating: node["helpfulRating"].as_f64().map(|v| v as f32),
-                    clarity_rating: node["clarityRating"].as_f64().map(|v| v as f32),
-                    difficulty_rating: node["difficultyRating"].as_f64().map(|v| v as f32),
+                    helpful_rating: node["helpfulRating"].as_f64().map(narrow_rating),
+                    clarity_rating: node["clarityRating"].as_f64().map(narrow_rating),
+                    difficulty_rating: node["difficultyRating"].as_f64().map(narrow_rating),
                     would_take_again: wta,
                     is_for_credit: node["isForCredit"].as_bool(),
                     is_for_online_class: node["isForOnlineClass"].as_bool(),
-                    attendance_mandatory: node["attendanceMandatory"].as_str().map(|s| s.to_string()),
+                    attendance_mandatory: node["attendanceMandatory"].as_str().map(ToString::to_string),
                     flag_status: node["flagStatus"].as_str().unwrap_or("visible").to_string(),
                     textbook_use: node["textbookUse"].as_i64().and_then(|v| Count::try_from(v).ok()),
                     thumbs_up_total: clamped_count(&node["thumbsUpTotal"]),
@@ -366,7 +384,7 @@ impl RmpClient {
                 break;
             }
 
-            cursor = page_info["endCursor"].as_str().map(|s| s.to_string());
+            cursor = page_info["endCursor"].as_str().map(ToString::to_string);
             trace!(fetched = all.len(), "RMP reviews pagination: fetching next page");
         }
 

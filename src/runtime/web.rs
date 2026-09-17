@@ -17,6 +17,7 @@ pub struct WebService {
 }
 
 impl WebService {
+    #[must_use]
     pub fn new(port: u16, app_state: AppState, auth_config: AuthConfig) -> Self {
         Self {
             port,
@@ -52,7 +53,7 @@ impl WebService {
     /// Periodically refreshes the reference cache from the database.
     async fn reference_cache_refresh_loop(state: AppState, mut shutdown_rx: broadcast::Receiver<()>) {
         use std::time::Duration;
-        let mut ticker = tokio::time::interval(Duration::from_secs(30 * 60));
+        let mut ticker = tokio::time::interval(Duration::from_mins(30));
         ticker.tick().await; // skip immediate first tick
 
         loop {
@@ -79,7 +80,7 @@ impl WebService {
     async fn session_cleanup_loop(state: AppState, mut shutdown_rx: broadcast::Receiver<()>) {
         use std::time::Duration;
         // Run every hour
-        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        let mut interval = tokio::time::interval(Duration::from_hours(1));
 
         loop {
             tokio::select! {

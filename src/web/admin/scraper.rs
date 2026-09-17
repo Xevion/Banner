@@ -60,6 +60,11 @@ pub struct ScraperStatsResponse {
     pub locked_jobs: i64,
 }
 
+/// `GET /api/admin/scraper/stats` -- Aggregate scrape stats for a period.
+///
+/// # Errors
+/// `BadRequest` if `period` is not a recognized value; internal error if the
+/// stats query fails.
 #[instrument(skip_all, fields(period = %params.period))]
 pub async fn scraper_stats(
     _admin: AdminUser,
@@ -68,7 +73,7 @@ pub async fn scraper_stats(
 ) -> Result<Json<ScraperStatsResponse>, ApiError> {
     let start = Instant::now();
 
-    let stats = crate::data::scraper_stats::compute_stats(&state.db_pool, &params.period, params.term.as_deref())
+    let computed = crate::data::scraper_stats::compute_stats(&state.db_pool, &params.period, params.term.as_deref())
         .await
         .map_err(|e| {
             error!(error = %e, "failed to fetch scraper stats");
@@ -79,28 +84,31 @@ pub async fn scraper_stats(
             }
         })?;
 
-    let success_rate = if stats.total_scrapes > 0 {
-        Some(stats.successful_scrapes as f64 / stats.total_scrapes as f64)
+    let success_rate = if computed.total_scrapes > 0 {
+        // Scrape counts stay well under 2^52, so the f64 conversion is exact in practice.
+        #[allow(clippy::cast_precision_loss)]
+        let rate = computed.successful_scrapes as f64 / computed.total_scrapes as f64;
+        Some(rate)
     } else {
         None
     };
 
     log_if_slow(start, SLOW_OP_THRESHOLD, "scraper_stats");
-    trace!(total_scrapes = stats.total_scrapes, "fetched scraper stats");
+    trace!(total_scrapes = computed.total_scrapes, "fetched scraper stats");
 
     Ok(Json(ScraperStatsResponse {
         period: params.period,
         term: params.term,
-        total_scrapes: stats.total_scrapes,
-        successful_scrapes: stats.successful_scrapes,
-        failed_scrapes: stats.failed_scrapes,
+        total_scrapes: computed.total_scrapes,
+        successful_scrapes: computed.successful_scrapes,
+        failed_scrapes: computed.failed_scrapes,
         success_rate,
-        avg_duration_ms: stats.avg_duration_ms,
-        total_courses_changed: stats.total_courses_changed,
-        total_courses_fetched: stats.total_courses_fetched,
-        total_audits_generated: stats.total_audits_generated,
-        pending_jobs: stats.pending_jobs,
-        locked_jobs: stats.locked_jobs,
+        avg_duration_ms: computed.avg_duration_ms,
+        total_courses_changed: computed.total_courses_changed,
+        total_courses_fetched: computed.total_courses_fetched,
+        total_audits_generated: computed.total_audits_generated,
+        pending_jobs: computed.pending_jobs,
+        locked_jobs: computed.locked_jobs,
     }))
 }
 
@@ -143,6 +151,11 @@ pub struct TimeseriesPoint {
     pub avg_duration_ms: f64,
 }
 
+/// `GET /api/admin/scraper/timeseries` -- Scrape counts bucketed over a period.
+///
+/// # Errors
+/// `BadRequest` if `period` or `bucket` is not a recognized value; internal
+/// error if the timeseries query fails.
 #[instrument(skip_all, fields(period = %params.period))]
 pub async fn scraper_timeseries(
     _admin: AdminUser,
@@ -239,6 +252,10 @@ impl PartialEq for SubjectSummary {
     }
 }
 
+/// `GET /api/admin/scraper/subjects` -- Per-subject scheduling and scrape summaries.
+///
+/// # Errors
+/// Internal error if the subject stats query fails.
 #[instrument(skip_all)]
 pub async fn scraper_subjects(
     _admin: AdminUser,
@@ -318,6 +335,10 @@ pub struct SubjectResultEntry {
     metrics_generated: Option<Count>,
 }
 
+/// `GET /api/admin/scraper/subjects/{subject}` -- Recent scrape results for a subject.
+///
+/// # Errors
+/// Internal error if the subject detail query fails.
 #[instrument(skip_all, fields(%subject))]
 pub async fn scraper_subject_detail(
     _admin: AdminUser,
@@ -328,7 +349,7 @@ pub async fn scraper_subject_detail(
     let start = Instant::now();
     let limit = params.limit.clamp(1, 200);
 
-    let rows = crate::data::scrape_jobs::list_results_for_subject(&state.db_pool, &subject, limit as i64)
+    let rows = crate::data::scrape_jobs::list_results_for_subject(&state.db_pool, &subject, i64::from(limit))
         .await
         .map_err(|e| {
             error!(error = %e, "failed to fetch subject detail");

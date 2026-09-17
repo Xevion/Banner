@@ -116,6 +116,7 @@ bitflags! {
 
 impl MeetingDays {
     /// Convert from the boolean flags in the raw API response
+    #[must_use]
     pub fn from_meeting_time(meeting_time: &MeetingTime) -> MeetingDays {
         let mut days = MeetingDays::empty();
 
@@ -209,6 +210,7 @@ pub struct TimeRange {
 
 impl TimeRange {
     /// Parse time range from HHMM format strings
+    #[must_use]
     pub fn from_hhmm(start: &str, end: &str) -> Option<Self> {
         let start_time = Self::parse_hhmm(start)?;
         let end_time = Self::parse_hhmm(end)?;
@@ -219,7 +221,7 @@ impl TimeRange {
         })
     }
 
-    /// Parse HHMM format string to NaiveTime
+    /// Parse `HHMM` format string to `NaiveTime`
     fn parse_hhmm(time_str: &str) -> Option<NaiveTime> {
         if time_str.len() != 4 {
             return None;
@@ -236,6 +238,7 @@ impl TimeRange {
     }
 
     /// Format time in 12-hour format
+    #[must_use]
     pub fn format_12hr(&self) -> String {
         format!(
             "{}-{}",
@@ -274,6 +277,7 @@ pub struct DateRange {
 
 impl DateRange {
     /// Parse date range from MM/DD/YYYY format strings
+    #[must_use]
     pub fn from_mm_dd_yyyy(start: &str, end: &str) -> Option<Self> {
         let start_date = Self::parse_mm_dd_yyyy(start)?;
         let end_date = Self::parse_mm_dd_yyyy(end)?;
@@ -284,15 +288,16 @@ impl DateRange {
         })
     }
 
-    /// Parse MM/DD/YYYY format string to NaiveDate
+    /// Parse `MM/DD/YYYY` format string to `NaiveDate`
     fn parse_mm_dd_yyyy(date_str: &str) -> Option<NaiveDate> {
         NaiveDate::parse_from_str(date_str, "%m/%d/%Y").ok()
     }
 
     /// Get the number of weeks between start and end dates
+    #[must_use]
     pub fn weeks_duration(&self) -> u32 {
         let duration = self.end.signed_duration_since(self.start);
-        duration.num_weeks().max(0) as u32
+        u32::try_from(duration.num_weeks()).unwrap_or(0)
     }
 }
 
@@ -326,6 +331,7 @@ impl std::str::FromStr for MeetingType {
 
 impl MeetingType {
     /// Get description for the meeting type
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             MeetingType::HybridBlended => "Hybrid",
@@ -353,7 +359,8 @@ pub enum MeetingLocation {
 }
 
 impl MeetingLocation {
-    /// Create from raw MeetingTime data
+    /// Create from raw `MeetingTime` data
+    #[must_use]
     pub fn from_meeting_time(meeting_time: &MeetingTime) -> Self {
         if let (Some(campus), Some(campus_description), Some(building), Some(building_description), Some(room)) = (
             &meeting_time.campus,
@@ -391,7 +398,8 @@ pub struct MeetingScheduleInfo {
 }
 
 impl MeetingScheduleInfo {
-    /// Create from raw MeetingTime data
+    /// Create from raw `MeetingTime` data
+    #[must_use]
     pub fn from_meeting_time(meeting_time: &MeetingTime) -> Self {
         let days = MeetingDays::from_meeting_time(meeting_time);
         let time_range = match (&meeting_time.begin_time, &meeting_time.end_time) {
@@ -425,6 +433,7 @@ impl MeetingScheduleInfo {
     }
 
     /// Convert the meeting days bitset to a weekday vector
+    #[must_use]
     pub fn days_of_week(&self) -> Vec<Weekday> {
         self.days
             .iter()
@@ -433,6 +442,11 @@ impl MeetingScheduleInfo {
     }
 
     /// Get formatted days string
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: the single-day short-string is always non-empty.
+    #[must_use]
     pub fn days_string(&self) -> Option<String> {
         if self.days.is_empty() {
             return None;
@@ -463,6 +477,7 @@ impl MeetingScheduleInfo {
     }
 
     /// Returns a formatted string representing the location of the meeting
+    #[must_use]
     pub fn place_string(&self) -> String {
         match &self.location {
             MeetingLocation::Online => "Online".to_string(),
@@ -494,6 +509,11 @@ impl MeetingScheduleInfo {
     /// Uses the start and end times of the meeting if available, otherwise defaults to midnight (00:00:00.000).
     ///
     /// The returned times are in UTC.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: midnight is always a valid time.
+    #[must_use]
     pub fn datetime_range(&self) -> (DateTime<Utc>, DateTime<Utc>) {
         let (start, end) = if let Some(time_range) = &self.time_range {
             let start = self.date_range.start.and_time(time_range.start);
@@ -548,6 +568,7 @@ pub struct MeetingTimeResponse {
 
 impl MeetingTimeResponse {
     /// Get parsed meeting schedule information
+    #[must_use]
     pub fn schedule_info(&self) -> MeetingScheduleInfo {
         MeetingScheduleInfo::from_meeting_time(&self.meeting_time)
     }

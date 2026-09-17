@@ -128,7 +128,7 @@ pub struct LinkedRmpProfile {
     pub avg_difficulty: Option<f32>,
     pub num_ratings: i32,
     pub would_take_again_pct: Option<f32>,
-    /// Subject prefixes extracted from RMP reviews (queried live from rmp_reviews).
+    /// Subject prefixes extracted from RMP reviews (queried live from `rmp_reviews`).
     pub review_subjects: Vec<String>,
     /// Distinct years in which this professor received reviews.
     pub review_years: Vec<i16>,
@@ -152,7 +152,7 @@ pub struct CandidateResponse {
     #[ts(as = "ScoreBreakdown")]
     pub score_breakdown: sqlx::types::Json<ScoreBreakdown>,
     pub status: RmpCandidateStatus,
-    /// Subject prefixes extracted from RMP reviews (e.g. ["CS", "WRC"]).
+    /// Subject prefixes extracted from RMP reviews (e.g. `["CS", "WRC"]`).
     pub review_subjects: Vec<String>,
     /// Distinct years in which this professor received reviews.
     pub review_years: Vec<i16>,
@@ -253,7 +253,7 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
         .map(|search| format!("%{}%", escape_like(search)));
 
     let query_str = format!(
-        r#"
+        r"
         SELECT
             i.id, i.display_name, i.email, ms.status AS rmp_match_status,
             (SELECT COUNT(*) FROM instructor_rmp_links irl WHERE irl.instructor_id = i.id) as rmp_link_count,
@@ -286,7 +286,7 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
           AND ($2::text IS NULL OR i.display_name ILIKE $2 OR i.email ILIKE $2)
         ORDER BY {sort_clause}
         LIMIT $3 OFFSET $4
-        "#
+        "
     );
 
     // Only the sort is interpolated, and ORDER BY cannot be a bind parameter, so this
@@ -336,7 +336,7 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
             .await
             .context("failed to count instructors with candidates")?;
 
-    let mut stats = InstructorStats {
+    let mut instructor_stats = InstructorStats {
         total: 0,
         unmatched: 0,
         pending: 0,
@@ -346,13 +346,13 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
         with_candidates,
     };
     for row in &stats_rows {
-        stats.total += row.count;
+        instructor_stats.total += row.count;
         match row.status {
-            RmpMatchStatus::Unmatched => stats.unmatched = row.count,
-            RmpMatchStatus::Pending => stats.pending = row.count,
-            RmpMatchStatus::Auto => stats.auto = row.count,
-            RmpMatchStatus::Confirmed => stats.confirmed = row.count,
-            RmpMatchStatus::Rejected => stats.rejected = row.count,
+            RmpMatchStatus::Unmatched => instructor_stats.unmatched = row.count,
+            RmpMatchStatus::Pending => instructor_stats.pending = row.count,
+            RmpMatchStatus::Auto => instructor_stats.auto = row.count,
+            RmpMatchStatus::Confirmed => instructor_stats.confirmed = row.count,
+            RmpMatchStatus::Rejected => instructor_stats.rejected = row.count,
         }
     }
 
@@ -405,7 +405,7 @@ pub async fn list_instructors(pool: &PgPool, filter: &ListInstructorsFilter) -> 
             page,
             per_page,
         },
-        stats,
+        stats: instructor_stats,
     })
 }
 
