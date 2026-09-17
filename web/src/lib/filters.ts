@@ -338,6 +338,14 @@ export function clearFilters(state: FilterState): void {
   }
 }
 
+/**
+ * Rows per search request.
+ *
+ * The load and the pager both need it, and they have to agree: a pager counting
+ * against a size the request never used reports the wrong number of pages.
+ */
+export const PAGE_SIZE = 25;
+
 /** Convert filter state + metadata to a full SearchParams for the API. */
 export function toAPIParams(
   state: FilterState,

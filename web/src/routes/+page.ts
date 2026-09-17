@@ -1,13 +1,10 @@
 import type { SearchResponse } from "$lib/api";
 import { BannerApiClient } from "$lib/api";
 import type { SearchOptionsResponse } from "$lib/bindings";
-import { parseFilters, toAPIParams } from "$lib/filters";
+import { PAGE_SIZE, parseFilters, toAPIParams } from "$lib/filters";
 import { parseSort } from "$lib/sort";
 import { unresolvedSlugs } from "$lib/stores/instructor-names";
 import type { PageLoad } from "./$types";
-
-/** Rows per request. Returned below so the pager counts against what was asked. */
-const PAGE_SIZE = 25;
 
 interface SearchMeta {
   totalCount: number;
@@ -21,24 +18,19 @@ interface SearchMeta {
  * Each failure returns the same shape as success so the page reads one set of
  * fields, and an omitted field is the empty case rather than a missing key.
  */
-function pageData(
-  url: URL,
-  parts: {
-    searchOptions?: SearchOptionsResponse | null;
-    resolvedInstructors?: Record<string, string>;
-    searchResult?: SearchResponse | null;
-    searchError?: string | null;
-    searchMeta?: SearchMeta | null;
-  }
-) {
+function pageData(parts: {
+  searchOptions?: SearchOptionsResponse | null;
+  resolvedInstructors?: Record<string, string>;
+  searchResult?: SearchResponse | null;
+  searchError?: string | null;
+  searchMeta?: SearchMeta | null;
+}) {
   return {
     searchOptions: parts.searchOptions ?? null,
     resolvedInstructors: parts.resolvedInstructors ?? {},
     searchResult: parts.searchResult ?? null,
     searchError: parts.searchError ?? null,
     searchMeta: parts.searchMeta ?? null,
-    urlSearch: url.search,
-    pageSize: PAGE_SIZE,
   };
 }
 
@@ -50,7 +42,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   if (optionsResult.isErr) {
     const { code, message } = optionsResult.error;
     console.error(`Failed to load search options [${code}]: ${message}`);
-    return pageData(url, { searchError: `Failed to load search options: ${message}` });
+    return pageData({ searchError: `Failed to load search options: ${message}` });
   }
 
   const searchOptions = optionsResult.value;
@@ -84,14 +76,14 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const durationMs = performance.now() - t0;
 
   if (searchResult.isErr) {
-    return pageData(url, {
+    return pageData({
       searchOptions,
       resolvedInstructors,
       searchError: searchResult.error.message,
     });
   }
 
-  return pageData(url, {
+  return pageData({
     searchOptions,
     resolvedInstructors,
     searchResult: searchResult.value,

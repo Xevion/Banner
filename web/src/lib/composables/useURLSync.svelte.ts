@@ -1,4 +1,6 @@
+import { untrack } from "svelte";
 import { goto } from "$app/navigation";
+import { page } from "$app/state";
 import type { FilterState } from "$lib/filters";
 import { serializeFilters } from "$lib/filters";
 import { type SortTerm, formatSort } from "$lib/sort";
@@ -58,7 +60,9 @@ export function useURLSync(options: UseURLSyncOptions): URLSyncHandle {
     }
 
     params.sort();
-    const currentParams = new URLSearchParams(window.location.search); // eslint-disable-line svelte/prefer-svelte-reactivity -- non-reactive read of current browser URL
+    // Untracked on purpose: this effect writes the URL, so subscribing to it
+    // here would make every navigation it causes schedule another one.
+    const currentParams = new URLSearchParams(untrack(() => page.url.search)); // eslint-disable-line svelte/prefer-svelte-reactivity -- a sorted copy for comparison, never stored
     currentParams.sort();
     if (params.toString() === currentParams.toString()) return;
 

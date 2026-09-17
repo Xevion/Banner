@@ -35,7 +35,7 @@ export const load: PageLoad = async ({ fetch }) => {
     const api = new BannerApiClient(undefined, fetch);
     const result = await api.searchCourses({ term });
     return result.match({
-        Ok: (data) => ({ courses: data.courses }),
+        Ok: (envelope) => ({ courses: envelope.items }),
         Err: () => ({ courses: [] }),
     });
 };
@@ -44,6 +44,25 @@ export const load: PageLoad = async ({ fetch }) => {
 - Pass `fetch` from load context to `BannerApiClient` constructor for SSR
 - Handle errors in load functions -- return fallback data, don't throw
 - Component receives data via `let { data } = $props()`
+
+### `data` Is Not Always Yours
+
+SvelteKit addresses load data by branch depth. A page sitting at the same depth
+as the route being navigated to is handed that route's payload as its own
+`data`, and it does that before checking whether the navigation was abandoned,
+so an abandoned navigation leaves the foreign payload in place. The route id and
+the URL both still name your route, so neither tells you this has happened.
+
+- Read the router from the router. `page.url` is correct throughout; a copy of
+  `url.search` returned from a load is not, and applying a stale one resets
+  every piece of state the URL was driving. Never mirror router state through
+  the load payload.
+- Before copying `data` into state, take it through `ownPayload(data, marker)`,
+  where `marker` is a key your load always returns.
+- Reads that only render are already safe, because a derived value recomputes
+  once the payload is yours again. It is the effects that write that need this.
+- An effect that writes the URL untracks its read of `page.url`. Tracking it
+  makes every navigation the effect causes schedule another one.
 
 ## Error Handling
 
