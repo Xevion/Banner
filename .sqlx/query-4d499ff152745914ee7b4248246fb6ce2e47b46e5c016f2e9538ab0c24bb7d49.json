@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO instructors (display_name, email, first_name, last_name, slug)\n            SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])\n            ON CONFLICT (email) WHERE email IS NOT NULL\n            DO UPDATE SET\n                display_name = EXCLUDED.display_name,\n                first_name = EXCLUDED.first_name,\n                last_name = EXCLUDED.last_name,\n                slug = COALESCE(instructors.slug, EXCLUDED.slug)\n            RETURNING id, email AS \"email!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "4d499ff152745914ee7b4248246fb6ce2e47b46e5c016f2e9538ab0c24bb7d49"
+}

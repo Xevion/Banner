@@ -1,0 +1,160 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, target_type AS \"target_type: TargetType\",\n                   target_payload AS \"target_payload: Json<TargetPayload>\",\n                   priority AS \"priority: ScrapePriority\",\n                   execute_at, created_at, locked_at,\n                   retry_count AS \"retry_count: Count\", max_retries AS \"max_retries: Count\",\n                   queued_at\n            FROM scrape_jobs\n            WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision))\n              AND execute_at <= NOW()\n            ORDER BY priority DESC, execute_at ASC\n            LIMIT 1\n            FOR UPDATE SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "target_type: TargetType",
+        "type_info": {
+          "Custom": {
+            "name": "target_type",
+            "kind": {
+              "Enum": [
+                "Subject",
+                "CourseRange",
+                "CrnList",
+                "SingleCrn"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "target_type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "target_payload: Json<TargetPayload>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "target_payload"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "priority: ScrapePriority",
+        "type_info": {
+          "Custom": {
+            "name": "scrape_priority",
+            "kind": {
+              "Enum": [
+                "Low",
+                "Medium",
+                "High",
+                "Critical"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "priority"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "execute_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "execute_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "locked_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "locked_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "retry_count: Count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "retry_count"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "max_retries: Count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "max_retries"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "queued_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "queued_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6903177385550c902feea0dc0c9e06117b7eac934266bbf09cdd3bbcf9351f7"
+}

@@ -22,131 +22,132 @@ fn parse_mm_dd_yyyy(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s, "%m/%d/%Y").ok()
 }
 
-/// Convert a Banner API course's meeting times to the DB JSONB shape.
-fn to_db_meeting_times(course: &Course) -> serde_json::Value {
-    let meetings: Vec<DbMeetingTime> = course
-        .meetings_faculty
-        .iter()
-        .map(|mf| {
-            let mt = &mf.meeting_time;
+impl Course {
+    /// Convert this course's meeting times to the DB JSONB shape.
+    fn to_db_meeting_times(&self) -> serde_json::Value {
+        let meetings: Vec<DbMeetingTime> = self
+            .meetings_faculty
+            .iter()
+            .map(|mf| {
+                let mt = &mf.meeting_time;
 
-            // Build days BTreeSet from boolean flags
-            let mut days = BTreeSet::new();
-            if mt.monday {
-                days.insert(DayOfWeek::Monday);
-            }
-            if mt.tuesday {
-                days.insert(DayOfWeek::Tuesday);
-            }
-            if mt.wednesday {
-                days.insert(DayOfWeek::Wednesday);
-            }
-            if mt.thursday {
-                days.insert(DayOfWeek::Thursday);
-            }
-            if mt.friday {
-                days.insert(DayOfWeek::Friday);
-            }
-            if mt.saturday {
-                days.insert(DayOfWeek::Saturday);
-            }
-            if mt.sunday {
-                days.insert(DayOfWeek::Sunday);
-            }
+                // Build days BTreeSet from boolean flags
+                let mut days = BTreeSet::new();
+                if mt.monday {
+                    days.insert(DayOfWeek::Monday);
+                }
+                if mt.tuesday {
+                    days.insert(DayOfWeek::Tuesday);
+                }
+                if mt.wednesday {
+                    days.insert(DayOfWeek::Wednesday);
+                }
+                if mt.thursday {
+                    days.insert(DayOfWeek::Thursday);
+                }
+                if mt.friday {
+                    days.insert(DayOfWeek::Friday);
+                }
+                if mt.saturday {
+                    days.insert(DayOfWeek::Saturday);
+                }
+                if mt.sunday {
+                    days.insert(DayOfWeek::Sunday);
+                }
 
-            // Parse time range from HHMM strings
-            let time_range = match (mt.begin_time.as_deref(), mt.end_time.as_deref()) {
-                (Some(begin), Some(end)) => {
-                    let result = TimeRange::from_hhmm(begin, end);
-                    if result.is_none() {
+                // Parse time range from HHMM strings
+                let time_range = match (mt.begin_time.as_deref(), mt.end_time.as_deref()) {
+                    (Some(begin), Some(end)) => {
+                        let result = TimeRange::from_hhmm(begin, end);
+                        if result.is_none() {
+                            warn!(
+                                crn = %mt.course_reference_number,
+                                begin, end,
+                                "Failed to parse meeting time range"
+                            );
+                        }
+                        result
+                    }
+                    _ => None,
+                };
+
+                // Parse date range from MM/DD/YYYY strings
+                let date_range = match (parse_mm_dd_yyyy(&mt.start_date), parse_mm_dd_yyyy(&mt.end_date)) {
+                    (Some(start), Some(end)) => DateRange::new(start, end).unwrap_or_else(|err| {
                         warn!(
                             crn = %mt.course_reference_number,
-                            begin, end,
-                            "Failed to parse meeting time range"
+                            start_date = %mt.start_date,
+                            end_date = %mt.end_date,
+                            ?err,
+                            "Invalid date range, swapping start/end"
                         );
+                        // Swap so the invariant holds
+                        DateRange { start: end, end: start }
+                    }),
+                    _ => {
+                        warn!(
+                            crn = %mt.course_reference_number,
+                            start_date = %mt.start_date,
+                            end_date = %mt.end_date,
+                            "Failed to parse meeting date range, using epoch fallback"
+                        );
+                        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                        DateRange {
+                            start: epoch,
+                            end: epoch,
+                        }
                     }
-                    result
-                }
-                _ => None,
-            };
-
-            // Parse date range from MM/DD/YYYY strings
-            let date_range = match (parse_mm_dd_yyyy(&mt.start_date), parse_mm_dd_yyyy(&mt.end_date)) {
-                (Some(start), Some(end)) => DateRange::new(start, end).unwrap_or_else(|err| {
-                    warn!(
-                        crn = %mt.course_reference_number,
-                        start_date = %mt.start_date,
-                        end_date = %mt.end_date,
-                        ?err,
-                        "Invalid date range, swapping start/end"
-                    );
-                    // Swap so the invariant holds
-                    DateRange { start: end, end: start }
-                }),
-                _ => {
-                    warn!(
-                        crn = %mt.course_reference_number,
-                        start_date = %mt.start_date,
-                        end_date = %mt.end_date,
-                        "Failed to parse meeting date range, using epoch fallback"
-                    );
-                    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                    DateRange {
-                        start: epoch,
-                        end: epoch,
-                    }
-                }
-            };
-
-            // Build location if any field is present
-            let location = {
-                let loc = MeetingLocation {
-                    building: mt.building.clone(),
-                    building_description: mt.building_description.clone(),
-                    room: mt.room.clone(),
-                    campus: mt.campus.clone(),
                 };
-                if loc.building.is_some()
-                    || loc.building_description.is_some()
-                    || loc.room.is_some()
-                    || loc.campus.is_some()
-                {
-                    Some(loc)
-                } else {
-                    None
+
+                // Build location if any field is present
+                let location = {
+                    let loc = MeetingLocation {
+                        building: mt.building.clone(),
+                        building_description: mt.building_description.clone(),
+                        room: mt.room.clone(),
+                        campus: mt.campus.clone(),
+                    };
+                    if loc.building.is_some()
+                        || loc.building_description.is_some()
+                        || loc.room.is_some()
+                        || loc.campus.is_some()
+                    {
+                        Some(loc)
+                    } else {
+                        None
+                    }
+                };
+
+                DbMeetingTime {
+                    time_range,
+                    date_range,
+                    days,
+                    location,
+                    meeting_type: mt.meeting_type.clone().unwrap_or_default(),
+                    meeting_schedule_type: mt.meeting_schedule_type.clone(),
                 }
-            };
+            })
+            .collect();
+        serde_json::to_value(meetings).unwrap_or_default()
+    }
 
-            DbMeetingTime {
-                time_range,
-                date_range,
-                days,
-                location,
-                meeting_type: mt.meeting_type.clone().unwrap_or_default(),
-                meeting_schedule_type: mt.meeting_schedule_type.clone(),
-            }
-        })
-        .collect();
-    serde_json::to_value(meetings).unwrap_or_default()
-}
+    /// Convert this course's section attributes to a JSONB array of code strings.
+    fn to_db_attributes(&self) -> serde_json::Value {
+        let codes: Vec<&str> = self.section_attributes.iter().map(|a| a.code.as_str()).collect();
+        serde_json::to_value(codes).unwrap_or_default()
+    }
 
-/// Convert a Banner API course's section attributes to a JSONB array of code strings.
-fn to_db_attributes(course: &Course) -> serde_json::Value {
-    let codes: Vec<&str> = course.section_attributes.iter().map(|a| a.code.as_str()).collect();
-    serde_json::to_value(codes).unwrap_or_default()
-}
-
-/// Extract the campus code from the first meeting time (Banner doesn't put it on the course directly).
-fn extract_campus_code(course: &Course) -> Option<String> {
-    course
-        .meetings_faculty
-        .first()
-        .and_then(|mf| mf.meeting_time.campus.clone())
+    /// The campus code, which Banner carries on the first meeting time rather than the course.
+    fn campus_code(&self) -> Option<String> {
+        self.meetings_faculty
+            .first()
+            .and_then(|mf| mf.meeting_time.campus.clone())
+    }
 }
 
 /// Row returned by the CTE-based upsert query, carrying both old and new values
 /// for every auditable field. `old_id` is `None` for fresh inserts.
-#[derive(sqlx::FromRow, Debug)]
+#[derive(Debug)]
 struct UpsertDiffRow {
     id: i32,
     old_id: Option<i32>,
@@ -366,11 +367,11 @@ async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result
     }
 
     let course_ids: Vec<i32> = audits.iter().map(|a| a.course_id).collect();
-    let fields: Vec<&str> = audits.iter().map(|a| a.field_changed).collect();
+    let fields: Vec<String> = audits.iter().map(|a| a.field_changed.to_owned()).collect();
     let old_values: Vec<Option<serde_json::Value>> = audits.iter().map(|a| a.old_value.clone()).collect();
     let new_values: Vec<serde_json::Value> = audits.iter().map(|a| a.new_value.clone()).collect();
 
-    let rows: Vec<(i32,)> = sqlx::query_as(
+    sqlx::query_scalar!(
         r#"
         INSERT INTO course_audits (course_id, timestamp, field_changed, old_value, new_value)
         SELECT v.course_id, NOW(), v.field_changed, v.old_value, v.new_value
@@ -378,16 +379,14 @@ async fn insert_audits(audits: &[AuditEntry], conn: &mut PgConnection) -> Result
             AS v(course_id, field_changed, old_value, new_value)
         RETURNING id
         "#,
+        &course_ids,
+        &fields,
+        &old_values as &[Option<serde_json::Value>],
+        &new_values,
     )
-    .bind(&course_ids)
-    .bind(&fields)
-    .bind(&old_values)
-    .bind(&new_values)
     .fetch_all(&mut *conn)
     .await
-    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_audits: {}", e))?;
-
-    Ok(rows.into_iter().map(|(id,)| id).collect())
+    .map_err(|e| anyhow::anyhow!("Failed to batch insert course_audits: {}", e))
 }
 
 async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Result<()> {
@@ -400,18 +399,18 @@ async fn insert_metrics(metrics: &[MetricEntry], conn: &mut PgConnection) -> Res
     let wait_counts: Vec<i32> = metrics.iter().map(|m| m.wait_count).collect();
     let seats_available: Vec<i32> = metrics.iter().map(|m| m.seats_available).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO course_metrics (course_id, timestamp, enrollment, wait_count, seats_available)
         SELECT v.course_id, NOW(), v.enrollment, v.wait_count, v.seats_available
         FROM UNNEST($1::int4[], $2::int4[], $3::int4[], $4::int4[])
             AS v(course_id, enrollment, wait_count, seats_available)
         "#,
+        &course_ids,
+        &enrollments,
+        &wait_counts,
+        &seats_available,
     )
-    .bind(&course_ids)
-    .bind(&enrollments)
-    .bind(&wait_counts)
-    .bind(&seats_available)
     .execute(&mut *conn)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch insert course_metrics: {}", e))?;
@@ -551,14 +550,19 @@ pub async fn batch_upsert_courses(courses: &[Course], db_pool: &PgPool) -> Resul
 }
 
 async fn fetch_audit_entries_by_ids(db_pool: &PgPool, audit_ids: &[i32]) -> Result<Vec<AuditLogEntry>> {
-    let rows: Vec<AuditRow> = sqlx::query_as(
-        "SELECT a.id, a.course_id, a.timestamp, a.field_changed, a.old_value, a.new_value, \
-                c.subject, c.course_number, c.crn, c.title, c.term_code \
-         FROM course_audits a \
-         LEFT JOIN courses c ON c.id = a.course_id \
-         WHERE a.id = ANY($1)",
+    let rows = sqlx::query_as!(
+        AuditRow,
+        r#"
+        SELECT a.id AS "id!", a.course_id AS "course_id!", a.timestamp AS "timestamp!",
+               a.field_changed AS "field_changed!", a.old_value, a.new_value AS "new_value!",
+               c.subject AS "subject?", c.course_number AS "course_number?",
+               c.crn AS "crn?", c.title AS "title?", c.term_code AS "term_code?"
+        FROM course_audits a
+        LEFT JOIN courses c ON c.id = a.course_id
+        WHERE a.id = ANY($1)
+        "#,
+        audit_ids,
     )
-    .bind(audit_ids)
     .fetch_all(db_pool)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to fetch audit entries: {}", e))?;
@@ -582,7 +586,7 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
     let sequence_numbers: Vec<Option<&str>> = courses.iter().map(|c| Some(c.sequence_number.as_str())).collect();
     let parts_of_term: Vec<Option<&str>> = courses.iter().map(|c| Some(c.part_of_term.as_str())).collect();
     let instructional_methods: Vec<Option<&str>> = courses.iter().map(|c| c.instructional_method.as_deref()).collect();
-    let campuses: Vec<Option<String>> = courses.iter().map(extract_campus_code).collect();
+    let campuses: Vec<Option<String>> = courses.iter().map(Course::campus_code).collect();
     let credit_hours: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hours).collect();
     let credit_hour_lows: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_low).collect();
     let credit_hour_highs: Vec<Option<f64>> = courses.iter().map(|c| c.credit_hour_high).collect();
@@ -593,10 +597,11 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
     let is_section_linkeds: Vec<Option<bool>> = courses.iter().map(|c| Some(c.is_section_linked)).collect();
 
     // JSONB fields
-    let meeting_times_json: Vec<serde_json::Value> = courses.iter().map(to_db_meeting_times).collect();
-    let attributes_json: Vec<serde_json::Value> = courses.iter().map(to_db_attributes).collect();
+    let meeting_times_json: Vec<serde_json::Value> = courses.iter().map(Course::to_db_meeting_times).collect();
+    let attributes_json: Vec<serde_json::Value> = courses.iter().map(Course::to_db_attributes).collect();
 
-    let rows = sqlx::query_as::<_, UpsertDiffRow>(
+    let rows = sqlx::query_as!(
+        UpsertDiffRow,
         r#"
         WITH old_data AS (
             SELECT id, enrollment, max_enrollment, wait_count, wait_capacity,
@@ -671,57 +676,57 @@ async fn upsert_courses(courses: &[Course], conn: &mut PgConnection) -> Result<V
                 attributes = EXCLUDED.attributes
             RETURNING *
         )
-        SELECT u.id,
-               o.id AS old_id,
-               u.crn, u.term_code,
-               o.enrollment AS old_enrollment, u.enrollment AS new_enrollment,
-               o.max_enrollment AS old_max_enrollment, u.max_enrollment AS new_max_enrollment,
-               o.wait_count AS old_wait_count, u.wait_count AS new_wait_count,
-               o.wait_capacity AS old_wait_capacity, u.wait_capacity AS new_wait_capacity,
-               o.subject AS old_subject, u.subject AS new_subject,
-               o.course_number AS old_course_number, u.course_number AS new_course_number,
-               o.title AS old_title, u.title AS new_title,
-               o.sequence_number AS old_sequence_number, u.sequence_number AS new_sequence_number,
-               o.part_of_term AS old_part_of_term, u.part_of_term AS new_part_of_term,
-               o.instructional_method AS old_instructional_method, u.instructional_method AS new_instructional_method,
-               o.campus AS old_campus, u.campus AS new_campus,
-               o.credit_hours AS old_credit_hours, u.credit_hours AS new_credit_hours,
-               o.credit_hour_low AS old_credit_hour_low, u.credit_hour_low AS new_credit_hour_low,
-               o.credit_hour_high AS old_credit_hour_high, u.credit_hour_high AS new_credit_hour_high,
-               o.cross_list AS old_cross_list, u.cross_list AS new_cross_list,
-               o.cross_list_capacity AS old_cross_list_capacity, u.cross_list_capacity AS new_cross_list_capacity,
-               o.cross_list_count AS old_cross_list_count, u.cross_list_count AS new_cross_list_count,
-               o.link_identifier AS old_link_identifier, u.link_identifier AS new_link_identifier,
-               o.is_section_linked AS old_is_section_linked, u.is_section_linked AS new_is_section_linked,
-               o.meeting_times AS old_meeting_times, u.meeting_times AS new_meeting_times,
-               o.attributes AS old_attributes, u.attributes AS new_attributes
+        SELECT u.id AS "id!",
+               o.id AS "old_id?",
+               u.crn AS "crn!", u.term_code AS "term_code!",
+               o.enrollment AS "old_enrollment?", u.enrollment AS "new_enrollment!",
+               o.max_enrollment AS "old_max_enrollment?", u.max_enrollment AS "new_max_enrollment!",
+               o.wait_count AS "old_wait_count?", u.wait_count AS "new_wait_count!",
+               o.wait_capacity AS "old_wait_capacity?", u.wait_capacity AS "new_wait_capacity!",
+               o.subject AS "old_subject?", u.subject AS "new_subject!",
+               o.course_number AS "old_course_number?", u.course_number AS "new_course_number!",
+               o.title AS "old_title?", u.title AS "new_title!",
+               o.sequence_number AS "old_sequence_number?", u.sequence_number AS new_sequence_number,
+               o.part_of_term AS "old_part_of_term?", u.part_of_term AS new_part_of_term,
+               o.instructional_method AS "old_instructional_method?", u.instructional_method AS new_instructional_method,
+               o.campus AS "old_campus?", u.campus AS new_campus,
+               o.credit_hours AS "old_credit_hours?", u.credit_hours AS new_credit_hours,
+               o.credit_hour_low AS "old_credit_hour_low?", u.credit_hour_low AS new_credit_hour_low,
+               o.credit_hour_high AS "old_credit_hour_high?", u.credit_hour_high AS new_credit_hour_high,
+               o.cross_list AS "old_cross_list?", u.cross_list AS new_cross_list,
+               o.cross_list_capacity AS "old_cross_list_capacity?", u.cross_list_capacity AS new_cross_list_capacity,
+               o.cross_list_count AS "old_cross_list_count?", u.cross_list_count AS new_cross_list_count,
+               o.link_identifier AS "old_link_identifier?", u.link_identifier AS new_link_identifier,
+               o.is_section_linked AS "old_is_section_linked?", u.is_section_linked AS new_is_section_linked,
+               o.meeting_times AS "old_meeting_times?", u.meeting_times AS "new_meeting_times!",
+               o.attributes AS "old_attributes?", u.attributes AS "new_attributes!"
         FROM upserted u
         LEFT JOIN old_data o ON u.crn = o.crn AND u.term_code = o.term_code
         "#,
+        &crns as &[&str],
+        &subjects as &[&str],
+        &course_numbers as &[&str],
+        &titles,
+        &term_codes as &[&str],
+        &enrollments,
+        &max_enrollments,
+        &wait_counts,
+        &wait_capacities,
+        &sequence_numbers as &[Option<&str>],
+        &parts_of_term as &[Option<&str>],
+        &instructional_methods as &[Option<&str>],
+        &campuses as &[Option<String>],
+        &credit_hours as &[Option<f64>],
+        &credit_hour_lows as &[Option<f64>],
+        &credit_hour_highs as &[Option<f64>],
+        &cross_lists as &[Option<&str>],
+        &cross_list_capacities as &[Option<i32>],
+        &cross_list_counts as &[Option<i32>],
+        &link_identifiers as &[Option<&str>],
+        &is_section_linkeds as &[Option<bool>],
+        &meeting_times_json,
+        &attributes_json,
     )
-    .bind(&crns)
-    .bind(&subjects)
-    .bind(&course_numbers)
-    .bind(&titles)
-    .bind(&term_codes)
-    .bind(&enrollments)
-    .bind(&max_enrollments)
-    .bind(&wait_counts)
-    .bind(&wait_capacities)
-    .bind(&sequence_numbers)
-    .bind(&parts_of_term)
-    .bind(&instructional_methods)
-    .bind(&campuses)
-    .bind(&credit_hours)
-    .bind(&credit_hour_lows)
-    .bind(&credit_hour_highs)
-    .bind(&cross_lists)
-    .bind(&cross_list_capacities)
-    .bind(&cross_list_counts)
-    .bind(&link_identifiers)
-    .bind(&is_section_linkeds)
-    .bind(&meeting_times_json)
-    .bind(&attributes_json)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch upsert courses: {}", e))?;
@@ -764,14 +769,16 @@ async fn existing_emails_by_canonical(emails: &[String], conn: &mut PgConnection
     }
     let variants: Vec<String> = variants.into_iter().collect();
 
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT email FROM instructors WHERE email = ANY($1)")
-        .bind(&variants)
-        .fetch_all(conn)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
+    let rows = sqlx::query_scalar!(
+        r#"SELECT email AS "email!" FROM instructors WHERE email = ANY($1)"#,
+        &variants
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to resolve existing instructor emails: {}", e))?;
 
     let mut stored: HashMap<String, String> = HashMap::new();
-    for (email,) in rows {
+    for email in rows {
         let canon = canonical_email(&email);
         // Prefer the staff address when both spellings are already on file.
         let keep = stored.get(&canon).is_none_or(|existing| existing.contains("@my."));
@@ -903,7 +910,7 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
             .map(|name| crate::data::instructors::generate_slug(name))
             .collect();
 
-        let rows: Vec<(i32, String)> = sqlx::query_as(
+        let rows = sqlx::query!(
             r#"
             INSERT INTO instructors (display_name, email, first_name, last_name, slug)
             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
@@ -913,19 +920,19 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
                 first_name = EXCLUDED.first_name,
                 last_name = EXCLUDED.last_name,
                 slug = COALESCE(instructors.slug, EXCLUDED.slug)
-            RETURNING id, email
+            RETURNING id, email AS "email!"
             "#,
+            &e_display_names,
+            &email_refs as &[&str],
+            &first_name_refs as &[Option<&str>],
+            &last_name_refs as &[Option<&str>],
+            &slugs,
         )
-        .bind(&e_display_names)
-        .bind(&email_refs)
-        .bind(&first_name_refs)
-        .bind(&last_name_refs)
-        .bind(&slugs)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (email): {}", e))?;
 
-        let by_stored: HashMap<String, i32> = rows.into_iter().map(|(id, e)| (e, id)).collect();
+        let by_stored: HashMap<String, i32> = rows.into_iter().map(|r| (r.email, r.id)).collect();
         // Callers look instructors up by the address the scrape reported, so
         // every original address maps to the row that absorbed it.
         by_email = e_emails
@@ -961,7 +968,7 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
             .map(|name| crate::data::instructors::generate_slug(name))
             .collect();
 
-        let rows: Vec<(i32, String)> = sqlx::query_as(
+        let rows = sqlx::query!(
             r#"
             INSERT INTO instructors (display_name, first_name, last_name, slug)
             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
@@ -972,16 +979,16 @@ async fn upsert_instructors(courses: &[Course], conn: &mut PgConnection) -> Resu
                 slug = COALESCE(instructors.slug, EXCLUDED.slug)
             RETURNING id, display_name
             "#,
+            &ne_display_names,
+            &first_name_refs as &[Option<&str>],
+            &last_name_refs as &[Option<&str>],
+            &slugs,
         )
-        .bind(&ne_display_names)
-        .bind(&first_name_refs)
-        .bind(&last_name_refs)
-        .bind(&slugs)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to batch upsert instructors (no-email): {}", e))?;
 
-        by_display_name.extend(rows.into_iter().map(|(id, name)| (name, id)));
+        by_display_name.extend(rows.into_iter().map(|r| (r.display_name, r.id)));
     }
 
     Ok(InstructorLookup {
@@ -1049,31 +1056,32 @@ async fn upsert_course_instructors(
     let unique_cids: Vec<i32> = cids.iter().copied().collect::<HashSet<_>>().into_iter().collect();
 
     // Fetch existing instructor names before deletion
-    let old_rows: Vec<(i32, String)> = sqlx::query_as(
-        "SELECT ci.course_id, i.display_name \
-         FROM course_instructors ci \
-         JOIN instructors i ON i.id = ci.instructor_id \
-         WHERE ci.course_id = ANY($1) \
-         ORDER BY ci.course_id, ci.is_primary DESC, i.display_name",
+    let old_rows = sqlx::query!(
+        r#"
+        SELECT ci.course_id, i.display_name
+        FROM course_instructors ci
+        JOIN instructors i ON i.id = ci.instructor_id
+        WHERE ci.course_id = ANY($1)
+        ORDER BY ci.course_id, ci.is_primary DESC, i.display_name
+        "#,
+        &unique_cids,
     )
-    .bind(&unique_cids)
     .fetch_all(&mut *conn)
     .await
     .context("failed to fetch existing instructor names for courses")?;
 
     let mut old_names: HashMap<i32, Vec<String>> = HashMap::new();
-    for (course_id, name) in old_rows {
-        old_names.entry(course_id).or_default().push(name);
+    for row in old_rows {
+        old_names.entry(row.course_id).or_default().push(row.display_name);
     }
 
     // Delete existing links for these courses then re-insert
-    sqlx::query("DELETE FROM course_instructors WHERE course_id = ANY($1)")
-        .bind(&unique_cids)
+    sqlx::query!("DELETE FROM course_instructors WHERE course_id = ANY($1)", &unique_cids)
         .execute(&mut *conn)
         .await
         .context("failed to delete existing course instructor links")?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO course_instructors (course_id, instructor_id, banner_id, is_primary)
         SELECT * FROM UNNEST($1::int4[], $2::int4[], $3::text[], $4::bool[])
@@ -1082,11 +1090,11 @@ async fn upsert_course_instructors(
             banner_id = EXCLUDED.banner_id,
             is_primary = EXCLUDED.is_primary
         "#,
+        &cids,
+        &instructor_ids,
+        &banner_ids as &[&str],
+        &primaries,
     )
-    .bind(&cids)
-    .bind(&instructor_ids)
-    .bind(&banner_ids)
-    .bind(&primaries)
     .execute(&mut *conn)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to batch upsert course_instructors: {}", e))?;
@@ -1206,26 +1214,25 @@ async fn sync_course_meetings(
     // Delete existing meetings for affected courses
     let unique_cids: Vec<i32> = crn_term_to_id.values().copied().collect();
     if !unique_cids.is_empty() {
-        sqlx::query("DELETE FROM course_meetings WHERE course_id = ANY($1)")
-            .bind(&unique_cids)
+        sqlx::query!("DELETE FROM course_meetings WHERE course_id = ANY($1)", &unique_cids)
             .execute(&mut *conn)
             .await
             .context("failed to delete existing course_meetings")?;
     }
 
     if !course_ids.is_empty() {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO course_meetings (course_id, day_bits, begin_minutes, end_minutes, start_date, end_date)
             SELECT * FROM UNNEST($1::int4[], $2::int2[], $3::int2[], $4::int2[], $5::date[], $6::date[])
             "#,
+            &course_ids,
+            &day_bits_vec,
+            &begin_minutes_vec,
+            &end_minutes_vec,
+            &start_dates,
+            &end_dates,
         )
-        .bind(&course_ids)
-        .bind(&day_bits_vec)
-        .bind(&begin_minutes_vec)
-        .bind(&end_minutes_vec)
-        .bind(&start_dates)
-        .bind(&end_dates)
         .execute(&mut *conn)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to batch insert course_meetings: {}", e))?;
@@ -1246,7 +1253,7 @@ async fn refresh_meeting_summary(conn: &mut sqlx::PgConnection, course_ids: &[i3
         return Ok(());
     }
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE courses c
         SET first_begin_minutes = a.first_begin,
@@ -1266,8 +1273,8 @@ async fn refresh_meeting_summary(conn: &mut sqlx::PgConnection, course_ids: &[i3
         ) a
         WHERE c.id = a.course_id
         "#,
+        course_ids,
     )
-    .bind(course_ids)
     .execute(conn)
     .await
     .map_err(|e| anyhow::anyhow!("Failed to refresh course meeting summary: {}", e))?;

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM instructor_rmp_links WHERE source != 'manual'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6f7c646013dd4fd01e28895a901a69e2d1170c21cac3835523ec28e5ce765c44"
+}

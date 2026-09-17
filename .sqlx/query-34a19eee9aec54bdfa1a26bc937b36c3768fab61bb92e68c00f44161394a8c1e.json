@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM rmp_match_candidates WHERE status != 'rejected'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "34a19eee9aec54bdfa1a26bc937b36c3768fab61bb92e68c00f44161394a8c1e"
+}

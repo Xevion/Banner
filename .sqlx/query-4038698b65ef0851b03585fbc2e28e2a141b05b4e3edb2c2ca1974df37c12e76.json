@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE rmp_match_candidates\n             SET status = 'pending', resolved_at = NULL, resolved_by = NULL\n             WHERE instructor_id = $1 AND rmp_legacy_id = $2 AND status = 'accepted'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4038698b65ef0851b03585fbc2e28e2a141b05b4e3edb2c2ca1974df37c12e76"
+}

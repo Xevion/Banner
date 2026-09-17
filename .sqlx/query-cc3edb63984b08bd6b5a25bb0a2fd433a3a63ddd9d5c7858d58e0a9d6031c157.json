@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT target_payload FROM scrape_jobs\n            WHERE target_type = $1 AND target_payload = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "target_payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "scrape_jobs",
+            "name": "target_payload"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "target_type",
+            "kind": {
+              "Enum": [
+                "Subject",
+                "CourseRange",
+                "CrnList",
+                "SingleCrn"
+              ]
+            }
+          }
+        },
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cc3edb63984b08bd6b5a25bb0a2fd433a3a63ddd9d5c7858d58e0a9d6031c157"
+}

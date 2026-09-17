@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM instructor_rmp_links WHERE instructor_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a124ff81b52c572f35a340c9df44e0387fa1ab65fd80c3f05ff40d995d405ba"
+}

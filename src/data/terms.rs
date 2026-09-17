@@ -19,7 +19,7 @@ use anyhow::{Context, Result};
 ///
 /// Named `DbTerm` to avoid collision with `crate::banner::models::terms::Term`
 /// which represents a parsed term code (year + season).
-#[derive(sqlx::FromRow, Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct DbTerm {
@@ -62,10 +62,18 @@ pub struct SyncResult {
 
 /// Get all terms, ordered by code descending (newest first).
 pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
-    let terms = sqlx::query_as::<_, DbTerm>("SELECT * FROM terms ORDER BY code DESC")
-        .fetch_all(db_pool)
-        .await
-        .context("failed to fetch all terms")?;
+    let terms = sqlx::query_as!(
+        DbTerm,
+        r#"
+        SELECT code, description, year, season AS "season: Season", scrape_enabled,
+               is_archived, discovered_at, last_scraped_at, created_at, updated_at
+        FROM terms
+        ORDER BY code DESC
+        "#,
+    )
+    .fetch_all(db_pool)
+    .await
+    .context("failed to fetch all terms")?;
 
     Ok(terms)
 }
@@ -73,16 +81,25 @@ pub async fn get_all_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
 /// Get terms with scraping enabled, ordered by code descending.
 #[allow(dead_code)] // Used by admin API and future features
 pub async fn get_enabled_terms(db_pool: &PgPool) -> Result<Vec<DbTerm>> {
-    let terms = sqlx::query_as::<_, DbTerm>("SELECT * FROM terms WHERE scrape_enabled = true ORDER BY code DESC")
-        .fetch_all(db_pool)
-        .await
-        .context("failed to fetch enabled terms")?;
+    let terms = sqlx::query_as!(
+        DbTerm,
+        r#"
+        SELECT code, description, year, season AS "season: Season", scrape_enabled,
+               is_archived, discovered_at, last_scraped_at, created_at, updated_at
+        FROM terms
+        WHERE scrape_enabled = true
+        ORDER BY code DESC
+        "#,
+    )
+    .fetch_all(db_pool)
+    .await
+    .context("failed to fetch enabled terms")?;
 
     Ok(terms)
 }
 
 /// A lightweight projection of an enabled term for scheduling decisions.
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct EnabledTerm {
     pub code: String,
     pub is_archived: bool,
@@ -93,7 +110,8 @@ pub struct EnabledTerm {
 /// Returns lightweight projections for the scheduler to determine per-term
 /// scheduling tiers without fetching full rows.
 pub async fn get_enabled_terms_for_scheduling(db_pool: &PgPool) -> Result<Vec<EnabledTerm>> {
-    let terms = sqlx::query_as::<_, EnabledTerm>(
+    let terms = sqlx::query_as!(
+        EnabledTerm,
         "SELECT code, is_archived FROM terms WHERE scrape_enabled = true ORDER BY code DESC",
     )
     .fetch_all(db_pool)
@@ -105,18 +123,26 @@ pub async fn get_enabled_terms_for_scheduling(db_pool: &PgPool) -> Result<Vec<En
 
 /// Get a single term by code.
 pub async fn get_term_by_code(db_pool: &PgPool, code: &str) -> Result<Option<DbTerm>> {
-    let term = sqlx::query_as::<_, DbTerm>("SELECT * FROM terms WHERE code = $1")
-        .bind(code)
-        .fetch_optional(db_pool)
-        .await
-        .context("failed to fetch term by code")?;
+    let term = sqlx::query_as!(
+        DbTerm,
+        r#"
+        SELECT code, description, year, season AS "season: Season", scrape_enabled,
+               is_archived, discovered_at, last_scraped_at, created_at, updated_at
+        FROM terms
+        WHERE code = $1
+        "#,
+        code,
+    )
+    .fetch_optional(db_pool)
+    .await
+    .context("failed to fetch term by code")?;
 
     Ok(term)
 }
 
 /// Get all existing term codes (for sync deduplication).
 async fn get_existing_term_codes(db_pool: &PgPool) -> Result<HashSet<String>> {
-    let codes: Vec<String> = sqlx::query_scalar("SELECT code FROM terms")
+    let codes = sqlx::query_scalar!("SELECT code FROM terms")
         .fetch_all(db_pool)
         .await
         .context("failed to fetch existing term codes")?;
@@ -128,11 +154,13 @@ async fn get_existing_term_codes(db_pool: &PgPool) -> Result<HashSet<String>> {
 ///
 /// Returns `true` if the term was found and updated, `false` if not found.
 pub async fn enable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
-    let result = sqlx::query("UPDATE terms SET scrape_enabled = true, updated_at = now() WHERE code = $1")
-        .bind(code)
-        .execute(db_pool)
-        .await
-        .context("failed to enable scraping for term")?;
+    let result = sqlx::query!(
+        "UPDATE terms SET scrape_enabled = true, updated_at = now() WHERE code = $1",
+        code
+    )
+    .execute(db_pool)
+    .await
+    .context("failed to enable scraping for term")?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -141,11 +169,13 @@ pub async fn enable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
 ///
 /// Returns `true` if the term was found and updated, `false` if not found.
 pub async fn disable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
-    let result = sqlx::query("UPDATE terms SET scrape_enabled = false, updated_at = now() WHERE code = $1")
-        .bind(code)
-        .execute(db_pool)
-        .await
-        .context("failed to disable scraping for term")?;
+    let result = sqlx::query!(
+        "UPDATE terms SET scrape_enabled = false, updated_at = now() WHERE code = $1",
+        code
+    )
+    .execute(db_pool)
+    .await
+    .context("failed to disable scraping for term")?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -154,11 +184,13 @@ pub async fn disable_scraping(db_pool: &PgPool, code: &str) -> Result<bool> {
 ///
 /// Called when a subject scrape job completes for this term.
 pub async fn update_last_scraped_at(db_pool: &PgPool, code: &str) -> Result<()> {
-    sqlx::query("UPDATE terms SET last_scraped_at = now(), updated_at = now() WHERE code = $1")
-        .bind(code)
-        .execute(db_pool)
-        .await
-        .context("failed to update last scraped at for term")?;
+    sqlx::query!(
+        "UPDATE terms SET last_scraped_at = now(), updated_at = now() WHERE code = $1",
+        code
+    )
+    .execute(db_pool)
+    .await
+    .context("failed to update last scraped at for term")?;
 
     Ok(())
 }
@@ -233,16 +265,16 @@ pub async fn sync_terms_from_banner(db_pool: &PgPool, banner_terms: Vec<BannerTe
 
         if existing_codes.contains(&term.code) {
             // Update metadata only - DO NOT touch scrape_enabled
-            sqlx::query(
+            sqlx::query!(
                 r#"
-                UPDATE terms 
+                UPDATE terms
                 SET description = $2, is_archived = $3, updated_at = now()
                 WHERE code = $1
                 "#,
+                term.code,
+                term.description,
+                is_archived,
             )
-            .bind(&term.code)
-            .bind(&term.description)
-            .bind(is_archived)
             .execute(db_pool)
             .await
             .context("failed to update term metadata")?;
@@ -252,18 +284,18 @@ pub async fn sync_terms_from_banner(db_pool: &PgPool, banner_terms: Vec<BannerTe
             // New term - enable scraping ONLY if it's the latest
             let scrape_enabled = Some(&term.code) == latest_code.as_ref();
 
-            sqlx::query(
+            sqlx::query!(
                 r#"
                 INSERT INTO terms (code, description, year, season, scrape_enabled, is_archived)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
+                term.code,
+                term.description,
+                year,
+                season as Season,
+                scrape_enabled,
+                is_archived,
             )
-            .bind(&term.code)
-            .bind(&term.description)
-            .bind(year)
-            .bind(season)
-            .bind(scrape_enabled)
-            .bind(is_archived)
             .execute(db_pool)
             .await
             .context("failed to insert new term")?;

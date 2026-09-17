@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO course_watches (discord_user_id, course_id, watch_type)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (discord_user_id, course_id, watch_type)\n        DO UPDATE SET active = TRUE, notified_at = NULL\n        RETURNING (xmax::text::bigint = 0) AS \"is_new!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_new!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dc363da6110950c6f4a7051f2955d5da12c19d88659cf6ad4b00dc9d03d4388e"
+}

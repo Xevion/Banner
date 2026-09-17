@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT course_number_max, credit_hour_min, credit_hour_max, wait_count_max\n        FROM term_summary\n        WHERE term_code = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "course_number_max",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "term_summary",
+            "name": "course_number_max"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "credit_hour_min",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "term_summary",
+            "name": "credit_hour_min"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "credit_hour_max",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "term_summary",
+            "name": "credit_hour_max"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "wait_count_max",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "term_summary",
+            "name": "wait_count_max"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b921f7c40c238c7857ab12d05a63ba5fb8f269c567eb455ea98b78c0f1873b63"
+}

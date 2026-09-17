@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT subject, MAX(term) AS max_term FROM bluebook_evaluations GROUP BY subject",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "bluebook_evaluations",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "max_term",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bc95c36f2d6738a0ec256477132d2b1033e8dc4a969e34cff405b60f0b2040e0"
+}

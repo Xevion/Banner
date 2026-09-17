@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT code, description, year, season AS \"season: Season\", scrape_enabled,\n               is_archived, discovered_at, last_scraped_at, created_at, updated_at\n        FROM terms\n        WHERE code = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "year",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "year"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "season: Season",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "season"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "scrape_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "scrape_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_archived",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "is_archived"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "discovered_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "discovered_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "last_scraped_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "last_scraped_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "terms",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f7bb5e16eb258407602680da2e5ea4143071671bd4083a10d313efe940b79fd0"
+}

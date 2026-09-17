@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE terms SET scrape_enabled = true, updated_at = now() WHERE code = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee52b9ad17ce295403d1a7dc63f5907a11fc7c208148423c3724be8f7715f2fa"
+}

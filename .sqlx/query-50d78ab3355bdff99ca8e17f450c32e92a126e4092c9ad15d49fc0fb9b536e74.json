@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT subject FROM courses ORDER BY subject",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "50d78ab3355bdff99ca8e17f450c32e92a126e4092c9ad15d49fc0fb9b536e74"
+}

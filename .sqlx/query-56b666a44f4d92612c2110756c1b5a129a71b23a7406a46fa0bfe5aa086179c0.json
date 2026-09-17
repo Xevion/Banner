@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scrape_jobs WHERE id = $1 RETURNING target_payload->>'subject' AS subject",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "56b666a44f4d92612c2110756c1b5a129a71b23a7406a46fa0bfe5aa086179c0"
+}

@@ -36,7 +36,6 @@ pub struct MatchingStats {
 type CandidateRow = (i32, i32, f32, sqlx::types::Json<ScoreBreakdown>, Vec<String>, Vec<i16>);
 
 /// Raw row fetched from `rmp_professors` for the matching pipeline.
-#[derive(sqlx::FromRow)]
 struct RmpProfRow {
     legacy_id: i32,
     first_name: String,
@@ -126,10 +125,13 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     let cleared = clear_previous_run(&mut tx).await?;
 
     // 'confirmed' and 'rejected' are human decisions -- never touch them.
-    let instructors: Vec<(i32, String)> = sqlx::query_as(
-        "SELECT i.id, i.display_name FROM instructors i \
-         JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id \
-         WHERE ms.status NOT IN ('confirmed', 'rejected')",
+    let instructors = sqlx::query!(
+        r#"
+        SELECT i.id, i.display_name
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        WHERE ms.status NOT IN ('confirmed', 'rejected')
+        "#
     )
     .fetch_all(&mut *tx)
     .await
@@ -150,7 +152,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         });
     }
 
-    let instructor_ids: Vec<i32> = instructors.iter().map(|(id, _)| *id).collect();
+    let instructor_ids: Vec<i32> = instructors.iter().map(|r| r.id).collect();
     let total_processed = instructors.len();
 
     let subject_map = load_instructor_subjects(&mut tx, &instructor_ids).await?;
@@ -169,14 +171,18 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     let mut skipped_unparseable = 0usize;
     let mut skipped_no_candidates = 0usize;
 
-    for (instructor_id, display_name) in &instructors {
-        let Some(instructor_parts) = parse_banner_name(display_name) else {
+    for instructor in &instructors {
+        let Some(instructor_parts) = parse_banner_name(&instructor.display_name) else {
             skipped_unparseable += 1;
-            debug!(instructor_id, display_name, "Unparseable display name, skipping");
+            debug!(
+                instructor_id = instructor.id,
+                display_name = instructor.display_name,
+                "Unparseable display name, skipping"
+            );
             continue;
         };
 
-        let subjects = subject_map.get(instructor_id).unwrap_or(&empty_subjects);
+        let subjects = subject_map.get(&instructor.id).unwrap_or(&empty_subjects);
         let matched = collect_matched_profs(&name_index, &instructor_parts);
 
         if matched.profs.is_empty() {
@@ -185,7 +191,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
         }
 
         let scored = score_instructor(
-            *instructor_id,
+            instructor.id,
             subjects,
             &matched,
             &rejected_pairs,
@@ -193,7 +199,7 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
             &mut collected,
         );
 
-        let decision = decide_auto_links(*instructor_id, &scored, &matched);
+        let decision = decide_auto_links(instructor.id, &scored, &matched);
         auto_accept.extend(decision.accepted);
         inherited.extend(decision.inherited);
     }
@@ -216,12 +222,11 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
     // One RMP profile belongs to one instructor. Where several claim the same
     // profile, keep the strongest and leave the rest for review.
     let manual_held: HashSet<i32> =
-        sqlx::query_as("SELECT rmp_legacy_id FROM instructor_rmp_links WHERE source = 'manual'")
+        sqlx::query_scalar!("SELECT rmp_legacy_id FROM instructor_rmp_links WHERE source = 'manual'")
             .fetch_all(&mut *tx)
             .await
             .context("failed to fetch manually linked rmp profiles")?
             .into_iter()
-            .map(|(id,): (i32,)| id)
             .collect();
 
     let best_claim = resolve_best_claims(&auto_accept, &manual_held, &course_count_map);
@@ -273,13 +278,13 @@ pub async fn generate_candidates(db_pool: &PgPool) -> Result<MatchingStats> {
 /// Drop every algorithm-generated candidate and link, and reset the statuses
 /// they set. Only explicit human decisions survive.
 async fn clear_previous_run(conn: &mut PgConnection) -> Result<ClearedState> {
-    let candidates = sqlx::query("DELETE FROM rmp_match_candidates WHERE status != 'rejected'")
+    let candidates = sqlx::query!("DELETE FROM rmp_match_candidates WHERE status != 'rejected'")
         .execute(&mut *conn)
         .await
         .context("failed to delete non-rejected match candidates")?
         .rows_affected() as usize;
 
-    let links = sqlx::query("DELETE FROM instructor_rmp_links WHERE source != 'manual'")
+    let links = sqlx::query!("DELETE FROM instructor_rmp_links WHERE source != 'manual'")
         .execute(&mut *conn)
         .await
         .context("failed to delete non-manual rmp links")?
@@ -293,23 +298,26 @@ async fn load_instructor_subjects(
     conn: &mut PgConnection,
     instructor_ids: &[i32],
 ) -> Result<HashMap<i32, Vec<(String, u32)>>> {
-    let rows: Vec<(i32, String, i64)> = sqlx::query_as(
+    let rows = sqlx::query!(
         r#"
-        SELECT ci.instructor_id, c.subject, COUNT(*)
+        SELECT ci.instructor_id, c.subject, COUNT(*) AS "count!"
         FROM course_instructors ci
         JOIN courses c ON c.id = ci.course_id
         WHERE ci.instructor_id = ANY($1)
         GROUP BY ci.instructor_id, c.subject
         "#,
+        instructor_ids,
     )
-    .bind(instructor_ids)
     .fetch_all(&mut *conn)
     .await
     .context("failed to fetch instructor subjects for matching")?;
 
     let mut subject_map: HashMap<i32, Vec<(String, u32)>> = HashMap::new();
-    for (iid, subject, count) in rows {
-        subject_map.entry(iid).or_default().push((subject, count.max(0) as u32));
+    for row in rows {
+        subject_map
+            .entry(row.instructor_id)
+            .or_default()
+            .push((row.subject, row.count.max(0) as u32));
     }
 
     Ok(subject_map)
@@ -317,30 +325,32 @@ async fn load_instructor_subjects(
 
 /// Total courses taught per instructor.
 async fn load_course_counts(conn: &mut PgConnection, instructor_ids: &[i32]) -> Result<HashMap<i32, i64>> {
-    let counts = sqlx::query_as(
-        "SELECT instructor_id, COUNT(*) FROM course_instructors \
-         WHERE instructor_id = ANY($1) GROUP BY instructor_id",
+    let rows = sqlx::query!(
+        r#"
+        SELECT instructor_id, COUNT(*) AS "count!"
+        FROM course_instructors
+        WHERE instructor_id = ANY($1)
+        GROUP BY instructor_id
+        "#,
+        instructor_ids,
     )
-    .bind(instructor_ids)
     .fetch_all(&mut *conn)
     .await
-    .context("failed to fetch instructor course counts")?
-    .into_iter()
-    .collect();
+    .context("failed to fetch instructor course counts")?;
 
-    Ok(counts)
+    Ok(rows.into_iter().map(|r| (r.instructor_id, r.count)).collect())
 }
 
 /// Subject prefixes and posting years for every reviewed RMP profile.
 async fn load_review_data(conn: &mut PgConnection) -> Result<ReviewData> {
-    let rows: Vec<(i32, Option<String>, Option<i16>)> = sqlx::query_as(
+    let rows = sqlx::query!(
         r#"
         SELECT rmp_legacy_id,
                class,
                EXTRACT(YEAR FROM posted_at)::SMALLINT as year
         FROM rmp_reviews
         WHERE posted_at IS NOT NULL OR class IS NOT NULL
-        "#,
+        "#
     )
     .fetch_all(&mut *conn)
     .await
@@ -348,19 +358,19 @@ async fn load_review_data(conn: &mut PgConnection) -> Result<ReviewData> {
 
     let mut subjects: HashMap<i32, HashMap<String, u32>> = HashMap::new();
     let mut years: HashMap<i32, HashSet<i16>> = HashMap::new();
-    for (legacy_id, class, year) in &rows {
-        if let Some(class_str) = class {
+    for row in &rows {
+        if let Some(class_str) = &row.class {
             let prefix: String = class_str.chars().take_while(|c| c.is_alphabetic()).collect();
             if !prefix.is_empty() {
                 *subjects
-                    .entry(*legacy_id)
+                    .entry(row.rmp_legacy_id)
                     .or_default()
                     .entry(prefix.to_uppercase())
                     .or_default() += 1;
             }
         }
-        if let Some(y) = year {
-            years.entry(*legacy_id).or_default().insert(*y);
+        if let Some(y) = row.year {
+            years.entry(row.rmp_legacy_id).or_default().insert(y);
         }
     }
 
@@ -369,9 +379,13 @@ async fn load_review_data(conn: &mut PgConnection) -> Result<ReviewData> {
 
 /// Index every RMP professor under each key variant their name produces.
 async fn build_name_index(conn: &mut PgConnection, reviews: &ReviewData) -> Result<NameIndex> {
-    let prof_rows: Vec<RmpProfRow> = sqlx::query_as(
-        "SELECT legacy_id, first_name, last_name, department, num_ratings, course_codes \
-         FROM rmp_professors",
+    let prof_rows = sqlx::query_as!(
+        RmpProfRow,
+        r#"
+        SELECT legacy_id, first_name, last_name, department, num_ratings,
+               course_codes AS "course_codes: sqlx::types::Json<Vec<RmpCourseCode>>"
+        FROM rmp_professors
+        "#
     )
     .fetch_all(&mut *conn)
     .await
@@ -428,16 +442,18 @@ async fn build_name_index(conn: &mut PgConnection, reviews: &ReviewData) -> Resu
 
 /// Pairs a human explicitly refused to link.
 async fn load_rejected_pairs(conn: &mut PgConnection) -> Result<HashSet<(i32, i32)>> {
-    let rows: Vec<(i32, i32)> = sqlx::query_as(
-        "SELECT instructor_id, rmp_legacy_id \
-         FROM rmp_match_candidates \
-         WHERE status = 'rejected'",
+    let rows = sqlx::query!(
+        r#"
+        SELECT instructor_id, rmp_legacy_id
+        FROM rmp_match_candidates
+        WHERE status = 'rejected'
+        "#
     )
     .fetch_all(&mut *conn)
     .await
     .context("failed to fetch rejected match pairs")?;
 
-    Ok(rows.into_iter().collect())
+    Ok(rows.into_iter().map(|r| (r.instructor_id, r.rmp_legacy_id)).collect())
 }
 
 /// Gather the RMP profiles reachable from any of an instructor's name keys.
@@ -623,7 +639,7 @@ async fn insert_candidates(conn: &mut PgConnection, new_candidates: Vec<Candidat
         .map(|(_, _, _, _, _, ry)| serde_json::to_value(&ry).unwrap_or_default())
         .collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO rmp_match_candidates (instructor_id, rmp_legacy_id, score, score_breakdown)
         SELECT v.instructor_id, v.rmp_legacy_id, v.score, v.score_breakdown
@@ -633,17 +649,17 @@ async fn insert_candidates(conn: &mut PgConnection, new_candidates: Vec<Candidat
             score = EXCLUDED.score,
             score_breakdown = EXCLUDED.score_breakdown
         "#,
+        &c_instructor_ids,
+        &c_legacy_ids,
+        &c_scores,
+        &c_breakdowns,
     )
-    .bind(&c_instructor_ids)
-    .bind(&c_legacy_ids)
-    .bind(&c_scores)
-    .bind(&c_breakdowns)
     .execute(&mut *conn)
     .await
     .context("failed to batch insert match candidates")?;
 
     // Batch-update review subjects and years using JSONB->array conversion.
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE rmp_match_candidates mc
         SET review_subjects = sub.subjects,
@@ -658,11 +674,11 @@ async fn insert_candidates(conn: &mut PgConnection, new_candidates: Vec<Candidat
         WHERE mc.instructor_id = sub.instructor_id
           AND mc.rmp_legacy_id = sub.rmp_legacy_id
         "#,
+        &c_instructor_ids,
+        &c_legacy_ids,
+        &c_review_subjects_json,
+        &c_review_years_json,
     )
-    .bind(&c_instructor_ids)
-    .bind(&c_legacy_ids)
-    .bind(&c_review_subjects_json)
-    .bind(&c_review_years_json)
     .execute(&mut *conn)
     .await
     .context("failed to batch update candidate review data")?;
@@ -715,7 +731,7 @@ async fn insert_auto_links(conn: &mut PgConnection, best_claim: &HashMap<i32, (i
     let aa_legacy_ids: Vec<i32> = best_claim.keys().copied().collect();
     let aa_instructor_ids: Vec<i32> = aa_legacy_ids.iter().map(|lid| best_claim[lid].0).collect();
 
-    let actually_linked: Vec<(i32, i32)> = sqlx::query_as(
+    let actually_linked = sqlx::query!(
         r#"
         INSERT INTO instructor_rmp_links (instructor_id, rmp_legacy_id, source)
         SELECT v.instructor_id, v.rmp_legacy_id, 'auto'
@@ -723,18 +739,18 @@ async fn insert_auto_links(conn: &mut PgConnection, best_claim: &HashMap<i32, (i
         ON CONFLICT (rmp_legacy_id) DO NOTHING
         RETURNING instructor_id, rmp_legacy_id
         "#,
+        &aa_instructor_ids,
+        &aa_legacy_ids,
     )
-    .bind(&aa_instructor_ids)
-    .bind(&aa_legacy_ids)
     .fetch_all(&mut *conn)
     .await
     .context("failed to insert auto rmp links")?;
 
     // Only mark candidates accepted once the link actually landed.
-    let linked_instructor_ids: Vec<i32> = actually_linked.iter().map(|(iid, _)| *iid).collect();
-    let linked_legacy_ids: Vec<i32> = actually_linked.iter().map(|(_, lid)| *lid).collect();
+    let linked_instructor_ids: Vec<i32> = actually_linked.iter().map(|r| r.instructor_id).collect();
+    let linked_legacy_ids: Vec<i32> = actually_linked.iter().map(|r| r.rmp_legacy_id).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE rmp_match_candidates mc
         SET status = 'accepted', resolved_at = NOW()
@@ -742,9 +758,9 @@ async fn insert_auto_links(conn: &mut PgConnection, best_claim: &HashMap<i32, (i
         WHERE mc.instructor_id = v.instructor_id
           AND mc.rmp_legacy_id = v.rmp_legacy_id
         "#,
+        &linked_instructor_ids,
+        &linked_legacy_ids,
     )
-    .bind(&linked_instructor_ids)
-    .bind(&linked_legacy_ids)
     .execute(&mut *conn)
     .await
     .context("failed to update auto-accepted candidates")?;

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM term_subjects WHERE term_code = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf024d445f0637b9c842b01b48cc4797a2a96c537e2a7385a1a335bcacd84aa8"
+}

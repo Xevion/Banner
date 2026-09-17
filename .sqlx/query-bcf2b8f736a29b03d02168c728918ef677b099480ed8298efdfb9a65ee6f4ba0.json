@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO rmp_match_candidates (instructor_id, rmp_legacy_id, score, score_breakdown)\n        SELECT v.instructor_id, v.rmp_legacy_id, v.score, v.score_breakdown\n        FROM UNNEST($1::int4[], $2::int4[], $3::real[], $4::jsonb[])\n            AS v(instructor_id, rmp_legacy_id, score, score_breakdown)\n        ON CONFLICT (instructor_id, rmp_legacy_id) DO UPDATE SET\n            score = EXCLUDED.score,\n            score_breakdown = EXCLUDED.score_breakdown\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4Array",
+        "Float4Array",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bcf2b8f736a29b03d02168c728918ef677b099480ed8298efdfb9a65ee6f4ba0"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE rmp_match_candidates mc\n        SET review_subjects = sub.subjects,\n            review_years = sub.years\n        FROM (\n            SELECT v.instructor_id, v.rmp_legacy_id,\n                   COALESCE(ARRAY(SELECT jsonb_array_elements_text(v.rs)), '{}') as subjects,\n                   COALESCE(ARRAY(SELECT (jsonb_array_elements_text(v.ry))::SMALLINT), '{}') as years\n            FROM UNNEST($1::int4[], $2::int4[], $3::jsonb[], $4::jsonb[])\n                AS v(instructor_id, rmp_legacy_id, rs, ry)\n        ) sub\n        WHERE mc.instructor_id = sub.instructor_id\n          AND mc.rmp_legacy_id = sub.rmp_legacy_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4Array",
+        "JsonbArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "75fd65cc6484e7d5773a7b2b4f0eaca9c9bf028107a94532db9f4ec43bb0a26f"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO rmp_reviews (\n                rmp_legacy_id, comment, class, grade, rating_tags,\n                helpful_rating, clarity_rating, difficulty_rating,\n                would_take_again, is_for_credit, is_for_online_class,\n                attendance_mandatory, flag_status, textbook_use,\n                thumbs_up_total, thumbs_down_total, posted_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "TextArray",
+        "Float4",
+        "Float4",
+        "Float4",
+        "Int2",
+        "Bool",
+        "Bool",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f20032de33b15f2f448ba4f57e26110d3a8799e0f3f40c10d7d00fc0364be01f"
+}

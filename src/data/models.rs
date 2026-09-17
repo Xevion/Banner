@@ -426,7 +426,7 @@ pub struct CourseInstructor {
 }
 
 /// Joined instructor data for a course (from course_instructors + instructors + rmp_professors + instructor_scores).
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CourseInstructorDetail {
     pub instructor_id: i32,
     pub banner_id: String,
@@ -441,8 +441,7 @@ pub struct CourseInstructorDetail {
     pub bb_avg_instructor_rating: Option<f32>,
     pub bb_total_responses: Option<i64>,
     pub slug: Option<String>,
-    /// Present when fetched via batch query; `None` for single-course queries.
-    pub course_id: Option<i32>,
+    pub course_id: i32,
     // Precomputed Bayesian score fields (from instructor_scores)
     pub sc_display_score: Option<f32>,
     pub sc_sort_score: Option<f32>,
@@ -455,7 +454,7 @@ pub struct CourseInstructorDetail {
 }
 
 #[allow(dead_code)]
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ReferenceData {
     pub category: String,
     pub code: String,
@@ -614,7 +613,7 @@ const LOCK_EXPIRY_SECS: i64 = 10 * 60;
 
 /// Represents a queryable job from the database.
 #[allow(dead_code)]
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ScrapeJob {
     pub id: i32,
     pub target_type: TargetType,
@@ -647,7 +646,7 @@ impl ScrapeJob {
 }
 
 /// A user authenticated via Discord OAuth.
-#[derive(sqlx::FromRow, Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct User {
@@ -665,8 +664,8 @@ pub struct User {
 }
 
 /// A server-side session for an authenticated user.
-#[allow(dead_code)] // Fields read via sqlx::FromRow; some only used in DB queries
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[allow(dead_code)] // Some fields exist only to mirror the row, never read in Rust
+#[derive(Debug, Clone)]
 pub struct UserSession {
     pub id: String,
     pub user_id: i64,
@@ -676,7 +675,7 @@ pub struct UserSession {
 }
 
 /// Row returned by audit-log queries (audit + joined course fields).
-#[derive(sqlx::FromRow, Debug)]
+#[derive(Debug)]
 pub struct AuditRow {
     pub id: i32,
     pub course_id: i32,
@@ -695,7 +694,7 @@ pub struct AuditRow {
 ///
 /// Populated by `ScrapeJobOps::fetch_subject_stats` and converted into
 /// `crate::scraper::adaptive::SubjectStats` for interval computation.
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct SubjectResultStats {
     pub subject: String,
     pub term: String,

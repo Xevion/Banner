@@ -201,6 +201,8 @@ pub async fn list_links(pool: &PgPool, filter: &ListBluebookLinksFilter) -> Resu
         "#
     );
 
+    // The WHERE clause and its bind positions are assembled per filter, so this query
+    // and its count below stay runtime-checked.
     let mut query = sqlx::query_as::<_, LinkListRow>(AssertSqlSafe(query_str));
     if let Some(status) = filter.status {
         query = query.bind(status);

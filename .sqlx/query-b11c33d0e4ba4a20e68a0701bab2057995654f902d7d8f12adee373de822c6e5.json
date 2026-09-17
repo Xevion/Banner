@@ -1,0 +1,317 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,\n               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,\n               instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,\n               cross_list, cross_list_capacity, cross_list_count, link_identifier,\n               is_section_linked,\n               meeting_times AS \"meeting_times: Json<Vec<DbMeetingTime>>\",\n               attributes AS \"attributes: Json<Vec<String>>\"\n        FROM courses\n        WHERE crn = $1 AND term_code = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "crn",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "crn"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "course_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "term_code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "term_code"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "max_enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "max_enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "wait_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "wait_capacity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "last_scraped_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "last_scraped_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "sequence_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "sequence_number"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "part_of_term",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "part_of_term"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "instructional_method",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "instructional_method"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "campus",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "campus"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "credit_hours",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "credit_hour_low",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_low"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "credit_hour_high",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_high"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "cross_list",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "cross_list_capacity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "cross_list_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_count"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "link_identifier",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "link_identifier"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "is_section_linked",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "is_section_linked"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "meeting_times: Json<Vec<DbMeetingTime>>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "meeting_times"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "attributes: Json<Vec<String>>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "attributes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b11c33d0e4ba4a20e68a0701bab2057995654f902d7d8f12adee373de822c6e5"
+}

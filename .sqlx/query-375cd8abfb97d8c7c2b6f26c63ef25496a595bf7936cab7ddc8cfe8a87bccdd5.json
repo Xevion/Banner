@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scrape_jobs SET locked_at = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "375cd8abfb97d8c7c2b6f26c63ef25496a595bf7936cab7ddc8cfe8a87bccdd5"
+}

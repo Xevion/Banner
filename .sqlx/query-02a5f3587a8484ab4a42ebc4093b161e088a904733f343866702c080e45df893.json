@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE rmp_professors SET\n            reviews_last_scraped_at =\n                NOW() - review_scrape_interval + make_interval(hours => $1)\n        WHERE legacy_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02a5f3587a8484ab4a42ebc4093b161e088a904733f343866702c080e45df893"
+}

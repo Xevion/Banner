@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT subject, course_number, title, COUNT(*)::int as \"section_count!\",\n               MAX(GREATEST(similarity(immutable_unaccent(title), immutable_unaccent($2)), similarity(subject || ' ' || course_number, $2))) as \"score!\"\n        FROM courses\n        WHERE term_code = $1\n          AND (immutable_unaccent(title) % immutable_unaccent($2) OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent($2) || '%'\n               OR (subject || ' ' || course_number) % $2\n               OR (subject || ' ' || course_number) ILIKE '%' || $2 || '%')\n        GROUP BY subject, course_number, title\n        ORDER BY \"score!\" DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "course_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "section_count!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "score!",
+        "type_info": "Float4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "1743bdb5ded53e51885a37d7dca8d0fca222adfa9be924742f11ff837e64c63a"
+}

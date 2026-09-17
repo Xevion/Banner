@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bluebook_subject_scrapes (subject, last_scraped_at)\n         VALUES ($1, NOW())\n         ON CONFLICT (subject) DO UPDATE SET last_scraped_at = NOW()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1246e71b0e00b2dd76694ed535bb62d3ca60bcf6d46cfe6c2dc84df3d326df5d"
+}

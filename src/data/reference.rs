@@ -15,17 +15,17 @@ pub async fn batch_upsert(pool: &PgPool, entries: &[ReferenceData]) -> Result<()
     let codes: Vec<&str> = entries.iter().map(|e| e.code.as_str()).collect();
     let descriptions: Vec<String> = entries.iter().map(|e| decode_html_entities(&e.description)).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO reference_data (category, code, description)
         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
         ON CONFLICT (category, code)
         DO UPDATE SET description = EXCLUDED.description
         "#,
+        &categories as &[&str],
+        &codes as &[&str],
+        &descriptions,
     )
-    .bind(&categories)
-    .bind(&codes)
-    .bind(&descriptions)
     .execute(pool)
     .await
     .context("failed to batch upsert reference data")?;
@@ -35,10 +35,11 @@ pub async fn batch_upsert(pool: &PgPool, entries: &[ReferenceData]) -> Result<()
 
 /// Get all reference data entries for a category.
 pub async fn get_by_category(pool: &PgPool, category: &str) -> Result<Vec<ReferenceData>> {
-    let rows = sqlx::query_as::<_, ReferenceData>(
+    let rows = sqlx::query_as!(
+        ReferenceData,
         "SELECT category, code, description FROM reference_data WHERE category = $1 ORDER BY description",
+        category,
     )
-    .bind(category)
     .fetch_all(pool)
     .await
     .context("failed to fetch reference data by category")?;
@@ -47,7 +48,8 @@ pub async fn get_by_category(pool: &PgPool, category: &str) -> Result<Vec<Refere
 
 /// Get all reference data entries (for cache initialization).
 pub async fn get_all(pool: &PgPool) -> Result<Vec<ReferenceData>> {
-    let rows = sqlx::query_as::<_, ReferenceData>(
+    let rows = sqlx::query_as!(
+        ReferenceData,
         "SELECT category, code, description FROM reference_data ORDER BY category, description",
     )
     .fetch_all(pool)

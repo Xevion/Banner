@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            i.slug AS \"slug!\",\n            GREATEST(\n                sc.computed_at,\n                bb.max_updated_at,\n                rmp.max_synced_at,\n                cr.max_scraped_at\n            ) AS last_modified\n        FROM instructors i\n        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id\n        LEFT JOIN (\n            SELECT instructor_id, MAX(updated_at) AS max_updated_at\n            FROM instructor_bluebook_links\n            GROUP BY instructor_id\n        ) bb ON bb.instructor_id = i.id\n        LEFT JOIN (\n            SELECT irl.instructor_id, MAX(rp.last_synced_at) AS max_synced_at\n            FROM instructor_rmp_links irl\n            JOIN rmp_professors rp ON rp.legacy_id = irl.rmp_legacy_id\n            GROUP BY irl.instructor_id\n        ) rmp ON rmp.instructor_id = i.id\n        LEFT JOIN (\n            SELECT ci.instructor_id, MAX(c.last_scraped_at) AS max_scraped_at\n            FROM course_instructors ci\n            JOIN courses c ON c.id = ci.course_id\n            GROUP BY ci.instructor_id\n        ) cr ON cr.instructor_id = i.id\n        WHERE i.slug IS NOT NULL\n        ORDER BY i.slug\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "last_modified",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "8e53936f782244aa69d463492cf593c7a008219ed7601bd7474070ed3c721815"
+}

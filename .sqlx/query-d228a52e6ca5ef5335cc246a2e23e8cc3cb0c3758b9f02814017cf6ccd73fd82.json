@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH buckets AS (\n            SELECT generate_series(\n                date_bin($1::text::interval, NOW() - $2::text::interval, '2020-01-01'::timestamptz),\n                date_bin($1::text::interval, NOW(), '2020-01-01'::timestamptz),\n                $1::text::interval\n            ) AS bucket_start\n        ),\n        raw AS (\n            SELECT date_bin($1::text::interval, completed_at, '2020-01-01'::timestamptz) AS bucket_start,\n                   COUNT(*)::BIGINT AS scrape_count,\n                   COUNT(*) FILTER (WHERE success)::BIGINT AS success_count,\n                   COUNT(*) FILTER (WHERE NOT success)::BIGINT AS error_count,\n                   COALESCE(SUM(courses_changed) FILTER (WHERE success), 0)::BIGINT AS courses_changed,\n                   COALESCE(AVG(duration_ms) FILTER (WHERE success), 0)::FLOAT8 AS avg_duration_ms\n            FROM scrape_job_results\n            WHERE completed_at > NOW() - $2::text::interval\n              AND ($3::text IS NULL OR payload->>'term' = $3)\n            GROUP BY 1\n        )\n        SELECT b.bucket_start AS \"timestamp!\",\n               COALESCE(r.scrape_count, 0) AS \"scrape_count!\",\n               COALESCE(r.success_count, 0) AS \"success_count!\",\n               COALESCE(r.error_count, 0) AS \"error_count!\",\n               COALESCE(r.courses_changed, 0) AS \"courses_changed!\",\n               COALESCE(r.avg_duration_ms, 0) AS \"avg_duration_ms!\"\n        FROM buckets b\n        LEFT JOIN raw r ON b.bucket_start = r.bucket_start\n        ORDER BY b.bucket_start\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timestamp!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "scrape_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "success_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "error_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "courses_changed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_duration_ms!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d228a52e6ca5ef5335cc246a2e23e8cc3cb0c3758b9f02814017cf6ccd73fd82"
+}

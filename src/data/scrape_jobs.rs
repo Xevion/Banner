@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use sqlx::types::Json;
 use tracing::debug;
 
 use super::context::DbContext;
@@ -24,9 +25,9 @@ fn payloads_as_json(payloads: &[TargetPayload]) -> Result<Vec<serde_json::Value>
 }
 
 /// A single row from scrape_job_results for a given subject.
-#[derive(sqlx::FromRow, Debug)]
+#[derive(Debug)]
 pub struct SubjectResultRow {
-    pub id: i32,
+    pub id: i64,
     pub completed_at: chrono::DateTime<chrono::Utc>,
     pub duration_ms: i32,
     pub success: bool,
@@ -40,16 +41,29 @@ pub struct SubjectResultRow {
 
 /// List scrape jobs ordered by priority descending, then execute_at ascending.
 pub async fn list_ordered(pool: &PgPool, limit: i64) -> Result<Vec<ScrapeJob>> {
-    sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs ORDER BY priority DESC, execute_at ASC LIMIT $1")
-        .bind(limit)
-        .fetch_all(pool)
-        .await
-        .context("failed to list ordered scrape jobs")
+    sqlx::query_as!(
+        ScrapeJob,
+        r#"
+        SELECT id, target_type AS "target_type: TargetType",
+               target_payload AS "target_payload: Json<TargetPayload>",
+               priority AS "priority: ScrapePriority",
+               execute_at, created_at, locked_at,
+               retry_count AS "retry_count: Count", max_retries AS "max_retries: Count",
+               queued_at
+        FROM scrape_jobs
+        ORDER BY priority DESC, execute_at ASC
+        LIMIT $1
+        "#,
+        limit,
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to list ordered scrape jobs")
 }
 
 /// Count all scrape jobs in the queue.
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM scrape_jobs")
+    let count = sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM scrape_jobs"#)
         .fetch_one(pool)
         .await
         .context("failed to count scrape jobs")?;
@@ -59,7 +73,7 @@ pub async fn count_all(pool: &PgPool) -> Result<i64> {
 /// Depth of the backlog a worker could pick up right now: unlocked (or
 /// stale-locked) jobs whose `execute_at` has passed. Mirrors `lock_next`'s
 /// eligibility predicate so the two never disagree.
-#[derive(sqlx::FromRow, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct QueueDepth {
     pub count: i64,
     pub oldest_seconds: Option<f64>,
@@ -67,14 +81,17 @@ pub struct QueueDepth {
 
 /// Count eligible jobs and the age in seconds of the oldest one's `queued_at`.
 pub async fn queue_depth(pool: &PgPool) -> Result<QueueDepth> {
-    sqlx::query_as::<_, QueueDepth>(
-        "SELECT COUNT(*)::BIGINT AS count, \
-                EXTRACT(EPOCH FROM (NOW() - MIN(queued_at)))::FLOAT8 AS oldest_seconds \
-         FROM scrape_jobs \
-         WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision)) \
-           AND execute_at <= NOW()",
+    sqlx::query_as!(
+        QueueDepth,
+        r#"
+        SELECT COUNT(*)::BIGINT AS "count!",
+               EXTRACT(EPOCH FROM (NOW() - MIN(queued_at)))::FLOAT8 AS oldest_seconds
+        FROM scrape_jobs
+        WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision))
+          AND execute_at <= NOW()
+        "#,
+        f64::from(LOCK_EXPIRY_SECS),
     )
-    .bind(LOCK_EXPIRY_SECS)
     .fetch_one(pool)
     .await
     .context("failed to compute scrape queue depth")
@@ -82,26 +99,41 @@ pub async fn queue_depth(pool: &PgPool) -> Result<QueueDepth> {
 
 /// Fetch a single scrape job by ID.
 pub async fn get_by_id(pool: &PgPool, id: i32) -> Result<Option<ScrapeJob>> {
-    sqlx::query_as::<_, ScrapeJob>("SELECT * FROM scrape_jobs WHERE id = $1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .context("failed to fetch scrape job by id")
+    sqlx::query_as!(
+        ScrapeJob,
+        r#"
+        SELECT id, target_type AS "target_type: TargetType",
+               target_payload AS "target_payload: Json<TargetPayload>",
+               priority AS "priority: ScrapePriority",
+               execute_at, created_at, locked_at,
+               retry_count AS "retry_count: Count", max_retries AS "max_retries: Count",
+               queued_at
+        FROM scrape_jobs
+        WHERE id = $1
+        "#,
+        id,
+    )
+    .fetch_optional(pool)
+    .await
+    .context("failed to fetch scrape job by id")
 }
 
 /// Fetch recent scrape job results for a given subject.
 pub async fn list_results_for_subject(pool: &PgPool, subject: &str, limit: i64) -> Result<Vec<SubjectResultRow>> {
-    sqlx::query_as::<_, SubjectResultRow>(
-        "SELECT id, completed_at, duration_ms, success, error_message, \
-                courses_fetched, courses_changed, courses_unchanged, \
-                audits_generated, metrics_generated \
-         FROM scrape_job_results \
-         WHERE target_type = 'Subject' AND payload->>'subject' = $1 \
-         ORDER BY completed_at DESC \
-         LIMIT $2",
+    sqlx::query_as!(
+        SubjectResultRow,
+        r#"
+        SELECT id, completed_at, duration_ms, success, error_message,
+               courses_fetched, courses_changed, courses_unchanged,
+               audits_generated, metrics_generated
+        FROM scrape_job_results
+        WHERE target_type = 'Subject' AND payload->>'subject' = $1
+        ORDER BY completed_at DESC
+        LIMIT $2
+        "#,
+        subject,
+        limit,
     )
-    .bind(subject)
-    .bind(limit)
     .fetch_all(pool)
     .await
     .context("failed to list results for subject")
@@ -131,22 +163,30 @@ impl<'a> ScrapeJobOps<'a> {
             .await
             .context("failed to begin transaction for lock_next")?;
 
-        let job = sqlx::query_as::<_, ScrapeJob>(
-            "SELECT * FROM scrape_jobs \
-             WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision)) \
-             AND execute_at <= NOW() \
-             ORDER BY priority DESC, execute_at ASC \
-             LIMIT 1 \
-             FOR UPDATE SKIP LOCKED",
+        let job = sqlx::query_as!(
+            ScrapeJob,
+            r#"
+            SELECT id, target_type AS "target_type: TargetType",
+                   target_payload AS "target_payload: Json<TargetPayload>",
+                   priority AS "priority: ScrapePriority",
+                   execute_at, created_at, locked_at,
+                   retry_count AS "retry_count: Count", max_retries AS "max_retries: Count",
+                   queued_at
+            FROM scrape_jobs
+            WHERE (locked_at IS NULL OR locked_at < NOW() - make_interval(secs => $1::double precision))
+              AND execute_at <= NOW()
+            ORDER BY priority DESC, execute_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            "#,
+            f64::from(LOCK_EXPIRY_SECS),
         )
-        .bind(LOCK_EXPIRY_SECS)
         .fetch_optional(&mut *tx)
         .await
         .context("failed to fetch next lockable scrape job")?;
 
         if let Some(ref job) = job {
-            sqlx::query("UPDATE scrape_jobs SET locked_at = NOW() WHERE id = $1")
-                .bind(job.id)
+            sqlx::query!("UPDATE scrape_jobs SET locked_at = NOW() WHERE id = $1", job.id)
                 .execute(&mut *tx)
                 .await
                 .context("failed to update locked_at for scrape job")?;
@@ -173,8 +213,7 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// Emits a `ScrapeJobEvent::Deleted` event on success.
     pub async fn delete(&self, job_id: i32) -> Result<()> {
-        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
-            .bind(job_id)
+        sqlx::query!("DELETE FROM scrape_jobs WHERE id = $1", job_id)
             .execute(self.ctx.pool())
             .await
             .context("failed to delete scrape job")?;
@@ -191,13 +230,14 @@ impl<'a> ScrapeJobOps<'a> {
     /// Emits a `ScrapeJobEvent::Completed` event with the subject extracted from
     /// the job's target payload.
     pub async fn complete(&self, job_id: i32) -> Result<()> {
-        let subject: Option<String> =
-            sqlx::query_scalar("DELETE FROM scrape_jobs WHERE id = $1 RETURNING target_payload->>'subject'")
-                .bind(job_id)
-                .fetch_optional(self.ctx.pool())
-                .await
-                .context("failed to complete scrape job")?
-                .flatten();
+        let subject = sqlx::query_scalar!(
+            "DELETE FROM scrape_jobs WHERE id = $1 RETURNING target_payload->>'subject' AS subject",
+            job_id,
+        )
+        .fetch_optional(self.ctx.pool())
+        .await
+        .context("failed to complete scrape job")?
+        .flatten();
 
         self.ctx
             .events()
@@ -213,12 +253,12 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// Emits a `ScrapeJobEvent::Retried` event.
     pub async fn retry(&self, job_id: i32, retry_count: Count, execute_at: DateTime<Utc>) -> Result<()> {
-        sqlx::query(
+        sqlx::query!(
             "UPDATE scrape_jobs SET locked_at = NULL, retry_count = $2, queued_at = NOW(), execute_at = $3 WHERE id = $1",
+            job_id,
+            retry_count as Count,
+            execute_at,
         )
-        .bind(job_id)
-        .bind(retry_count)
-        .bind(execute_at)
         .execute(self.ctx.pool())
         .await
         .context("failed to retry scrape job")?;
@@ -240,8 +280,7 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// Emits `ScrapeJobEvent::Exhausted` then `ScrapeJobEvent::Deleted`.
     pub async fn exhaust(&self, job_id: i32) -> Result<()> {
-        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
-            .bind(job_id)
+        sqlx::query!("DELETE FROM scrape_jobs WHERE id = $1", job_id)
             .execute(self.ctx.pool())
             .await
             .context("failed to exhaust scrape job")?;
@@ -262,7 +301,7 @@ impl<'a> ScrapeJobOps<'a> {
     /// a previous unclean shutdown.
     pub async fn force_unlock_all(&self) -> Result<u64> {
         let result =
-            sqlx::query("UPDATE scrape_jobs SET locked_at = NULL, queued_at = NOW() WHERE locked_at IS NOT NULL")
+            sqlx::query!("UPDATE scrape_jobs SET locked_at = NULL, queued_at = NOW() WHERE locked_at IS NOT NULL")
                 .execute(self.ctx.pool())
                 .await
                 .context("failed to force unlock all scrape jobs")?;
@@ -273,8 +312,7 @@ impl<'a> ScrapeJobOps<'a> {
     ///
     /// Used to release a job back to the queue during graceful shutdown.
     pub async fn unlock(&self, job_id: i32) -> Result<()> {
-        sqlx::query("UPDATE scrape_jobs SET locked_at = NULL WHERE id = $1")
-            .bind(job_id)
+        sqlx::query!("UPDATE scrape_jobs SET locked_at = NULL WHERE id = $1", job_id)
             .execute(self.ctx.pool())
             .await
             .context("failed to unlock scrape job")?;
@@ -296,7 +334,8 @@ impl<'a> ScrapeJobOps<'a> {
         retry_count: Count,
         counts: Option<&UpsertCounts>,
     ) -> Result<()> {
-        sqlx::query(
+        let payload = sqlx::types::Json(payload);
+        sqlx::query!(
             r#"
             INSERT INTO scrape_job_results (
                 target_type, payload, priority,
@@ -306,21 +345,21 @@ impl<'a> ScrapeJobOps<'a> {
                 audits_generated, metrics_generated
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             "#,
+            target_type as TargetType,
+            payload as Json<TargetPayload>,
+            priority as ScrapePriority,
+            queued_at,
+            started_at,
+            duration_ms as DurationMs,
+            success,
+            error_message,
+            retry_count as Count,
+            counts.map(|c| c.courses_fetched) as Option<Count>,
+            counts.map(|c| c.courses_changed) as Option<Count>,
+            counts.map(|c| c.courses_unchanged) as Option<Count>,
+            counts.map(|c| c.audits_generated) as Option<Count>,
+            counts.map(|c| c.metrics_generated) as Option<Count>,
         )
-        .bind(target_type)
-        .bind(sqlx::types::Json(&payload))
-        .bind(priority)
-        .bind(queued_at)
-        .bind(started_at)
-        .bind(duration_ms)
-        .bind(success)
-        .bind(error_message)
-        .bind(retry_count)
-        .bind(counts.map(|c| c.courses_fetched))
-        .bind(counts.map(|c| c.courses_changed))
-        .bind(counts.map(|c| c.courses_unchanged))
-        .bind(counts.map(|c| c.audits_generated))
-        .bind(counts.map(|c| c.metrics_generated))
         .execute(self.ctx.pool())
         .await
         .context("failed to insert scrape job result")?;
@@ -338,20 +377,19 @@ impl<'a> ScrapeJobOps<'a> {
         candidate_payloads: &[TargetPayload],
     ) -> Result<HashSet<String>> {
         let candidates = payloads_as_json(candidate_payloads)?;
-        let existing_jobs: Vec<(serde_json::Value,)> = sqlx::query_as(
-            "SELECT target_payload FROM scrape_jobs
-             WHERE target_type = $1 AND target_payload = ANY($2)",
+        let existing_jobs = sqlx::query_scalar!(
+            r#"
+            SELECT target_payload FROM scrape_jobs
+            WHERE target_type = $1 AND target_payload = ANY($2)
+            "#,
+            target_type as TargetType,
+            &candidates,
         )
-        .bind(target_type)
-        .bind(&candidates)
         .fetch_all(self.ctx.pool())
         .await
         .context("failed to find existing scrape job payloads")?;
 
-        let existing_payloads = existing_jobs
-            .into_iter()
-            .map(|(payload,)| payload.to_string())
-            .collect();
+        let existing_payloads = existing_jobs.iter().map(ToString::to_string).collect();
 
         Ok(existing_payloads)
     }
@@ -361,7 +399,8 @@ impl<'a> ScrapeJobOps<'a> {
     /// For past/archived terms, results older than 24h are still relevant since they
     /// scrape on 48h intervals. We use a 72h window to capture at least one full cycle.
     pub async fn fetch_subject_stats(&self) -> Result<Vec<SubjectResultStats>> {
-        let rows = sqlx::query_as::<_, SubjectResultStats>(
+        let rows = sqlx::query_as!(
+            SubjectResultStats,
             r#"
             WITH recent AS (
                 SELECT payload->>'subject' AS subject,
@@ -382,16 +421,16 @@ impl<'a> ScrapeJobOps<'a> {
                 FROM filtered GROUP BY subject, term
             )
             SELECT
-                f.subject::TEXT AS subject,
-                f.term::TEXT AS term,
-                COUNT(*)::BIGINT AS recent_runs,
+                f.subject::TEXT AS "subject!",
+                f.term::TEXT AS "term!",
+                COUNT(*)::BIGINT AS "recent_runs!",
                 COALESCE(AVG(CASE WHEN f.success AND f.courses_fetched > 0
-                     THEN f.courses_changed::FLOAT / f.courses_fetched ELSE NULL END), 0.0)::FLOAT8 AS avg_change_ratio,
-                COALESCE(zb.first_nonzero_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_changed = 0))::BIGINT AS consecutive_zero_changes,
-                COALESCE(zb.first_nonempty_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_fetched = 0))::BIGINT AS consecutive_empty_fetches,
-                COUNT(*) FILTER (WHERE NOT f.success)::BIGINT AS recent_failure_count,
-                COUNT(*) FILTER (WHERE f.success)::BIGINT AS recent_success_count,
-                MAX(f.completed_at) AS last_completed
+                     THEN f.courses_changed::FLOAT / f.courses_fetched ELSE NULL END), 0.0)::FLOAT8 AS "avg_change_ratio!",
+                COALESCE(zb.first_nonzero_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_changed = 0))::BIGINT AS "consecutive_zero_changes!",
+                COALESCE(zb.first_nonempty_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_fetched = 0))::BIGINT AS "consecutive_empty_fetches!",
+                COUNT(*) FILTER (WHERE NOT f.success)::BIGINT AS "recent_failure_count!",
+                COUNT(*) FILTER (WHERE f.success)::BIGINT AS "recent_success_count!",
+                MAX(f.completed_at) AS "last_completed!"
             FROM filtered f
             LEFT JOIN zero_break zb ON f.subject = zb.subject AND f.term = zb.term
             GROUP BY f.subject, f.term, zb.first_nonzero_rn, zb.first_nonempty_rn
@@ -423,18 +462,24 @@ impl<'a> ScrapeJobOps<'a> {
             priorities.push(format!("{priority:?}"));
         }
 
-        let inserted = sqlx::query_as::<_, ScrapeJob>(
+        let inserted = sqlx::query_as!(
+            ScrapeJob,
             r#"
             INSERT INTO scrape_jobs (target_type, target_payload, priority, execute_at, queued_at)
             SELECT v.target_type::target_type, v.payload, v.priority::scrape_priority, NOW(), NOW()
             FROM UNNEST($1::text[], $2::jsonb[], $3::text[])
                 AS v(target_type, payload, priority)
-            RETURNING *
+            RETURNING id, target_type AS "target_type: TargetType",
+                      target_payload AS "target_payload: Json<TargetPayload>",
+                      priority AS "priority: ScrapePriority",
+                      execute_at, created_at, locked_at,
+                      retry_count AS "retry_count: Count", max_retries AS "max_retries: Count",
+                      queued_at
             "#,
+            &target_types,
+            &payloads,
+            &priorities,
         )
-        .bind(&target_types)
-        .bind(&payloads)
-        .bind(&priorities)
         .fetch_all(self.ctx.pool())
         .await
         .context("failed to batch insert scrape jobs")?;

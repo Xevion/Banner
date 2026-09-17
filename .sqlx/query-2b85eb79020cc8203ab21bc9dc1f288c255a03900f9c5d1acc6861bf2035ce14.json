@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO course_meetings (course_id, day_bits, begin_minutes, end_minutes, start_date, end_date)\n            SELECT * FROM UNNEST($1::int4[], $2::int2[], $3::int2[], $4::int2[], $5::date[], $6::date[])\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int2Array",
+        "Int2Array",
+        "Int2Array",
+        "DateArray",
+        "DateArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b85eb79020cc8203ab21bc9dc1f288c255a03900f9c5d1acc6861bf2035ce14"
+}

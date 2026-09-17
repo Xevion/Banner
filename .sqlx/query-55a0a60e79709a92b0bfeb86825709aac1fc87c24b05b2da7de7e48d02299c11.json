@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "55a0a60e79709a92b0bfeb86825709aac1fc87c24b05b2da7de7e48d02299c11"
+}

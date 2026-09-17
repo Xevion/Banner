@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT term_code FROM courses ORDER BY term_code DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "term_code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "term_code"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1e9d32604d5de5d35614a8cf1dfeea6e0cde3d50ad042d22d73475926f92b50e"
+}

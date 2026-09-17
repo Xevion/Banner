@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT rmp.avg_rating, rmp.avg_difficulty, rmp.would_take_again_pct,\n               rmp.num_ratings, rmp.primary_legacy_id as legacy_id\n        FROM instructor_rmp_summary rmp\n        WHERE rmp.instructor_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "avg_rating",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_summary",
+            "name": "avg_rating"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "avg_difficulty",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_summary",
+            "name": "avg_difficulty"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "would_take_again_pct",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_summary",
+            "name": "would_take_again_pct"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "num_ratings",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_summary",
+            "name": "num_ratings"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "legacy_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_summary",
+            "name": "primary_legacy_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b752cbf631664a2c6600e24356d59760f09eff2e2a1d83146e7ab1c0a6700ab4"
+}

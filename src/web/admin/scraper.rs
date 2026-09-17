@@ -340,7 +340,7 @@ pub async fn scraper_subject_detail(
     let results: Vec<SubjectResultEntry> = rows
         .into_iter()
         .map(|row| SubjectResultEntry {
-            id: row.id as i64,
+            id: row.id,
             completed_at: row.completed_at,
             duration_ms: DurationMs::new(row.duration_ms.max(0) as u32),
             success: row.success,

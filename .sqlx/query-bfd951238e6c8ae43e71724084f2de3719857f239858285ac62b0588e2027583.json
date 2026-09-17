@@ -1,0 +1,590 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH old_data AS (\n            SELECT id, enrollment, max_enrollment, wait_count, wait_capacity,\n                   subject, course_number, title,\n                   sequence_number, part_of_term, instructional_method, campus,\n                   credit_hours, credit_hour_low, credit_hour_high,\n                   cross_list, cross_list_capacity, cross_list_count,\n                   link_identifier, is_section_linked,\n                   meeting_times, attributes,\n                   crn, term_code\n            FROM courses\n            WHERE (crn, term_code) IN (SELECT * FROM UNNEST($1::text[], $5::text[]))\n        ),\n        upserted AS (\n            INSERT INTO courses (\n                crn, subject, course_number, title, term_code,\n                enrollment, max_enrollment, wait_count, wait_capacity, last_scraped_at,\n                sequence_number, part_of_term, instructional_method, campus,\n                credit_hours, credit_hour_low, credit_hour_high,\n                cross_list, cross_list_capacity, cross_list_count,\n                link_identifier, is_section_linked,\n                meeting_times, attributes\n            )\n            SELECT\n                v.crn, v.subject, v.course_number, v.title, v.term_code,\n                v.enrollment, v.max_enrollment, v.wait_count, v.wait_capacity, NOW(),\n                v.sequence_number, v.part_of_term, v.instructional_method, v.campus,\n                v.credit_hours, v.credit_hour_low, v.credit_hour_high,\n                v.cross_list, v.cross_list_capacity, v.cross_list_count,\n                v.link_identifier, v.is_section_linked,\n                v.meeting_times, v.attributes\n            FROM UNNEST(\n                $1::text[], $2::text[], $3::text[], $4::text[], $5::text[],\n                $6::int4[], $7::int4[], $8::int4[], $9::int4[],\n                $10::text[], $11::text[], $12::text[], $13::text[],\n                $14::float8[], $15::float8[], $16::float8[],\n                $17::text[], $18::int4[], $19::int4[],\n                $20::text[], $21::bool[],\n                $22::jsonb[], $23::jsonb[]\n            ) AS v(\n                crn, subject, course_number, title, term_code,\n                enrollment, max_enrollment, wait_count, wait_capacity,\n                sequence_number, part_of_term, instructional_method, campus,\n                credit_hours, credit_hour_low, credit_hour_high,\n                cross_list, cross_list_capacity, cross_list_count,\n                link_identifier, is_section_linked,\n                meeting_times, attributes\n            )\n            ON CONFLICT (crn, term_code)\n            DO UPDATE SET\n                subject = EXCLUDED.subject,\n                course_number = EXCLUDED.course_number,\n                title = EXCLUDED.title,\n                enrollment = EXCLUDED.enrollment,\n                max_enrollment = EXCLUDED.max_enrollment,\n                wait_count = EXCLUDED.wait_count,\n                wait_capacity = EXCLUDED.wait_capacity,\n                last_scraped_at = EXCLUDED.last_scraped_at,\n                sequence_number = EXCLUDED.sequence_number,\n                part_of_term = EXCLUDED.part_of_term,\n                instructional_method = EXCLUDED.instructional_method,\n                campus = EXCLUDED.campus,\n                credit_hours = EXCLUDED.credit_hours,\n                credit_hour_low = EXCLUDED.credit_hour_low,\n                credit_hour_high = EXCLUDED.credit_hour_high,\n                cross_list = EXCLUDED.cross_list,\n                cross_list_capacity = EXCLUDED.cross_list_capacity,\n                cross_list_count = EXCLUDED.cross_list_count,\n                link_identifier = EXCLUDED.link_identifier,\n                is_section_linked = EXCLUDED.is_section_linked,\n                meeting_times = EXCLUDED.meeting_times,\n                attributes = EXCLUDED.attributes\n            RETURNING *\n        )\n        SELECT u.id AS \"id!\",\n               o.id AS \"old_id?\",\n               u.crn AS \"crn!\", u.term_code AS \"term_code!\",\n               o.enrollment AS \"old_enrollment?\", u.enrollment AS \"new_enrollment!\",\n               o.max_enrollment AS \"old_max_enrollment?\", u.max_enrollment AS \"new_max_enrollment!\",\n               o.wait_count AS \"old_wait_count?\", u.wait_count AS \"new_wait_count!\",\n               o.wait_capacity AS \"old_wait_capacity?\", u.wait_capacity AS \"new_wait_capacity!\",\n               o.subject AS \"old_subject?\", u.subject AS \"new_subject!\",\n               o.course_number AS \"old_course_number?\", u.course_number AS \"new_course_number!\",\n               o.title AS \"old_title?\", u.title AS \"new_title!\",\n               o.sequence_number AS \"old_sequence_number?\", u.sequence_number AS new_sequence_number,\n               o.part_of_term AS \"old_part_of_term?\", u.part_of_term AS new_part_of_term,\n               o.instructional_method AS \"old_instructional_method?\", u.instructional_method AS new_instructional_method,\n               o.campus AS \"old_campus?\", u.campus AS new_campus,\n               o.credit_hours AS \"old_credit_hours?\", u.credit_hours AS new_credit_hours,\n               o.credit_hour_low AS \"old_credit_hour_low?\", u.credit_hour_low AS new_credit_hour_low,\n               o.credit_hour_high AS \"old_credit_hour_high?\", u.credit_hour_high AS new_credit_hour_high,\n               o.cross_list AS \"old_cross_list?\", u.cross_list AS new_cross_list,\n               o.cross_list_capacity AS \"old_cross_list_capacity?\", u.cross_list_capacity AS new_cross_list_capacity,\n               o.cross_list_count AS \"old_cross_list_count?\", u.cross_list_count AS new_cross_list_count,\n               o.link_identifier AS \"old_link_identifier?\", u.link_identifier AS new_link_identifier,\n               o.is_section_linked AS \"old_is_section_linked?\", u.is_section_linked AS new_is_section_linked,\n               o.meeting_times AS \"old_meeting_times?\", u.meeting_times AS \"new_meeting_times!\",\n               o.attributes AS \"old_attributes?\", u.attributes AS \"new_attributes!\"\n        FROM upserted u\n        LEFT JOIN old_data o ON u.crn = o.crn AND u.term_code = o.term_code\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "old_id?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "crn!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "crn"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "term_code!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "term_code"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "old_enrollment?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "new_enrollment!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "old_max_enrollment?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "max_enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "new_max_enrollment!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "max_enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "old_wait_count?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "new_wait_count!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "old_wait_capacity?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "new_wait_capacity!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "old_subject?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "new_subject!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "old_course_number?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "new_course_number!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "old_title?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "new_title!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "old_sequence_number?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "sequence_number"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "new_sequence_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "sequence_number"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "old_part_of_term?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "part_of_term"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "new_part_of_term",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "part_of_term"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "old_instructional_method?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "instructional_method"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "new_instructional_method",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "instructional_method"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "old_campus?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "campus"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "new_campus",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "campus"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "old_credit_hours?",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "new_credit_hours",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "old_credit_hour_low?",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_low"
+          }
+        }
+      },
+      {
+        "ordinal": 29,
+        "name": "new_credit_hour_low",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_low"
+          }
+        }
+      },
+      {
+        "ordinal": 30,
+        "name": "old_credit_hour_high?",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_high"
+          }
+        }
+      },
+      {
+        "ordinal": 31,
+        "name": "new_credit_hour_high",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "credit_hour_high"
+          }
+        }
+      },
+      {
+        "ordinal": 32,
+        "name": "old_cross_list?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list"
+          }
+        }
+      },
+      {
+        "ordinal": 33,
+        "name": "new_cross_list",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list"
+          }
+        }
+      },
+      {
+        "ordinal": 34,
+        "name": "old_cross_list_capacity?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 35,
+        "name": "new_cross_list_capacity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_capacity"
+          }
+        }
+      },
+      {
+        "ordinal": 36,
+        "name": "old_cross_list_count?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_count"
+          }
+        }
+      },
+      {
+        "ordinal": 37,
+        "name": "new_cross_list_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "cross_list_count"
+          }
+        }
+      },
+      {
+        "ordinal": 38,
+        "name": "old_link_identifier?",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "link_identifier"
+          }
+        }
+      },
+      {
+        "ordinal": 39,
+        "name": "new_link_identifier",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "link_identifier"
+          }
+        }
+      },
+      {
+        "ordinal": 40,
+        "name": "old_is_section_linked?",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "is_section_linked"
+          }
+        }
+      },
+      {
+        "ordinal": 41,
+        "name": "new_is_section_linked",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "is_section_linked"
+          }
+        }
+      },
+      {
+        "ordinal": 42,
+        "name": "old_meeting_times?",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "meeting_times"
+          }
+        }
+      },
+      {
+        "ordinal": 43,
+        "name": "new_meeting_times!",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "meeting_times"
+          }
+        }
+      },
+      {
+        "ordinal": 44,
+        "name": "old_attributes?",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "attributes"
+          }
+        }
+      },
+      {
+        "ordinal": 45,
+        "name": "new_attributes!",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "attributes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Float8Array",
+        "Float8Array",
+        "Float8Array",
+        "TextArray",
+        "Int4Array",
+        "Int4Array",
+        "TextArray",
+        "BoolArray",
+        "JsonbArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "bfd951238e6c8ae43e71724084f2de3719857f239858285ac62b0588e2027583"
+}

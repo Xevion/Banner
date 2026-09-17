@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scrape_job_results (\n                target_type, payload, priority,\n                queued_at, started_at, duration_ms,\n                success, error_message, retry_count,\n                courses_fetched, courses_changed, courses_unchanged,\n                audits_generated, metrics_generated\n            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "target_type",
+            "kind": {
+              "Enum": [
+                "Subject",
+                "CourseRange",
+                "CrnList",
+                "SingleCrn"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        {
+          "Custom": {
+            "name": "scrape_priority",
+            "kind": {
+              "Enum": [
+                "Low",
+                "Medium",
+                "High",
+                "Critical"
+              ]
+            }
+          }
+        },
+        "Timestamptz",
+        "Timestamptz",
+        "Int4",
+        "Bool",
+        "Text",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51d8b8da88244a0daa424cfddba0e23b4c72d111400f061d612b891f5e5a253c"
+}

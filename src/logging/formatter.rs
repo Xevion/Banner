@@ -1,5 +1,6 @@
 //! Custom tracing formatter
 
+use extension_traits::extension;
 use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -137,48 +138,11 @@ trait WriteColored {
     fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result;
 }
 
-/// Write a string value with appropriate coloring (arrays, numbers, quoted strings).
-fn write_str_value_colored(writer: &mut Writer<'_>, s: &str, truncate: bool) -> fmt::Result {
-    let ansi = writer.has_ansi_escapes();
-
-    // For non-truncated multiline strings (e.g. error fields), render with
-    // actual newlines and indentation instead of escaping them
-    if !truncate && s.contains('\n') {
-        let indent = "    ";
-        writeln!(writer)?;
-        for line in s.lines() {
-            if ansi {
-                writeln!(writer, "{}{}", indent, Paint::new(line).red())?;
-            } else {
-                writeln!(writer, "{}{}", indent, line)?;
-            }
-        }
-        return Ok(());
-    }
-
-    if s.starts_with('[') && s.ends_with(']') {
-        write_array_colored(writer, s)
-    } else if s.parse::<i64>().is_ok() || s.parse::<u64>().is_ok() {
-        if ansi {
-            write!(writer, "{}", Paint::new(s).magenta())
-        } else {
-            write!(writer, "{}", s)
-        }
-    } else {
-        let formatted = format_string_value(s, truncate);
-        if formatted.starts_with('"') && ansi {
-            write!(writer, "{}", Paint::new(&formatted).yellow())
-        } else {
-            write!(writer, "{}", formatted)
-        }
-    }
-}
-
 impl WriteColored for FieldValue {
     fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
         let ansi = writer.has_ansi_escapes();
         match self {
-            FieldValue::Debug(s) | FieldValue::Display(s) => write_str_value_colored(writer, s, truncate),
+            FieldValue::Debug(s) | FieldValue::Display(s) => writer.write_str_value_colored(s, truncate),
             FieldValue::Signed(n) => {
                 if ansi {
                     write!(writer, "{}", Paint::new(n).magenta())
@@ -206,42 +170,8 @@ impl WriteColored for FieldValue {
 
 impl WriteColored for String {
     fn write_colored(&self, writer: &mut Writer<'_>, truncate: bool) -> fmt::Result {
-        write_str_value_colored(writer, self, truncate)
+        writer.write_str_value_colored(self, truncate)
     }
-}
-
-/// Write an array value with colored elements
-/// Input format: `["a", "b", 123]` (Debug-formatted Rust arrays)
-fn write_array_colored(writer: &mut Writer<'_>, s: &str) -> fmt::Result {
-    // Strip outer brackets
-    let inner = &s[1..s.len() - 1];
-
-    write_dim_char(writer, '[')?;
-
-    if !inner.is_empty() {
-        // Parse and colorize each element
-        let mut remaining = inner.trim();
-        let mut first = true;
-
-        while !remaining.is_empty() {
-            if !first {
-                write_dim_str(writer, ", ")?;
-            }
-            first = false;
-
-            // Parse next element
-            let (element, rest) = parse_array_element(remaining);
-            write_array_element_colored(writer, element)?;
-            remaining = rest.trim_start();
-
-            // Skip comma if present
-            if remaining.starts_with(',') {
-                remaining = remaining[1..].trim_start();
-            }
-        }
-    }
-
-    write_dim_char(writer, ']')
 }
 
 /// Parse one element from an array string, returning (element, remaining)
@@ -278,40 +208,6 @@ fn parse_array_element(s: &str) -> (&str, &str) {
         // Unquoted value - read until comma or end
         let end = s.find(',').unwrap_or(s.len());
         (s[..end].trim_end(), &s[end..])
-    }
-}
-
-/// Write a single array element with appropriate coloring
-fn write_array_element_colored(writer: &mut Writer<'_>, element: &str) -> fmt::Result {
-    let ansi = writer.has_ansi_escapes();
-
-    if element.starts_with('"') && element.ends_with('"') {
-        // String element - yellow
-        if ansi {
-            write!(writer, "{}", Paint::new(element).yellow())
-        } else {
-            write!(writer, "{}", element)
-        }
-    } else if element.starts_with('[') && element.ends_with(']') {
-        // Nested array - recurse
-        write_array_colored(writer, element)
-    } else if element.parse::<i64>().is_ok() || element.parse::<u64>().is_ok() {
-        // Number - magenta
-        if ansi {
-            write!(writer, "{}", Paint::new(element).magenta())
-        } else {
-            write!(writer, "{}", element)
-        }
-    } else if element == "true" || element == "false" {
-        // Boolean - magenta
-        if ansi {
-            write!(writer, "{}", Paint::new(element).magenta())
-        } else {
-            write!(writer, "{}", element)
-        }
-    } else {
-        // Other - default
-        write!(writer, "{}", element)
     }
 }
 
@@ -407,136 +303,281 @@ enum GroupedField<V> {
     Group(IndexMap<String, V>),
 }
 
-/// Write grouped fields with colors
-fn write_grouped_fields<V: WriteColored>(
-    writer: &mut Writer<'_>,
-    fields: IndexMap<String, GroupedField<V>>,
-) -> fmt::Result {
-    let mut first = true;
+/// Colored writes for the pretty formatter; private because every caller lives in this file.
+#[extension(trait WriterExt)]
+impl<'w> Writer<'w> {
+    /// Write a string value with appropriate coloring (arrays, numbers, quoted strings).
+    fn write_str_value_colored(&mut self, s: &str, truncate: bool) -> fmt::Result {
+        let ansi = self.has_ansi_escapes();
 
-    for (key, grouped) in &fields {
-        if !first {
-            writer.write_char(' ')?;
-        }
-        first = false;
-
-        let truncate = !NO_TRUNCATE_FIELDS.contains(&key.as_str());
-
-        match grouped {
-            GroupedField::Single(value) => {
-                write_field_key(writer, key)?;
-                write_field_eq(writer)?;
-                value.write_colored(writer, truncate)?;
-            }
-            GroupedField::Group(subfields) => {
-                write_field_key(writer, key)?;
-                write_field_eq(writer)?;
-                write_dim_char(writer, '{')?;
-
-                let mut sub_first = true;
-                for (subkey, subvalue) in subfields {
-                    if !sub_first {
-                        write_dim_str(writer, ", ")?;
-                    }
-                    sub_first = false;
-
-                    write_field_key(writer, subkey)?;
-                    write_field_eq(writer)?;
-                    subvalue.write_colored(writer, truncate)?;
+        // For non-truncated multiline strings (e.g. error fields), render with
+        // actual newlines and indentation instead of escaping them
+        if !truncate && s.contains('\n') {
+            let indent = "    ";
+            writeln!(self)?;
+            for line in s.lines() {
+                if ansi {
+                    writeln!(self, "{}{}", indent, Paint::new(line).red())?;
+                } else {
+                    writeln!(self, "{}{}", indent, line)?;
                 }
-
-                write_dim_char(writer, '}')?;
             }
-        }
-    }
-
-    Ok(())
-}
-
-fn write_dim_char(writer: &mut Writer<'_>, c: char) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new(c).dim())
-    } else {
-        writer.write_char(c)
-    }
-}
-
-fn write_dim_str(writer: &mut Writer<'_>, s: &str) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new(s).dim())
-    } else {
-        writer.write_str(s)
-    }
-}
-
-fn write_field_key(writer: &mut Writer<'_>, key: &str) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new(key).cyan())
-    } else {
-        write!(writer, "{}", key)
-    }
-}
-
-fn write_field_eq(writer: &mut Writer<'_>) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new("=").dim())
-    } else {
-        writer.write_char('=')
-    }
-}
-
-/// Parse span fields string and reformat with colors
-fn write_span_fields_colored(writer: &mut Writer<'_>, fields_str: &str) -> fmt::Result {
-    if fields_str.is_empty() {
-        return Ok(());
-    }
-
-    // Parse key=value pairs (simple parser, handles quoted values)
-    let mut fields: IndexMap<String, String> = IndexMap::new();
-    let mut remaining = fields_str;
-
-    while !remaining.is_empty() {
-        remaining = remaining.trim_start();
-        if remaining.is_empty() {
-            break;
+            return Ok(());
         }
 
-        // Find the key
-        let eq_pos = match remaining.find('=') {
-            Some(p) => p,
-            None => break,
-        };
-        let key = remaining[..eq_pos].trim();
-        remaining = &remaining[eq_pos + 1..];
-
-        // Find the value (handle quoted strings)
-        let value = if remaining.starts_with('"') {
-            // Quoted string - find closing quote
-            let mut end = 1;
-            let chars: Vec<char> = remaining.chars().collect();
-            while end < chars.len() {
-                if chars[end] == '"' && (end == 0 || chars[end - 1] != '\\') {
-                    break;
-                }
-                end += 1;
+        if s.starts_with('[') && s.ends_with(']') {
+            self.write_array_colored(s)
+        } else if s.parse::<i64>().is_ok() || s.parse::<u64>().is_ok() {
+            if ansi {
+                write!(self, "{}", Paint::new(s).magenta())
+            } else {
+                write!(self, "{}", s)
             }
-            let byte_end = chars[..=end.min(chars.len() - 1)].iter().collect::<String>().len();
-            let val = &remaining[..byte_end];
-            remaining = &remaining[byte_end..];
-            val
         } else {
-            // Unquoted - read until space or end
-            let space_pos = remaining.find(' ').unwrap_or(remaining.len());
-            let val = &remaining[..space_pos];
-            remaining = &remaining[space_pos..];
-            val
-        };
-
-        fields.insert(key.to_string(), value.to_string());
+            let formatted = format_string_value(s, truncate);
+            if formatted.starts_with('"') && ansi {
+                write!(self, "{}", Paint::new(&formatted).yellow())
+            } else {
+                write!(self, "{}", formatted)
+            }
+        }
     }
 
-    let grouped = group_dotted_fields(fields);
-    write_grouped_fields(writer, grouped)
+    /// Write an array value with colored elements
+    /// Input format: `["a", "b", 123]` (Debug-formatted Rust arrays)
+    fn write_array_colored(&mut self, s: &str) -> fmt::Result {
+        // Strip outer brackets
+        let inner = &s[1..s.len() - 1];
+
+        self.write_dim_char('[')?;
+
+        if !inner.is_empty() {
+            // Parse and colorize each element
+            let mut remaining = inner.trim();
+            let mut first = true;
+
+            while !remaining.is_empty() {
+                if !first {
+                    self.write_dim_str(", ")?;
+                }
+                first = false;
+
+                // Parse next element
+                let (element, rest) = parse_array_element(remaining);
+                self.write_array_element_colored(element)?;
+                remaining = rest.trim_start();
+
+                // Skip comma if present
+                if remaining.starts_with(',') {
+                    remaining = remaining[1..].trim_start();
+                }
+            }
+        }
+
+        self.write_dim_char(']')
+    }
+
+    /// Write a single array element with appropriate coloring
+    fn write_array_element_colored(&mut self, element: &str) -> fmt::Result {
+        let ansi = self.has_ansi_escapes();
+
+        if element.starts_with('"') && element.ends_with('"') {
+            // String element - yellow
+            if ansi {
+                write!(self, "{}", Paint::new(element).yellow())
+            } else {
+                write!(self, "{}", element)
+            }
+        } else if element.starts_with('[') && element.ends_with(']') {
+            // Nested array - recurse
+            self.write_array_colored(element)
+        } else if element.parse::<i64>().is_ok() || element.parse::<u64>().is_ok() {
+            // Number - magenta
+            if ansi {
+                write!(self, "{}", Paint::new(element).magenta())
+            } else {
+                write!(self, "{}", element)
+            }
+        } else if element == "true" || element == "false" {
+            // Boolean - magenta
+            if ansi {
+                write!(self, "{}", Paint::new(element).magenta())
+            } else {
+                write!(self, "{}", element)
+            }
+        } else {
+            // Other - default
+            write!(self, "{}", element)
+        }
+    }
+
+    /// Write grouped fields with colors
+    fn write_grouped_fields<V: WriteColored>(&mut self, fields: IndexMap<String, GroupedField<V>>) -> fmt::Result {
+        let mut first = true;
+
+        for (key, grouped) in &fields {
+            if !first {
+                self.write_char(' ')?;
+            }
+            first = false;
+
+            let truncate = !NO_TRUNCATE_FIELDS.contains(&key.as_str());
+
+            match grouped {
+                GroupedField::Single(value) => {
+                    self.write_field_key(key)?;
+                    self.write_field_eq()?;
+                    value.write_colored(self, truncate)?;
+                }
+                GroupedField::Group(subfields) => {
+                    self.write_field_key(key)?;
+                    self.write_field_eq()?;
+                    self.write_dim_char('{')?;
+
+                    let mut sub_first = true;
+                    for (subkey, subvalue) in subfields {
+                        if !sub_first {
+                            self.write_dim_str(", ")?;
+                        }
+                        sub_first = false;
+
+                        self.write_field_key(subkey)?;
+                        self.write_field_eq()?;
+                        subvalue.write_colored(self, truncate)?;
+                    }
+
+                    self.write_dim_char('}')?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_dim_char(&mut self, c: char) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new(c).dim())
+        } else {
+            self.write_char(c)
+        }
+    }
+
+    fn write_dim_str(&mut self, s: &str) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new(s).dim())
+        } else {
+            self.write_str(s)
+        }
+    }
+
+    fn write_field_key(&mut self, key: &str) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new(key).cyan())
+        } else {
+            write!(self, "{}", key)
+        }
+    }
+
+    fn write_field_eq(&mut self) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new("=").dim())
+        } else {
+            self.write_char('=')
+        }
+    }
+
+    /// Parse span fields string and reformat with colors
+    fn write_span_fields_colored(&mut self, fields_str: &str) -> fmt::Result {
+        if fields_str.is_empty() {
+            return Ok(());
+        }
+
+        // Parse key=value pairs (simple parser, handles quoted values)
+        let mut fields: IndexMap<String, String> = IndexMap::new();
+        let mut remaining = fields_str;
+
+        while !remaining.is_empty() {
+            remaining = remaining.trim_start();
+            if remaining.is_empty() {
+                break;
+            }
+
+            // Find the key
+            let eq_pos = match remaining.find('=') {
+                Some(p) => p,
+                None => break,
+            };
+            let key = remaining[..eq_pos].trim();
+            remaining = &remaining[eq_pos + 1..];
+
+            // Find the value (handle quoted strings)
+            let value = if remaining.starts_with('"') {
+                // Quoted string - find closing quote
+                let mut end = 1;
+                let chars: Vec<char> = remaining.chars().collect();
+                while end < chars.len() {
+                    if chars[end] == '"' && (end == 0 || chars[end - 1] != '\\') {
+                        break;
+                    }
+                    end += 1;
+                }
+                let byte_end = chars[..=end.min(chars.len() - 1)].iter().collect::<String>().len();
+                let val = &remaining[..byte_end];
+                remaining = &remaining[byte_end..];
+                val
+            } else {
+                // Unquoted - read until space or end
+                let space_pos = remaining.find(' ').unwrap_or(remaining.len());
+                let val = &remaining[..space_pos];
+                remaining = &remaining[space_pos..];
+                val
+            };
+
+            fields.insert(key.to_string(), value.to_string());
+        }
+
+        let grouped = group_dotted_fields(fields);
+        self.write_grouped_fields(grouped)
+    }
+
+    /// Write the verbosity level with the same coloring/alignment as the Full formatter.
+    fn write_colored_level(&mut self, level: &Level) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            let paint = match *level {
+                Level::TRACE => Paint::new("TRACE").magenta(),
+                Level::DEBUG => Paint::new("DEBUG").blue(),
+                Level::INFO => Paint::new(" INFO").green(),
+                Level::WARN => Paint::new(" WARN").yellow(),
+                Level::ERROR => Paint::new("ERROR").red(),
+            };
+            write!(self, "{}", paint)
+        } else {
+            // Right-pad to width 5 like Full's non-ANSI mode
+            match *level {
+                Level::TRACE => write!(self, "{:>5}", "TRACE"),
+                Level::DEBUG => write!(self, "{:>5}", "DEBUG"),
+                Level::INFO => write!(self, "{:>5}", " INFO"),
+                Level::WARN => write!(self, "{:>5}", " WARN"),
+                Level::ERROR => write!(self, "{:>5}", "ERROR"),
+            }
+        }
+    }
+
+    fn write_dimmed(&mut self, s: impl fmt::Display) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new(s).dim())
+        } else {
+            write!(self, "{}", s)
+        }
+    }
+
+    fn write_bold(&mut self, s: impl fmt::Display) -> fmt::Result {
+        if self.has_ansi_escapes() {
+            write!(self, "{}", Paint::new(s).bold())
+        } else {
+            write!(self, "{}", s)
+        }
+    }
 }
 
 /// A custom formatter with enhanced timestamp formatting and colored fields
@@ -560,29 +601,29 @@ where
             eprintln!("Failed to format timestamp: {}", e);
             fmt::Error
         })?;
-        write_dimmed(&mut writer, formatted_time)?;
+        writer.write_dimmed(formatted_time)?;
         writer.write_char(' ')?;
 
         // 2) Colored 5-char level like Full
-        write_colored_level(&mut writer, meta.level())?;
+        writer.write_colored_level(meta.level())?;
         writer.write_char(' ')?;
 
         // 3) Span scope chain (bold names, colored fields in braces, dimmed ':')
         if let Some(scope) = ctx.event_scope() {
             let mut saw_any = false;
             for span in scope.from_root() {
-                write_bold(&mut writer, span.metadata().name())?;
+                writer.write_bold(span.metadata().name())?;
                 saw_any = true;
 
                 let ext = span.extensions();
                 if let Some(fields) = ext.get::<FormattedFields<N>>()
                     && !fields.fields.is_empty()
                 {
-                    write_dim_char(&mut writer, '{')?;
-                    write_span_fields_colored(&mut writer, fields.fields.as_str())?;
-                    write_dim_char(&mut writer, '}')?;
+                    writer.write_dim_char('{')?;
+                    writer.write_span_fields_colored(fields.fields.as_str())?;
+                    writer.write_dim_char('}')?;
                 }
-                write_dimmed(&mut writer, ":")?;
+                writer.write_dimmed(":")?;
             }
 
             if saw_any {
@@ -611,7 +652,7 @@ where
 
         // Write fields with grouping and colors
         let grouped = group_dotted_fields(collector.fields);
-        write_grouped_fields(&mut writer, grouped)?;
+        writer.write_grouped_fields(grouped)?;
 
         // 6) Newline
         writeln!(writer)
@@ -747,45 +788,6 @@ where
             "{}",
             serde_json::to_string(&json).unwrap_or_else(|_| "{}".to_string())
         )
-    }
-}
-
-/// Write the verbosity level with the same coloring/alignment as the Full formatter.
-fn write_colored_level(writer: &mut Writer<'_>, level: &Level) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        let paint = match *level {
-            Level::TRACE => Paint::new("TRACE").magenta(),
-            Level::DEBUG => Paint::new("DEBUG").blue(),
-            Level::INFO => Paint::new(" INFO").green(),
-            Level::WARN => Paint::new(" WARN").yellow(),
-            Level::ERROR => Paint::new("ERROR").red(),
-        };
-        write!(writer, "{}", paint)
-    } else {
-        // Right-pad to width 5 like Full's non-ANSI mode
-        match *level {
-            Level::TRACE => write!(writer, "{:>5}", "TRACE"),
-            Level::DEBUG => write!(writer, "{:>5}", "DEBUG"),
-            Level::INFO => write!(writer, "{:>5}", " INFO"),
-            Level::WARN => write!(writer, "{:>5}", " WARN"),
-            Level::ERROR => write!(writer, "{:>5}", "ERROR"),
-        }
-    }
-}
-
-fn write_dimmed(writer: &mut Writer<'_>, s: impl fmt::Display) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new(s).dim())
-    } else {
-        write!(writer, "{}", s)
-    }
-}
-
-fn write_bold(writer: &mut Writer<'_>, s: impl fmt::Display) -> fmt::Result {
-    if writer.has_ansi_escapes() {
-        write!(writer, "{}", Paint::new(s).bold())
-    } else {
-        write!(writer, "{}", s)
     }
 }
 

@@ -1,5 +1,6 @@
 //! Database operations for RateMyProfessors data.
 
+use crate::data::unsigned::Count;
 use crate::rmp::{RmpProfessor, RmpProfessorDetail, RmpReview};
 use anyhow::{Context, Result};
 use sqlx::PgPool;
@@ -21,9 +22,7 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
     let legacy_ids: Vec<i32> = deduped.iter().map(|p| p.legacy_id).collect();
     let graphql_ids: Vec<&str> = deduped.iter().map(|p| p.graphql_id.as_str()).collect();
     let first_names: Vec<String> = deduped.iter().map(|p| p.first_name.trim().to_string()).collect();
-    let first_name_refs: Vec<&str> = first_names.iter().map(|s| s.as_str()).collect();
     let last_names: Vec<String> = deduped.iter().map(|p| p.last_name.trim().to_string()).collect();
-    let last_name_refs: Vec<&str> = last_names.iter().map(|s| s.as_str()).collect();
     let departments: Vec<Option<&str>> = deduped.iter().map(|p| p.department.as_deref()).collect();
     let avg_ratings: Vec<Option<f32>> = deduped.iter().map(|p| p.avg_rating).collect();
     let avg_difficulties: Vec<Option<f32>> = deduped.iter().map(|p| p.avg_difficulty).collect();
@@ -33,7 +32,7 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
         .collect();
     let would_take_again_pcts: Vec<Option<f32>> = deduped.iter().map(|p| p.would_take_again_pct).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO rmp_professors (
             legacy_id, graphql_id, first_name, last_name, department,
@@ -63,16 +62,16 @@ pub async fn batch_upsert_rmp_professors(pool: &PgPool, professors: &[RmpProfess
             would_take_again_pct = EXCLUDED.would_take_again_pct,
             last_synced_at = EXCLUDED.last_synced_at
         "#,
+        &legacy_ids,
+        &graphql_ids as &[&str],
+        &first_names,
+        &last_names,
+        &departments as &[Option<&str>],
+        &avg_ratings as &[Option<f32>],
+        &avg_difficulties as &[Option<f32>],
+        &num_ratings,
+        &would_take_again_pcts as &[Option<f32>],
     )
-    .bind(&legacy_ids)
-    .bind(&graphql_ids)
-    .bind(&first_name_refs)
-    .bind(&last_name_refs)
-    .bind(&departments)
-    .bind(&avg_ratings)
-    .bind(&avg_difficulties)
-    .bind(&num_ratings)
-    .bind(&would_take_again_pcts)
     .execute(pool)
     .await
     .context("Failed to batch upsert RMP professors")?;
@@ -91,42 +90,46 @@ pub async fn unmatch_instructor(pool: &PgPool, instructor_id: i32, rmp_legacy_id
 
     // Delete specific link or all links
     if let Some(legacy_id) = rmp_legacy_id {
-        sqlx::query("DELETE FROM instructor_rmp_links WHERE instructor_id = $1 AND rmp_legacy_id = $2")
-            .bind(instructor_id)
-            .bind(legacy_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to delete specific rmp link for instructor")?;
+        sqlx::query!(
+            "DELETE FROM instructor_rmp_links WHERE instructor_id = $1 AND rmp_legacy_id = $2",
+            instructor_id,
+            legacy_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to delete specific rmp link for instructor")?;
     } else {
-        sqlx::query("DELETE FROM instructor_rmp_links WHERE instructor_id = $1")
-            .bind(instructor_id)
-            .execute(&mut *tx)
-            .await
-            .context("failed to delete all rmp links for instructor")?;
+        sqlx::query!(
+            "DELETE FROM instructor_rmp_links WHERE instructor_id = $1",
+            instructor_id
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to delete all rmp links for instructor")?;
     }
 
     // Reset accepted candidates back to pending when unmatching
     // This allows the candidates to be re-matched later
     if let Some(legacy_id) = rmp_legacy_id {
         // Reset only the specific candidate
-        sqlx::query(
-            "UPDATE rmp_match_candidates 
-             SET status = 'pending', resolved_at = NULL, resolved_by = NULL 
+        sqlx::query!(
+            "UPDATE rmp_match_candidates
+             SET status = 'pending', resolved_at = NULL, resolved_by = NULL
              WHERE instructor_id = $1 AND rmp_legacy_id = $2 AND status = 'accepted'",
+            instructor_id,
+            legacy_id,
         )
-        .bind(instructor_id)
-        .bind(legacy_id)
         .execute(&mut *tx)
         .await
         .context("failed to reset specific rmp match candidate to pending")?;
     } else {
         // Reset all accepted candidates for this instructor
-        sqlx::query(
-            "UPDATE rmp_match_candidates 
-             SET status = 'pending', resolved_at = NULL, resolved_by = NULL 
+        sqlx::query!(
+            "UPDATE rmp_match_candidates
+             SET status = 'pending', resolved_at = NULL, resolved_by = NULL
              WHERE instructor_id = $1 AND status = 'accepted'",
+            instructor_id,
         )
-        .bind(instructor_id)
         .execute(&mut *tx)
         .await
         .context("failed to reset all rmp match candidates to pending")?;
@@ -142,7 +145,7 @@ pub async fn unmatch_instructor(pool: &PgPool, instructor_id: i32, rmp_legacy_id
 /// Returns `(legacy_id, graphql_id)` pairs for professors whose
 /// `reviews_last_scraped_at` is NULL or past their individual interval.
 pub async fn get_professors_eligible_for_review_scrape(pool: &PgPool, limit: i64) -> Result<Vec<(i32, String)>> {
-    let rows: Vec<(i32, String)> = sqlx::query_as(
+    let rows = sqlx::query!(
         r#"
         SELECT legacy_id, graphql_id FROM rmp_professors
         WHERE reviews_last_scraped_at IS NULL
@@ -150,20 +153,20 @@ pub async fn get_professors_eligible_for_review_scrape(pool: &PgPool, limit: i64
         ORDER BY reviews_last_scraped_at ASC NULLS FIRST
         LIMIT $1
         "#,
+        limit,
     )
-    .bind(limit)
     .fetch_all(pool)
     .await
     .context("failed to fetch professors eligible for review scrape")?;
 
-    Ok(rows)
+    Ok(rows.into_iter().map(|r| (r.legacy_id, r.graphql_id)).collect())
 }
 
 /// Update extended profile columns on `rmp_professors` for one professor.
 pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail) -> Result<()> {
     let course_codes_json = serde_json::to_value(&detail.course_codes)?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE rmp_professors SET
             ratings_r1 = $1,
@@ -174,14 +177,14 @@ pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail)
             course_codes = $6
         WHERE legacy_id = $7
         "#,
+        detail.ratings_r1 as Option<Count>,
+        detail.ratings_r2 as Option<Count>,
+        detail.ratings_r3 as Option<Count>,
+        detail.ratings_r4 as Option<Count>,
+        detail.ratings_r5 as Option<Count>,
+        course_codes_json,
+        detail.legacy_id,
     )
-    .bind(detail.ratings_r1)
-    .bind(detail.ratings_r2)
-    .bind(detail.ratings_r3)
-    .bind(detail.ratings_r4)
-    .bind(detail.ratings_r5)
-    .bind(&course_codes_json)
-    .bind(detail.legacy_id)
     .execute(pool)
     .await
     .context("failed to upsert professor detail")?;
@@ -196,14 +199,13 @@ pub async fn upsert_professor_detail(pool: &PgPool, detail: &RmpProfessorDetail)
 pub async fn replace_professor_reviews(pool: &PgPool, legacy_id: i32, reviews: &[RmpReview]) -> Result<()> {
     let mut tx = pool.begin().await?;
 
-    sqlx::query("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1")
-        .bind(legacy_id)
+    sqlx::query!("DELETE FROM rmp_reviews WHERE rmp_legacy_id = $1", legacy_id)
         .execute(&mut *tx)
         .await
         .context("failed to delete reviews for professor")?;
 
     for review in reviews {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO rmp_reviews (
                 rmp_legacy_id, comment, class, grade, rating_tags,
@@ -214,24 +216,24 @@ pub async fn replace_professor_reviews(pool: &PgPool, legacy_id: i32, reviews: &
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             "#,
+            legacy_id,
+            review.comment,
+            review.class,
+            review.grade,
+            &review.rating_tags,
+            review.helpful_rating,
+            review.clarity_rating,
+            review.difficulty_rating,
+            review.would_take_again,
+            review.is_for_credit,
+            review.is_for_online_class,
+            review.attendance_mandatory,
+            review.flag_status,
+            review.textbook_use as Option<Count>,
+            review.thumbs_up_total as Count,
+            review.thumbs_down_total as Count,
+            review.posted_at,
         )
-        .bind(legacy_id)
-        .bind(&review.comment)
-        .bind(&review.class)
-        .bind(&review.grade)
-        .bind(&review.rating_tags)
-        .bind(review.helpful_rating)
-        .bind(review.clarity_rating)
-        .bind(review.difficulty_rating)
-        .bind(review.would_take_again)
-        .bind(review.is_for_credit)
-        .bind(review.is_for_online_class)
-        .bind(&review.attendance_mandatory)
-        .bind(&review.flag_status)
-        .bind(review.textbook_use)
-        .bind(review.thumbs_up_total)
-        .bind(review.thumbs_down_total)
-        .bind(review.posted_at)
         .execute(&mut *tx)
         .await
         .context("failed to insert rmp review")?;
@@ -253,16 +255,16 @@ pub async fn mark_professor_reviews_scraped(pool: &PgPool, legacy_id: i32, num_r
         _ => 1,
     };
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE rmp_professors SET
             reviews_last_scraped_at = NOW(),
             review_scrape_interval = make_interval(days => $1)
         WHERE legacy_id = $2
         "#,
+        interval_days,
+        legacy_id,
     )
-    .bind(interval_days)
-    .bind(legacy_id)
     .execute(pool)
     .await
     .context("failed to mark professor reviews as scraped")?;
@@ -277,16 +279,16 @@ const REVIEW_RETRY_DELAY_HOURS: i32 = 6;
 ///
 /// One that never succeeds otherwise keeps the oldest timestamp and is reselected forever.
 pub async fn defer_professor_review_scrape(pool: &PgPool, legacy_id: i32) -> Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE rmp_professors SET
             reviews_last_scraped_at =
                 NOW() - review_scrape_interval + make_interval(hours => $1)
         WHERE legacy_id = $2
         "#,
+        REVIEW_RETRY_DELAY_HOURS,
+        legacy_id,
     )
-    .bind(REVIEW_RETRY_DELAY_HOURS)
-    .bind(legacy_id)
     .execute(pool)
     .await
     .context("failed to defer professor review scrape")?;
@@ -300,7 +302,7 @@ pub async fn defer_professor_review_scrape(pool: &PgPool, legacy_id: i32) -> Res
 /// or updates `rmp_professors` rating data. Uses `CONCURRENTLY`
 /// to avoid blocking reads during refresh.
 pub async fn refresh_rmp_summary(pool: &PgPool) -> Result<()> {
-    sqlx::query("REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary")
+    sqlx::query!("REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary")
         .execute(pool)
         .await
         .context("failed to refresh rmp summary materialized view")?;

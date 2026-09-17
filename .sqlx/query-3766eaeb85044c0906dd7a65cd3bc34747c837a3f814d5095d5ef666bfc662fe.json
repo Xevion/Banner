@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(*) AS \"total_scrapes!\",\n            COUNT(*) FILTER (WHERE success) AS \"successful_scrapes!\",\n            COUNT(*) FILTER (WHERE NOT success) AS \"failed_scrapes!\",\n            (AVG(duration_ms) FILTER (WHERE success))::FLOAT8 AS avg_duration_ms,\n            COALESCE(SUM(courses_changed) FILTER (WHERE success), 0) AS \"total_courses_changed!\",\n            COALESCE(SUM(courses_fetched) FILTER (WHERE success), 0) AS \"total_courses_fetched!\",\n            COALESCE(SUM(audits_generated) FILTER (WHERE success), 0) AS \"total_audits_generated!\"\n        FROM scrape_job_results\n        WHERE completed_at > NOW() - $1::text::interval\n          AND ($2::text IS NULL OR payload->>'term' = $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_scrapes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "successful_scrapes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed_scrapes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "avg_duration_ms",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_courses_changed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_courses_fetched!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_audits_generated!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3766eaeb85044c0906dd7a65cd3bc34747c837a3f814d5095d5ef666bfc662fe"
+}

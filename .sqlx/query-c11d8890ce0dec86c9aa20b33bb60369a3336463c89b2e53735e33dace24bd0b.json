@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE terms SET last_scraped_at = now(), updated_at = now() WHERE code = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c11d8890ce0dec86c9aa20b33bb60369a3336463c89b2e53735e33dace24bd0b"
+}

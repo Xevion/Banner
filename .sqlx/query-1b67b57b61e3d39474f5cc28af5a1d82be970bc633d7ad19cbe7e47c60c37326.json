@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"total!\"\n        FROM admin_audits\n        WHERE ($1::bigint IS NULL OR actor_discord_id = $1)\n          AND ($2::text IS NULL OR action = $2)\n          AND ($3::text IS NULL OR entity_type = $3)\n          AND ($4::text IS NULL OR entity_id = $4 OR $4 = ANY(related_ids))\n          AND ($5::timestamptz IS NULL OR created_at >= $5)\n          AND ($6::timestamptz IS NULL OR created_at < $6)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1b67b57b61e3d39474f5cc28af5a1d82be970bc633d7ad19cbe7e47c60c37326"
+}

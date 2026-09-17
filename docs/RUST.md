@@ -154,10 +154,23 @@ Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashM
   aliased in the SQL). `query_as!` ignores `FromRow` entirely, so a struct with
   `#[sqlx(default)]` fields needs `query!` plus a hand-written map.
 - **Migrations** run automatically on startup via `sqlx::migrate!()`
-- **The macro's reported nullability is the source of truth.** Only declare `Option<T>`
-  where sqlx says the column is nullable; do not widen a type for convenience. Where sqlx
-  is conservative and you know better -- a view's `CASE` expression, `COUNT(*)`, a
-  `COALESCE`d aggregate -- assert it with `AS "col!"` rather than wrapping the field.
+- **The macro's nullability is a strong hint, not proof.** Only declare `Option<T>` where
+  the column is genuinely nullable; do not widen a type for convenience. Where sqlx is
+  conservative and you know better, such as a view's `CASE` expression, `COUNT(*)` or a
+  `COALESCE`d aggregate, assert it with `AS "col!"` rather than wrapping the field.
+- **Verify the other direction by hand: sqlx over-reports non-null on outer joins.**
+  Whether a `LEFT JOIN` column reads as nullable depends on the query plan, not the SQL
+  text, so two selects differing only in their WHERE clause can disagree about the same
+  column. A field declared `Option<T>` accepts a non-null report silently, because
+  `From<T> for Option<T>` makes it compile, and then panics on the first real NULL. The
+  build cannot catch this for you. Force it with `AS "col?"` on every column that reaches
+  a row through a `LEFT JOIN`, a CTE or a `LATERAL`.
+- **Pin the driving table's columns too, with `AS "col!"`.** The plan decides which side of
+  an outer join is the nullable one, and on empty tables Postgres reads `a LEFT JOIN b` as
+  a hash right join, which inverts the verdict: every `a` column comes back nullable. A
+  non-`Option` field then fails to compile, on an empty database only. Once a query carries
+  a `?` on one side it needs a `!` on the other, so its column types stop depending on how
+  much data happens to be around.
 - **Batch operations**: Use `UNNEST` for bulk inserts/upserts instead of looping single inserts
 - **JSONB**: Used for nested structures (meeting times, enrollment). Query with `jsonb_array_elements` and lateral joins.
 

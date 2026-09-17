@@ -5,6 +5,6 @@ use sqlx::PgPool;
 
 /// Verify the database connection is alive.
 pub async fn ping(pool: &PgPool) -> Result<()> {
-    sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(pool).await?;
+    sqlx::query_scalar!(r#"SELECT 1 AS "one!""#).fetch_one(pool).await?;
     Ok(())
 }

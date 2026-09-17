@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO rmp_professors (\n            legacy_id, graphql_id, first_name, last_name, department,\n            avg_rating, avg_difficulty, num_ratings, would_take_again_pct,\n            last_synced_at\n        )\n        SELECT\n            v.legacy_id, v.graphql_id, v.first_name, v.last_name, v.department,\n            v.avg_rating, v.avg_difficulty, v.num_ratings, v.would_take_again_pct,\n            NOW()\n        FROM UNNEST(\n            $1::int4[], $2::text[], $3::text[], $4::text[], $5::text[],\n            $6::real[], $7::real[], $8::int4[], $9::real[]\n        ) AS v(\n            legacy_id, graphql_id, first_name, last_name, department,\n            avg_rating, avg_difficulty, num_ratings, would_take_again_pct\n        )\n        ON CONFLICT (legacy_id)\n        DO UPDATE SET\n            graphql_id = EXCLUDED.graphql_id,\n            first_name = EXCLUDED.first_name,\n            last_name = EXCLUDED.last_name,\n            department = EXCLUDED.department,\n            avg_rating = EXCLUDED.avg_rating,\n            avg_difficulty = EXCLUDED.avg_difficulty,\n            num_ratings = EXCLUDED.num_ratings,\n            would_take_again_pct = EXCLUDED.would_take_again_pct,\n            last_synced_at = EXCLUDED.last_synced_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Float4Array",
+        "Float4Array",
+        "Int4Array",
+        "Float4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d7eb71f5f848e75ab6e185b49c01cc83b84af03282a71a934155e871800ab96"
+}

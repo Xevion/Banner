@@ -7,8 +7,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
+use sqlx::PgPool;
 use sqlx::types::Json;
-use sqlx::{AssertSqlSafe, PgPool};
 use strum::{AsRefStr, VariantArray};
 use ts_rs::TS;
 
@@ -114,7 +114,7 @@ impl Target {
 }
 
 /// One recorded action, as stored and as served.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AdminAuditEntry {
@@ -165,13 +165,6 @@ impl Default for AdminAuditFilter {
     }
 }
 
-const WHERE_CLAUSE: &str = "WHERE ($1::bigint IS NULL OR actor_discord_id = $1) \
-       AND ($2::text IS NULL OR action = $2) \
-       AND ($3::text IS NULL OR entity_type = $3) \
-       AND ($4::text IS NULL OR entity_id = $4 OR $4 = ANY(related_ids)) \
-       AND ($5::timestamptz IS NULL OR created_at >= $5) \
-       AND ($6::timestamptz IS NULL OR created_at < $6)";
-
 /// Append one entry.
 ///
 /// Callers audit an action that has already committed, so they must log a
@@ -183,20 +176,25 @@ pub async fn insert(
     target: Target,
     detail: serde_json::Value,
 ) -> Result<AdminAuditEntry> {
-    let entry = sqlx::query_as::<_, AdminAuditEntry>(
-        "INSERT INTO admin_audits \
-             (actor_discord_id, actor_username, action, entity_type, entity_id, related_ids, detail) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7) \
-         RETURNING id, created_at, actor_discord_id, actor_username, action, entity_type, \
-                   entity_id, related_ids, detail",
+    let detail = Json(detail);
+    let entity_type = action.entity();
+    let entry = sqlx::query_as!(
+        AdminAuditEntry,
+        r#"
+        INSERT INTO admin_audits
+            (actor_discord_id, actor_username, action, entity_type, entity_id, related_ids, detail)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, created_at, actor_discord_id, actor_username, action, entity_type,
+                  entity_id, related_ids, detail AS "detail: Json<serde_json::Value>"
+        "#,
+        actor.discord_id,
+        actor.discord_username,
+        action.as_ref(),
+        entity_type.as_ref(),
+        target.id,
+        &target.related,
+        detail as Json<serde_json::Value>,
     )
-    .bind(actor.discord_id)
-    .bind(&actor.discord_username)
-    .bind(action.as_ref())
-    .bind(action.entity().as_ref())
-    .bind(target.id)
-    .bind(target.related)
-    .bind(Json(detail))
     .fetch_one(pool)
     .await
     .context("failed to record admin action")?;
@@ -211,40 +209,59 @@ pub async fn list(pool: &PgPool, filter: &AdminAuditFilter) -> Result<Page<Admin
     let action = filter.action.as_ref().map(AsRef::as_ref);
     let entity_type = filter.entity_type.as_ref().map(AsRef::as_ref);
 
-    let total: (i64,) = sqlx::query_as(AssertSqlSafe(format!(
-        "SELECT COUNT(*) FROM admin_audits {WHERE_CLAUSE}"
-    )))
-    .bind(filter.actor_discord_id)
-    .bind(action)
-    .bind(entity_type)
-    .bind(filter.entity_id.as_deref())
-    .bind(filter.since)
-    .bind(filter.until)
+    let total = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "total!"
+        FROM admin_audits
+        WHERE ($1::bigint IS NULL OR actor_discord_id = $1)
+          AND ($2::text IS NULL OR action = $2)
+          AND ($3::text IS NULL OR entity_type = $3)
+          AND ($4::text IS NULL OR entity_id = $4 OR $4 = ANY(related_ids))
+          AND ($5::timestamptz IS NULL OR created_at >= $5)
+          AND ($6::timestamptz IS NULL OR created_at < $6)
+        "#,
+        filter.actor_discord_id,
+        action,
+        entity_type,
+        filter.entity_id.as_deref(),
+        filter.since,
+        filter.until,
+    )
     .fetch_one(pool)
     .await
     .context("failed to count admin audit entries")?;
 
-    let entries = sqlx::query_as::<_, AdminAuditEntry>(AssertSqlSafe(format!(
-        "SELECT id, created_at, actor_discord_id, actor_username, action, entity_type, \
-                entity_id, related_ids, detail \
-         FROM admin_audits {WHERE_CLAUSE} \
-         ORDER BY created_at DESC, id DESC LIMIT $7 OFFSET $8"
-    )))
-    .bind(filter.actor_discord_id)
-    .bind(action)
-    .bind(entity_type)
-    .bind(filter.entity_id.as_deref())
-    .bind(filter.since)
-    .bind(filter.until)
-    .bind(i64::from(per_page))
-    .bind(i64::from(page - 1) * i64::from(per_page))
+    let entries = sqlx::query_as!(
+        AdminAuditEntry,
+        r#"
+        SELECT id, created_at, actor_discord_id, actor_username, action, entity_type,
+               entity_id, related_ids, detail AS "detail: Json<serde_json::Value>"
+        FROM admin_audits
+        WHERE ($1::bigint IS NULL OR actor_discord_id = $1)
+          AND ($2::text IS NULL OR action = $2)
+          AND ($3::text IS NULL OR entity_type = $3)
+          AND ($4::text IS NULL OR entity_id = $4 OR $4 = ANY(related_ids))
+          AND ($5::timestamptz IS NULL OR created_at >= $5)
+          AND ($6::timestamptz IS NULL OR created_at < $6)
+        ORDER BY created_at DESC, id DESC
+        LIMIT $7 OFFSET $8
+        "#,
+        filter.actor_discord_id,
+        action,
+        entity_type,
+        filter.entity_id.as_deref(),
+        filter.since,
+        filter.until,
+        i64::from(per_page),
+        i64::from(page - 1) * i64::from(per_page),
+    )
     .fetch_all(pool)
     .await
     .context("failed to list admin audit entries")?;
 
     Ok(Page {
         items: entries,
-        total: Count::try_from(total.0)?,
+        total: Count::try_from(total)?,
         page,
         per_page,
     })

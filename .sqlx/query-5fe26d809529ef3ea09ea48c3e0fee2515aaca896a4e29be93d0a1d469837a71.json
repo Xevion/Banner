@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO users (discord_id, discord_username, discord_avatar_hash)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (discord_id) DO UPDATE\n            SET discord_username = EXCLUDED.discord_username,\n                discord_avatar_hash = EXCLUDED.discord_avatar_hash,\n                updated_at = now()\n        RETURNING discord_id, discord_username, discord_avatar_hash, is_admin, created_at, updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "discord_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "discord_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "discord_username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "discord_username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "discord_avatar_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "discord_avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "is_admin",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "is_admin"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5fe26d809529ef3ea09ea48c3e0fee2515aaca896a4e29be93d0a1d469837a71"
+}

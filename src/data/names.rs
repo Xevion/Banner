@@ -606,11 +606,10 @@ pub fn find_best_candidate(bluebook_name: &str, candidates: &[MatchCandidate]) -
 /// Parses each `display_name` using [`parse_banner_name`] and updates the row.
 /// Logs warnings for any names that fail to parse.
 pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
-    let rows: Vec<(i32, String)> =
-        sqlx::query_as("SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL")
-            .fetch_all(db_pool)
-            .await
-            .context("failed to fetch instructors for name backfill")?;
+    let rows = sqlx::query!("SELECT id, display_name FROM instructors WHERE first_name IS NULL OR last_name IS NULL")
+        .fetch_all(db_pool)
+        .await
+        .context("failed to fetch instructors for name backfill")?;
 
     if rows.is_empty() {
         return Ok(());
@@ -622,17 +621,18 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
     let mut lasts: Vec<String> = Vec::with_capacity(total);
     let mut unparseable = 0usize;
 
-    for (id, display_name) in &rows {
-        match parse_banner_name(display_name) {
+    for row in &rows {
+        match parse_banner_name(&row.display_name) {
             Some(parts) => {
-                ids.push(*id);
+                ids.push(row.id);
                 firsts.push(parts.first);
                 lasts.push(parts.last);
             }
             None => {
                 warn!(
-                    id,
-                    display_name, "Failed to parse instructor display_name during backfill"
+                    id = row.id,
+                    display_name = row.display_name,
+                    "Failed to parse instructor display_name during backfill"
                 );
                 unparseable += 1;
             }
@@ -640,10 +640,7 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
     }
 
     if !ids.is_empty() {
-        let first_refs: Vec<&str> = firsts.iter().map(|s| s.as_str()).collect();
-        let last_refs: Vec<&str> = lasts.iter().map(|s| s.as_str()).collect();
-
-        sqlx::query(
+        sqlx::query!(
             r#"
             UPDATE instructors i
             SET first_name = v.first_name, last_name = v.last_name
@@ -651,10 +648,10 @@ pub async fn backfill_instructor_names(db_pool: &PgPool) -> anyhow::Result<()> {
                 AS v(id, first_name, last_name)
             WHERE i.id = v.id
             "#,
+            &ids,
+            &firsts,
+            &lasts,
         )
-        .bind(&ids)
-        .bind(&first_refs)
-        .bind(&last_refs)
         .execute(db_pool)
         .await
         .context("failed to update instructor names")?;

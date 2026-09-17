@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, course_id, timestamp, enrollment, wait_count, seats_available\n        FROM course_metrics\n        WHERE course_id = $1 AND timestamp >= $2\n        ORDER BY timestamp DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "course_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "course_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "wait_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "seats_available",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "seats_available"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d7e9e0eb0231f941eb906d11ca5c1bf943c26065ba3f0349c5aa1d529023e2b3"
+}

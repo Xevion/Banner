@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT computed_at FROM instructor_scores WHERE instructor_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "computed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cb8f153f4cbc30e63accff4574543a6d8c3513bc91d86b38c12ff1b1987fb62a"
+}

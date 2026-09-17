@@ -7,7 +7,7 @@ use axum::{
     },
     response::IntoResponse,
 };
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, trace, warn};
 
@@ -22,6 +22,7 @@ use crate::web::stream::protocol::{
     STREAM_PROTOCOL_VERSION, StreamClientMessage, StreamDelta, StreamError, StreamErrorCode, StreamKind,
     StreamServerMessage, StreamSnapshot,
 };
+use crate::web::stream::sink::StreamSink;
 use crate::web::stream::streams::{audit_log, scrape_jobs};
 use crate::web::stream::subscriptions::{Subscription, SubscriptionRegistry, build_subscription};
 use crate::web::ws::ScrapeJobEvent;
@@ -92,49 +93,16 @@ pub async fn stream_ws(
     ws.on_upgrade(|socket| handle_stream_ws(socket, state))
 }
 
-async fn send_message(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    message: &StreamServerMessage,
-) -> bool {
-    let kind = message.kind_label();
-
-    // Serializing our own message cannot fail for any input the client controls, so this keeps the
-    // connection rather than tearing it down; counting it is what stops it being silent.
-    let Ok(json) = serde_json::to_string(message) else {
-        metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => "encode_failed").increment(1);
-        return true;
-    };
-
-    let sent = sink.send(Message::Text(json.into())).await.is_ok();
-    let outcome = if sent { "sent" } else { "failed" };
-    metrics::counter!(WS_MESSAGES, "direction" => "out", "kind" => kind, "outcome" => outcome).increment(1);
-
-    sent
-}
-
-async fn send_error(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    request_id: Option<String>,
-    code: StreamErrorCode,
-    message: &str,
-) -> bool {
-    let msg = StreamServerMessage::Error {
-        request_id,
-        code,
-        message: message.to_string(),
-    };
-    send_message(sink, &msg).await
-}
-
 async fn handle_stream_ws(socket: WebSocket, state: AppState) {
     let _connection_guard = ConnectionGuard::new();
     trace!("stream WebSocket connected");
 
-    let (mut sink, mut stream) = socket.split();
+    let (split_sink, mut stream) = socket.split();
+    let mut sink = StreamSink::new(split_sink);
     let ready = StreamServerMessage::Ready {
         protocol_version: STREAM_PROTOCOL_VERSION,
     };
-    if !send_message(&mut sink, &ready).await {
+    if !sink.send(&ready).await {
         return;
     }
 
@@ -208,7 +176,7 @@ async fn handle_stream_ws(socket: WebSocket, state: AppState) {
 }
 
 async fn handle_client_message(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     state: &AppState,
     registry: &mut SubscriptionRegistry,
     text: &str,
@@ -218,7 +186,9 @@ async fn handle_client_message(
         Err(_) => {
             metrics::counter!(WS_MESSAGES, "direction" => "in", "kind" => "invalid", "outcome" => "received")
                 .increment(1);
-            let sent = send_error(sink, None, StreamErrorCode::InvalidMessage, "Invalid message").await;
+            let sent = sink
+                .send_error(None, StreamErrorCode::InvalidMessage, "Invalid message")
+                .await;
             return ClientMessageResult::from_error_send(sent);
         }
     };
@@ -236,7 +206,7 @@ async fn handle_client_message(
             let subscription = match build_subscription(stream, filter) {
                 Ok(sub) => sub,
                 Err(StreamError { code, message }) => {
-                    let sent = send_error(sink, Some(request_id), code, &message).await;
+                    let sent = sink.send_error(Some(request_id), code, &message).await;
                     return ClientMessageResult::from_error_send(sent);
                 }
             };
@@ -253,7 +223,7 @@ async fn handle_client_message(
                 subscription_id: sub_id.clone(),
                 stream,
             };
-            if !send_message(sink, &subscribed).await {
+            if !sink.send(&subscribed).await {
                 return ClientMessageResult::Disconnected;
             }
 
@@ -267,13 +237,13 @@ async fn handle_client_message(
             filter,
         } => {
             let Some(subscription) = registry.get(&subscription_id) else {
-                let sent = send_error(
-                    sink,
-                    Some(request_id),
-                    StreamErrorCode::UnknownSubscription,
-                    "Unknown subscription",
-                )
-                .await;
+                let sent = sink
+                    .send_error(
+                        Some(request_id),
+                        StreamErrorCode::UnknownSubscription,
+                        "Unknown subscription",
+                    )
+                    .await;
                 return ClientMessageResult::from_error_send(sent);
             };
 
@@ -283,7 +253,7 @@ async fn handle_client_message(
             let updated = match build_subscription(stream, filter) {
                 Ok(sub) => sub,
                 Err(StreamError { code, message }) => {
-                    let sent = send_error(sink, Some(request_id), code, &message).await;
+                    let sent = sink.send_error(Some(request_id), code, &message).await;
                     return ClientMessageResult::from_error_send(sent);
                 }
             };
@@ -303,13 +273,13 @@ async fn handle_client_message(
             // Now get mutable reference and update
             let Some(subscription) = registry.get_mut(&subscription_id) else {
                 warn!(subscription_id, "subscription disappeared from registry during modify");
-                let sent = send_error(
-                    sink,
-                    Some(request_id),
-                    StreamErrorCode::UnknownSubscription,
-                    "Subscription removed during modification",
-                )
-                .await;
+                let sent = sink
+                    .send_error(
+                        Some(request_id),
+                        StreamErrorCode::UnknownSubscription,
+                        "Subscription removed during modification",
+                    )
+                    .await;
                 return ClientMessageResult::from_error_send(sent);
             };
             *subscription = updated;
@@ -317,7 +287,7 @@ async fn handle_client_message(
                 request_id,
                 subscription_id: subscription_id.clone(),
             };
-            if !send_message(sink, &modified).await {
+            if !sink.send(&modified).await {
                 return ClientMessageResult::Disconnected;
             }
 
@@ -340,13 +310,13 @@ async fn handle_client_message(
                 request_id,
                 subscription_id,
             };
-            if !send_message(sink, &msg).await {
+            if !sink.send(&msg).await {
                 return ClientMessageResult::Disconnected;
             }
         }
         StreamClientMessage::Ping { request_id, timestamp } => {
             let pong = StreamServerMessage::Pong { request_id, timestamp };
-            if !send_message(sink, &pong).await {
+            if !sink.send(&pong).await {
                 return ClientMessageResult::Disconnected;
             }
         }
@@ -356,7 +326,7 @@ async fn handle_client_message(
 }
 
 async fn send_snapshot(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     state: &AppState,
     registry: &mut SubscriptionRegistry,
     subscription_id: &str,
@@ -373,46 +343,40 @@ async fn send_snapshot(
                     StreamSnapshot::ScrapeJobs { jobs }
                 }
                 Err(_) => {
-                    return send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load scrape jobs snapshot",
-                    )
-                    .await;
+                    return sink
+                        .send_error(
+                            None,
+                            StreamErrorCode::InternalError,
+                            "Failed to load scrape jobs snapshot",
+                        )
+                        .await;
                 }
             };
 
-            send_message(
-                sink,
-                &StreamServerMessage::Snapshot {
-                    subscription_id: subscription_id.to_string(),
-                    snapshot,
-                },
-            )
+            sink.send(&StreamServerMessage::Snapshot {
+                subscription_id: subscription_id.to_string(),
+                snapshot,
+            })
             .await
         }
         Subscription::AuditLog { filter } => {
             let snapshot = match audit_log::build_snapshot(&state.db_pool, filter).await {
                 Ok(entries) => StreamSnapshot::AuditLog { entries },
                 Err(_) => {
-                    return send_error(
-                        sink,
-                        None,
-                        StreamErrorCode::InternalError,
-                        "Failed to load audit log snapshot",
-                    )
-                    .await;
+                    return sink
+                        .send_error(
+                            None,
+                            StreamErrorCode::InternalError,
+                            "Failed to load audit log snapshot",
+                        )
+                        .await;
                 }
             };
 
-            send_message(
-                sink,
-                &StreamServerMessage::Snapshot {
-                    subscription_id: subscription_id.to_string(),
-                    snapshot,
-                },
-            )
+            sink.send(&StreamServerMessage::Snapshot {
+                subscription_id: subscription_id.to_string(),
+                snapshot,
+            })
             .await
         }
         Subscription::ScraperStats { filter } => {
@@ -439,16 +403,16 @@ async fn send_snapshot(
                         pending_jobs: raw.pending_jobs,
                         locked_jobs: raw.locked_jobs,
                     };
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperStats { stats },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperStats { stats },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load stats").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load stats")
+                        .await
+                }
             }
         }
         Subscription::ScraperTimeseries { filter } => {
@@ -476,16 +440,16 @@ async fn send_snapshot(
                             avg_duration_ms: p.avg_duration_ms,
                         })
                         .collect();
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load timeseries").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load timeseries")
+                        .await
+                }
             }
         }
         Subscription::ScraperSubjects => {
@@ -510,23 +474,23 @@ async fn send_snapshot(
                             recent_failures: d.recent_failures,
                         })
                         .collect();
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperSubjects { subjects },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperSubjects { subjects },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load subjects").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load subjects")
+                        .await
+                }
             }
         }
     }
 }
 
 async fn dispatch_event(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     state: &AppState,
     registry: &mut SubscriptionRegistry,
     event: DomainEvent,
@@ -537,16 +501,12 @@ async fn dispatch_event(
     }
 }
 
-async fn resync_all(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    state: &AppState,
-    registry: &mut SubscriptionRegistry,
-) -> bool {
+async fn resync_all(sink: &mut StreamSink, state: &AppState, registry: &mut SubscriptionRegistry) -> bool {
     resync_scrape_jobs(sink, state, registry).await && resync_audit_log(sink, state, registry).await
 }
 
 async fn dispatch_scrape_job_event(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     state: &AppState,
     registry: &mut SubscriptionRegistry,
     event: ScrapeJobEvent,
@@ -565,7 +525,7 @@ async fn dispatch_scrape_job_event(
                 subscription_id: subscription_id.clone(),
                 delta: StreamDelta::ScrapeJobs { event: event.clone() },
             };
-            if !send_message(sink, &delta).await {
+            if !sink.send(&delta).await {
                 return false;
             }
         }
@@ -575,7 +535,7 @@ async fn dispatch_scrape_job_event(
 }
 
 async fn dispatch_audit_log_event(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     registry: &mut SubscriptionRegistry,
     event: AuditLogEvent,
 ) -> bool {
@@ -593,7 +553,7 @@ async fn dispatch_audit_log_event(
             subscription_id: subscription_id.clone(),
             delta: StreamDelta::AuditLog { entries },
         };
-        if !send_message(sink, &delta).await {
+        if !sink.send(&delta).await {
             return false;
         }
     }
@@ -601,11 +561,7 @@ async fn dispatch_audit_log_event(
     true
 }
 
-async fn resync_scrape_jobs(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    state: &AppState,
-    registry: &mut SubscriptionRegistry,
-) -> bool {
+async fn resync_scrape_jobs(sink: &mut StreamSink, state: &AppState, registry: &mut SubscriptionRegistry) -> bool {
     let ids = registry.ids_for_kind(StreamKind::ScrapeJobs);
     for subscription_id in ids {
         if !send_snapshot(sink, state, registry, &subscription_id).await {
@@ -615,11 +571,7 @@ async fn resync_scrape_jobs(
     true
 }
 
-async fn resync_audit_log(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    state: &AppState,
-    registry: &mut SubscriptionRegistry,
-) -> bool {
+async fn resync_audit_log(sink: &mut StreamSink, state: &AppState, registry: &mut SubscriptionRegistry) -> bool {
     let ids = registry.ids_for_kind(StreamKind::AuditLog);
     for subscription_id in ids {
         if !send_snapshot(sink, state, registry, &subscription_id).await {
@@ -630,7 +582,7 @@ async fn resync_audit_log(
 }
 
 async fn dispatch_computed_update(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     registry: &SubscriptionRegistry,
     update: ComputedUpdate,
 ) -> bool {
@@ -655,7 +607,7 @@ async fn dispatch_computed_update(
                 subscription_id: subscription_id.clone(),
                 delta: delta.clone(),
             };
-            if !send_message(sink, &msg).await {
+            if !sink.send(&msg).await {
                 return false;
             }
         }
@@ -665,7 +617,7 @@ async fn dispatch_computed_update(
 
 /// Send computed snapshots for all computed subscriptions.
 async fn send_computed_snapshot(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
+    sink: &mut StreamSink,
     state: &AppState,
     subscription: &Subscription,
     subscription_id: &str,
@@ -695,16 +647,16 @@ async fn send_computed_snapshot(
                         pending_jobs: raw.pending_jobs,
                         locked_jobs: raw.locked_jobs,
                     };
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperStats { stats },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperStats { stats },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load stats").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load stats")
+                        .await
+                }
             }
         }
         Subscription::ScraperTimeseries { filter } => {
@@ -732,16 +684,16 @@ async fn send_computed_snapshot(
                             avg_duration_ms: p.avg_duration_ms,
                         })
                         .collect();
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperTimeseries { points, period, bucket },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load timeseries").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load timeseries")
+                        .await
+                }
             }
         }
         Subscription::ScraperSubjects => {
@@ -766,27 +718,23 @@ async fn send_computed_snapshot(
                             recent_failures: d.recent_failures,
                         })
                         .collect();
-                    send_message(
-                        sink,
-                        &StreamServerMessage::Snapshot {
-                            subscription_id: subscription_id.to_string(),
-                            snapshot: StreamSnapshot::ScraperSubjects { subjects },
-                        },
-                    )
+                    sink.send(&StreamServerMessage::Snapshot {
+                        subscription_id: subscription_id.to_string(),
+                        snapshot: StreamSnapshot::ScraperSubjects { subjects },
+                    })
                     .await
                 }
-                Err(_) => send_error(sink, None, StreamErrorCode::InternalError, "Failed to load subjects").await,
+                Err(_) => {
+                    sink.send_error(None, StreamErrorCode::InternalError, "Failed to load subjects")
+                        .await
+                }
             }
         }
         _ => true, // Non-computed subscriptions don't need resync here
     }
 }
 
-async fn resync_computed(
-    sink: &mut futures::stream::SplitSink<WebSocket, Message>,
-    state: &AppState,
-    registry: &SubscriptionRegistry,
-) -> bool {
+async fn resync_computed(sink: &mut StreamSink, state: &AppState, registry: &SubscriptionRegistry) -> bool {
     for (subscription_id, subscription) in registry.iter() {
         if subscription.is_computed() && !send_computed_snapshot(sink, state, subscription, subscription_id).await {
             return false;

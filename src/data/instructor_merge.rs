@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use sqlx::{AssertSqlSafe, PgPool};
+use sqlx::PgPool;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use strum::{AsRefStr, IntoStaticStr, VariantArray};
@@ -115,7 +115,6 @@ struct MergeSide {
     slug: Option<String>,
 }
 
-#[derive(sqlx::FromRow)]
 struct InstructorRow {
     id: i32,
     display_name: String,
@@ -159,27 +158,6 @@ fn classify(a: Option<&str>, b: Option<&str>) -> DuplicateTier {
     }
 }
 
-const INSTRUCTOR_PAIR_SELECT: &str = r#"
-    SELECT i.id, i.display_name, i.email, ms.status AS rmp_match_status,
-           COALESCE(ci.course_count, 0) AS course_count,
-           COALESCE(ci.subjects, '{}') AS subjects,
-           COALESCE(rl.legacy_ids, '{}') AS rmp_legacy_ids
-    FROM instructors i
-    JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
-    LEFT JOIN LATERAL (
-        SELECT COUNT(*) AS course_count,
-               ARRAY_AGG(DISTINCT c.subject) AS subjects
-        FROM course_instructors x
-        JOIN courses c ON c.id = x.course_id
-        WHERE x.instructor_id = i.id
-    ) ci ON TRUE
-    LEFT JOIN LATERAL (
-        SELECT ARRAY_AGG(l.rmp_legacy_id ORDER BY l.rmp_legacy_id) AS legacy_ids
-        FROM instructor_rmp_links l
-        WHERE l.instructor_id = i.id
-    ) rl ON TRUE
-"#;
-
 /// The two ids of a pair in the order the dismissal table stores them.
 ///
 /// `None` when both sides are the same record, which is never a pair.
@@ -215,13 +193,34 @@ async fn dismissed_pairs(pool: &PgPool) -> Result<Vec<(i32, i32)>> {
 ///
 /// Pairs an admin has judged to be different people are left out.
 pub async fn find_duplicate_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
-    let rows: Vec<InstructorRow> = sqlx::query_as(AssertSqlSafe(format!(
-        "{INSTRUCTOR_PAIR_SELECT} \
-         WHERE i.display_name IN ( \
-             SELECT display_name FROM instructors GROUP BY display_name HAVING COUNT(*) > 1 \
-         ) \
-         ORDER BY i.display_name, i.id"
-    )))
+    let rows = sqlx::query_as!(
+        InstructorRow,
+        r#"
+        SELECT i.id AS "id!", i.display_name AS "display_name!", i.email,
+               ms.status AS "rmp_match_status!: RmpMatchStatus",
+               COALESCE(ci.course_count, 0) AS "course_count!",
+               COALESCE(ci.subjects, '{}') AS "subjects!",
+               COALESCE(rl.legacy_ids, '{}') AS "rmp_legacy_ids!"
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS course_count,
+                   ARRAY_AGG(DISTINCT c.subject) AS subjects
+            FROM course_instructors x
+            JOIN courses c ON c.id = x.course_id
+            WHERE x.instructor_id = i.id
+        ) ci ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(l.rmp_legacy_id ORDER BY l.rmp_legacy_id) AS legacy_ids
+            FROM instructor_rmp_links l
+            WHERE l.instructor_id = i.id
+        ) rl ON TRUE
+        WHERE i.display_name IN (
+            SELECT display_name FROM instructors GROUP BY display_name HAVING COUNT(*) > 1
+        )
+        ORDER BY i.display_name, i.id
+        "#
+    )
     .fetch_all(pool)
     .await
     .context("failed to fetch duplicate instructor groups")?;
@@ -264,12 +263,35 @@ pub async fn find_dismissed_pairs(pool: &PgPool) -> Result<Vec<DuplicatePair>> {
     }
 
     let ids: Vec<i32> = dismissed.iter().flat_map(|&(a, b)| [a, b]).collect();
-    let rows: Vec<InstructorRow> =
-        sqlx::query_as(AssertSqlSafe(format!("{INSTRUCTOR_PAIR_SELECT} WHERE i.id = ANY($1)")))
-            .bind(&ids)
-            .fetch_all(pool)
-            .await
-            .context("failed to fetch dismissed instructor records")?;
+    let rows = sqlx::query_as!(
+        InstructorRow,
+        r#"
+        SELECT i.id AS "id!", i.display_name AS "display_name!", i.email,
+               ms.status AS "rmp_match_status!: RmpMatchStatus",
+               COALESCE(ci.course_count, 0) AS "course_count!",
+               COALESCE(ci.subjects, '{}') AS "subjects!",
+               COALESCE(rl.legacy_ids, '{}') AS "rmp_legacy_ids!"
+        FROM instructors i
+        JOIN instructor_rmp_match_status ms ON ms.instructor_id = i.id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS course_count,
+                   ARRAY_AGG(DISTINCT c.subject) AS subjects
+            FROM course_instructors x
+            JOIN courses c ON c.id = x.course_id
+            WHERE x.instructor_id = i.id
+        ) ci ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(l.rmp_legacy_id ORDER BY l.rmp_legacy_id) AS legacy_ids
+            FROM instructor_rmp_links l
+            WHERE l.instructor_id = i.id
+        ) rl ON TRUE
+        WHERE i.id = ANY($1)
+        "#,
+        &ids,
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to fetch dismissed instructor records")?;
 
     let by_id: HashMap<i32, &InstructorRow> = rows.iter().map(|row| (row.id, row)).collect();
     Ok(dismissed
@@ -511,7 +533,7 @@ pub async fn merge_with_claimant(
 
     let names = sqlx::query!(
         r#"
-        SELECT i.id, i.display_name, i.email,
+        SELECT i.id AS "id!", i.display_name AS "display_name!", i.email,
                (SELECT COUNT(*) FROM course_instructors ci WHERE ci.instructor_id = i.id) AS "course_count!"
         FROM instructors i WHERE i.id = ANY($1::int4[])
         "#,

@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT s.subject,\n               COALESCE(rd.description, s.subject) AS \"description!\",\n               s.total_enrollment\n        FROM term_subject_summary s\n        LEFT JOIN reference_data rd ON rd.category = 'subject' AND rd.code = s.subject\n        WHERE s.term_code = $1\n        ORDER BY s.total_enrollment DESC, s.subject\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "term_subject_summary",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "description!",
+        "type_info": "Varchar",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_enrollment",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "term_subject_summary",
+            "name": "total_enrollment"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "8e7269f91605fa7d271185169c4fbb37dafee717b26037a63367a73cd4cb06b1"
+}

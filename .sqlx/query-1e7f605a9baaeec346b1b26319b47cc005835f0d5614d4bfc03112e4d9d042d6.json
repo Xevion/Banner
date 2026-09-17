@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE courses c\n        SET first_begin_minutes = a.first_begin,\n            first_end_minutes   = a.first_end,\n            meeting_minutes     = a.first_end - a.first_begin,\n            weekly_minutes      = a.weekly,\n            day_mask            = a.mask\n        FROM (\n            SELECT ids.id AS course_id,\n                   (array_agg(m.begin_minutes ORDER BY m.begin_minutes))[1] AS first_begin,\n                   (array_agg(m.end_minutes   ORDER BY m.begin_minutes))[1] AS first_end,\n                   sum(m.end_minutes - m.begin_minutes)::smallint           AS weekly,\n                   bit_or(m.day_bits)                                       AS mask\n            FROM UNNEST($1::int4[]) AS ids(id)\n            LEFT JOIN course_meetings m ON m.course_id = ids.id\n            GROUP BY ids.id\n        ) a\n        WHERE c.id = a.course_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e7f605a9baaeec346b1b26319b47cc005835f0d5614d4bfc03112e4d9d042d6"
+}

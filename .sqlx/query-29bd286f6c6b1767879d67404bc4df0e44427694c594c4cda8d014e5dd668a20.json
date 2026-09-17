@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email AS \"email!\" FROM instructors WHERE email = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "29bd286f6c6b1767879d67404bc4df0e44427694c594c4cda8d014e5dd668a20"
+}

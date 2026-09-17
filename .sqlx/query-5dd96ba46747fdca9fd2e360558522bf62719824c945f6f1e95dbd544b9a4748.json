@@ -1,0 +1,131 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, created_at, actor_discord_id, actor_username, action, entity_type,\n               entity_id, related_ids, detail AS \"detail: Json<serde_json::Value>\"\n        FROM admin_audits\n        WHERE ($1::bigint IS NULL OR actor_discord_id = $1)\n          AND ($2::text IS NULL OR action = $2)\n          AND ($3::text IS NULL OR entity_type = $3)\n          AND ($4::text IS NULL OR entity_id = $4 OR $4 = ANY(related_ids))\n          AND ($5::timestamptz IS NULL OR created_at >= $5)\n          AND ($6::timestamptz IS NULL OR created_at < $6)\n        ORDER BY created_at DESC, id DESC\n        LIMIT $7 OFFSET $8\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "actor_discord_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "actor_discord_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "actor_username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "actor_username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "action",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "entity_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "entity_type"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "entity_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "entity_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "related_ids",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "related_ids"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "detail: Json<serde_json::Value>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "admin_audits",
+            "name": "detail"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5dd96ba46747fdca9fd2e360558522bf62719824c945f6f1e95dbd544b9a4748"
+}

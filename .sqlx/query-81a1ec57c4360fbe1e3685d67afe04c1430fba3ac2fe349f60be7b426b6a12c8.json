@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, completed_at, duration_ms, success, error_message,\n               courses_fetched, courses_changed, courses_unchanged,\n               audits_generated, metrics_generated\n        FROM scrape_job_results\n        WHERE target_type = 'Subject' AND payload->>'subject' = $1\n        ORDER BY completed_at DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "completed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "completed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "duration_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "duration_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "success",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "success"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "error_message",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "error_message"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "courses_fetched",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "courses_fetched"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "courses_changed",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "courses_changed"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "courses_unchanged",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "courses_unchanged"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "audits_generated",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "audits_generated"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "metrics_generated",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "scrape_job_results",
+            "name": "metrics_generated"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "81a1ec57c4360fbe1e3685d67afe04c1430fba3ac2fe349f60be7b426b6a12c8"
+}

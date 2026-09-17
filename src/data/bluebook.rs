@@ -76,7 +76,7 @@ pub async fn batch_upsert_bluebook_evaluations(pool: &PgPool, evaluations: &[Blu
     let course_response_counts: Vec<Option<i32>> = deduped.iter().map(|e| e.course_response_count).collect();
     let departments: Vec<Option<&str>> = deduped.iter().map(|e| e.department.as_deref()).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO bluebook_evaluations (
             subject, course_number, section, crn, term, instructor_name,
@@ -108,18 +108,18 @@ pub async fn batch_upsert_bluebook_evaluations(pool: &PgPool, evaluations: &[Blu
             department = EXCLUDED.department,
             scraped_at = EXCLUDED.scraped_at
         "#,
+        &subjects as &[&str],
+        &course_numbers as &[&str],
+        &sections as &[&str],
+        &crns as &[&str],
+        &terms as &[&str],
+        &instructor_names as &[&str],
+        &instructor_ratings as &[Option<f32>],
+        &instructor_response_counts as &[Option<i32>],
+        &course_ratings as &[Option<f32>],
+        &course_response_counts as &[Option<i32>],
+        &departments as &[Option<&str>],
     )
-    .bind(&subjects)
-    .bind(&course_numbers)
-    .bind(&sections)
-    .bind(&crns)
-    .bind(&terms)
-    .bind(&instructor_names)
-    .bind(&instructor_ratings)
-    .bind(&instructor_response_counts)
-    .bind(&course_ratings)
-    .bind(&course_response_counts)
-    .bind(&departments)
     .execute(pool)
     .await
     .context("Failed to batch upsert BlueBook evaluations")?;
@@ -129,40 +129,37 @@ pub async fn batch_upsert_bluebook_evaluations(pool: &PgPool, evaluations: &[Blu
 
 /// Load the last-scraped timestamp for every subject in `bluebook_subject_scrapes`.
 pub async fn get_all_subject_scrape_times(pool: &PgPool) -> Result<HashMap<String, DateTime<Utc>>> {
-    let rows =
-        sqlx::query_as::<_, (String, DateTime<Utc>)>("SELECT subject, last_scraped_at FROM bluebook_subject_scrapes")
-            .fetch_all(pool)
-            .await
-            .context("Failed to load subject scrape times")?;
+    let rows = sqlx::query!("SELECT subject, last_scraped_at FROM bluebook_subject_scrapes")
+        .fetch_all(pool)
+        .await
+        .context("Failed to load subject scrape times")?;
 
-    Ok(rows.into_iter().collect())
+    Ok(rows.into_iter().map(|r| (r.subject, r.last_scraped_at)).collect())
 }
 
 /// Returns the MAX(term) code per subject from `bluebook_evaluations`.
 ///
 /// Used to classify subjects as recent vs. historical when deciding scrape intervals.
 pub async fn get_subject_max_terms(pool: &PgPool) -> Result<HashMap<String, String>> {
-    let rows = sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT subject, MAX(term) FROM bluebook_evaluations GROUP BY subject",
-    )
-    .fetch_all(pool)
-    .await
-    .context("Failed to load subject max terms")?;
+    let rows = sqlx::query!("SELECT subject, MAX(term) AS max_term FROM bluebook_evaluations GROUP BY subject")
+        .fetch_all(pool)
+        .await
+        .context("Failed to load subject max terms")?;
 
     Ok(rows
         .into_iter()
-        .filter_map(|(subject, max_term)| max_term.map(|t| (subject, t)))
+        .filter_map(|r| r.max_term.map(|t| (r.subject, t)))
         .collect())
 }
 
 /// Upsert `last_scraped_at = NOW()` for the given subject in `bluebook_subject_scrapes`.
 pub async fn mark_subject_scraped(pool: &PgPool, subject: &str) -> Result<()> {
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO bluebook_subject_scrapes (subject, last_scraped_at)
          VALUES ($1, NOW())
          ON CONFLICT (subject) DO UPDATE SET last_scraped_at = NOW()",
+        subject,
     )
-    .bind(subject)
     .execute(pool)
     .await
     .context("Failed to mark subject scraped")?;

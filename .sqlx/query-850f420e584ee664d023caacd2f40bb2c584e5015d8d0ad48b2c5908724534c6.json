@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_sessions\n        SET last_active_at = now(),\n            expires_at = now() + make_interval(secs => $2::double precision)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "850f420e584ee664d023caacd2f40bb2c584e5015d8d0ad48b2c5908724534c6"
+}

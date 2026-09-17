@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cw.watch_type AS \"watch_type: WatchType\",\n            cw.notified_at,\n            c.crn,\n            c.term_code,\n            c.subject,\n            c.course_number,\n            c.title\n        FROM course_watches cw\n        JOIN courses c ON c.id = cw.course_id\n        WHERE cw.discord_user_id = $1\n          AND cw.active = TRUE\n        ORDER BY c.subject, c.course_number, c.crn, cw.watch_type\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "watch_type: WatchType",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "course_watches",
+            "name": "watch_type"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "notified_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "course_watches",
+            "name": "notified_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "crn",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "crn"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "term_code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "term_code"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "course_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9cf02146c5e4a58d1ebd65ec0e3215b2a8c57eae016e7dd4cc6ea3268296811b"
+}

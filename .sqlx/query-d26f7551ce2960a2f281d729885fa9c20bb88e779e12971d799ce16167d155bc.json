@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH recent AS (\n                SELECT payload->>'subject' AS subject,\n                       COALESCE(payload->>'term', '') AS term,\n                       success,\n                       COALESCE(courses_fetched, 0) AS courses_fetched,\n                       COALESCE(courses_changed, 0) AS courses_changed,\n                       completed_at,\n                       ROW_NUMBER() OVER (PARTITION BY payload->>'subject', payload->>'term' ORDER BY completed_at DESC) AS rn\n                FROM scrape_job_results\n                WHERE target_type = 'Subject' AND completed_at > NOW() - INTERVAL '72 hours'\n            ),\n            filtered AS (SELECT * FROM recent WHERE rn <= 20),\n            zero_break AS (\n                SELECT subject, term,\n                       MIN(rn) FILTER (WHERE courses_changed > 0 AND success) AS first_nonzero_rn,\n                       MIN(rn) FILTER (WHERE courses_fetched > 0 AND success) AS first_nonempty_rn\n                FROM filtered GROUP BY subject, term\n            )\n            SELECT\n                f.subject::TEXT AS \"subject!\",\n                f.term::TEXT AS \"term!\",\n                COUNT(*)::BIGINT AS \"recent_runs!\",\n                COALESCE(AVG(CASE WHEN f.success AND f.courses_fetched > 0\n                     THEN f.courses_changed::FLOAT / f.courses_fetched ELSE NULL END), 0.0)::FLOAT8 AS \"avg_change_ratio!\",\n                COALESCE(zb.first_nonzero_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_changed = 0))::BIGINT AS \"consecutive_zero_changes!\",\n                COALESCE(zb.first_nonempty_rn - 1, COUNT(*) FILTER (WHERE f.success AND f.courses_fetched = 0))::BIGINT AS \"consecutive_empty_fetches!\",\n                COUNT(*) FILTER (WHERE NOT f.success)::BIGINT AS \"recent_failure_count!\",\n                COUNT(*) FILTER (WHERE f.success)::BIGINT AS \"recent_success_count!\",\n                MAX(f.completed_at) AS \"last_completed!\"\n            FROM filtered f\n            LEFT JOIN zero_break zb ON f.subject = zb.subject AND f.term = zb.term\n            GROUP BY f.subject, f.term, zb.first_nonzero_rn, zb.first_nonempty_rn\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "term!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "recent_runs!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "avg_change_ratio!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "consecutive_zero_changes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "consecutive_empty_fetches!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "recent_failure_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "recent_success_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_completed!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d26f7551ce2960a2f281d729885fa9c20bb88e779e12971d799ce16167d155bc"
+}

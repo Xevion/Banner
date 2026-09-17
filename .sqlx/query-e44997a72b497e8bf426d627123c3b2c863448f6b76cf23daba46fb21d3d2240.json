@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE terms\n                SET description = $2, is_archived = $3, updated_at = now()\n                WHERE code = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e44997a72b497e8bf426d627123c3b2c863448f6b76cf23daba46fb21d3d2240"
+}

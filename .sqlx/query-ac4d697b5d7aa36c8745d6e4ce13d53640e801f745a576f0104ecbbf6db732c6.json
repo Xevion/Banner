@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT crn FROM courses WHERE term_code = $1 ORDER BY crn",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "crn",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "crn"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ac4d697b5d7aa36c8745d6e4ce13d53640e801f745a576f0104ecbbf6db732c6"
+}

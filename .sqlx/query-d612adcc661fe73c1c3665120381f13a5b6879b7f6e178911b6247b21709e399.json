@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE rmp_professors SET\n            ratings_r1 = $1,\n            ratings_r2 = $2,\n            ratings_r3 = $3,\n            ratings_r4 = $4,\n            ratings_r5 = $5,\n            course_codes = $6\n        WHERE legacy_id = $7\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d612adcc661fe73c1c3665120381f13a5b6879b7f6e178911b6247b21709e399"
+}

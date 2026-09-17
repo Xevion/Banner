@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ci.instructor_id, c.subject, COUNT(*) AS \"count!\"\n        FROM course_instructors ci\n        JOIN courses c ON c.id = ci.course_id\n        WHERE ci.instructor_id = ANY($1)\n        GROUP BY ci.instructor_id, c.subject\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "instructor_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_instructors",
+            "name": "instructor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "ee338af47dde7b3620b1bebbdcab1d4e5467efc9596ec32ff66357c86c269f90"
+}

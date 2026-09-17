@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, course_id, timestamp, enrollment, wait_count, seats_available\n        FROM course_metrics\n        WHERE timestamp >= $1\n        ORDER BY timestamp DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "course_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "course_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "wait_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "seats_available",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_metrics",
+            "name": "seats_available"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d9e688382309f0c8282e3ad4677181b9d618c1f2dc86ca423bf9812c5cd8a1e6"
+}

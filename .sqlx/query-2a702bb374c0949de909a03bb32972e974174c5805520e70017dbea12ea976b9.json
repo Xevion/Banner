@@ -1,0 +1,162 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cw.id AS watch_id,\n            cw.discord_user_id,\n            cw.watch_type AS \"watch_type: WatchType\",\n            c.crn,\n            c.term_code,\n            c.subject,\n            c.course_number,\n            c.title,\n            c.enrollment,\n            c.max_enrollment,\n            c.wait_count,\n            c.wait_capacity\n        FROM course_watches cw\n        JOIN courses c ON c.id = cw.course_id\n        WHERE cw.active = TRUE\n          AND (cw.notified_at IS NULL OR cw.notified_at < NOW() - INTERVAL '15 minutes')\n          AND (\n            (cw.watch_type = 'seats_available'\n                AND c.id = ANY($1::int4[])\n                AND c.max_enrollment > c.enrollment)\n            OR\n            (cw.watch_type = 'waitlist_open'\n                AND c.id = ANY($2::int4[])\n                AND c.wait_count < c.wait_capacity)\n            OR\n            (cw.watch_type = 'any_change'\n                AND c.id = ANY($3::int4[]))\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "watch_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "course_watches",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "discord_user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "course_watches",
+            "name": "discord_user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "watch_type: WatchType",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "course_watches",
+            "name": "watch_type"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "crn",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "crn"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "term_code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "term_code"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "subject",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "course_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "max_enrollment",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "max_enrollment"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "wait_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_count"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "wait_capacity",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "courses",
+            "name": "wait_capacity"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4Array",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2a702bb374c0949de909a03bb32972e974174c5805520e70017dbea12ea976b9"
+}

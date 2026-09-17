@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE instructors SET slug = data.slug\n        FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::text[]) AS slug) data\n        WHERE instructors.id = data.id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "217beabb27ceddec71c7a0f8b427f3e9ce52ceb455f2f697d673f7e06676eb7e"
+}

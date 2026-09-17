@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_rmp_summary",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "950852657b710a8fbd5f1059fc5cf53d54d6e7975fc4d24f3b1e574d489a180e"
+}

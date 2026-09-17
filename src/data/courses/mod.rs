@@ -11,8 +11,10 @@ use super::context::DbContext;
 use super::events::{AuditLogEvent, DomainEvent};
 use crate::banner::Course as BannerCourse;
 use crate::data::batch::batch_upsert_courses as batch_upsert_impl;
-use crate::data::models::{Course, CourseInstructorDetail, UpsertCounts};
+use crate::data::course_types::RatingSource;
+use crate::data::models::{Course, CourseInstructorDetail, DbMeetingTime, UpsertCounts};
 use anyhow::{Context, Result};
+use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::HashMap;
 use ts_rs::TS;
@@ -202,13 +204,14 @@ pub async fn search_courses(
     data_builder.push(" OFFSET ");
     data_builder.push_bind(offset);
 
+    // Every filter is optional and the ORDER BY is chosen at runtime, so neither this
+    // query nor its count below is a string literal the macro could check.
     let courses = data_builder
         .build_query_as::<Course>()
         .fetch_all(db_pool)
         .await
         .context("failed to search courses")?;
 
-    // Count query
     let mut count_builder: QueryBuilder<Postgres> = QueryBuilder::new("SELECT COUNT(*) FROM courses");
     push_search_conditions(&mut count_builder, filter);
 
@@ -223,18 +226,32 @@ pub async fn search_courses(
 
 /// Get a single course by CRN and term.
 pub async fn get_course_by_crn(db_pool: &PgPool, crn: &str, term_code: &str) -> Result<Option<Course>> {
-    let course = sqlx::query_as::<_, Course>("SELECT * FROM courses WHERE crn = $1 AND term_code = $2")
-        .bind(crn)
-        .bind(term_code)
-        .fetch_optional(db_pool)
-        .await
-        .context("failed to fetch course by crn and term")?;
+    let course = sqlx::query_as!(
+        Course,
+        r#"
+        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,
+               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,
+               instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,
+               cross_list, cross_list_capacity, cross_list_count, link_identifier,
+               is_section_linked,
+               meeting_times AS "meeting_times: Json<Vec<DbMeetingTime>>",
+               attributes AS "attributes: Json<Vec<String>>"
+        FROM courses
+        WHERE crn = $1 AND term_code = $2
+        "#,
+        crn,
+        term_code,
+    )
+    .fetch_optional(db_pool)
+    .await
+    .context("failed to fetch course by crn and term")?;
     Ok(course)
 }
 
 /// Get instructors for a single course by course ID.
 pub async fn get_course_instructors(db_pool: &PgPool, course_id: i32) -> Result<Vec<CourseInstructorDetail>> {
-    let rows = sqlx::query_as::<_, CourseInstructorDetail>(
+    let rows = sqlx::query_as!(
+        CourseInstructorDetail,
         r#"
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
@@ -242,10 +259,10 @@ pub async fn get_course_instructors(db_pool: &PgPool, course_id: i32) -> Result<
                bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
                ci.course_id,
-               sc.display_score as sc_display_score, sc.sort_score as sc_sort_score,
-               sc.ci_lower as sc_ci_lower, sc.ci_upper as sc_ci_upper,
-               sc.confidence as sc_confidence, sc.source as sc_source,
-               sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
+               sc.display_score as "sc_display_score?", sc.sort_score as "sc_sort_score?",
+               sc.ci_lower as "sc_ci_lower?", sc.ci_upper as "sc_ci_upper?",
+               sc.confidence as "sc_confidence?", sc.source as "sc_source?: RatingSource",
+               sc.rmp_count as "sc_rmp_count?", sc.bb_count as "sc_bb_count?"
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
@@ -265,8 +282,8 @@ pub async fn get_course_instructors(db_pool: &PgPool, course_id: i32) -> Result<
         WHERE ci.course_id = $1
         ORDER BY ci.is_primary DESC, i.display_name
         "#,
+        course_id,
     )
-    .bind(course_id)
     .fetch_all(db_pool)
     .await
     .context("failed to fetch instructors for course")?;
@@ -284,7 +301,8 @@ pub async fn get_instructors_for_courses(
         return Ok(HashMap::new());
     }
 
-    let rows = sqlx::query_as::<_, CourseInstructorDetail>(
+    let rows = sqlx::query_as!(
+        CourseInstructorDetail,
         r#"
         SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,
                i.email, ci.is_primary,
@@ -292,10 +310,10 @@ pub async fn get_instructors_for_courses(
                bb.bb_avg_instructor_rating, bb.bb_total_responses,
                i.slug,
                ci.course_id,
-               sc.display_score as sc_display_score, sc.sort_score as sc_sort_score,
-               sc.ci_lower as sc_ci_lower, sc.ci_upper as sc_ci_upper,
-               sc.confidence as sc_confidence, sc.source as sc_source,
-               sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count
+               sc.display_score as "sc_display_score?", sc.sort_score as "sc_sort_score?",
+               sc.ci_lower as "sc_ci_lower?", sc.ci_upper as "sc_ci_upper?",
+               sc.confidence as "sc_confidence?", sc.source as "sc_source?: RatingSource",
+               sc.rmp_count as "sc_rmp_count?", sc.bb_count as "sc_bb_count?"
         FROM course_instructors ci
         JOIN instructors i ON i.id = ci.instructor_id
         LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id
@@ -315,17 +333,15 @@ pub async fn get_instructors_for_courses(
         WHERE ci.course_id = ANY($1)
         ORDER BY ci.course_id, ci.is_primary DESC, i.display_name
         "#,
+        course_ids,
     )
-    .bind(course_ids)
     .fetch_all(db_pool)
     .await
     .context("failed to batch fetch instructors for courses")?;
 
     let mut map: HashMap<i32, Vec<CourseInstructorDetail>> = HashMap::new();
     for row in rows {
-        // course_id is always present in the batch query
-        let cid = row.course_id.unwrap_or_default();
-        map.entry(cid).or_default().push(row);
+        map.entry(row.course_id).or_default().push(row);
     }
     Ok(map)
 }
@@ -335,22 +351,25 @@ pub async fn get_instructors_for_courses(
 /// Returns only subjects that have courses in the given term, with their
 /// descriptions from reference_data and enrollment totals for ranking.
 pub async fn get_subjects_by_enrollment(db_pool: &PgPool, term_code: &str) -> Result<Vec<(String, String, i64)>> {
-    let rows: Vec<(String, String, i64)> = sqlx::query_as(
+    let rows = sqlx::query!(
         r#"
         SELECT s.subject,
-               COALESCE(rd.description, s.subject),
+               COALESCE(rd.description, s.subject) AS "description!",
                s.total_enrollment
         FROM term_subject_summary s
         LEFT JOIN reference_data rd ON rd.category = 'subject' AND rd.code = s.subject
         WHERE s.term_code = $1
         ORDER BY s.total_enrollment DESC, s.subject
         "#,
+        term_code,
     )
-    .bind(term_code)
     .fetch_all(db_pool)
     .await
     .context("failed to fetch subjects by enrollment")?;
-    Ok(rows)
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.subject, r.description, r.total_enrollment))
+        .collect())
 }
 
 /// Get all sections of the same course (same term, subject, and course number).
@@ -360,12 +379,24 @@ pub async fn get_related_sections(
     subject: &str,
     course_number: &str,
 ) -> Result<Vec<Course>> {
-    let courses = sqlx::query_as::<_, Course>(
-        "SELECT * FROM courses WHERE term_code = $1 AND subject = $2 AND course_number = $3 ORDER BY sequence_number ASC NULLS LAST",
+    let courses = sqlx::query_as!(
+        Course,
+        r#"
+        SELECT id, crn, subject, course_number, title, term_code, enrollment, max_enrollment,
+               wait_count, wait_capacity, last_scraped_at, sequence_number, part_of_term,
+               instructional_method, campus, credit_hours, credit_hour_low, credit_hour_high,
+               cross_list, cross_list_capacity, cross_list_count, link_identifier,
+               is_section_linked,
+               meeting_times AS "meeting_times: Json<Vec<DbMeetingTime>>",
+               attributes AS "attributes: Json<Vec<String>>"
+        FROM courses
+        WHERE term_code = $1 AND subject = $2 AND course_number = $3
+        ORDER BY sequence_number ASC NULLS LAST
+        "#,
+        term_code,
+        subject,
+        course_number,
     )
-    .bind(term_code)
-    .bind(subject)
-    .bind(course_number)
     .fetch_all(db_pool)
     .await
     .context("failed to fetch related sections")?;
@@ -374,56 +405,48 @@ pub async fn get_related_sections(
 
 /// Get all distinct term codes that have courses in the DB.
 pub async fn get_available_terms(db_pool: &PgPool) -> Result<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT DISTINCT term_code FROM courses ORDER BY term_code DESC")
+    sqlx::query_scalar!("SELECT DISTINCT term_code FROM courses ORDER BY term_code DESC")
         .fetch_all(db_pool)
         .await
-        .context("failed to fetch available terms")?;
-    Ok(rows.into_iter().map(|(tc,)| tc).collect())
+        .context("failed to fetch available terms")
 }
 
 /// List all CRNs for a given term, for sitemap generation.
 pub async fn list_crns_for_term(db_pool: &PgPool, term_code: &str) -> Result<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT crn FROM courses WHERE term_code = $1 ORDER BY crn")
-        .bind(term_code)
+    sqlx::query_scalar!("SELECT crn FROM courses WHERE term_code = $1 ORDER BY crn", term_code)
         .fetch_all(db_pool)
         .await
-        .context("failed to list crns for term")?;
-    Ok(rows.into_iter().map(|(crn,)| crn).collect())
+        .context("failed to list crns for term")
 }
 
 /// List all distinct subject codes, for sitemap generation.
 pub async fn list_all_subjects(db_pool: &PgPool) -> Result<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT DISTINCT subject FROM courses ORDER BY subject")
+    sqlx::query_scalar!("SELECT DISTINCT subject FROM courses ORDER BY subject")
         .fetch_all(db_pool)
         .await
-        .context("failed to list all subjects")?;
-    Ok(rows.into_iter().map(|(s,)| s).collect())
+        .context("failed to list all subjects")
 }
-
-type RangeRow = (Option<i32>, Option<i32>, Option<f64>, Option<f64>, Option<i32>);
 
 /// Get aggregate filter ranges for a term (course number, credit hours, waitlist).
 pub async fn get_filter_ranges(db_pool: &PgPool, term_code: &str) -> Result<FilterRanges> {
-    // An unknown term produces no row here, whereas the aggregate this replaced
-    // returned a single all-NULL row. Both funnel into the same defaults below.
-    let row: RangeRow = sqlx::query_as(
+    // An unknown term produces no row here, and every column is nullable in its own
+    // right, so both absences funnel into the same defaults below.
+    let row = sqlx::query!(
         r#"
-        SELECT course_number_min, course_number_max,
-               credit_hour_min, credit_hour_max, wait_count_max
+        SELECT course_number_max, credit_hour_min, credit_hour_max, wait_count_max
         FROM term_summary
         WHERE term_code = $1
         "#,
+        term_code,
     )
-    .bind(term_code)
     .fetch_optional(db_pool)
     .await
-    .context("failed to fetch filter ranges for term")?
-    .unwrap_or((None, None, None, None, None));
+    .context("failed to fetch filter ranges for term")?;
 
-    let cn_max = row.1.unwrap_or(9000);
-    let ch_min = row.2.unwrap_or(0.0);
-    let ch_max = row.3.unwrap_or(8.0);
-    let wc_max_raw = row.4.unwrap_or(0);
+    let cn_max = row.as_ref().and_then(|r| r.course_number_max).unwrap_or(9000);
+    let ch_min = row.as_ref().and_then(|r| r.credit_hour_min).unwrap_or(0.0);
+    let ch_max = row.as_ref().and_then(|r| r.credit_hour_max).unwrap_or(8.0);
+    let wc_max_raw = row.as_ref().and_then(|r| r.wait_count_max).unwrap_or(0);
 
     // Round course number to hundreds: floor min, ceil max
     let cn_max_rounded = ((cn_max + 99) / 100) * 100;
@@ -471,39 +494,29 @@ pub async fn suggest_courses(
     query: &str,
     limit: i32,
 ) -> Result<Vec<CourseSuggestion>> {
-    let rows: Vec<(String, String, String, i32, f32)> = sqlx::query_as(
+    let rows = sqlx::query_as!(
+        CourseSuggestion,
         r#"
-        SELECT subject, course_number, title, COUNT(*)::int as section_count,
-               MAX(GREATEST(similarity(immutable_unaccent(title), immutable_unaccent($2)), similarity(subject || ' ' || course_number, $2))) as score
+        SELECT subject, course_number, title, COUNT(*)::int as "section_count!",
+               MAX(GREATEST(similarity(immutable_unaccent(title), immutable_unaccent($2)), similarity(subject || ' ' || course_number, $2))) as "score!"
         FROM courses
         WHERE term_code = $1
           AND (immutable_unaccent(title) % immutable_unaccent($2) OR immutable_unaccent(title) ILIKE '%' || immutable_unaccent($2) || '%'
                OR (subject || ' ' || course_number) % $2
                OR (subject || ' ' || course_number) ILIKE '%' || $2 || '%')
         GROUP BY subject, course_number, title
-        ORDER BY score DESC
+        ORDER BY "score!" DESC
         LIMIT $3
         "#,
+        term_code,
+        query,
+        i64::from(limit),
     )
-    .bind(term_code)
-    .bind(query)
-    .bind(limit)
     .fetch_all(db_pool)
     .await
     .context("failed to suggest courses")?;
 
-    Ok(rows
-        .into_iter()
-        .map(
-            |(subject, course_number, title, section_count, score)| CourseSuggestion {
-                subject,
-                course_number,
-                title,
-                section_count,
-                score,
-            },
-        )
-        .collect())
+    Ok(rows)
 }
 
 /// Get instructor suggestions using trigram similarity.
@@ -513,11 +526,12 @@ pub async fn suggest_instructors(
     query: &str,
     limit: i32,
 ) -> Result<Vec<InstructorSuggestion>> {
-    let rows: Vec<(i32, String, String, i32, f32)> = sqlx::query_as(
+    let rows = sqlx::query_as!(
+        InstructorSuggestion,
         r#"
-        SELECT i.id, i.slug, i.display_name,
-               COUNT(DISTINCT c.id)::int as section_count,
-               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as score
+        SELECT i.id, i.slug as "slug!", i.display_name,
+               COUNT(DISTINCT c.id)::int as "section_count!",
+               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as "score!"
         FROM instructors i
         JOIN course_instructors ci ON ci.instructor_id = i.id
         JOIN courses c ON c.id = ci.course_id
@@ -525,27 +539,18 @@ pub async fn suggest_instructors(
           AND i.slug IS NOT NULL
           AND (immutable_unaccent(i.display_name) % immutable_unaccent($2) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($2) || '%')
         GROUP BY i.id, i.slug, i.display_name
-        ORDER BY score DESC
+        ORDER BY "score!" DESC
         LIMIT $3
         "#,
+        term_code,
+        query,
+        i64::from(limit),
     )
-    .bind(term_code)
-    .bind(query)
-    .bind(limit)
     .fetch_all(db_pool)
     .await
     .context("failed to suggest instructors")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|(id, slug, display_name, section_count, score)| InstructorSuggestion {
-            id,
-            slug,
-            display_name,
-            section_count,
-            score,
-        })
-        .collect())
+    Ok(rows)
 }
 
 /// Suggest instructors with an optional term filter.
@@ -557,11 +562,12 @@ pub async fn suggest_instructors_global(
     query: &str,
     limit: i32,
 ) -> Result<Vec<InstructorSuggestion>> {
-    let rows: Vec<(i32, String, String, i32, f32)> = sqlx::query_as(
+    let rows = sqlx::query_as!(
+        InstructorSuggestion,
         r#"
-        SELECT i.id, i.slug, i.display_name,
-               COUNT(DISTINCT c.id)::int as section_count,
-               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as score
+        SELECT i.id, i.slug as "slug!", i.display_name,
+               COUNT(DISTINCT c.id)::int as "section_count!",
+               MAX(similarity(immutable_unaccent(i.display_name), immutable_unaccent($2))) as "score!"
         FROM instructors i
         JOIN course_instructors ci ON ci.instructor_id = i.id
         JOIN courses c ON c.id = ci.course_id
@@ -569,27 +575,18 @@ pub async fn suggest_instructors_global(
           AND i.slug IS NOT NULL
           AND (immutable_unaccent(i.display_name) % immutable_unaccent($2) OR immutable_unaccent(i.display_name) ILIKE '%' || immutable_unaccent($2) || '%')
         GROUP BY i.id, i.slug, i.display_name
-        ORDER BY score DESC
+        ORDER BY "score!" DESC
         LIMIT $3
         "#,
+        term_code,
+        query,
+        i64::from(limit),
     )
-    .bind(term_code)
-    .bind(query)
-    .bind(limit)
     .fetch_all(db_pool)
     .await
     .context("failed to suggest instructors globally")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|(id, slug, display_name, section_count, score)| InstructorSuggestion {
-            id,
-            slug,
-            display_name,
-            section_count,
-            score,
-        })
-        .collect())
+    Ok(rows)
 }
 
 /// Course operations with automatic event emission.
@@ -624,8 +621,7 @@ impl<'a> CourseOps<'a> {
 /// Terms other than the one being scraped are untouched, so past terms keep the
 /// values computed when they were last active.
 pub async fn refresh_term_summary(pool: &PgPool, term_code: &str) -> Result<()> {
-    sqlx::query("SELECT refresh_term_summary($1)")
-        .bind(term_code)
+    sqlx::query!("SELECT refresh_term_summary($1)", term_code)
         .execute(pool)
         .await
         .context("failed to refresh term summary")?;
@@ -634,33 +630,34 @@ pub async fn refresh_term_summary(pool: &PgPool, term_code: &str) -> Result<()> 
 
 /// Count all courses in the database.
 pub async fn count_all(pool: &PgPool) -> Result<i64> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(course_count), 0)::bigint FROM term_summary")
+    sqlx::query_scalar!(r#"SELECT COALESCE(SUM(course_count), 0)::bigint AS "count!" FROM term_summary"#)
         .fetch_one(pool)
         .await
-        .context("failed to count all courses")?;
-    Ok(count)
+        .context("failed to count all courses")
 }
 
 /// Look up a course's internal ID by term code and CRN.
 pub async fn get_id_by_crn(pool: &PgPool, term_code: &str, crn: &str) -> Result<Option<i32>> {
-    let row: Option<(i32,)> = sqlx::query_as("SELECT id FROM courses WHERE term_code = $1 AND crn = $2")
-        .bind(term_code)
-        .bind(crn)
-        .fetch_optional(pool)
-        .await
-        .context("failed to get course id by crn")?;
-    Ok(row.map(|(id,)| id))
+    sqlx::query_scalar!(
+        "SELECT id FROM courses WHERE term_code = $1 AND crn = $2",
+        term_code,
+        crn
+    )
+    .fetch_optional(pool)
+    .await
+    .context("failed to get course id by crn")
 }
 
 /// Count courses grouped by subject for a given term.
 ///
 /// Returns a map of subject code -> count.
 pub async fn count_by_subject(pool: &PgPool, term_code: &str) -> Result<HashMap<String, i64>> {
-    let rows: Vec<(String, i64)> =
-        sqlx::query_as("SELECT subject, COUNT(*)::BIGINT AS cnt FROM courses WHERE term_code = $1 GROUP BY subject")
-            .bind(term_code)
-            .fetch_all(pool)
-            .await
-            .context("failed to count courses by subject")?;
-    Ok(rows.into_iter().collect())
+    let rows = sqlx::query!(
+        r#"SELECT subject, COUNT(*)::BIGINT AS "cnt!" FROM courses WHERE term_code = $1 GROUP BY subject"#,
+        term_code,
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to count courses by subject")?;
+    Ok(rows.into_iter().map(|r| (r.subject, r.cnt)).collect())
 }

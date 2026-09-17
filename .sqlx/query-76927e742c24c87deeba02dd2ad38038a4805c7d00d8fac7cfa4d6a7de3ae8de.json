@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO bluebook_evaluations (\n            subject, course_number, section, crn, term, instructor_name,\n            instructor_rating, instructor_response_count,\n            course_rating, course_response_count,\n            department, scraped_at\n        )\n        SELECT\n            v.subject, v.course_number, v.section, v.crn, v.term, v.instructor_name,\n            v.instructor_rating, v.instructor_response_count,\n            v.course_rating, v.course_response_count,\n            v.department, NOW()\n        FROM UNNEST(\n            $1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],\n            $7::real[], $8::int4[], $9::real[], $10::int4[], $11::text[]\n        ) AS v(\n            subject, course_number, section, crn, term, instructor_name,\n            instructor_rating, instructor_response_count,\n            course_rating, course_response_count,\n            department\n        )\n        ON CONFLICT ON CONSTRAINT uq_bluebook_eval\n        DO UPDATE SET\n            crn = EXCLUDED.crn,\n            instructor_rating = EXCLUDED.instructor_rating,\n            instructor_response_count = EXCLUDED.instructor_response_count,\n            course_rating = EXCLUDED.course_rating,\n            course_response_count = EXCLUDED.course_response_count,\n            department = EXCLUDED.department,\n            scraped_at = EXCLUDED.scraped_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Float4Array",
+        "Int4Array",
+        "Float4Array",
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76927e742c24c87deeba02dd2ad38038a4805c7d00d8fac7cfa4d6a7de3ae8de"
+}

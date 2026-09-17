@@ -19,7 +19,7 @@ pub enum WatchType {
 text_column_enum!(WatchType);
 
 /// A watch entry joined with course info, for listing.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone)]
 pub struct WatchListItem {
     pub watch_type: WatchType,
     pub notified_at: Option<DateTime<Utc>>,
@@ -31,7 +31,7 @@ pub struct WatchListItem {
 }
 
 /// A watch that has been triggered and should receive a notification.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone)]
 pub struct TriggeredWatch {
     pub watch_id: i32,
     pub discord_user_id: i64,
@@ -52,7 +52,7 @@ pub struct TriggeredWatch {
 /// Discord bot users may not have logged in via the web, so we create a thin
 /// record from the information available in the bot context.
 pub async fn ensure_user(pool: &PgPool, discord_user_id: i64, discord_username: &str) -> Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO users (discord_id, discord_username)
         VALUES ($1, $2)
@@ -60,9 +60,9 @@ pub async fn ensure_user(pool: &PgPool, discord_user_id: i64, discord_username: 
             SET discord_username = EXCLUDED.discord_username,
                 updated_at = NOW()
         "#,
+        discord_user_id,
+        discord_username,
     )
-    .bind(discord_user_id)
-    .bind(discord_username)
     .execute(pool)
     .await
     .context("failed to upsert user")?;
@@ -72,35 +72,35 @@ pub async fn ensure_user(pool: &PgPool, discord_user_id: i64, discord_username: 
 /// Create or reactivate a watch. Returns true if newly created, false if it already existed.
 pub async fn upsert_watch(pool: &PgPool, discord_user_id: i64, course_id: i32, watch_type: WatchType) -> Result<bool> {
     // xmax = 0 means the row was just inserted; non-zero means it was updated.
-    let row: (bool,) = sqlx::query_as(
+    let is_new = sqlx::query_scalar!(
         r#"
         INSERT INTO course_watches (discord_user_id, course_id, watch_type)
         VALUES ($1, $2, $3)
         ON CONFLICT (discord_user_id, course_id, watch_type)
         DO UPDATE SET active = TRUE, notified_at = NULL
-        RETURNING (xmax::text::bigint = 0) AS is_new
+        RETURNING (xmax::text::bigint = 0) AS "is_new!"
         "#,
+        discord_user_id,
+        course_id,
+        watch_type as WatchType,
     )
-    .bind(discord_user_id)
-    .bind(course_id)
-    .bind(watch_type)
     .fetch_one(pool)
     .await
     .context("failed to upsert watch")?;
-    Ok(row.0)
+    Ok(is_new)
 }
 
 /// Delete a specific watch. Returns true if a watch was found and deleted.
 pub async fn delete_watch(pool: &PgPool, discord_user_id: i64, course_id: i32, watch_type: WatchType) -> Result<bool> {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         r#"
         DELETE FROM course_watches
         WHERE discord_user_id = $1 AND course_id = $2 AND watch_type = $3
         "#,
+        discord_user_id,
+        course_id,
+        watch_type as WatchType,
     )
-    .bind(discord_user_id)
-    .bind(course_id)
-    .bind(watch_type)
     .execute(pool)
     .await
     .context("failed to delete watch")?;
@@ -109,14 +109,14 @@ pub async fn delete_watch(pool: &PgPool, discord_user_id: i64, course_id: i32, w
 
 /// Delete all watches for a user on a specific course. Returns count deleted.
 pub async fn delete_all_watches_for_course(pool: &PgPool, discord_user_id: i64, course_id: i32) -> Result<u64> {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         r#"
         DELETE FROM course_watches
         WHERE discord_user_id = $1 AND course_id = $2
         "#,
+        discord_user_id,
+        course_id,
     )
-    .bind(discord_user_id)
-    .bind(course_id)
     .execute(pool)
     .await
     .context("failed to delete watches for course")?;
@@ -125,10 +125,11 @@ pub async fn delete_all_watches_for_course(pool: &PgPool, discord_user_id: i64, 
 
 /// List all active watches for a user with course info.
 pub async fn list_active_watches(pool: &PgPool, discord_user_id: i64) -> Result<Vec<WatchListItem>> {
-    let items = sqlx::query_as::<_, WatchListItem>(
+    let items = sqlx::query_as!(
+        WatchListItem,
         r#"
         SELECT
-            cw.watch_type,
+            cw.watch_type AS "watch_type: WatchType",
             cw.notified_at,
             c.crn,
             c.term_code,
@@ -141,8 +142,8 @@ pub async fn list_active_watches(pool: &PgPool, discord_user_id: i64) -> Result<
           AND cw.active = TRUE
         ORDER BY c.subject, c.course_number, c.crn, cw.watch_type
         "#,
+        discord_user_id,
     )
-    .bind(discord_user_id)
     .fetch_all(pool)
     .await
     .context("failed to list active watches")?;
@@ -162,12 +163,13 @@ pub async fn find_triggered_watches(
     waitlist_changed_ids: &[i32],
     any_change_ids: &[i32],
 ) -> Result<Vec<TriggeredWatch>> {
-    let watches = sqlx::query_as::<_, TriggeredWatch>(
+    let watches = sqlx::query_as!(
+        TriggeredWatch,
         r#"
         SELECT
             cw.id AS watch_id,
             cw.discord_user_id,
-            cw.watch_type,
+            cw.watch_type AS "watch_type: WatchType",
             c.crn,
             c.term_code,
             c.subject,
@@ -194,10 +196,10 @@ pub async fn find_triggered_watches(
                 AND c.id = ANY($3::int4[]))
           )
         "#,
+        enrollment_changed_ids,
+        waitlist_changed_ids,
+        any_change_ids,
     )
-    .bind(enrollment_changed_ids)
-    .bind(waitlist_changed_ids)
-    .bind(any_change_ids)
     .fetch_all(pool)
     .await
     .context("failed to find triggered watches")?;
@@ -206,8 +208,7 @@ pub async fn find_triggered_watches(
 
 /// Update `notified_at` to NOW() for a watch after a notification is sent.
 pub async fn mark_notified(pool: &PgPool, watch_id: i32) -> Result<()> {
-    sqlx::query("UPDATE course_watches SET notified_at = NOW() WHERE id = $1")
-        .bind(watch_id)
+    sqlx::query!("UPDATE course_watches SET notified_at = NOW() WHERE id = $1", watch_id)
         .execute(pool)
         .await
         .context("failed to mark watch as notified")?;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO term_subjects (term_code, subject_code)\n        SELECT * FROM UNNEST($1::text[], $2::text[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ea9a89d0f6d14c831f9bf03e921c1eb10f714b4b80e8f27eca622e39099add1"
+}

@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT display_score, sort_score, ci_lower, ci_upper, confidence,\n               source AS \"source: RatingSource\", rmp_count, bb_count, calibrated_bb\n        FROM instructor_scores\n        WHERE instructor_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "display_score",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "display_score"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "sort_score",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "sort_score"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "ci_lower",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "ci_lower"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "ci_upper",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "ci_upper"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "confidence",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "confidence"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "source: RatingSource",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "source"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "rmp_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "rmp_count"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "bb_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "bb_count"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "calibrated_bb",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "calibrated_bb"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9c7c91b05c2acfc3228a3bca50407c357360852fe104d9c0444b00c20a48fb19"
+}

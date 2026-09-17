@@ -7,23 +7,26 @@ use crate::banner::models::common::Pair;
 
 /// Returns cached subjects for a term, or empty vec if none cached.
 pub async fn get_cached(term_code: &str, pool: &PgPool) -> Result<Vec<Pair>> {
-    let rows = sqlx::query_as::<_, (String, String)>(
+    let rows = sqlx::query!(
         r#"
-        SELECT ts.subject_code, COALESCE(rd.description, ts.subject_code)
+        SELECT ts.subject_code AS "code!", COALESCE(rd.description, ts.subject_code) AS "description!"
         FROM term_subjects ts
         LEFT JOIN reference_data rd ON rd.category = 'subject' AND rd.code = ts.subject_code
         WHERE ts.term_code = $1
         ORDER BY ts.subject_code
         "#,
+        term_code,
     )
-    .bind(term_code)
     .fetch_all(pool)
     .await
     .context("failed to fetch cached term subjects")?;
 
     Ok(rows
         .into_iter()
-        .map(|(code, description)| Pair { code, description })
+        .map(|r| Pair {
+            code: r.code,
+            description: r.description,
+        })
         .collect())
 }
 
@@ -38,8 +41,7 @@ pub async fn cache(term_code: &str, subjects: &[Pair], pool: &PgPool) -> Result<
         .await
         .context("failed to begin transaction for term subjects cache")?;
 
-    sqlx::query("DELETE FROM term_subjects WHERE term_code = $1")
-        .bind(term_code)
+    sqlx::query!("DELETE FROM term_subjects WHERE term_code = $1", term_code)
         .execute(&mut *tx)
         .await
         .context("failed to delete existing term subjects")?;
@@ -47,14 +49,14 @@ pub async fn cache(term_code: &str, subjects: &[Pair], pool: &PgPool) -> Result<
     let term_codes: Vec<&str> = subjects.iter().map(|_| term_code).collect();
     let subject_codes: Vec<&str> = subjects.iter().map(|s| s.code.as_str()).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO term_subjects (term_code, subject_code)
         SELECT * FROM UNNEST($1::text[], $2::text[])
         "#,
+        &term_codes as &[&str],
+        &subject_codes as &[&str],
     )
-    .bind(&term_codes)
-    .bind(&subject_codes)
     .execute(&mut *tx)
     .await
     .context("failed to insert term subjects")?;

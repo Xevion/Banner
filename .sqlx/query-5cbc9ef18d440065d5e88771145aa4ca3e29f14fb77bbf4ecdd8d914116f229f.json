@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rmp_legacy_id FROM instructor_rmp_links WHERE source = 'manual'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rmp_legacy_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_rmp_links",
+            "name": "rmp_legacy_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5cbc9ef18d440065d5e88771145aa4ca3e29f14fb77bbf4ecdd8d914116f229f"
+}

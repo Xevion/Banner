@@ -5,8 +5,10 @@ use serde::Serialize;
 use sqlx::PgPool;
 use ts_rs::TS;
 
+use sqlx::types::Json;
+
 use crate::data::course_types::RatingSource;
-use crate::data::models::Page;
+use crate::data::models::{DbMeetingTime, Page};
 use crate::data::unsigned::Count;
 
 const NANOID_ALPHABET: &[char] = &[
@@ -50,7 +52,7 @@ pub fn generate_slug(display_name: &str) -> String {
 
 /// Backfill slugs for all instructors that don't have one yet.
 pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
-    let rows: Vec<(i32, String)> = sqlx::query_as("SELECT id, display_name FROM instructors WHERE slug IS NULL")
+    let rows = sqlx::query!("SELECT id, display_name FROM instructors WHERE slug IS NULL")
         .fetch_all(pool)
         .await
         .context("failed to fetch instructors without slugs")?;
@@ -60,18 +62,18 @@ pub async fn backfill_instructor_slugs(pool: &PgPool) -> Result<u64> {
     }
 
     let count = rows.len() as u64;
-    let ids: Vec<i32> = rows.iter().map(|(id, _)| *id).collect();
-    let slugs: Vec<String> = rows.iter().map(|(_, name)| generate_slug(name)).collect();
+    let ids: Vec<i32> = rows.iter().map(|r| r.id).collect();
+    let slugs: Vec<String> = rows.iter().map(|r| generate_slug(&r.display_name)).collect();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE instructors SET slug = data.slug
         FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::text[]) AS slug) data
         WHERE instructors.id = data.id
         "#,
+        &ids,
+        &slugs,
     )
-    .bind(&ids)
-    .bind(&slugs)
     .execute(pool)
     .await
     .context("failed to backfill instructor slugs")?;
@@ -282,13 +284,14 @@ pub async fn list_public_instructors(
     data_builder.push(" OFFSET ");
     data_builder.push_bind(offset);
 
+    // The sort clause and each optional filter are assembled at runtime, so neither this
+    // query nor its count below is a string literal the macro could check.
     let rows = data_builder
         .build_query_as::<Row>()
         .fetch_all(pool)
         .await
         .context("failed to list public instructors")?;
 
-    // Count query
     let mut count_builder: QueryBuilder<Postgres> = QueryBuilder::new("SELECT COUNT(*) FROM instructors i");
     push_instructor_conditions(&mut count_builder, params, &extra_condition);
 
@@ -369,7 +372,6 @@ pub async fn get_public_instructor_by_slug(
     pool: &PgPool,
     slug: &str,
 ) -> Result<Option<PublicInstructorProfileResponse>> {
-    #[derive(sqlx::FromRow)]
     struct InstructorRow {
         id: i32,
         slug: Option<String>,
@@ -379,10 +381,11 @@ pub async fn get_public_instructor_by_slug(
         last_name: Option<String>,
     }
 
-    let instructor = sqlx::query_as::<_, InstructorRow>(
+    let instructor = sqlx::query_as!(
+        InstructorRow,
         "SELECT id, slug, display_name, email, first_name, last_name FROM instructors WHERE slug = $1",
+        slug,
     )
-    .bind(slug)
     .fetch_optional(pool)
     .await
     .context("failed to fetch instructor by slug")?;
@@ -393,16 +396,15 @@ pub async fn get_public_instructor_by_slug(
     };
 
     // Subjects
-    let subjects: Vec<(String,)> = sqlx::query_as(
+    let subjects = sqlx::query_scalar!(
         "SELECT DISTINCT c.subject FROM course_instructors ci JOIN courses c ON c.id = ci.course_id WHERE ci.instructor_id = $1 ORDER BY c.subject",
+        inst.id,
     )
-    .bind(inst.id)
     .fetch_all(pool)
     .await
     .context("failed to fetch instructor subjects")?;
 
     // Best RMP profile (from materialized view)
-    #[derive(sqlx::FromRow)]
     struct RmpRow {
         avg_rating: Option<f64>,
         avg_difficulty: Option<f64>,
@@ -411,15 +413,16 @@ pub async fn get_public_instructor_by_slug(
         legacy_id: Option<i32>,
     }
 
-    let rmp = sqlx::query_as::<_, RmpRow>(
+    let rmp = sqlx::query_as!(
+        RmpRow,
         r#"
         SELECT rmp.avg_rating, rmp.avg_difficulty, rmp.would_take_again_pct,
                rmp.num_ratings, rmp.primary_legacy_id as legacy_id
         FROM instructor_rmp_summary rmp
         WHERE rmp.instructor_id = $1
         "#,
+        inst.id,
     )
-    .bind(inst.id)
     .fetch_optional(pool)
     .await
     .context("failed to fetch instructor rmp")?;
@@ -438,21 +441,21 @@ pub async fn get_public_instructor_by_slug(
     });
 
     // BlueBook evaluations
-    #[derive(sqlx::FromRow)]
     struct BlueBookRow {
         avg_instructor_rating: Option<f32>,
         avg_course_rating: Option<f32>,
         total_responses: Option<i64>,
-        eval_count: Option<i64>,
+        eval_count: i64,
     }
 
-    let bb = sqlx::query_as::<_, BlueBookRow>(
+    let bb = sqlx::query_as!(
+        BlueBookRow,
         r#"
         SELECT
             AVG(be.instructor_rating)::real as avg_instructor_rating,
             AVG(be.course_rating)::real as avg_course_rating,
             SUM(be.instructor_response_count)::bigint as total_responses,
-            COUNT(*)::bigint as eval_count
+            COUNT(*)::bigint as "eval_count!"
         FROM bluebook_evaluations be
         JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name
             AND (ibl.subject IS NULL OR ibl.subject = be.subject)
@@ -461,14 +464,13 @@ pub async fn get_public_instructor_by_slug(
             AND be.instructor_rating IS NOT NULL
             AND be.instructor_response_count > 0
         "#,
+        inst.id,
     )
-    .bind(inst.id)
     .fetch_optional(pool)
     .await
     .context("failed to fetch instructor bluebook")?;
 
     // Precomputed composite score (fetched before BB summary so calibrated_bb is available)
-    #[derive(sqlx::FromRow)]
     struct DbScoreRow {
         display_score: f32,
         sort_score: f32,
@@ -481,10 +483,16 @@ pub async fn get_public_instructor_by_slug(
         calibrated_bb: Option<f32>,
     }
 
-    let score_row = sqlx::query_as::<_, DbScoreRow>(
-        "SELECT display_score, sort_score, ci_lower, ci_upper, confidence, source, rmp_count, bb_count, calibrated_bb FROM instructor_scores WHERE instructor_id = $1",
+    let score_row = sqlx::query_as!(
+        DbScoreRow,
+        r#"
+        SELECT display_score, sort_score, ci_lower, ci_upper, confidence,
+               source AS "source: RatingSource", rmp_count, bb_count, calibrated_bb
+        FROM instructor_scores
+        WHERE instructor_id = $1
+        "#,
+        inst.id,
     )
-    .bind(inst.id)
     .fetch_optional(pool)
     .await
     .context("failed to fetch instructor score")?;
@@ -506,7 +514,7 @@ pub async fn get_public_instructor_by_slug(
         Some(ref r) => match (r.avg_instructor_rating, r.total_responses) {
             (Some(avg), Some(n)) if avg > 0.0 && n > 0 => {
                 let total_responses = Count::try_from(n).ok();
-                let eval_count = Count::try_from(r.eval_count.unwrap_or(0)).ok();
+                let eval_count = Count::try_from(r.eval_count).ok();
                 match (total_responses, eval_count) {
                     (Some(total_responses), Some(eval_count)) => {
                         let calibrated_rating = score_row
@@ -540,7 +548,7 @@ pub async fn get_public_instructor_by_slug(
             email: inst.email,
             first_name: inst.first_name,
             last_name: inst.last_name,
-            subjects: subjects.into_iter().map(|(s,)| s).collect(),
+            subjects,
             rmp: rmp_summary,
             bluebook: bluebook_summary,
             rating,
@@ -551,7 +559,6 @@ pub async fn get_public_instructor_by_slug(
 
 /// Get teaching history grouped by term for an instructor.
 async fn get_teaching_history(pool: &PgPool, instructor_id: i32) -> Result<Vec<TeachingHistoryTerm>> {
-    #[derive(sqlx::FromRow)]
     struct Row {
         term_code: String,
         subject: String,
@@ -560,17 +567,19 @@ async fn get_teaching_history(pool: &PgPool, instructor_id: i32) -> Result<Vec<T
         section_count: Count,
     }
 
-    let rows = sqlx::query_as::<_, Row>(
+    let rows = sqlx::query_as!(
+        Row,
         r#"
-        SELECT c.term_code, c.subject, c.course_number, c.title, COUNT(*)::int as section_count
+        SELECT c.term_code, c.subject, c.course_number, c.title,
+               COUNT(*)::int AS "section_count!: Count"
         FROM course_instructors ci
         JOIN courses c ON c.id = ci.course_id
         WHERE ci.instructor_id = $1
         GROUP BY c.term_code, c.subject, c.course_number, c.title
         ORDER BY c.term_code DESC, c.subject ASC, c.course_number ASC
         "#,
+        instructor_id,
     )
-    .bind(instructor_id)
     .fetch_all(pool)
     .await
     .context("failed to fetch teaching history")?;
@@ -624,17 +633,25 @@ pub async fn get_instructor_sections(
     instructor_id: i32,
     term_code: &str,
 ) -> Result<Vec<super::models::Course>> {
-    let courses = sqlx::query_as::<_, super::models::Course>(
+    let courses = sqlx::query_as!(
+        super::models::Course,
         r#"
-        SELECT c.*
+        SELECT c.id, c.crn, c.subject, c.course_number, c.title, c.term_code,
+               c.enrollment, c.max_enrollment, c.wait_count, c.wait_capacity,
+               c.last_scraped_at, c.sequence_number, c.part_of_term,
+               c.instructional_method, c.campus, c.credit_hours, c.credit_hour_low,
+               c.credit_hour_high, c.cross_list, c.cross_list_capacity,
+               c.cross_list_count, c.link_identifier, c.is_section_linked,
+               c.meeting_times AS "meeting_times: Json<Vec<DbMeetingTime>>",
+               c.attributes AS "attributes: Json<Vec<String>>"
         FROM courses c
         JOIN course_instructors ci ON ci.course_id = c.id
         WHERE ci.instructor_id = $1 AND c.term_code = $2
         ORDER BY c.subject, c.course_number, c.sequence_number
         "#,
+        instructor_id,
+        term_code,
     )
-    .bind(instructor_id)
-    .bind(term_code)
     .fetch_all(pool)
     .await
     .context("failed to fetch instructor sections")?;
@@ -644,12 +661,18 @@ pub async fn get_instructor_sections(
 
 /// Resolve a batch of instructor slugs to their display names.
 pub async fn resolve_instructor_slugs(pool: &PgPool, slugs: &[String]) -> Result<Vec<(String, String)>> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT slug, display_name FROM instructors WHERE slug = ANY($1)")
-        .bind(slugs)
-        .fetch_all(pool)
-        .await
-        .context("failed to resolve instructor slugs")?;
-    Ok(rows)
+    let rows = sqlx::query!(
+        r#"
+        SELECT slug AS "slug!", display_name
+        FROM instructors
+        WHERE slug = ANY($1)
+        "#,
+        slugs,
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to resolve instructor slugs")?;
+    Ok(rows.into_iter().map(|r| (r.slug, r.display_name)).collect())
 }
 
 /// An instructor slug with its most recent modification timestamp for sitemap generation.
@@ -663,16 +686,11 @@ pub struct InstructorSitemapEntry {
 /// The lastmod is the most recent of: score computation, BlueBook link update,
 /// RMP profile sync, and course scrape time.
 pub async fn list_all_instructor_sitemap_entries(pool: &PgPool) -> Result<Vec<InstructorSitemapEntry>> {
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        slug: String,
-        last_modified: Option<chrono::DateTime<chrono::Utc>>,
-    }
-
-    let rows = sqlx::query_as::<_, Row>(
+    let rows = sqlx::query_as!(
+        InstructorSitemapEntry,
         r#"
         SELECT
-            i.slug,
+            i.slug AS "slug!",
             GREATEST(
                 sc.computed_at,
                 bb.max_updated_at,
@@ -706,13 +724,7 @@ pub async fn list_all_instructor_sitemap_entries(pool: &PgPool) -> Result<Vec<In
     .await
     .context("failed to list instructor sitemap entries")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| InstructorSitemapEntry {
-            slug: r.slug,
-            last_modified: r.last_modified,
-        })
-        .collect())
+    Ok(rows)
 }
 
 pub enum IdentifierKind {
@@ -734,31 +746,29 @@ pub fn classify_identifier(s: &str) -> IdentifierKind {
 /// Resolve any identifier form to (instructor_id, canonical_slug).
 /// Returns None if not found or if the instructor has no slug yet.
 pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<Option<(i32, String)>> {
-    #[derive(sqlx::FromRow)]
     struct Row {
         id: i32,
         slug: Option<String>,
     }
 
-    let row: Option<Row> = match classify_identifier(raw) {
+    let row = match classify_identifier(raw) {
         IdentifierKind::Slug => {
-            sqlx::query_as("SELECT id, slug FROM instructors WHERE slug = $1")
-                .bind(raw)
+            sqlx::query_as!(Row, "SELECT id, slug FROM instructors WHERE slug = $1", raw)
                 .fetch_optional(pool)
                 .await?
         }
         IdentifierKind::NumericId(id) => {
-            sqlx::query_as("SELECT id, slug FROM instructors WHERE id = $1")
-                .bind(id)
+            sqlx::query_as!(Row, "SELECT id, slug FROM instructors WHERE id = $1", id)
                 .fetch_optional(pool)
                 .await?
         }
         IdentifierKind::EmailPrefix => {
-            sqlx::query_as(
-                "SELECT id, slug FROM instructors \
+            sqlx::query_as!(
+                Row,
+                "SELECT id, slug FROM instructors
                  WHERE LOWER(SPLIT_PART(email, '@', 1)) = LOWER($1)",
+                raw,
             )
-            .bind(raw)
             .fetch_optional(pool)
             .await?
         }
@@ -768,12 +778,13 @@ pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<O
     let row = match row {
         Some(row) => Some(row),
         None => {
-            sqlx::query_as(
-                "SELECT i.id, i.slug FROM instructor_merges m \
-                 JOIN instructors i ON i.id = m.survivor_id \
+            sqlx::query_as!(
+                Row,
+                "SELECT i.id, i.slug FROM instructor_merges m
+                 JOIN instructors i ON i.id = m.survivor_id
                  WHERE m.absorbed_slug = $1",
+                raw,
             )
-            .bind(raw)
             .fetch_optional(pool)
             .await?
         }
@@ -787,10 +798,11 @@ pub async fn resolve_instructor_identifier(pool: &PgPool, raw: &str) -> Result<O
 /// The score is the most frequently changing part of a profile, so it stands in
 /// for profile freshness when building an ETag.
 pub async fn get_score_computed_at(pool: &PgPool, instructor_id: i32) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
-    sqlx::query_scalar("SELECT computed_at FROM instructor_scores WHERE instructor_id = $1")
-        .bind(instructor_id)
-        .fetch_optional(pool)
-        .await
-        .context("failed to fetch instructor score timestamp")
-        .map(Option::flatten)
+    sqlx::query_scalar!(
+        "SELECT computed_at FROM instructor_scores WHERE instructor_id = $1",
+        instructor_id
+    )
+    .fetch_optional(pool)
+    .await
+    .context("failed to fetch instructor score timestamp")
 }

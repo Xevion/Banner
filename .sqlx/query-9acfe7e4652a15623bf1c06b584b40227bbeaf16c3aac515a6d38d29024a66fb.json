@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO users (discord_id, discord_username)\n        VALUES ($1, $2)\n        ON CONFLICT (discord_id) DO UPDATE\n            SET discord_username = EXCLUDED.discord_username,\n                updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9acfe7e4652a15623bf1c06b584b40227bbeaf16c3aac515a6d38d29024a66fb"
+}

@@ -7,5 +7,6 @@ pub mod streams;
 pub mod subscriptions;
 
 mod handler;
+mod sink;
 
 pub use handler::stream_ws;
