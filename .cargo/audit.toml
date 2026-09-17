@@ -4,10 +4,6 @@
 [advisories]
 # Transitive dependencies we can't control
 ignore = [
-    # rsa: Marvin Attack timing sidechannel (via sqlx-mysql, no fix available)
-    "RUSTSEC-2023-0071",
-    # derivative: unmaintained (via poise)
-    "RUSTSEC-2024-0388",
     # rustls-webpki: CRL distribution point matching (via serenity -> rustls 0.22, no fix available)
     "RUSTSEC-2026-0049",
     # rustls-webpki 0.102 name-constraint + CRL-parse issues (via serenity -> rustls 0.22, no
