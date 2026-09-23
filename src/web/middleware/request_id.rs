@@ -6,7 +6,7 @@
 //!
 //! Always sets an `X-Request-Id` response header with the resolved ID.
 
-use crate::web::middleware::client_ip::header_str;
+use crate::web::middleware::client_ip::{header_str, resolve_client_ip};
 use axum::extract::Request;
 use axum::http::HeaderValue;
 use axum::response::Response;
@@ -67,13 +67,8 @@ where
             .map(String::from)
             .unwrap_or_default();
 
-        // Client IP for tracing correlation (same priority as ClientIp extractor).
-        let client_ip = header_str(req.headers(), "cf-connecting-ip")
-            .or_else(|| {
-                header_str(req.headers(), "x-forwarded-for").and_then(|xff| xff.rsplit(',').next().map(str::trim))
-            })
-            .unwrap_or("-")
-            .to_string();
+        let client_ip =
+            resolve_client_ip(req.headers(), req.extensions()).map_or_else(|| "-".to_owned(), |ip| ip.to_string());
 
         let method = req.method().clone();
         let path = req.uri().path().to_string();

@@ -642,8 +642,8 @@ export default defineConfig({
           ctx.fail("PUBLIC_POSTHOG_HOST not set -- baked into the CSP at build time");
         }
 
-        // Deliberately does not sync secrets. .env is a development environment -- its
-        // Discord token, client id and guild belong to a separate test application -- so
+        // Deliberately does not sync secrets. .env is a development environment: its
+        // Discord token, client id and guild belong to a separate test application, so
         // pushing it at deploy time silently swaps production onto the wrong bot. The
         // cluster Secret is the source of truth; `sync-secrets` pushes local values only
         // when asked for explicitly.

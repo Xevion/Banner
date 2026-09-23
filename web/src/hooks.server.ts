@@ -1,6 +1,7 @@
 import { env } from "$env/dynamic/private";
 import type { ApiError } from "$lib/bindings";
-import type { Handle, HandleServerError } from "@sveltejs/kit";
+import { withInternalHeaders } from "$lib/server/internal-fetch";
+import type { Handle, HandleFetch, HandleServerError } from "@sveltejs/kit";
 import { PostHog } from "posthog-node";
 
 const backendUrl = env.BACKEND_URL ?? "http://localhost:8080";
@@ -74,6 +75,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   return resolve(event);
 };
+
+export const handleFetch: HandleFetch = ({ event, request, fetch }) =>
+  fetch(withInternalHeaders(event.request, request));
 
 export const handleError: HandleServerError = ({ error, event, status }) => {
   const errorId = crypto.randomUUID();

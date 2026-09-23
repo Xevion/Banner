@@ -138,7 +138,7 @@ async fn handler(State(state): State<AppState>) -> Result<Json<T>, ApiError> {
 }
 ```
 
-Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashMap<K, V>>` for concurrent write access (search options cache). Optional services return `Option<&T>` -- handlers check availability before use.
+Caches use `Arc<RwLock<T>>` for read-heavy data (reference cache) and `Arc<DashMap<K, V>>` for concurrent write access (search options cache). Optional services return `Option<&T>`: handlers check availability before use.
 
 ## Database
 
@@ -265,8 +265,8 @@ pub struct CourseResponse {
 
 - `tokio` runtime. All I/O is async.
 - `tokio::spawn` for background tasks (scraper workers, scheduler, heartbeat).
-- Background tasks log errors and continue -- no panics.
-- No explicit locking for DB access -- SQLx pool handles concurrency.
+- Background tasks log errors and continue. No panics.
+- No explicit locking for DB access, since SQLx pool handles concurrency.
 - Use `tokio::select!` for tasks that need cancellation (shutdown signals).
 
 ## Discord Bot
@@ -294,8 +294,8 @@ PostgreSQL-backed job queue with priority scheduling:
 - **Worker**: Fetches and processes jobs atomically using `FOR UPDATE SKIP LOCKED`
 - **Job trait**: Each job type implements `Job` with `process()` returning `UpsertCounts`
 - **Lock expiry**: 10-minute safety net for dead workers
-- **Priority ordering**: `priority DESC, execute_at ASC` -- high-priority jobs run first, ties broken by age
-- **Refresh intervals**: Reference data (6h), RMP ratings (24h), terms (8h) -- configurable
+- **Priority ordering**: `priority DESC, execute_at ASC` (high-priority jobs run first, ties broken by age)
+- **Refresh intervals**: Reference data (6h), RMP ratings (24h), terms (8h), all configurable
 
 Rate limiting for the Banner API uses Governor with per-endpoint costs and conditional bursting.
 
@@ -304,7 +304,7 @@ Rate limiting for the Banner API uses Governor with per-endpoint costs and condi
 - Import macros at module top: `use tracing::{debug, error, info, warn};`
 - Use `#[instrument]` on handlers and significant functions. Skip large/sensitive args.
 - Log errors in structured fields: `error!(error = %e, "Failed to process")`
-- Spans propagate context -- child logs inherit parent span fields.
+- Spans propagate context: child logs inherit parent span fields.
 
 ```rust
 #[instrument(skip(state, body), fields(term = %term, crn = %crn))]
@@ -332,7 +332,7 @@ Per-module log levels are configured via `RUST_LOG` env var or the default filte
 ## Optionality
 
 - Use `Option<T>` for genuinely optional data (nullable DB columns, optional config)
-- Prefer requiring values when the domain demands them -- don't default to `Option` for convenience
+- Prefer requiring values when the domain demands them, rather than defaulting to `Option` for convenience
 - Use newtypes for critical domain identifiers where type safety matters (e.g., term codes, CRNs)
 
 ## Testing

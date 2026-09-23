@@ -10,11 +10,12 @@
 //! Requests carrying a valid `X-Internal-Token` header (set by the SSR proxy)
 //! bypass all rate limiting to avoid double-counting SSR -> API calls.
 
-use crate::web::middleware::client_ip::header_str;
+use crate::web::error::ApiError;
+use crate::web::middleware::client_ip::{header_str, resolve_client_ip};
 use axum::body::Body;
 use axum::extract::Request;
 use axum::http::HeaderValue;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter, clock::Clock};
 use std::net::IpAddr;
 use std::num::NonZeroU32;
@@ -29,7 +30,7 @@ enum RouteGroup {
     Api,
     Ssr,
     Admin,
-    /// Health/metrics endpoints: no route-group limiting.
+    /// Health and readiness endpoints: no route-group limiting.
     Internal,
     /// Static assets (JS, CSS, fonts, images): exempt from all rate limiting.
     Static,
@@ -46,7 +47,7 @@ enum TrackedEndpoint {
 fn classify_route(path: &str) -> RouteGroup {
     if path.starts_with("/api/admin/") {
         RouteGroup::Admin
-    } else if path.starts_with("/api/health") || path.starts_with("/api/ready") || path.starts_with("/api/metrics") {
+    } else if path.starts_with("/api/health") || path.starts_with("/api/ready") {
         RouteGroup::Internal
     } else if path.starts_with("/api/") {
         RouteGroup::Api
@@ -204,8 +205,9 @@ impl RateLimitState {
     fn check(&self, ip: IpAddr, path: &str) -> Result<(), u64> {
         let group = classify_route(path);
 
-        // Static assets are exempt from all rate limiting.
-        if group == RouteGroup::Static {
+        // Static assets are cheap and bursty. Kubelet probes carry no forwarding headers and may
+        // share a socket-peer bucket with direct-to-origin traffic, which could then restart the pod.
+        if group == RouteGroup::Static || path == "/api/health" {
             return Ok(());
         }
 
@@ -365,59 +367,119 @@ where
             return Box::pin(future);
         }
 
-        // Extract client IP from headers (same logic as ClientIp extractor).
-        let client_ip = extract_ip_from_headers(req.headers());
-
         let path = req.uri().path().to_string();
 
-        if let Some(ip) = client_ip {
-            match self.state.check(ip, &path) {
-                Ok(()) => {
-                    let future = self.inner.call(req);
-                    Box::pin(future)
-                }
-                Err(retry_after) => {
-                    warn!(
-                        client_ip = %ip,
-                        path = %path,
-                        retry_after_secs = retry_after,
-                        "Rate limit exceeded"
-                    );
-                    let resp = rate_limit_response(retry_after).map(Into::into);
-                    Box::pin(async move { Ok(resp) })
-                }
+        let Some(ip) = resolve_client_ip(req.headers(), req.extensions()) else {
+            warn!(path = %path, "Rejecting request with no resolvable client address");
+            let resp = ApiError::internal_error("Unable to determine client IP")
+                .into_response()
+                .map(Into::into);
+            return Box::pin(async move { Ok(resp) });
+        };
+
+        match self.state.check(ip, &path) {
+            Ok(()) => Box::pin(self.inner.call(req)),
+            Err(retry_after) => {
+                warn!(
+                    client_ip = %ip,
+                    path = %path,
+                    retry_after_secs = retry_after,
+                    "Rate limit exceeded"
+                );
+                let resp = rate_limit_response(retry_after).map(Into::into);
+                Box::pin(async move { Ok(resp) })
             }
-        } else {
-            // Cannot determine IP, so allow but log.
-            let future = self.inner.call(req);
-            Box::pin(future)
         }
     }
 }
 
-/// Extract client IP from request headers without going through the full
-/// Axum extractor system (we're in a Tower middleware, not an Axum handler).
-fn extract_ip_from_headers(headers: &http::HeaderMap) -> Option<IpAddr> {
-    // CF-Connecting-IP (Cloudflare)
-    if let Some(ip) = header_str(headers, "cf-connecting-ip").and_then(|s| s.parse().ok()) {
-        return Some(ip);
-    }
-    // Rightmost X-Forwarded-For (Railway)
-    if let Some(xff) = header_str(headers, "x-forwarded-for")
-        && let Some(ip) = xff.rsplit(',').next().map(str::trim).and_then(|s| s.parse().ok())
-    {
-        return Some(ip);
-    }
-    None
-}
-
 fn rate_limit_response(retry_after: u64) -> Response<Body> {
-    use crate::web::error::ApiError;
-    use axum::response::IntoResponse;
-
     let mut response = ApiError::rate_limited(retry_after).into_response();
     response
         .headers_mut()
         .insert("retry-after", HeaderValue::from_str(&retry_after.to_string()).unwrap());
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert2::check;
+    use axum::Router;
+    use axum::extract::ConnectInfo;
+    use axum::http::StatusCode;
+    use axum::routing::get;
+    use std::net::SocketAddr;
+    use tower::ServiceExt;
+
+    const PEER: &str = "172.17.0.1:40000";
+
+    fn router() -> Router {
+        let state = Arc::new(RateLimitState::new("internal".to_owned()));
+        Router::new()
+            .route("/api/suggest", get(|| async { "ok" }))
+            .route("/api/health", get(|| async { "ok" }))
+            .layer(RateLimitLayer::new(state))
+    }
+
+    fn request(path: &str, peer: Option<&str>, cf_ip: Option<&str>) -> Request {
+        let mut builder = axum::http::Request::builder().uri(path);
+        if let Some(ip) = cf_ip {
+            builder = builder.header("cf-connecting-ip", ip);
+        }
+        let mut req = builder.body(Body::empty()).expect("request builds");
+        if let Some(addr) = peer {
+            req.extensions_mut()
+                .insert(ConnectInfo(addr.parse::<SocketAddr>().expect("valid socket addr")));
+        }
+        req
+    }
+
+    async fn statuses(router: &Router, count: usize, make: impl Fn() -> Request) -> Vec<StatusCode> {
+        let mut out = Vec::with_capacity(count);
+        for _ in 0..count {
+            let resp = router.clone().oneshot(make()).await.expect("router responds");
+            out.push(resp.status());
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn test_request_without_forwarding_headers_is_limited_by_socket_peer() {
+        let router = router();
+        let got = statuses(&router, 8, || request("/api/suggest", Some(PEER), None)).await;
+
+        check!(got[..5].iter().all(|s| *s == StatusCode::OK));
+        check!(got[5] == StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_request_with_no_resolvable_address_is_rejected() {
+        let router = router();
+        let got = statuses(&router, 1, || request("/api/suggest", None, None)).await;
+
+        check!(got[0] == StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn test_forwarded_client_ip_takes_priority_over_socket_peer() {
+        let router = router();
+        let first = statuses(&router, 5, || request("/api/suggest", Some(PEER), Some("203.0.113.1"))).await;
+        let second = statuses(&router, 5, || request("/api/suggest", Some(PEER), Some("203.0.113.2"))).await;
+
+        check!(first.iter().chain(&second).all(|s| *s == StatusCode::OK));
+    }
+
+    #[test]
+    fn test_enrollment_metrics_endpoint_is_an_api_route() {
+        check!(classify_route("/api/metrics") == RouteGroup::Api);
+    }
+
+    #[tokio::test]
+    async fn test_health_probe_is_never_limited() {
+        let router = router();
+        let got = statuses(&router, 40, || request("/api/health", Some(PEER), None)).await;
+
+        check!(got.iter().all(|s| *s == StatusCode::OK));
+    }
 }

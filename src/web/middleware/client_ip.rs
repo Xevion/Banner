@@ -12,6 +12,7 @@
 use axum::extract::{ConnectInfo, FromRequestParts};
 use axum::http::StatusCode;
 use http::request::Parts;
+use http::{Extensions, HeaderMap};
 use std::net::{IpAddr, SocketAddr};
 
 /// The resolved client IP address.
@@ -22,38 +23,39 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
 
     // Resolution reads headers already in memory, so there is nothing to await.
     fn from_request_parts(parts: &mut Parts, _state: &S) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        std::future::ready(Self::resolve(parts))
+        std::future::ready(
+            resolve_client_ip(&parts.headers, &parts.extensions)
+                .map(Self)
+                .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Unable to determine client IP")),
+        )
     }
 }
 
-impl ClientIp {
-    fn resolve(parts: &Parts) -> Result<Self, (StatusCode, &'static str)> {
-        // 1. CF-Connecting-IP: set by Cloudflare, most trustworthy.
-        if let Some(ip) = header_str(&parts.headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok()) {
-            return Ok(Self(ip));
-        }
-
-        // 2. Rightmost X-Forwarded-For: appended by Railway's edge proxy.
-        if let Some(xff) = header_str(&parts.headers, "x-forwarded-for")
-            && let Some(ip) = xff
-                .rsplit(',')
-                .next()
-                .map(str::trim)
-                .and_then(|s| s.parse::<IpAddr>().ok())
-        {
-            return Ok(Self(ip));
-        }
-
-        // 3. Socket peer address (local dev fallback).
-        if let Some(ConnectInfo(addr)) = parts.extensions.get::<ConnectInfo<SocketAddr>>() {
-            return Ok(Self(addr.ip()));
-        }
-
-        Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to determine client IP"))
+/// Resolves the client address in the priority order described in the module docs.
+///
+/// Returns `None` only when the server was not started with `ConnectInfo`.
+#[must_use]
+pub fn resolve_client_ip(headers: &HeaderMap, extensions: &Extensions) -> Option<IpAddr> {
+    if let Some(ip) = header_str(headers, "cf-connecting-ip").and_then(|s| s.parse::<IpAddr>().ok()) {
+        return Some(ip);
     }
+
+    if let Some(xff) = header_str(headers, "x-forwarded-for")
+        && let Some(ip) = xff
+            .rsplit(',')
+            .next()
+            .map(str::trim)
+            .and_then(|s| s.parse::<IpAddr>().ok())
+    {
+        return Some(ip);
+    }
+
+    extensions
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(addr)| addr.ip())
 }
 
 #[must_use]
-pub fn header_str<'a>(headers: &'a http::HeaderMap, name: &str) -> Option<&'a str> {
+pub fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
 }
