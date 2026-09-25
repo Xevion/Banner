@@ -213,10 +213,12 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
                 AVG(be.instructor_rating)::REAL AS bb_avg,
                 SUM(be.instructor_response_count)::INTEGER AS bb_responses
             FROM instructor_bluebook_links ibl
-            JOIN bluebook_evaluations be ON be.instructor_name = ibl.instructor_name
+            JOIN bluebook_instructor_evaluations be ON be.instructor_name = ibl.instructor_name
+                AND (ibl.subject IS NULL OR ibl.subject = be.subject)
             WHERE ibl.status IN ('approved', 'auto')
               AND ibl.instructor_id IS NOT NULL
               AND be.instructor_rating IS NOT NULL
+              AND be.instructor_response_count > 0
             GROUP BY ibl.instructor_id
         ),
         rmp_data AS (

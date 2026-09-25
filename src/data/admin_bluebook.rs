@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 use sqlx::{AssertSqlSafe, PgPool};
-use tracing::info;
+use tracing::{info, warn};
 use ts_rs::TS;
 
 use crate::data::unsigned::Count;
@@ -434,6 +434,16 @@ pub async fn get_link_detail(pool: &PgPool, link_id: i32) -> Result<BluebookLink
     })
 }
 
+/// Recompute instructor scores after a link change moved evaluations between instructors.
+///
+/// The link change has already committed, so a failure here is logged rather than
+/// returned; the next scrape sync recomputes again.
+async fn refresh_scores(pool: &PgPool) {
+    if let Err(e) = super::scoring::recompute_all_scores(pool).await {
+        warn!(error = ?e, "Failed to recompute instructor scores after BlueBook link change");
+    }
+}
+
 /// Approve an auto or pending `BlueBook` link.
 pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
     let result = sqlx::query!(
@@ -448,6 +458,7 @@ pub async fn approve_link(pool: &PgPool, link_id: i32) -> Result<()> {
         return Err(BluebookError::NotApprovable.into());
     }
 
+    refresh_scores(pool).await;
     Ok(())
 }
 
@@ -465,6 +476,7 @@ pub async fn reject_link(pool: &PgPool, link_id: i32) -> Result<()> {
         return Err(BluebookError::NotRejectable.into());
     }
 
+    refresh_scores(pool).await;
     Ok(())
 }
 
@@ -500,6 +512,7 @@ pub async fn assign_link(pool: &PgPool, link_id: i32, instructor_id: i32) -> Res
         return Err(BluebookError::NoSuchLink.into());
     }
 
+    refresh_scores(pool).await;
     Ok(())
 }
 
@@ -590,6 +603,7 @@ pub async fn run_auto_matching(pool: &PgPool) -> Result<BluebookMatchResponse> {
     }
 
     tx.commit().await.context("failed to commit matching results")?;
+    refresh_scores(pool).await;
 
     info!(
         total_names,

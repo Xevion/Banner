@@ -8,6 +8,7 @@ mod helpers;
 
 mod admin_audits;
 mod admin_rmp;
+mod bluebook_aggregates;
 mod course_search_alphanumeric;
 mod course_search_days;
 mod course_search_filters;

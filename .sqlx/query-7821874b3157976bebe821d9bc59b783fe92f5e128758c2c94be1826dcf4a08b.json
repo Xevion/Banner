@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,\n               i.email, ci.is_primary,\n               rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,\n               bb.bb_avg_instructor_rating, bb.bb_total_responses,\n               i.slug,\n               ci.course_id,\n               sc.display_score as \"sc_display_score?\", sc.sort_score as \"sc_sort_score?\",\n               sc.ci_lower as \"sc_ci_lower?\", sc.ci_upper as \"sc_ci_upper?\",\n               sc.confidence as \"sc_confidence?\", sc.source as \"sc_source?: RatingSource\",\n               sc.rmp_count as \"sc_rmp_count?\", sc.bb_count as \"sc_bb_count?\"\n        FROM course_instructors ci\n        JOIN instructors i ON i.id = ci.instructor_id\n        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id\n        LEFT JOIN LATERAL (\n            SELECT\n                AVG(be.instructor_rating)::real as bb_avg_instructor_rating,\n                SUM(be.instructor_response_count)::bigint as bb_total_responses\n            FROM bluebook_evaluations be\n            JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name\n                AND (ibl.subject IS NULL OR ibl.subject = be.subject)\n            WHERE ibl.instructor_id = i.id\n                AND ibl.status IN ('approved', 'auto')\n                AND be.instructor_rating IS NOT NULL\n                AND be.instructor_response_count > 0\n        ) bb ON true\n        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id\n        WHERE ci.course_id = ANY($1)\n        ORDER BY ci.course_id, ci.is_primary DESC, i.display_name\n        ",
+  "query": "\n        SELECT i.id as instructor_id, ci.banner_id, i.display_name, i.first_name, i.last_name,\n               i.email, ci.is_primary,\n               rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id,\n               sc.bb_rating as \"bb_avg_instructor_rating?\", sc.bb_count::bigint as \"bb_total_responses?\",\n               i.slug,\n               ci.course_id,\n               sc.display_score as \"sc_display_score?\", sc.sort_score as \"sc_sort_score?\",\n               sc.ci_lower as \"sc_ci_lower?\", sc.ci_upper as \"sc_ci_upper?\",\n               sc.confidence as \"sc_confidence?\", sc.source as \"sc_source?: RatingSource\",\n               sc.rmp_count as \"sc_rmp_count?\", sc.bb_count as \"sc_bb_count?\"\n        FROM course_instructors ci\n        JOIN instructors i ON i.id = ci.instructor_id\n        LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id\n        LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id\n        WHERE ci.course_id = $1\n        ORDER BY ci.is_primary DESC, i.display_name\n        ",
   "describe": {
     "columns": [
       {
@@ -115,13 +115,18 @@
       },
       {
         "ordinal": 10,
-        "name": "bb_avg_instructor_rating",
+        "name": "bb_avg_instructor_rating?",
         "type_info": "Float4",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "instructor_scores",
+            "name": "bb_rating"
+          }
+        }
       },
       {
         "ordinal": 11,
-        "name": "bb_total_responses",
+        "name": "bb_total_responses?",
         "type_info": "Int8",
         "origin": "Expression"
       },
@@ -238,7 +243,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4Array"
+        "Int4"
       ]
     },
     "nullable": [
@@ -252,7 +257,7 @@
       true,
       true,
       true,
-      null,
+      true,
       null,
       true,
       false,
@@ -266,5 +271,5 @@
       false
     ]
   },
-  "hash": "26b6e13ba9f630035f04f110045f948eab008d8514aad669b59a136095a78cd4"
+  "hash": "7821874b3157976bebe821d9bc59b783fe92f5e128758c2c94be1826dcf4a08b"
 }

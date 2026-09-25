@@ -260,24 +260,12 @@ async fn fetch_public_instructor_page(
                 ARRAY[]::text[]\
             ) as subjects, \
             rmp.avg_rating, rmp.num_ratings, rmp.primary_legacy_id as rmp_legacy_id, \
-            bb.bb_avg_instructor_rating, bb.bb_total_responses, \
+            sc.bb_rating as bb_avg_instructor_rating, sc.bb_count::bigint as bb_total_responses, \
             sc.display_score, sc.sort_score, sc.ci_lower, sc.ci_upper, \
             sc.confidence, sc.source as score_source, \
             sc.rmp_count as sc_rmp_count, sc.bb_count as sc_bb_count \
          FROM instructors i \
          LEFT JOIN instructor_rmp_summary rmp ON rmp.instructor_id = i.id \
-         LEFT JOIN (\
-             SELECT ibl.instructor_id, \
-                 AVG(be.instructor_rating)::real as bb_avg_instructor_rating, \
-                 SUM(be.instructor_response_count)::bigint as bb_total_responses \
-             FROM instructor_bluebook_links ibl \
-             JOIN bluebook_evaluations be ON ibl.instructor_name = be.instructor_name \
-                 AND (ibl.subject IS NULL OR ibl.subject = be.subject) \
-             WHERE ibl.status IN ('approved', 'auto') \
-                 AND be.instructor_rating IS NOT NULL \
-                 AND be.instructor_response_count > 0 \
-             GROUP BY ibl.instructor_id\
-         ) bb ON bb.instructor_id = i.id \
          LEFT JOIN instructor_scores sc ON sc.instructor_id = i.id",
     );
     push_instructor_conditions(&mut data_builder, params, extra_condition);
@@ -492,7 +480,7 @@ async fn fetch_instructor_bluebook_row(pool: &PgPool, instructor_id: i32) -> Res
             AVG(be.course_rating)::real as avg_course_rating,
             SUM(be.instructor_response_count)::bigint as total_responses,
             COUNT(*)::bigint as "eval_count!"
-        FROM bluebook_evaluations be
+        FROM bluebook_instructor_evaluations be
         JOIN instructor_bluebook_links ibl ON ibl.instructor_name = be.instructor_name
             AND (ibl.subject IS NULL OR ibl.subject = be.subject)
         WHERE ibl.instructor_id = $1

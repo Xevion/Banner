@@ -14,8 +14,8 @@ use sqlx::PgPool;
 
 use crate::banner::models::terms::{Season, Term};
 use crate::data::bluebook::{
-    BlueBookEvaluation, batch_upsert_bluebook_evaluations, get_all_subject_scrape_times, get_subject_max_terms,
-    mark_subject_scraped,
+    BlueBookEvaluation, batch_upsert_bluebook_evaluations, catalogue_has_subject, get_all_subject_scrape_times,
+    get_subject_max_terms, mark_subject_scraped,
 };
 
 const BASE_URL: &str = "https://bluebook.utsa.edu/Default.aspx";
@@ -107,6 +107,10 @@ impl FormFields {
         self.0.iter().any(|(n, _)| n == name)
     }
 }
+
+/// `ComboBox` codes that re-list another subject's evaluations: MTC repeats MAT and
+/// C&I repeats CI. Their rows are copies, and the few that differ name the wrong instructor.
+const DUPLICATE_LISTINGS: &[&str] = &["MTC", "C&I"];
 
 /// A subject entry from the `BlueBook` `ComboBox`.
 #[derive(Debug, Clone)]
@@ -302,7 +306,9 @@ impl BlueBookClient {
             if text.is_empty() {
                 continue;
             }
-            if let Some(caps) = CODE_RE.captures(&text) {
+            if let Some(caps) = CODE_RE.captures(&text)
+                && !DUPLICATE_LISTINGS.contains(&&caps[1])
+            {
                 subjects.push(SubjectEntry {
                     code: caps[1].to_string(),
                     display_text: text,
@@ -591,7 +597,15 @@ impl BlueBookClient {
             return (None, None);
         }
 
-        let rating = text.split('/').next().and_then(|s| s.trim().parse::<f32>().ok());
+        // Unreleased evaluations carry a placeholder of 6 or 9, never a real score.
+        let rating = text
+            .split('/')
+            .next()
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .filter(|r| (1.0..=5.0).contains(r));
+        if rating.is_none() {
+            return (None, None);
+        }
 
         let response_count = RESPONSE_RE.captures(text).and_then(|caps| caps[1].parse::<i32>().ok());
 
@@ -763,6 +777,22 @@ impl BlueBookClient {
         }
 
         *total_evals += subject_eval_count;
+
+        if !subject_evals.is_empty() {
+            match catalogue_has_subject(db_pool, &subject.code).await {
+                Ok(true) => {}
+                Ok(false) => warn!(
+                    code = subject.code.as_str(),
+                    display = subject.display_text.as_str(),
+                    "BlueBook subject has no catalogue match; it may re-list another subject's evaluations"
+                ),
+                Err(e) => warn!(
+                    code = subject.code.as_str(),
+                    error = %e,
+                    "Failed to check BlueBook subject against the catalogue"
+                ),
+            }
+        }
 
         if let Err(e) = mark_subject_scraped(db_pool, &subject.code).await {
             warn!(
@@ -999,6 +1029,16 @@ mod tests {
         assert_eq!(count, None);
     }
 
+    /// `BlueBook` fills unreleased evaluations with an out-of-scale placeholder
+    /// (6 or 9 over 5) and no response count.
+    #[rstest::rstest]
+    #[case("6 / 5.0")]
+    #[case("9.0 / 5.0")]
+    #[case("0.0 / 5.0")]
+    fn test_parse_rating_cell_out_of_scale_is_none(#[case] text: &str) {
+        assert_eq!(BlueBookClient::parse_rating_cell(text), (None, None));
+    }
+
     #[test]
     fn test_parse_rating_cell_singular_student() {
         let (rating, count) = BlueBookClient::parse_rating_cell("5.0 / 5.0\n1 student responded");
@@ -1047,10 +1087,8 @@ mod tests {
         );
     }
 
-    /// `BlueBook` lists some subjects twice in the `ComboBox` under different internal
-    /// codes. E.g., "Mathematics (MAT)" and "Mathematics (MTC)" both exist, but
-    /// accordion cells always display the prefix "MAT". Scraping with code "MTC"
-    /// must still parse "MAT 1043.06B" successfully.
+    /// Accordion cells show the catalogue prefix even when the `ComboBox` code differs,
+    /// so the course number and section still parse under a mismatched code.
     #[test]
     fn test_parse_course_section_combobox_code_differs_from_display_prefix() {
         assert_eq!(
@@ -1236,6 +1274,25 @@ mod tests {
 
         assert_eq!(subjects[2].code, "IS");
         assert_eq!(subjects[2].combo_index, 3);
+    }
+
+    #[test]
+    fn test_parse_subjects_skips_duplicate_listings() {
+        let html_str = r#"<html><body>
+            <ul id="ctl00_MainContentSearchQuery_searchCriteriaEntry_CourseSubjectCombo_OptionList">
+                <li>Curriculum &amp; Instruction (C&amp;I)</li>
+                <li>Curriculum &amp; Instruction (CI)</li>
+                <li>Mathematics (MAT)</li>
+                <li>Mathematics (MTC)</li>
+            </ul>
+        </body></html>"#;
+        let html = Html::parse_document(html_str);
+        let codes: Vec<_> = BlueBookClient::parse_subjects(&html)
+            .into_iter()
+            .map(|s| s.code)
+            .collect();
+
+        assert_eq!(codes, ["CI", "MAT"]);
     }
 
     #[test]

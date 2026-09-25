@@ -126,6 +126,17 @@ pub async fn batch_upsert_bluebook_evaluations(pool: &PgPool, evaluations: &[Blu
     Ok(())
 }
 
+/// Whether the course catalogue has ever listed `subject`.
+pub async fn catalogue_has_subject(pool: &PgPool, subject: &str) -> Result<bool> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM courses WHERE subject = $1) AS "exists!""#,
+        subject
+    )
+    .fetch_one(pool)
+    .await
+    .context("Failed to check catalogue for subject")
+}
+
 /// Load the last-scraped timestamp for every subject in `bluebook_subject_scrapes`.
 pub async fn get_all_subject_scrape_times(pool: &PgPool) -> Result<HashMap<String, DateTime<Utc>>> {
     let rows = sqlx::query!("SELECT subject, last_scraped_at FROM bluebook_subject_scrapes")
