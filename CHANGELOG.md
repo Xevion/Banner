@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.5](https://github.com/Xevion/Banner/compare/v0.8.4...v0.8.5) (2026-09-25)
+
+
+### Features
+
+* **instructors:** Rank instructors against everyone teaching the same course ([688c3bf](https://github.com/Xevion/Banner/commit/688c3bf059cea8487fdea3a980782c668a37b3b0))
+
+
+### Bug Fixes
+
+* **bluebook:** Drop placeholder ratings and duplicate listings, count cross-listed evaluations once ([ac25ccb](https://github.com/Xevion/Banner/commit/ac25ccbecded60a73fa5a7fdff887b0934a5c6b1))
+* **frontend:** Resolve eslint failures in course trends store and health page ([ab6dbb1](https://github.com/Xevion/Banner/commit/ab6dbb17d699b828046184a31799e866feae9b28))
+* **rate-limit:** Key on socket peer when unproxied and forward SSR client headers ([b63c2d0](https://github.com/Xevion/Banner/commit/b63c2d03ccac4bfc02dca500dab820ea5b49e175))
+
+
+### Performance Improvements
+
+* **api:** Share in-flight GETs and open a row in one layout only ([ba15062](https://github.com/Xevion/Banner/commit/ba15062c99d68332e8fd08bd506f56441c3fd600))
+
+
+### Code Refactoring
+
+* **web:** Extract SingleFlight helper and remove dead code ([c17ec49](https://github.com/Xevion/Banner/commit/c17ec49e0bcd4ebd5ee90e63dcffde20324f785c))
+
+
+### Miscellaneous
+
+* **deps:** Bump CI postgres test service to postgres:18-alpine ([5494de6](https://github.com/Xevion/Banner/commit/5494de6f0d0b5f40dda62ae1b10ec765dc546d48))
+* **deps:** Bump frontend patch/minor deps and raise transitive security-floor overrides ([c139af9](https://github.com/Xevion/Banner/commit/c139af932729a7d068481625afb842e36d1eadd3))
+* **deps:** Bump pinned just to 1.58.0 ([d47f209](https://github.com/Xevion/Banner/commit/d47f2098bf9ed2b447b59f9a148f7de5e04429fa))
+* **deps:** Update Rust dependencies within semver ranges ([efa45b8](https://github.com/Xevion/Banner/commit/efa45b814c60cb6be07f290e37eb21daa5ac702a))
+* **deps:** Update ts-rs to 12.0.1 ([b1430c8](https://github.com/Xevion/Banner/commit/b1430c8b3342a2f1869500abb9c3a78f4f41306c))
+* **deps:** Update ulid to 3.0.0 ([d06c11d](https://github.com/Xevion/Banner/commit/d06c11de01307b038e3718332c10b23800cab1f9))
+* **security:** Drop two stale audit ignores no longer in the dependency tree ([fcd5e38](https://github.com/Xevion/Banner/commit/fcd5e38ebd253fd291fe051c3a38686a5600c304))
+
 ## [0.8.4](https://github.com/Xevion/Banner/compare/v0.8.3...v0.8.4) (2026-09-17)
 
 
