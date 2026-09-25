@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "REFRESH MATERIALIZED VIEW CONCURRENTLY instructor_cohort_standing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d5225853e5e5cb9a258d17a80997db28f5a2e78d63b84538280f942ef3b6fb3a"
+}

@@ -22,7 +22,7 @@ const NANOID_LEN: usize = 3;
     clippy::cast_possible_truncation,
     reason = "ratings carry a few decimal digits, far under f32 precision"
 )]
-const fn narrow_rating(v: f64) -> f32 {
+pub(super) const fn narrow_rating(v: f64) -> f32 {
     v as f32
 }
 
@@ -118,6 +118,7 @@ pub struct PublicInstructorProfile {
     pub rmp: Option<super::course_types::RmpFull>,
     pub bluebook: Option<super::course_types::BlueBookFull>,
     pub rating: Option<super::course_types::InstructorRating>,
+    pub cohort: super::cohort::InstructorCohort,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -567,6 +568,7 @@ pub async fn get_public_instructor_by_slug(
     let rating = score_row.as_ref().map(build_instructor_rating);
     let bluebook_summary = build_bluebook_full(bb.as_ref(), score_row.as_ref().and_then(|s| s.calibrated_bb));
     let teaching_history = get_teaching_history(pool, inst.id).await?;
+    let cohort = super::cohort::fetch_instructor_cohort(pool, inst.id).await?;
 
     Ok(Some(PublicInstructorProfileResponse {
         instructor: PublicInstructorProfile {
@@ -580,6 +582,7 @@ pub async fn get_public_instructor_by_slug(
             rmp: rmp_summary,
             bluebook: bluebook_summary,
             rating,
+            cohort,
         },
         teaching_history,
     }))

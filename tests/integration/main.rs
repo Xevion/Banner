@@ -17,6 +17,7 @@ mod db_batch_upsert;
 mod db_context_events;
 mod db_health;
 mod db_scrape_jobs;
+mod instructor_cohorts;
 mod rmp_matching_corpus;
 mod rmp_matching_pipeline;
 mod search_accent_handling;

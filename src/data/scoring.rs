@@ -194,7 +194,8 @@ fn compute_score(data: &RawInstructorData) -> ComputedScore {
 
 /// Recompute all instructor scores from raw RMP and `BlueBook` data.
 ///
-/// Truncates the `instructor_scores` table and bulk-inserts fresh scores.
+/// Truncates the `instructor_scores` table and bulk-inserts fresh scores, then
+/// refreshes the per-course cohort views from the same evaluations.
 /// Should be called on startup and after scrape completions.
 #[instrument(skip(pool))]
 #[expect(
@@ -314,6 +315,8 @@ pub async fn recompute_all_scores(pool: &PgPool) -> Result<usize> {
     .context("Failed to insert instructor scores")?;
 
     tx.commit().await.context("Failed to commit transaction")?;
+
+    super::cohort::refresh_cohorts(pool).await?;
 
     let elapsed = start.elapsed();
     #[expect(

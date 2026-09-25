@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT subject AS \"subject!\", course_number AS \"course_number!\",\n               rating AS \"rating!\", responses AS \"responses!: Count\", sections AS \"sections!: Count\",\n               cohort_mean AS \"cohort_mean!\", cohort_sd,\n               cohort_size::int AS \"cohort_size!: Count\", cohort_rank::int AS \"cohort_rank!: Count\"\n        FROM instructor_course_cohorts\n        WHERE instructor_id = $1\n        ORDER BY subject, course_number\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "course_number!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "rating!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "responses!: Count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "responses"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "sections!: Count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "sections"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "cohort_mean!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "cohort_mean"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "cohort_sd",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "cohort_sd"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "cohort_size!: Count",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "cohort_rank!: Count",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "a6389db12ecf087ddd0efc7c33c8495c7980e77b101ff6d7a01b2e9ddff02a87"
+}

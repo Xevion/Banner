@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT peer.subject AS \"subject!\", peer.course_number AS \"course_number!\",\n               i.slug, i.display_name, peer.rating AS \"rating!\", peer.responses AS \"responses!: Count\"\n        FROM instructor_course_cohorts me\n        JOIN instructor_course_cohorts peer\n            ON peer.subject = me.subject\n           AND peer.course_number = me.course_number\n           AND peer.instructor_id <> me.instructor_id\n        JOIN instructors i ON i.id = peer.instructor_id\n        WHERE me.instructor_id = $1\n        ORDER BY peer.rating DESC, i.display_name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "course_number!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "course_number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "instructors",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rating!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "responses!: Count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "instructor_course_cohorts",
+            "name": "responses"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "80d9a297b949972cbbf9f693ee9721e4b7dcf8b1b4b4482d933e41c7c0410f8f"
+}

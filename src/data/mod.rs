@@ -7,6 +7,7 @@ pub mod admin_scraper;
 pub mod audit;
 pub mod batch;
 pub mod bluebook;
+pub mod cohort;
 mod context;
 pub mod course_types;
 pub mod courses;
