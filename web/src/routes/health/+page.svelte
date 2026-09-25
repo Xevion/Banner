@@ -1,6 +1,6 @@
 <script lang="ts">
 import { client } from "$lib/api";
-import type { ServiceInfo, ServiceStatus, StatusResponse } from "$lib/bindings";
+import type { ServiceStatus, StatusResponse } from "$lib/bindings";
 import Footer from "$lib/components/Footer.svelte";
 import SimpleTooltip from "$lib/components/SimpleTooltip.svelte";
 import { relativeTime } from "$lib/time";
@@ -112,13 +112,11 @@ const isHealthy = $derived(overallHealth === "active" || overallHealth === "conn
 
 const services: Service[] = $derived(
   statusState.mode === "response"
-    ? (Object.entries(statusState.status.services) as [string, ServiceInfo][]).map(
-        ([id, info]) => ({
-          name: info.name,
-          status: info.status,
-          icon: SERVICE_ICONS[id] ?? Bot,
-        })
-      )
+    ? Object.entries(statusState.status.services).map(([id, info]) => ({
+        name: info.name,
+        status: info.status,
+        icon: SERVICE_ICONS[id] ?? Bot,
+      }))
     : []
 );
 

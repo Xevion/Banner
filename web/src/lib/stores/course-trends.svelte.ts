@@ -30,7 +30,7 @@ class CourseTrends {
     result.match({
       Ok: (data) => {
         for (const [crn, points] of Object.entries(data.trends)) {
-          if (points) this.samples[this.key(term, crn)] = points;
+          this.samples[this.key(term, crn)] = points;
         }
       },
       Err: () => {
