@@ -2,6 +2,6 @@
 # installs exactly it, so a lint that fires in the pipeline fires locally too; a
 # floating `stable` silently gains lints between two runs of the same commit.
 [toolchain]
-channel = "1.98.1"
+channel = "1.99.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
