@@ -385,7 +385,7 @@ jobs:
       # dedicated action. Tool versions for the docs gate live in one place as a result.
       # Scoped: mise.toml also pins bun, helm, kubectl and the rest, none of which this job
       # needs. node comes along because markdownlint-cli2 resolves through the npm backend.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: node dprint markdownlint-cli2 lychee
 
