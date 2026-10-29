@@ -3,7 +3,7 @@
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     ports:
       - "59489:5432"
     environment:
