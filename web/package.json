@@ -78,7 +78,7 @@
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
     "@nozbe/microfuzz": "^1.0.0",
-    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/kit": "^3.0.0",
     "bits-ui": "^2.19.2",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
