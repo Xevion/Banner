@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0](https://github.com/Xevion/Banner/compare/v0.8.4...v0.9.0) (2026-11-15)
+
+
+### Features
+
+* **instructors:** Show where an instructor stands among everyone teaching the same course, with a confidence interval and an evidence tier on their profile
+
+
+### Bug Fixes
+
+* **bluebook:** Drop placeholder ratings and duplicate listings, and count cross-listed evaluations once
+* **rate-limit:** Limit requests that arrive without forwarding headers by their socket address instead of letting them bypass the limiter, and exempt `/api/health` so probes are never throttled
+
+
+### Performance Improvements
+
+* **api:** Share in-flight GET requests between callers, and open an expanded row in one layout only
+
 ## [0.8.4](https://github.com/Xevion/Banner/compare/v0.8.3...v0.8.4) (2026-09-17)
 
 
